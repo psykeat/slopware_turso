@@ -860,7 +860,7 @@ CREATE TABLE "unit" (
 );
 --> statement-breakpoint
 CREATE TABLE "user_tenant" (
-	"user_id" uuid NOT NULL,
+	"user_id" text NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"role" text NOT NULL,
 	CONSTRAINT "user_tenant_user_id_tenant_id_unique" UNIQUE("user_id","tenant_id")
@@ -889,7 +889,6 @@ CREATE INDEX "idx_address_category_tenant" ON "address_category" ("tenant_id");-
 CREATE INDEX "idx_address_contact_address" ON "address_contact" ("address_id");--> statement-breakpoint
 CREATE INDEX "idx_address_contact_tenant" ON "address_contact" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_address_seq_tenant" ON "address_seq" ("tenant_id");--> statement-breakpoint
-CREATE INDEX "app_user_email_key" ON "app_user" ("email");--> statement-breakpoint
 CREATE INDEX "idx_article_default_wh" ON "article" ("tenant_id","default_warehouse_id");--> statement-breakpoint
 CREATE INDEX "idx_article_group_fk" ON "article" ("article_group_id");--> statement-breakpoint
 CREATE INDEX "idx_article_tenant" ON "article" ("tenant_id");--> statement-breakpoint
@@ -900,11 +899,7 @@ CREATE INDEX "idx_bank_account_company" ON "bank_account" ("company_id");--> sta
 CREATE INDEX "idx_bank_account_tenant" ON "bank_account" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_company_tenant" ON "company" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_company_tenant_active" ON "company" ("tenant_id","is_active");--> statement-breakpoint
-CREATE INDEX "connector_definition_slug_key" ON "connector_definition" ("slug");--> statement-breakpoint
 CREATE INDEX "idx_cost_center_tenant" ON "cost_center" ("tenant_id");--> statement-breakpoint
-CREATE INDEX "country_iso2_code_key" ON "country" ("iso2_code");--> statement-breakpoint
-CREATE INDEX "country_iso3_code_key" ON "country" ("iso3_code");--> statement-breakpoint
-CREATE INDEX "currency_code_key" ON "currency" ("code");--> statement-breakpoint
 CREATE INDEX "idx_delivery_address_partner" ON "delivery_address" ("address_id");--> statement-breakpoint
 CREATE INDEX "idx_delivery_address_tenant" ON "delivery_address" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_discount_group_tenant" ON "discount_group" ("tenant_id");--> statement-breakpoint
@@ -937,7 +932,6 @@ CREATE INDEX "idx_fact_sales_period" ON "fact_sales_event" ("tenant_id","booking
 CREATE INDEX "idx_fact_sales_tenant" ON "fact_sales_event" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_fact_sales_tx" ON "fact_sales_event" ("tenant_id","transaction_id");--> statement-breakpoint
 CREATE INDEX "idx_gl_account_tenant" ON "gl_account" ("tenant_id");--> statement-breakpoint
-CREATE INDEX "incoterm_code_key" ON "incoterm" ("code");--> statement-breakpoint
 CREATE INDEX "idx_industry_tenant" ON "industry" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_inv_balance_lookup" ON "inventory_balance" ("tenant_id","warehouse_id","article_id");--> statement-breakpoint
 CREATE INDEX "idx_inv_balance_tenant" ON "inventory_balance" ("tenant_id");--> statement-breakpoint
@@ -955,10 +949,8 @@ CREATE INDEX "idx_journal_entry_tenant" ON "journal_entry" ("tenant_id");--> sta
 CREATE INDEX "idx_journal_line_account" ON "journal_line" ("gl_account_id");--> statement-breakpoint
 CREATE INDEX "idx_journal_line_entry" ON "journal_line" ("journal_entry_id");--> statement-breakpoint
 CREATE INDEX "idx_journal_line_tenant" ON "journal_line" ("tenant_id");--> statement-breakpoint
-CREATE INDEX "modules_slug_key" ON "modules" ("slug");--> statement-breakpoint
 CREATE INDEX "idx_number_sequence_tenant" ON "number_sequence" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_number_sequence_tenant_company" ON "number_sequence" ("tenant_id","company_id");--> statement-breakpoint
-CREATE INDEX "organization_slug_key" ON "organization" ("slug");--> statement-breakpoint
 CREATE INDEX "idx_payment_term_tenant" ON "payment_term" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_postal_code_lookup" ON "postal_code" ("country_code","plz");--> statement-breakpoint
 CREATE INDEX "idx_price_list_tenant" ON "price_list" ("tenant_id");--> statement-breakpoint
@@ -973,7 +965,6 @@ CREATE INDEX "idx_tax_code_tenant" ON "tax_code" ("tenant_id");--> statement-bre
 CREATE INDEX "idx_tax_rule_lookup" ON "tax_rule" ("tenant_id","customer_tax_class_id","article_tax_class_id","country_code","valid_from");--> statement-breakpoint
 CREATE INDEX "idx_tax_rule_tenant" ON "tax_rule" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_tenant_organization" ON "tenant" ("organization_id");--> statement-breakpoint
-CREATE INDEX "tenant_slug_key" ON "tenant" ("slug");--> statement-breakpoint
 CREATE INDEX "idx_unit_tenant" ON "unit" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_user_tenant_tenant" ON "user_tenant" ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_user_tenant_user" ON "user_tenant" ("user_id");--> statement-breakpoint

@@ -4,7 +4,9 @@ import { Button } from "@repo/ui/components/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 
-export function SignOutButton() {
+import { cn } from "@repo/ui/lib/utils";
+
+export function SignOutButton({ className, variant = "destructive" }: { className?: string, variant?: any }) {
   const queryClient = useQueryClient();
   const router = useRouter();
   return (
@@ -21,9 +23,9 @@ export function SignOutButton() {
         });
       }}
       type="button"
-      className="w-fit"
-      variant="destructive"
-      size="lg"
+      className={cn("w-fit", className)}
+      variant={variant}
+      size="sm"
     >
       Sign out
     </Button>

@@ -3,9 +3,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, timestamp, boolean, index, uuid, varchar } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
-  id: uuid("id")
-    .primaryKey()
-    .default(sql`uuidv7()`),
+  id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
@@ -19,7 +17,7 @@ export const user = pgTable("user", {
   // Merged from app_user
   displayName: text("display_name"),
   isActive: boolean("is_active").notNull().default(true),
-  lastCompanyId: uuid("last_company_id"),
+  lastCompanyId: text("last_company_id"),
   isSystemAdmin: boolean("is_system_admin").notNull().default(false),
   locale: varchar("locale", { length: 5 }).notNull().default("de"),
 });
@@ -27,9 +25,7 @@ export const user = pgTable("user", {
 export const session = pgTable(
   "session",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`uuidv7()`),
+    id: text("id").primaryKey(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     token: text("token").notNull().unique(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -39,7 +35,7 @@ export const session = pgTable(
       .notNull(),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
-    userId: uuid("user_id")
+    userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
   },
@@ -49,12 +45,10 @@ export const session = pgTable(
 export const account = pgTable(
   "account",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`uuidv7()`),
+    id: text("id").primaryKey(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
-    userId: uuid("user_id")
+    userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     accessToken: text("access_token"),
@@ -76,9 +70,7 @@ export const account = pgTable(
 export const verification = pgTable(
   "verification",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`uuidv7()`),
+    id: text("id").primaryKey(),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

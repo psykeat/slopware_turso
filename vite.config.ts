@@ -125,6 +125,8 @@ export default defineConfig({
       "build/",
       "worker-configuration.d.ts",
       "scripts/",
+      ".gemini/prototype/",
+      ".gemini/skills/",
     ],
   },
 });

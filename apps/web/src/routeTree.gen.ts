@@ -12,11 +12,24 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as GuestRouteRouteImport } from './routes/_guest/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiMeRouteImport } from './routes/api/me'
 import { Route as GuestSignupRouteImport } from './routes/_guest/signup'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as AuthAppRouteRouteImport } from './routes/_auth/app/route'
 import { Route as AuthAppIndexRouteImport } from './routes/_auth/app/index'
+import { Route as ApiMetadataSplatRouteImport } from './routes/api/metadata/$'
+import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AuthAppDocumentsRouteImport } from './routes/_auth/app/documents'
+import { Route as AuthAppArticlesRouteImport } from './routes/_auth/app/articles'
+import { Route as AuthAppAddressesRouteImport } from './routes/_auth/app/addresses'
+import { Route as AuthAppAdminRouteRouteImport } from './routes/_auth/app/admin/route'
+import { Route as AuthAppSettingsIndexRouteImport } from './routes/_auth/app/settings/index'
+import { Route as AuthAppAdminIndexRouteImport } from './routes/_auth/app/admin/index'
+import { Route as ApiAdminDataSplatRouteImport } from './routes/api/admin/data/$'
+import { Route as AuthAppAdminUsersRouteImport } from './routes/_auth/app/admin/users'
+import { Route as AuthAppAdminTenantsRouteImport } from './routes/_auth/app/admin/tenants'
+import { Route as AuthAppAdminOrganizationsRouteImport } from './routes/_auth/app/admin/organizations'
 
 const GuestRouteRoute = GuestRouteRouteImport.update({
   id: '/_guest',
@@ -29,6 +42,11 @@ const AuthRouteRoute = AuthRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMeRoute = ApiMeRouteImport.update({
+  id: '/api/me',
+  path: '/api/me',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuestSignupRoute = GuestSignupRouteImport.update({
@@ -51,26 +69,112 @@ const AuthAppIndexRoute = AuthAppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthAppRouteRoute,
 } as any)
+const ApiMetadataSplatRoute = ApiMetadataSplatRouteImport.update({
+  id: '/api/metadata/$',
+  path: '/api/metadata/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDataSplatRoute = ApiDataSplatRouteImport.update({
+  id: '/api/data/$',
+  path: '/api/data/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthAppDocumentsRoute = AuthAppDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => AuthAppRouteRoute,
+} as any)
+const AuthAppArticlesRoute = AuthAppArticlesRouteImport.update({
+  id: '/articles',
+  path: '/articles',
+  getParentRoute: () => AuthAppRouteRoute,
+} as any)
+const AuthAppAddressesRoute = AuthAppAddressesRouteImport.update({
+  id: '/addresses',
+  path: '/addresses',
+  getParentRoute: () => AuthAppRouteRoute,
+} as any)
+const AuthAppAdminRouteRoute = AuthAppAdminRouteRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthAppRouteRoute,
+} as any)
+const AuthAppSettingsIndexRoute = AuthAppSettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
+  getParentRoute: () => AuthAppRouteRoute,
+} as any)
+const AuthAppAdminIndexRoute = AuthAppAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthAppAdminRouteRoute,
+} as any)
+const ApiAdminDataSplatRoute = ApiAdminDataSplatRouteImport.update({
+  id: '/api/admin/data/$',
+  path: '/api/admin/data/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthAppAdminUsersRoute = AuthAppAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthAppAdminRouteRoute,
+} as any)
+const AuthAppAdminTenantsRoute = AuthAppAdminTenantsRouteImport.update({
+  id: '/tenants',
+  path: '/tenants',
+  getParentRoute: () => AuthAppAdminRouteRoute,
+} as any)
+const AuthAppAdminOrganizationsRoute =
+  AuthAppAdminOrganizationsRouteImport.update({
+    id: '/organizations',
+    path: '/organizations',
+    getParentRoute: () => AuthAppAdminRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AuthAppRouteRouteWithChildren
   '/login': typeof GuestLoginRoute
   '/signup': typeof GuestSignupRoute
+  '/api/me': typeof ApiMeRoute
+  '/app/admin': typeof AuthAppAdminRouteRouteWithChildren
+  '/app/addresses': typeof AuthAppAddressesRoute
+  '/app/articles': typeof AuthAppArticlesRoute
+  '/app/documents': typeof AuthAppDocumentsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/data/$': typeof ApiDataSplatRoute
+  '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/app/': typeof AuthAppIndexRoute
+  '/app/admin/organizations': typeof AuthAppAdminOrganizationsRoute
+  '/app/admin/tenants': typeof AuthAppAdminTenantsRoute
+  '/app/admin/users': typeof AuthAppAdminUsersRoute
+  '/api/admin/data/$': typeof ApiAdminDataSplatRoute
+  '/app/admin/': typeof AuthAppAdminIndexRoute
+  '/app/settings/': typeof AuthAppSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof GuestLoginRoute
   '/signup': typeof GuestSignupRoute
+  '/api/me': typeof ApiMeRoute
+  '/app/addresses': typeof AuthAppAddressesRoute
+  '/app/articles': typeof AuthAppArticlesRoute
+  '/app/documents': typeof AuthAppDocumentsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/data/$': typeof ApiDataSplatRoute
+  '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/app': typeof AuthAppIndexRoute
+  '/app/admin/organizations': typeof AuthAppAdminOrganizationsRoute
+  '/app/admin/tenants': typeof AuthAppAdminTenantsRoute
+  '/app/admin/users': typeof AuthAppAdminUsersRoute
+  '/api/admin/data/$': typeof ApiAdminDataSplatRoute
+  '/app/admin': typeof AuthAppAdminIndexRoute
+  '/app/settings': typeof AuthAppSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,14 +184,63 @@ export interface FileRoutesById {
   '/_auth/app': typeof AuthAppRouteRouteWithChildren
   '/_guest/login': typeof GuestLoginRoute
   '/_guest/signup': typeof GuestSignupRoute
+  '/api/me': typeof ApiMeRoute
+  '/_auth/app/admin': typeof AuthAppAdminRouteRouteWithChildren
+  '/_auth/app/addresses': typeof AuthAppAddressesRoute
+  '/_auth/app/articles': typeof AuthAppArticlesRoute
+  '/_auth/app/documents': typeof AuthAppDocumentsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/data/$': typeof ApiDataSplatRoute
+  '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/_auth/app/': typeof AuthAppIndexRoute
+  '/_auth/app/admin/organizations': typeof AuthAppAdminOrganizationsRoute
+  '/_auth/app/admin/tenants': typeof AuthAppAdminTenantsRoute
+  '/_auth/app/admin/users': typeof AuthAppAdminUsersRoute
+  '/api/admin/data/$': typeof ApiAdminDataSplatRoute
+  '/_auth/app/admin/': typeof AuthAppAdminIndexRoute
+  '/_auth/app/settings/': typeof AuthAppSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/login' | '/signup' | '/api/auth/$' | '/app/'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/login'
+    | '/signup'
+    | '/api/me'
+    | '/app/admin'
+    | '/app/addresses'
+    | '/app/articles'
+    | '/app/documents'
+    | '/api/auth/$'
+    | '/api/data/$'
+    | '/api/metadata/$'
+    | '/app/'
+    | '/app/admin/organizations'
+    | '/app/admin/tenants'
+    | '/app/admin/users'
+    | '/api/admin/data/$'
+    | '/app/admin/'
+    | '/app/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/signup' | '/api/auth/$' | '/app'
+  to:
+    | '/'
+    | '/login'
+    | '/signup'
+    | '/api/me'
+    | '/app/addresses'
+    | '/app/articles'
+    | '/app/documents'
+    | '/api/auth/$'
+    | '/api/data/$'
+    | '/api/metadata/$'
+    | '/app'
+    | '/app/admin/organizations'
+    | '/app/admin/tenants'
+    | '/app/admin/users'
+    | '/api/admin/data/$'
+    | '/app/admin'
+    | '/app/settings'
   id:
     | '__root__'
     | '/'
@@ -96,15 +249,32 @@ export interface FileRouteTypes {
     | '/_auth/app'
     | '/_guest/login'
     | '/_guest/signup'
+    | '/api/me'
+    | '/_auth/app/admin'
+    | '/_auth/app/addresses'
+    | '/_auth/app/articles'
+    | '/_auth/app/documents'
     | '/api/auth/$'
+    | '/api/data/$'
+    | '/api/metadata/$'
     | '/_auth/app/'
+    | '/_auth/app/admin/organizations'
+    | '/_auth/app/admin/tenants'
+    | '/_auth/app/admin/users'
+    | '/api/admin/data/$'
+    | '/_auth/app/admin/'
+    | '/_auth/app/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
+  ApiMeRoute: typeof ApiMeRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiDataSplatRoute: typeof ApiDataSplatRoute
+  ApiMetadataSplatRoute: typeof ApiMetadataSplatRoute
+  ApiAdminDataSplatRoute: typeof ApiAdminDataSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -128,6 +298,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/me': {
+      id: '/api/me'
+      path: '/api/me'
+      fullPath: '/api/me'
+      preLoaderRoute: typeof ApiMeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_guest/signup': {
@@ -158,6 +335,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAppIndexRouteImport
       parentRoute: typeof AuthAppRouteRoute
     }
+    '/api/metadata/$': {
+      id: '/api/metadata/$'
+      path: '/api/metadata/$'
+      fullPath: '/api/metadata/$'
+      preLoaderRoute: typeof ApiMetadataSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/data/$': {
+      id: '/api/data/$'
+      path: '/api/data/$'
+      fullPath: '/api/data/$'
+      preLoaderRoute: typeof ApiDataSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -165,15 +356,112 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_auth/app/documents': {
+      id: '/_auth/app/documents'
+      path: '/documents'
+      fullPath: '/app/documents'
+      preLoaderRoute: typeof AuthAppDocumentsRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
+    '/_auth/app/articles': {
+      id: '/_auth/app/articles'
+      path: '/articles'
+      fullPath: '/app/articles'
+      preLoaderRoute: typeof AuthAppArticlesRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
+    '/_auth/app/addresses': {
+      id: '/_auth/app/addresses'
+      path: '/addresses'
+      fullPath: '/app/addresses'
+      preLoaderRoute: typeof AuthAppAddressesRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
+    '/_auth/app/admin': {
+      id: '/_auth/app/admin'
+      path: '/admin'
+      fullPath: '/app/admin'
+      preLoaderRoute: typeof AuthAppAdminRouteRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
+    '/_auth/app/settings/': {
+      id: '/_auth/app/settings/'
+      path: '/settings'
+      fullPath: '/app/settings/'
+      preLoaderRoute: typeof AuthAppSettingsIndexRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
+    '/_auth/app/admin/': {
+      id: '/_auth/app/admin/'
+      path: '/'
+      fullPath: '/app/admin/'
+      preLoaderRoute: typeof AuthAppAdminIndexRouteImport
+      parentRoute: typeof AuthAppAdminRouteRoute
+    }
+    '/api/admin/data/$': {
+      id: '/api/admin/data/$'
+      path: '/api/admin/data/$'
+      fullPath: '/api/admin/data/$'
+      preLoaderRoute: typeof ApiAdminDataSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_auth/app/admin/users': {
+      id: '/_auth/app/admin/users'
+      path: '/users'
+      fullPath: '/app/admin/users'
+      preLoaderRoute: typeof AuthAppAdminUsersRouteImport
+      parentRoute: typeof AuthAppAdminRouteRoute
+    }
+    '/_auth/app/admin/tenants': {
+      id: '/_auth/app/admin/tenants'
+      path: '/tenants'
+      fullPath: '/app/admin/tenants'
+      preLoaderRoute: typeof AuthAppAdminTenantsRouteImport
+      parentRoute: typeof AuthAppAdminRouteRoute
+    }
+    '/_auth/app/admin/organizations': {
+      id: '/_auth/app/admin/organizations'
+      path: '/organizations'
+      fullPath: '/app/admin/organizations'
+      preLoaderRoute: typeof AuthAppAdminOrganizationsRouteImport
+      parentRoute: typeof AuthAppAdminRouteRoute
+    }
   }
 }
 
+interface AuthAppAdminRouteRouteChildren {
+  AuthAppAdminOrganizationsRoute: typeof AuthAppAdminOrganizationsRoute
+  AuthAppAdminTenantsRoute: typeof AuthAppAdminTenantsRoute
+  AuthAppAdminUsersRoute: typeof AuthAppAdminUsersRoute
+  AuthAppAdminIndexRoute: typeof AuthAppAdminIndexRoute
+}
+
+const AuthAppAdminRouteRouteChildren: AuthAppAdminRouteRouteChildren = {
+  AuthAppAdminOrganizationsRoute: AuthAppAdminOrganizationsRoute,
+  AuthAppAdminTenantsRoute: AuthAppAdminTenantsRoute,
+  AuthAppAdminUsersRoute: AuthAppAdminUsersRoute,
+  AuthAppAdminIndexRoute: AuthAppAdminIndexRoute,
+}
+
+const AuthAppAdminRouteRouteWithChildren =
+  AuthAppAdminRouteRoute._addFileChildren(AuthAppAdminRouteRouteChildren)
+
 interface AuthAppRouteRouteChildren {
+  AuthAppAdminRouteRoute: typeof AuthAppAdminRouteRouteWithChildren
+  AuthAppAddressesRoute: typeof AuthAppAddressesRoute
+  AuthAppArticlesRoute: typeof AuthAppArticlesRoute
+  AuthAppDocumentsRoute: typeof AuthAppDocumentsRoute
   AuthAppIndexRoute: typeof AuthAppIndexRoute
+  AuthAppSettingsIndexRoute: typeof AuthAppSettingsIndexRoute
 }
 
 const AuthAppRouteRouteChildren: AuthAppRouteRouteChildren = {
+  AuthAppAdminRouteRoute: AuthAppAdminRouteRouteWithChildren,
+  AuthAppAddressesRoute: AuthAppAddressesRoute,
+  AuthAppArticlesRoute: AuthAppArticlesRoute,
+  AuthAppDocumentsRoute: AuthAppDocumentsRoute,
   AuthAppIndexRoute: AuthAppIndexRoute,
+  AuthAppSettingsIndexRoute: AuthAppSettingsIndexRoute,
 }
 
 const AuthAppRouteRouteWithChildren = AuthAppRouteRoute._addFileChildren(
@@ -210,7 +498,11 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRouteRoute: AuthRouteRouteWithChildren,
   GuestRouteRoute: GuestRouteRouteWithChildren,
+  ApiMeRoute: ApiMeRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiDataSplatRoute: ApiDataSplatRoute,
+  ApiMetadataSplatRoute: ApiMetadataSplatRoute,
+  ApiAdminDataSplatRoute: ApiAdminDataSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

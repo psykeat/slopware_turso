@@ -1,284 +1,159 @@
-# Slopware — Core Architecture
+# Core Architecture Specification
 
-Dieses Dokument definiert die unveränderlichen Kernregeln der Plattform. Es beschreibt die Zielarchitektur für eine metadata-getriebene, mehrsprachige, split-panel-fähige Multi-Tenant-Business-Plattform mit modernisierter App-Schicht und bewusst erhaltenem datenbankzentriertem Kern.
+## Purpose
 
-## 1. Zielplattform
+This document defines the non-negotiable architecture rules of the platform. It establishes a metadata-driven, database-centered, split-panel-capable, multi-tenant business platform with a modern application layer while preserving a deliberately authoritative relational core.[cite:1][cite:2]
 
-| Bereich                   | Ziel                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------- |
-| Runtime & Package Manager | Node.js + pnpm Workspaces                                                     |
-| App Runtime               | TanStack Start mit React, Vite, Middleware, Loadern, Server Functions und SSR |
-| Styling                   | Tailwind v4 + modulare UI-Komponenten                                         |
-| Identity & Session        | Better Auth                                                                   |
-| Integration Service       | Always-on Node.js Service für Connectors, Staging und Cron-Scheduling         |
-| Primäre Datenbank         | PostgreSQL 16+ / 17 / 18                                                      |
-| SQL-Zugriff               | Typsichere SQL-Zugriffsschicht, z. B. Drizzle oder Kysely                     |
-| Architekturprinzip        | App-modernisiert, aber datenbankzentriert                                     |
+## Core position
 
-Slopware ist keine reine UI-Anwendung, sondern eine metadata-getriebene Multi-Tenant-Business-Plattform. Die wichtigsten Invarianten dürfen nicht nur in Frontend oder losem Server-Code existieren, sondern müssen in Datenmodell, Datenbankarchitektur und kontrollierten Domain-Modulen verankert sein.
+The platform is not a frontend-first CRUD application. PostgreSQL, constraints, row-level security, effective metadata resolution, and controlled domain commands remain the source of truth for operational data, metadata, import staging, and derived data.[cite:1][cite:2]
 
-Daraus folgen vier Grundsätze:
+TanStack Start is the application runtime for routing, SSR, middleware, loaders, server functions, and workspace composition, but it does not replace database invariants, tenant isolation, or effective metadata resolvers.[cite:2][cite:3]
 
-1. Die App darf modernisiert werden, ohne die Datenkernlogik zu entkoppeln.
-2. Framework-Logik ersetzt keine DB-Invarianten.
-3. Generische Plattformfunktionen wie Imports, Upserts, Metadata-Auflösung, Split-Panel-Workspaces und AI-gestützte Schreibpfade müssen auf einer robusten relationalen Basis aufsetzen.
-4. Externe Integrationen laufen über einen isolierten Integration Service mit verschlüsselten Credentials und Staging-Pipeline.
+## Foundational invariants
 
-## 2. Wenn du nur 5 Regeln liest
+- PostgreSQL is the authoritative persistence layer for operational data, metadata, import staging data, and derived data.[cite:2]
+- Every tenant-scoped table must be protected by row-level security and tenant-aware access patterns.[cite:1][cite:2]
+- Framework logic never replaces database invariants.[cite:2]
+- Frontend, backend, imports, and assistant flows consume only effective metadata views, not raw metadata tables.[cite:1][cite:2]
+- Mutations occur only through validated create, patch, upsert paths or explicit domain commands.[cite:1][cite:2]
+- Posting and derived-data generation remain controlled domain concerns and must never degrade into unrestricted CRUD behavior.[cite:1][cite:2]
+- Hard delete is forbidden for business master data; archive or deactivate semantics must be used instead.[cite:2]
 
-- PostgreSQL, Constraints, RLS und effektive Views bleiben die autoritative Wahrheit.
-- Inter-Panel-Navigation läuft über Intents; Mutationen ausschließlich über Commands oder validierte Create/Patch/Upsert-Pfade.
-- Generic-first: Neue fachliche Oberflächen nutzen zuerst `ListPanelAdapter`/`DetailPanelAdapter` + Grid (`components/grid/`) statt Spezial-UI.
-- Spezialpanel sind Ausnahmefälle und müssen einen echten fachlichen oder ergonomischen Mehrwert haben.
-- Bevor neue Registries, Metadatenachsen oder Paneltypen entstehen, muss zuerst geprüft werden, ob der bestehende Kern reicht.
+## Layer model
 
-## 3. Begriffe
+### Database layer
 
-- **Organization** = Besitz- und Rechteeinheit oberhalb eines oder mehrerer Tenants.
-- **Tenant** = Isolations- und Rechteeinheit für Datenzugriff.
-- **Company** = fachliche Untereinheit innerhalb eines Tenants.
-- **Base Tenant** = systemweiter Sonder-Tenant für globale Metadaten; keine operativen Daten.
-- **Metadata** = Felddefinitionen, Layouts, Rules, Settings, Registries und UI-nahe Konfiguration.
-- **Schema Annotation** = Business-Namen, Beschreibungen und Data-Class-Metadaten für DB-Objekte.
-- **Master Data** = änderbare fachliche Stammdaten, nicht hart löschbar (UI-Begriff: Deactivate/Archive).
-- **Transaction Data** = fachliche Bewegungsdaten, nach Posting unveränderlich.
-- **Derived Data** = rekonstruierbare Ableitungen aus Transaktionen.
-- **Workspace** = adressierbarer Arbeitskontext innerhalb der App.
-- **Panel** = standardisierte UI-Einheit innerhalb eines Workspaces, z. B. Liste, Detail, Baum, Lookup, Belegzeilen oder Editor.
-- **Connector** = Externe Datenquelle/-senke (z. B. Shopify, XRechnung) mit Mapping und Staging.
+The database layer contains tables, foreign keys, constraints, row-level security, indexes, effective views, and where necessary trigger or function-based enforcement for hard invariants.[cite:2] Cross-tenant references must be technically prevented through tenant-safe key design where appropriate.[cite:2]
 
-## 4. Stabile System-Konstanten
+### Domain layer
 
-Diese UUIDs sind systemweit festgelegt und dürfen nicht geändert werden:
+The domain layer is the primary server-side application core. It contains read services, command services, entity registries, lookup services, effective metadata resolvers, posting orchestration, and assistant-safe mutation paths.[cite:2]
 
-| Konstante        | UUID                                   | Beschreibung                      |
-| ---------------- | -------------------------------------- | --------------------------------- |
-| `SYSTEM_ORG_ID`  | `00000000-0000-0000-0000-000000000001` | System-Organization               |
-| `BASE_TENANT_ID` | `00000000-0000-0000-0000-000000000002` | Base Tenant für globale Metadaten |
+### App layer
 
-## 5. Kerninvarianten
+The application layer contains routes, layouts, SSR, middleware, loaders, pending and error UI, workspace orchestration, and generic business interface composition.[cite:2][cite:3] It renders and coordinates, but it must not become the home of business invariants, posting logic, or tenant authorization truth.[cite:2]
 
-### K1 — PostgreSQL ist Source of Truth
+## Multi-tenancy
 
-Alle operativen Daten, Metadaten, Import-Staging-Daten und abgeleiteten Daten liegen primär in PostgreSQL. Die App darf keine alternative autoritative Persistenzschicht für Kernobjekte einführen.
+Multi-tenancy is mandatory and hard-enforced at database and server layers. Tenant context must always be resolved server-side from session, membership, and authorization state, and must never be trusted from arbitrary client payload, panel state, or query input except in explicitly protected administrative flows.[cite:1][cite:2]
 
-### K2 — TanStack Start ist App-Runtime, nicht Datenkern
+The Base Tenant is reserved for global metadata only and must never contain operational tenant data. Organization-level and tenant-level overrides are resolved into effective metadata views that the rest of the platform consumes.[cite:1][cite:2]
 
-TanStack Start steuer Routing, Loader, SSR, Middleware, Server Functions, Pending-/Error-UI und Workspace-Komposition. TanStack Start ersetzt weder RLS noch Constraints noch effektive Metadata-Resolver.
+## Effective metadata
 
-### K3 — Better Auth ist Identity-Layer, nicht Fachrechtesystem
+Effective metadata is the only valid consumable view for UI, orchestration, imports, and assistant-driven flows. The platform should expose effective contracts such as effective fields, layouts, rules, settings, lookups, validations, calculations, and commands, merged from Base Tenant, organization, and tenant scope by precedence.[cite:1][cite:2]
 
-Better Auth verwaltet Session-Cookies, User Identity und Login-Flows. Tenant-Membership, Rollen, System-Admin-Kontext und fachliche Rechte bleiben Teil der eigenen Domänenschicht.
+Tenant-defined extensions are allowed only inside the controlled extensibility model. They may influence presentation, validation, lookup behavior, defaulting, or declarative calculations, but they may not bypass security, redefine tenant isolation, or inject uncontrolled posting behavior.[cite:1][cite:2]
 
-### K4 — Multi-Tenancy wird hart erzwungen
+## Generic-first UI
 
-Tenant-Isolation wird auf Datenbank- und Server-Ebene erzwungen. Tenant-Kontext darf niemals frei aus Client-Body, Query-Parametern oder Workspace-Panel-State übernommen werden, außer in explizit geschützten System-Admin-Flows.
+The platform is generic-first. New business-facing surfaces must use standard panels and adapters before introducing custom views, because the architecture explicitly prefers list panels, detail panels, line panels, grids, and metadata-driven views over bespoke UI systems.[cite:2][cite:1]
 
-### K5 — RLS bleibt Pflicht für tenant-scoped Tabellen
+Specialized panels are allowed only when they provide real ergonomic or business value beyond the generic path. The existence of a special module must never create a parallel UI architecture.[cite:2]
 
-Jede tenant-scoped Tabelle muss RLS aktiviert haben. Jede solche Tabelle benötigt passende Policies und mindestens einen Index auf `tenant_id`.
+## Platform-wide command and focus system
 
-### K6 — Composite Tenant-Sicherheit bleibt erlaubt und gewünscht
+A platform-wide command and focus system is mandatory. Keyboard behavior, command execution, contextual actions, and focus movement must not be implemented ad hoc inside individual screens or components, but must be resolved through a shared runtime contract aligned with workspaces, panels, intents, and commands.[cite:2][cite:1]
 
-Wo fachlich relevant, bleiben zusammengesetzte Schlüssel und Foreign Keys mit `tenant_id` Teil der Integritätsstrategie, um Cross-Tenant-Referenzen technisch zu verhindern.
+### Command model
 
-### K7 — Effective Metadata bleibt die einzige gültige Sicht
+Every keyboard shortcut, toolbar action, contextual menu action, and command button must resolve to a registered UI or domain command. Components must never interpret raw key combinations as direct business logic.[cite:2][cite:1]
 
-Frontend, Backend, Imports und AI-Agenten lesen niemals rohe Metadata-Tabellen direkt. Konsumiert wird ausschließlich die aufgelöste effektive Sicht, insbesondere `effective_fields`, `effective_layout`, `effective_rules` und `effective_settings`.
+The platform should distinguish three command scopes:
 
-### K8 — JSONB bleibt nur für klar begrenzte Erweiterungen erlaubt
+- Global commands, available almost everywhere, such as opening core modules or showing the shortcut help.[cite:2]
+- Context commands, resolved from the active workspace, panel, entity, record, and mode.[cite:2][cite:1]
+- Local navigation commands, resolved inside focused controls such as grids, forms, dialogs, lookup tables, and designers.[cite:1]
 
-JSONB ist erlaubt für i18n-Werte, Labels, Hilfetexte, optionale UI-Konfiguration, Rules, Layoutdaten und additive tenant-spezifische Zusatzattribute. JSONB ist nicht erlaubt für Kernbeziehungen, Posting-Logik, Rechte, Tenant-Isolation oder Statusmaschinen.
+### Focus model
 
-### K9 — Generische Plattformpfade bleiben Kernfunktion
+A central focus manager must track the active workspace, active panel, focus area, selected entity, selected record, current field, current row, and interaction mode. Command resolution must always depend on this active focus context rather than on isolated component state.[cite:2][cite:1]
 
-Das System muss standardisierte Read-, Update-, Patch-, Upsert-, Import- und Command-Schnittstellen auf Tabellen- oder Entitätsebene unterstützen. Diese Pfade sind kein Ausnahmefall, sondern Kernfunktion der Plattform.
+Suggested focus areas include workspace, panel, grid, form, lookup, dialog, designer, and statistics overlay. This enables consistent contextual behavior for escape handling, lookup invocation, row navigation, save flows, and overlay management across the entire product.[cite:1][cite:2]
 
-### K10 — Große Datenmengen sind ein Kern-Use-Case
+### Keyboard contract
 
-Import großer Dateien, Massen-Upserts, Lookup-Listen, Virtualisierung großer Grid-Datenmengen und asynchrone Staging-Commit-Prozesse sind primäre Architekturziele. Die Plattform darf nicht auf kleine Einzelmutationen als dominantes Datenmodell optimiert werden.
+The keyboard model should be standardized at platform level. Representative platform shortcuts include:
 
-### K11 — AI schreibt nie roh auf Tabellen
+- `Alt+1` addresses module.[cite:1]
+- `Alt+2` articles module.[cite:1]
+- `Alt+3` documents module.[cite:1]
+- `Alt+0` company master data and settings.[cite:1]
+- `Alt+I` statistics module for the current context.[cite:1][cite:2]
+- `F3` create new record in current context.[cite:1]
+- `F4` delete or archive current record where allowed.[cite:1][cite:2]
+- `F5` open lookup table for the active lookup-capable field.[cite:1]
+- `F7` execute context transformation such as document conversion.[cite:1]
+- `F8` duplicate current record.[cite:1]
+- `F9` execute the current primary contextual operation.[cite:1]
+- `F10` save and close.[cite:1]
+- `?` open the shortcut cheat sheet.[cite:1]
+- `Esc` resolve contextual close, back, or cancel behavior through priority-based focus handling.[cite:1][cite:2]
 
-AI-gestützte Schreibzugriffe erfolgen ausschließlich über kontrollierte Domain-Commands, Registry-gesteuerte Table-Interfaces, Import-Pipelines oder Assistant-Services mit Tenant-, Rollen-, Validierungs- und Audit-Prüfung.
+Arrow keys, Home, End, Enter, Tab, and Shift+Tab must behave consistently within grids, forms, trees, dialogs, and lookup tables under the same contract.[cite:1]
 
-### K12 — Posting und Derived Data bleiben streng getrennt
+### Escape resolution
 
-Derived Data wie Lagerstände, Ledger oder Statistikfakten dürfen nur über definierte fachliche Posting- und Rebuild-Pfade entstehen. Direkte CRUD-Zugriffe auf Derived Data sind untersagt.
+Escape handling must follow a deterministic platform order. It should first close the most local overlay or transient state, then back out of the current editing context, and only then close panels or move back in workspace navigation.[cite:2][cite:1]
 
-### K13 — Kein Hard Delete für Master Data
+A recommended priority is: shortcut overlay, lookup popup, dialog or drawer, inline edit helper, unsaved edit cancel confirmation, panel-level back action, workspace-level close or previous intent.[cite:1][cite:2]
 
-Hard Delete ist für fachliche Master Data plattformweit verboten; UI-Begriff ist Deactivate/Archive.
+### Enforcing consistency
 
-### K14 — Tracking-Vollständigkeit ist Posting-Bedingung
+Consistency must be enforced structurally:
 
-Wenn ein Artikel oder eine Beleggruppe Tracking (Seriennummern/Chargen) erfordert, muss die Erfassung vor dem Posting vollständig sein. Unvollständige Tracking-Daten verhindern das Posting (409).
+- Every panel declares its supported commands.[cite:1]
+- The global keymap maps key bindings to commands, not to panel-specific handlers.[cite:1]
+- The active focus context determines which commands are enabled, visible, disabled, or unsupported.[cite:1]
+- The shortcut cheat sheet is generated from the command registry rather than maintained manually.[cite:1]
+- New UI primitives are not considered done until they implement their required keyboard contract.[cite:1][cite:2]
 
-### K15 — Integration-Credentials sind verschlüsselt
+## Platform standard components
 
-Credentials für externe Connectoren werden at-rest mit AES-256-GCM verschlüsselt. Der Klartext verlässt den Integration Service niemals in Richtung UI.
+The platform must standardize a small, reusable component family that covers most business-facing work without introducing parallel UI paradigms.[cite:1][cite:2]
 
-### K16 — Staging vor Posting für Imports
+### Required standard components
 
-Externe Daten landen zunächst in `import_row` (Staging). Die Übernahme in den operativen Kern erfolgt erst nach Mapping und Validierung.
+- DataGrid for list-oriented entity interpretation and large datasets.[cite:1][cite:2]
+- EntityMask for generic create, detail, patch, archive, and validation-driven form handling.[cite:1]
+- Dropdown and LookupTable for foreign-key and helper-table selection.[cite:1][cite:2]
+- NavigationTree for hierarchical filtering and navigation contexts such as address categories, article groups, document types, and document groups.[cite:1][cite:2]
+- TriViewWorkspace for the standard three-region business layout.[cite:2][cite:1]
+- StatisticsModule for context-sensitive read-only insights invoked from the active context.[cite:1][cite:2]
+- DocumentEditor for document-centric editing with a focused header and a line editor.[cite:1][cite:2]
+- ActionBar for visible command execution paired with the keyboard system.[cite:1]
+- InspectorPanel for compact dependent, read-mostly, or mixed detail contexts.[cite:1]
+- ContextTabs for switching between dependent subcontexts inside a panel or inspector area.[cite:1]
+- StatusBar for current tenant, company, module, record, state, and context hints.[cite:1]
 
-## 6. Lean Guardrails
+### Component governance
 
-- Keine neue Registry, wenn eine bestehende Konstante, Konfiguration oder Zuordnung ausreicht.
-- Kein neues Spezialpanel, wenn die bestehenden Panel-Adapter (`ListPanelAdapter`, `DetailPanelAdapter`, `LinesPanelAdapter`) oder das Grid (`components/grid/`) genügen.
-- Keine neue Metadata-Achse für einmalige fachliche Sonderfälle.
-- Keine neue Entity, wenn ein gefilterter Workspace auf bestehender Entity denselben Zweck erfüllt.
-- Keine parallelen generischen UI-Systeme neben dem festgelegten Standardpfad.
+All standard components must participate in the same command system, focus system, i18n model, effective metadata model, and validation model. A component that does not integrate with these platform contracts is not a standard component.[cite:1][cite:2]
 
-## 7. App- und UX-Architektur
+## TriView workspace pattern
 
-Kerninvarianten: adressierbare split-panel Workspaces (1–3 Panes), URL-/Search-Param-getriebener State (bookmarkbar, reload-stabil), Inter-Panel-Navigation über Intents, Mutationen nur über Commands. Generic UI (`ListPanelAdapter`, `DetailPanelAdapter`, Grid `components/grid/`) ist Leitprinzip — Spezialpanels sind begründungspflichtige Ausnahmen. Mehrsprachigkeit über JSONB `{de, en}` in Metadaten-Labels und `i18n-string`-Feldtyp.
+TriView should be formalized as a standard workspace pattern rather than implemented independently inside each module. It consists of three coordinated regions: a navigation tree on the left, a primary grid on the upper right, and a secondary contextual panel on the lower right.[cite:2][cite:1]
 
-### View-Routing (Convention over Configuration)
+Representative module mappings are:
 
-Views folgen einer strikten Dateikonvention. Der View-Key `[prefix]:[suffix]` leitet den Dateipfad deterministisch ab:
+- Articles: article group tree, article table, inventory or warehouse-related context for the selected article.[cite:1]
+- Addresses: address category tree, address table, tabbed contact, delivery address, or document context for the selected address.[cite:1]
+- Documents: document type or document group tree, document table, document line table for the selected document.[cite:1]
 
-```
-views/[prefix]/[prefix]-[suffix]-view.tsx
-```
+The TriView pattern must remain generic in runtime design even when its concrete entity mappings differ by module.[cite:1][cite:2]
 
-Beispiele: `document:lines` → `views/document/document-lines-view.tsx`, `meta:admin` → `views/meta/meta-admin-view.tsx`.
+## Documents and posting
 
-Schlüsselmodule:
+Document browsing and document editing should be separated. TriView is well suited for document discovery, filtering, and context inspection, while focused document editing should happen in a dedicated DocumentEditor workspace with a lightweight header and line editor.[cite:1][cite:2]
 
-- **`view-registry.ts`** — `VIEW_REGISTRY` mit Feldern `key`, `kind: "generic"|"custom"|"dashboard"`, `entity?`, `panelType?` und Labels
-- **`view-resolver.tsx`** — löst `key → React.ReactNode` per `import.meta.glob`; wirft Startup-Fehler für fehlende `kind: "custom"`-Dateien; rendert `EntityDataTable` generisch für `kind: "generic"`
-- **`workspace-context.tsx`** — `WorkspaceContext` + `useWorkspaceContext()`; ersetzt Prop-Drilling in allen View-Komponenten
-- **`workspace-presets.ts`** — Workspace-Presets (Layout, Panes) ausgelagert aus `workspace.tsx`
+Posting logic, status transitions, inventory effects, ledger generation, and fact generation remain controlled domain concerns and must not be moved into the frontend interaction model.[cite:1][cite:2]
 
-Alle Custom-Views sind `export default`-Komponenten ohne Props; State kommt ausschließlich über `useWorkspaceContext()`.
+## Priority of truth
 
-→ Vollständige Spezifikation: `.agents/02_workspace_architecture.md`, Implementierungsregeln: `.agents/04_implementation_patterns.md`
+In case of conflict, architecture priority should remain:
 
-## 8. Schichtenmodell
-
-### 8.1 App-Schicht
-
-Die App-Schicht basiert auf TanStack Start. Sie enthält Routen, Layouts, Middleware, Loader, Server Functions, SSR, route-spezifische Pending-/Error-UI und die generische Business-Oberfläche.
-
-Die App-Schicht orchestriert und rendert, aber sie ersetzt nicht den Domain-Layer.
-
-### 8.2 Auth-Schicht
-
-Better Auth liefert Sessions, Cookies und User Identity. Die aktive Locale, User-Session und grundlegende Anmeldung werden hier verankert. Tenant-Auswahl, Membership, Rollenmodell und System-Admin-Kontext werden darüber hinaus in der eigenen Domänenschicht geführt.
-
-### 8.3 Integration-Schicht (Service)
-
-Ein isolierter Node.js-Service verwaltet:
-
-- Connector-Cron-Scheduling und manuelle Trigger.
-- Staging-Pipeline (`import_batch`, `import_row`).
-- Credential-Verschlüsselung.
-- Kommunikation mit der Haupt-API via tenant-scoped JWT.
-
-### 8.4 Domain-Schicht
-
-Die Domain-Schicht ist die zentrale serverseitige Anwendungslogik. Sie ist frameworkarm und darf von UI, Jobs, Imports und AI gleichermaßen verwendet werden.
-
-Sie enthält:
-
-- `queries/*` — Read-Logik (`entity-read-service.ts`: listEntity, getEntityById)
-- `commands/*` — Write-Logik (`entity-command-service.ts`: createEntity, patchEntity, deleteEntity, deactivateEntity)
-- `entities/*` — Entity-Registry (`registry.ts`: ENTITY_REGISTRY Map + helpers)
-- `lookups/*` — Lookup-Logik (`helper-table-service.ts`: listHelperTables, getHelperTableItems)
-- `metadata/*` — Effective-Metadata-Zugriff (`effective-service.ts`: getEffectiveFields, etc.)
-- `runtime/*` — SqlClient, withTenant, SYSTEM_ORG_ID, BASE_TENANT_ID (`tenant-runtime.ts`)
-
-Zukünftig erweiterbar um: `posting/*`, `assistant/*`
-
-### 8.5 Datenbank-Schicht
-
-Die Datenbank-Schicht enthält:
-
-- Tabellen
-- RLS-Policies
-- Constraints
-- Indizes
-- effektive Views
-- ggf. Trigger/Funktionen für Kerninvarianten
-
-Wesentliche Integritätsregeln gehören in diese Schicht und dürfen nicht ausschließlich in TypeScript validiert werden.
-
-## 9. Tenant Isolation und Security
-
-→ Implementierungsdetails (withTenant, SET LOCAL, Drizzle-Schema): `.agents/tenant-context.md`
-
-### 9.1 Tenant-Kontext
-
-Jeder tenantbezogene Zugriff läuft innerhalb eines expliziten Tenant-Kontexts. Dieser wird aus Session, Membership und serverseitiger Autorisierung abgeleitet.
-
-### 9.2 Verbotene Muster
-
-Folgende Muster sind verboten:
-
-- `tenant_id` frei aus Client-Payload übernehmen
-- direkte SQL-Operationen ohne Tenant-Wrapper
-- rohe Metadaten ohne Resolver lesen
-- globale Metadaten ohne Admin-Kontext ändern
-- Cross-Tenant-FKs ohne Tenant-Schutz zulassen
-- Panel- oder Drag-and-drop-Zustände als Autorisierungsquelle verwenden
-
-### 9.3 Base Tenant
-
-Der Base Tenant enthält ausschließlich globale Metadaten. Operative Daten sind dort untersagt. Tenant-spezifische und organisationsspezifische Overrides werden auf Runtime-Ebene über effektive Resolver zusammengeführt.
-
-## 10. Metadata-Modell
-
-Metadaten bleiben in drei Scopes organisiert:
-
-- `global`
-- `organization`
-- `tenant`
-
-Die Auflösung erfolgt hierarchisch nach Priorität. Der spezifischste Scope gewinnt pro Artefakt. Frontend, Backend, Imports und Agenten arbeiten nur gegen die effektive Sicht.
-
-## 11. Imports und Integrationen
-
-Importe bleiben ein eigenes Subsystem mit Staging-Architektur.
-
-Kernobjekte und Prinzipien:
-
-- `import_batch` als Batch-Kopf
-- `import_row` als Staging-Zeile
-- Connector-Definitionen und tenant-spezifische Connectoren
-- Mapping auf Zieltabellen und Zielspalten
-- Validierung vor Commit
-- Atomicity-Modi auf Datei-, Entity- oder Run-Ebene
-
-Große Dateien dürfen über asynchrone Jobs, Worker oder Batch-Verarbeitung verarbeitet werden. PostgreSQL bleibt auch hier die autoritative Persistenzschicht.
-
-## 12. AI- und Assistant-Integration
-
-AI-Agenten dürfen nicht direkt auf Tabellen schreiben. Erlaubte Muster sind:
-
-- `assistant.table.create`
-- `assistant.table.patch`
-- `assistant.table.upsert`
-- `assistant.import.stage`
-- `assistant.command.run`
-
-Diese Pfade validieren mindestens:
-
-- Tenant-Kontext
-- Rollen
-- effektive Metadaten
-- Feldtypen
-- Pflichtfelder
-- i18n-Regeln
-- Schreibrechte
-- Audit-Logging
-
-## 13. Priorität der Wahrheit
-
-Bei Widerspruch gilt folgende Priorität:
-
-1. Diese Core Architecture
-2. Datenbank-Schema, Constraints, RLS und effektive Views
-3. Metadata Spec
-4. Implementation Patterns (SOP)
-5. Abgeleitete Dokumente, Agenten-Artefakte oder UI-Implementierungen
+1. Core architecture specification.[cite:2]
+2. Database schema, constraints, RLS policies, and effective views.[cite:1][cite:2]
+3. Project foundation and derived platform specifications.[cite:1][cite:2]
+4. Implementation patterns and UI artifacts.[cite:2][cite:3]

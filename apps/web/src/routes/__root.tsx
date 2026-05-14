@@ -51,6 +51,16 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
   shellComponent: RootDocument,
 });
 
+import { FocusProvider } from "@repo/ui/platform/focus-manager";
+import { CommandProvider } from "@repo/ui/platform/command-registry";
+import { GlobalCommands } from "@repo/ui/platform/global-commands";
+import { ShortcutHelp } from "@repo/ui/components/shortcut-help";
+import { StatisticsModule } from "@repo/ui/components/statistics-module";
+import { CommandPalette } from "@repo/ui/components/command-palette";
+import { TooltipProvider } from "@repo/ui/components/tooltip";
+import { I18nextProvider } from "react-i18next";
+import i18n from "#/lib/i18n";
+
 function RootDocument({ children }: { readonly children: React.ReactNode }) {
   return (
     // suppress since we're updating the "dark" class in ThemeProvider
@@ -59,10 +69,23 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <ThemeProvider>
-          {children}
-          <Toaster richColors />
-        </ThemeProvider>
+        <I18nextProvider i18n={i18n}>
+          <ThemeProvider>
+            <TooltipProvider>
+              <FocusProvider>
+                <CommandProvider>
+                  <GlobalCommands />
+                  <ShortcutHelp />
+                  <StatisticsModule />
+                  <CommandPalette />
+                  {children}
+                </CommandProvider>
+              </FocusProvider>
+            </TooltipProvider>
+            <Toaster richColors />
+          </ThemeProvider>
+        </I18nextProvider>
+
 
         <TanStackDevtools
           plugins={[

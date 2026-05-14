@@ -2,7 +2,7 @@ DROP TABLE "app_user";--> statement-breakpoint
 ALTER TABLE "user_tenant" DROP CONSTRAINT "user_tenant_user_id_tenant_id_unique";--> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN "display_name" text;--> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN "is_active" boolean DEFAULT true NOT NULL;--> statement-breakpoint
-ALTER TABLE "user" ADD COLUMN "last_company_id" uuid;--> statement-breakpoint
+ALTER TABLE "user" ADD COLUMN "last_company_id" text;--> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN "is_system_admin" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN "locale" varchar(5) DEFAULT 'de' NOT NULL;--> statement-breakpoint
 ALTER TABLE "helper_table_registry" ADD COLUMN "id" uuid DEFAULT uuidv7();--> statement-breakpoint
@@ -12,27 +12,17 @@ ALTER TABLE "schema_annotations" ADD PRIMARY KEY ("id");--> statement-breakpoint
 ALTER TABLE "user_tenant" ADD PRIMARY KEY ("id");--> statement-breakpoint
 ALTER TABLE "helper_table_registry" DROP CONSTRAINT "helper_table_registry_pkey";--> statement-breakpoint
 ALTER TABLE "helper_table_registry" ADD PRIMARY KEY ("id");--> statement-breakpoint
-ALTER TABLE "account" ALTER COLUMN "id" SET DATA TYPE uuid USING "id"::uuid;--> statement-breakpoint
-ALTER TABLE "account" ALTER COLUMN "id" SET DEFAULT uuidv7();--> statement-breakpoint
-ALTER TABLE "account" ALTER COLUMN "user_id" SET DATA TYPE uuid USING "user_id"::uuid;--> statement-breakpoint
 ALTER TABLE "account" ALTER COLUMN "access_token_expires_at" SET DATA TYPE timestamp with time zone USING "access_token_expires_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "account" ALTER COLUMN "refresh_token_expires_at" SET DATA TYPE timestamp with time zone USING "refresh_token_expires_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "account" ALTER COLUMN "created_at" SET DATA TYPE timestamp with time zone USING "created_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "account" ALTER COLUMN "updated_at" SET DATA TYPE timestamp with time zone USING "updated_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "account" ALTER COLUMN "updated_at" SET DEFAULT now();--> statement-breakpoint
-ALTER TABLE "session" ALTER COLUMN "id" SET DATA TYPE uuid USING "id"::uuid;--> statement-breakpoint
-ALTER TABLE "session" ALTER COLUMN "id" SET DEFAULT uuidv7();--> statement-breakpoint
 ALTER TABLE "session" ALTER COLUMN "expires_at" SET DATA TYPE timestamp with time zone USING "expires_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "session" ALTER COLUMN "created_at" SET DATA TYPE timestamp with time zone USING "created_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "session" ALTER COLUMN "updated_at" SET DATA TYPE timestamp with time zone USING "updated_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "session" ALTER COLUMN "updated_at" SET DEFAULT now();--> statement-breakpoint
-ALTER TABLE "session" ALTER COLUMN "user_id" SET DATA TYPE uuid USING "user_id"::uuid;--> statement-breakpoint
-ALTER TABLE "user" ALTER COLUMN "id" SET DATA TYPE uuid USING "id"::uuid;--> statement-breakpoint
-ALTER TABLE "user" ALTER COLUMN "id" SET DEFAULT uuidv7();--> statement-breakpoint
 ALTER TABLE "user" ALTER COLUMN "created_at" SET DATA TYPE timestamp with time zone USING "created_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "user" ALTER COLUMN "updated_at" SET DATA TYPE timestamp with time zone USING "updated_at"::timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "verification" ALTER COLUMN "id" SET DATA TYPE uuid USING "id"::uuid;--> statement-breakpoint
-ALTER TABLE "verification" ALTER COLUMN "id" SET DEFAULT uuidv7();--> statement-breakpoint
 ALTER TABLE "verification" ALTER COLUMN "expires_at" SET DATA TYPE timestamp with time zone USING "expires_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "verification" ALTER COLUMN "created_at" SET DATA TYPE timestamp with time zone USING "created_at"::timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "verification" ALTER COLUMN "updated_at" SET DATA TYPE timestamp with time zone USING "updated_at"::timestamp with time zone;--> statement-breakpoint

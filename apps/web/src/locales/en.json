@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "addresses": "Addresses",
+    "articles": "Articles",
+    "documents": "Documents",
+    "settings": "Settings",
+    "administration": "Administration",
+    "baseTenant": "Base Tenant"
+  },
+  "modules": {
+    "addresses": "Addresses",
+    "articles": "Articles",
+    "documents": "Documents"
+  },
+  "actions": {
+    "new": "New",
+    "archive": "Archive",
+    "duplicate": "Duplicate",
+    "save": "Save",
+    "cancel": "Cancel",
+    "post": "Post",
+    "edit": "Edit",
+    "close": "Close",
+    "export": "Export",
+    "filter": "Filter",
+    "refresh": "Refresh"
+  },
+  "shortcuts": {
+    "title": "Keyboard Shortcuts",
+    "navigation": "Navigation",
+    "recordOps": "Record Operations",
+    "workflow": "Workflow",
+    "navKeys": "Navigation Keys",
+    "moveUpDown": "Move up / down",
+    "firstLast": "First / last row",
+    "nextPrevField": "Next / previous field",
+    "confirm": "Confirm"
+  },
+  "status": {
+    "online": "System Online",
+    "offline": "Offline"
+  },
+  "empty": {
+    "title": "No results.",
+    "subtitle": "Try a different filter, or create a new record."
+  },
+  "grid": {
+    "records": "{{count}} records"
+  },
+  "tree": {
+    "categories": "Categories",
+    "groups": "Groups",
+    "types": "Types"
+  },
+  "tenant": {
+    "switch": "Switch Tenant",
+    "new": "New Tenant…"
+  },
+  "avatar": {
+    "language": "Language",
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "day": "Day",
+    "night": "Night",
+    "auto": "Auto",
+    "signOut": "Sign Out",
+    "userConfig": "User Config"
+  },
+  "form": {
+    "requiredHint": "Required fields marked *. Press F10 to save, Esc to cancel.",
+    "saving": "Saving…",
+    "create": "Create",
+    "update": "Update"
+  },
+  "commands": {
+    "newRecord": "New Record",
+    "archive": "Archive",
+    "duplicate": "Duplicate",
+    "saveClose": "Save & Close",
+    "statistics": "Statistics",
+    "palette": "Command Palette",
+    "help": "Keyboard Shortcuts",
+    "openDocument": "Open Document",
+    "postDocument": "Post Document",
+    "transform": "Transform"
+  },
+  "stats": {
+    "title": "Statistics",
+    "total": "Total",
+    "newThisMonth": "New this month",
+    "lowStock": "Low stock",
+    "draftCount": "Drafts",
+    "totalValue": "Total value"
+  }
+}

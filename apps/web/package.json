@@ -20,6 +20,8 @@
     "@tanstack/react-router-ssr-query": "catalog:",
     "@tanstack/react-start": "catalog:",
     "date-fns": "catalog:",
+    "i18next": "catalog:",
+    "react-i18next": "catalog:",
     "drizzle-orm": "catalog:",
     "lucide-react": "catalog:",
     "motion": "catalog:",

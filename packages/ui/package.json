@@ -20,11 +20,14 @@
     "clsx": "catalog:",
     "date-fns": "catalog:",
     "lucide-react": "catalog:",
+    "react-i18next": "catalog:",
     "motion": "catalog:",
+    "react-resizable-panels": "catalog:",
     "shadcn": "catalog:",
     "sonner": "catalog:",
     "tailwind-merge": "catalog:",
     "tw-animate-css": "catalog:",
+    "vaul": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -35,7 +38,9 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
+    "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
+    "i18next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   }

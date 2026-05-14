@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "addresses": "Adressen",
+    "articles": "Artikel",
+    "documents": "Belege",
+    "settings": "Einstellungen",
+    "administration": "Administration",
+    "baseTenant": "Basis-Mandant"
+  },
+  "modules": {
+    "addresses": "Adressen",
+    "articles": "Artikel",
+    "documents": "Belege"
+  },
+  "actions": {
+    "new": "Neu",
+    "archive": "Archivieren",
+    "duplicate": "Duplizieren",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "post": "Buchen",
+    "edit": "Bearbeiten",
+    "close": "Schließen",
+    "export": "Exportieren",
+    "filter": "Filtern",
+    "refresh": "Aktualisieren"
+  },
+  "shortcuts": {
+    "title": "Tastenkürzel",
+    "navigation": "Navigation",
+    "recordOps": "Datensatz-Operationen",
+    "workflow": "Workflow",
+    "navKeys": "Navigationstasten",
+    "moveUpDown": "Nach oben / unten",
+    "firstLast": "Erste / letzte Zeile",
+    "nextPrevField": "Nächstes / vorheriges Feld",
+    "confirm": "Bestätigen"
+  },
+  "status": {
+    "online": "System Online",
+    "offline": "Offline"
+  },
+  "empty": {
+    "title": "Keine Ergebnisse.",
+    "subtitle": "Versuchen Sie einen anderen Filter oder erstellen Sie einen neuen Datensatz."
+  },
+  "grid": {
+    "records": "{{count}} Einträge"
+  },
+  "tree": {
+    "categories": "Kategorien",
+    "groups": "Gruppen",
+    "types": "Typen"
+  },
+  "tenant": {
+    "switch": "Mandant wechseln",
+    "new": "Neuer Mandant…"
+  },
+  "avatar": {
+    "language": "Sprache",
+    "appearance": "Darstellung",
+    "theme": "Thema",
+    "day": "Hell",
+    "night": "Dunkel",
+    "auto": "Auto",
+    "signOut": "Abmelden",
+    "userConfig": "Benutzerkonfiguration"
+  },
+  "form": {
+    "requiredHint": "Pflichtfelder mit * markiert. F10 zum Speichern, Esc zum Abbrechen.",
+    "saving": "Wird gespeichert…",
+    "create": "Erstellen",
+    "update": "Aktualisieren"
+  },
+  "commands": {
+    "newRecord": "Neuer Datensatz",
+    "archive": "Archivieren",
+    "duplicate": "Duplizieren",
+    "saveClose": "Speichern & Schließen",
+    "statistics": "Statistik",
+    "palette": "Befehlspalette",
+    "help": "Tastenkürzel",
+    "openDocument": "Beleg öffnen",
+    "postDocument": "Beleg buchen",
+    "transform": "Umwandeln"
+  },
+  "stats": {
+    "title": "Statistik",
+    "total": "Gesamt",
+    "newThisMonth": "Neu diesen Monat",
+    "lowStock": "Niedriger Lagerbestand",
+    "draftCount": "Entwürfe",
+    "totalValue": "Gesamtwert"
+  }
+}

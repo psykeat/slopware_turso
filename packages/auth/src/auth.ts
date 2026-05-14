@@ -2,7 +2,8 @@ import "@tanstack/react-start/server-only";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import { db } from "@repo/db";
 import * as schema from "@repo/db/schema";
-import { betterAuth } from "better-auth/minimal";
+import { initializeDefaultTenant } from "@repo/db/services/tenant";
+import { betterAuth } from "better-auth";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 
 export const auth = betterAuth({
@@ -18,26 +19,6 @@ export const auth = betterAuth({
 
   // https://www.better-auth.com/docs/integrations/tanstack#usage-tips
   plugins: [tanstackStartCookies()],
-
-  // https://www.better-auth.com/docs/concepts/session-management#session-caching
-  session: {
-    cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60, // 5 minutes
-    },
-  },
-
-  // https://www.better-auth.com/docs/concepts/oauth
-  socialProviders: {
-    github: {
-      clientId: process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-    },
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    },
-  },
 
   // https://www.better-auth.com/docs/authentication/email-password
   emailAndPassword: {

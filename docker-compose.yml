@@ -1,0 +1,14 @@
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data_slopware:/var/lib/postgresql
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=bvh9j35v
+      - POSTGRES_DB=slopware
+
+volumes:
+  postgres_data_slopware:

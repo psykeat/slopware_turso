@@ -12,24 +12,38 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as GuestRouteRouteImport } from './routes/_guest/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiTenantsRouteImport } from './routes/api/tenants'
 import { Route as ApiMeRouteImport } from './routes/api/me'
+import { Route as ApiActiveTenantRouteImport } from './routes/api/active-tenant'
 import { Route as GuestSignupRouteImport } from './routes/_guest/signup'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as AuthAppRouteRouteImport } from './routes/_auth/app/route'
 import { Route as AuthAppIndexRouteImport } from './routes/_auth/app/index'
+import { Route as ApiStatsDashboardRouteImport } from './routes/api/stats/dashboard'
 import { Route as ApiMetadataSplatRouteImport } from './routes/api/metadata/$'
+import { Route as ApiFeedbackSubmitRouteImport } from './routes/api/feedback/submit'
+import { Route as ApiDocumentsTreeRouteImport } from './routes/api/documents/tree'
 import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiAdminLlmConfigRouteImport } from './routes/api/admin/llm-config'
 import { Route as AuthAppDocumentsRouteImport } from './routes/_auth/app/documents'
 import { Route as AuthAppArticlesRouteImport } from './routes/_auth/app/articles'
 import { Route as AuthAppAddressesRouteImport } from './routes/_auth/app/addresses'
 import { Route as AuthAppAdminRouteRouteImport } from './routes/_auth/app/admin/route'
 import { Route as AuthAppSettingsIndexRouteImport } from './routes/_auth/app/settings/index'
 import { Route as AuthAppAdminIndexRouteImport } from './routes/_auth/app/admin/index'
+import { Route as ApiStatsArticleArticleIdRouteImport } from './routes/api/stats/article/$articleId'
+import { Route as ApiStatsAddressAddressIdRouteImport } from './routes/api/stats/address/$addressId'
+import { Route as ApiDocumentsDocumentIdStornoRouteImport } from './routes/api/documents/$documentId/storno'
+import { Route as ApiDocumentsDocumentIdPostRouteImport } from './routes/api/documents/$documentId/post'
+import { Route as ApiDocumentsDocumentIdDeltaRouteImport } from './routes/api/documents/$documentId/delta'
+import { Route as ApiDocumentsDocumentIdConvertRouteImport } from './routes/api/documents/$documentId/convert'
+import { Route as ApiArticlesArticleIdPricingRouteImport } from './routes/api/articles/$articleId/pricing'
 import { Route as ApiAdminDataSplatRouteImport } from './routes/api/admin/data/$'
 import { Route as AuthAppAdminUsersRouteImport } from './routes/_auth/app/admin/users'
 import { Route as AuthAppAdminTenantsRouteImport } from './routes/_auth/app/admin/tenants'
 import { Route as AuthAppAdminOrganizationsRouteImport } from './routes/_auth/app/admin/organizations'
+import { Route as AuthAppAdminLlmConfigRouteImport } from './routes/_auth/app/admin/llm-config'
 
 const GuestRouteRoute = GuestRouteRouteImport.update({
   id: '/_guest',
@@ -44,9 +58,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTenantsRoute = ApiTenantsRouteImport.update({
+  id: '/api/tenants',
+  path: '/api/tenants',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMeRoute = ApiMeRouteImport.update({
   id: '/api/me',
   path: '/api/me',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiActiveTenantRoute = ApiActiveTenantRouteImport.update({
+  id: '/api/active-tenant',
+  path: '/api/active-tenant',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuestSignupRoute = GuestSignupRouteImport.update({
@@ -69,9 +93,24 @@ const AuthAppIndexRoute = AuthAppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthAppRouteRoute,
 } as any)
+const ApiStatsDashboardRoute = ApiStatsDashboardRouteImport.update({
+  id: '/api/stats/dashboard',
+  path: '/api/stats/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMetadataSplatRoute = ApiMetadataSplatRouteImport.update({
   id: '/api/metadata/$',
   path: '/api/metadata/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFeedbackSubmitRoute = ApiFeedbackSubmitRouteImport.update({
+  id: '/api/feedback/submit',
+  path: '/api/feedback/submit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDocumentsTreeRoute = ApiDocumentsTreeRouteImport.update({
+  id: '/api/documents/tree',
+  path: '/api/documents/tree',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDataSplatRoute = ApiDataSplatRouteImport.update({
@@ -82,6 +121,11 @@ const ApiDataSplatRoute = ApiDataSplatRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminLlmConfigRoute = ApiAdminLlmConfigRouteImport.update({
+  id: '/api/admin/llm-config',
+  path: '/api/admin/llm-config',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthAppDocumentsRoute = AuthAppDocumentsRouteImport.update({
@@ -114,6 +158,48 @@ const AuthAppAdminIndexRoute = AuthAppAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthAppAdminRouteRoute,
 } as any)
+const ApiStatsArticleArticleIdRoute =
+  ApiStatsArticleArticleIdRouteImport.update({
+    id: '/api/stats/article/$articleId',
+    path: '/api/stats/article/$articleId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiStatsAddressAddressIdRoute =
+  ApiStatsAddressAddressIdRouteImport.update({
+    id: '/api/stats/address/$addressId',
+    path: '/api/stats/address/$addressId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiDocumentsDocumentIdStornoRoute =
+  ApiDocumentsDocumentIdStornoRouteImport.update({
+    id: '/api/documents/$documentId/storno',
+    path: '/api/documents/$documentId/storno',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiDocumentsDocumentIdPostRoute =
+  ApiDocumentsDocumentIdPostRouteImport.update({
+    id: '/api/documents/$documentId/post',
+    path: '/api/documents/$documentId/post',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiDocumentsDocumentIdDeltaRoute =
+  ApiDocumentsDocumentIdDeltaRouteImport.update({
+    id: '/api/documents/$documentId/delta',
+    path: '/api/documents/$documentId/delta',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiDocumentsDocumentIdConvertRoute =
+  ApiDocumentsDocumentIdConvertRouteImport.update({
+    id: '/api/documents/$documentId/convert',
+    path: '/api/documents/$documentId/convert',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiArticlesArticleIdPricingRoute =
+  ApiArticlesArticleIdPricingRouteImport.update({
+    id: '/api/articles/$articleId/pricing',
+    path: '/api/articles/$articleId/pricing',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAdminDataSplatRoute = ApiAdminDataSplatRouteImport.update({
   id: '/api/admin/data/$',
   path: '/api/admin/data/$',
@@ -135,25 +221,44 @@ const AuthAppAdminOrganizationsRoute =
     path: '/organizations',
     getParentRoute: () => AuthAppAdminRouteRoute,
   } as any)
+const AuthAppAdminLlmConfigRoute = AuthAppAdminLlmConfigRouteImport.update({
+  id: '/llm-config',
+  path: '/llm-config',
+  getParentRoute: () => AuthAppAdminRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AuthAppRouteRouteWithChildren
   '/login': typeof GuestLoginRoute
   '/signup': typeof GuestSignupRoute
+  '/api/active-tenant': typeof ApiActiveTenantRoute
   '/api/me': typeof ApiMeRoute
+  '/api/tenants': typeof ApiTenantsRoute
   '/app/admin': typeof AuthAppAdminRouteRouteWithChildren
   '/app/addresses': typeof AuthAppAddressesRoute
   '/app/articles': typeof AuthAppArticlesRoute
   '/app/documents': typeof AuthAppDocumentsRoute
+  '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
+  '/api/documents/tree': typeof ApiDocumentsTreeRoute
+  '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
+  '/api/stats/dashboard': typeof ApiStatsDashboardRoute
   '/app/': typeof AuthAppIndexRoute
+  '/app/admin/llm-config': typeof AuthAppAdminLlmConfigRoute
   '/app/admin/organizations': typeof AuthAppAdminOrganizationsRoute
   '/app/admin/tenants': typeof AuthAppAdminTenantsRoute
   '/app/admin/users': typeof AuthAppAdminUsersRoute
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
+  '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
+  '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
+  '/api/documents/$documentId/delta': typeof ApiDocumentsDocumentIdDeltaRoute
+  '/api/documents/$documentId/post': typeof ApiDocumentsDocumentIdPostRoute
+  '/api/documents/$documentId/storno': typeof ApiDocumentsDocumentIdStornoRoute
+  '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
+  '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/app/admin/': typeof AuthAppAdminIndexRoute
   '/app/settings/': typeof AuthAppSettingsIndexRoute
 }
@@ -161,18 +266,32 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof GuestLoginRoute
   '/signup': typeof GuestSignupRoute
+  '/api/active-tenant': typeof ApiActiveTenantRoute
   '/api/me': typeof ApiMeRoute
+  '/api/tenants': typeof ApiTenantsRoute
   '/app/addresses': typeof AuthAppAddressesRoute
   '/app/articles': typeof AuthAppArticlesRoute
   '/app/documents': typeof AuthAppDocumentsRoute
+  '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
+  '/api/documents/tree': typeof ApiDocumentsTreeRoute
+  '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
+  '/api/stats/dashboard': typeof ApiStatsDashboardRoute
   '/app': typeof AuthAppIndexRoute
+  '/app/admin/llm-config': typeof AuthAppAdminLlmConfigRoute
   '/app/admin/organizations': typeof AuthAppAdminOrganizationsRoute
   '/app/admin/tenants': typeof AuthAppAdminTenantsRoute
   '/app/admin/users': typeof AuthAppAdminUsersRoute
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
+  '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
+  '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
+  '/api/documents/$documentId/delta': typeof ApiDocumentsDocumentIdDeltaRoute
+  '/api/documents/$documentId/post': typeof ApiDocumentsDocumentIdPostRoute
+  '/api/documents/$documentId/storno': typeof ApiDocumentsDocumentIdStornoRoute
+  '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
+  '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/app/admin': typeof AuthAppAdminIndexRoute
   '/app/settings': typeof AuthAppSettingsIndexRoute
 }
@@ -184,19 +303,33 @@ export interface FileRoutesById {
   '/_auth/app': typeof AuthAppRouteRouteWithChildren
   '/_guest/login': typeof GuestLoginRoute
   '/_guest/signup': typeof GuestSignupRoute
+  '/api/active-tenant': typeof ApiActiveTenantRoute
   '/api/me': typeof ApiMeRoute
+  '/api/tenants': typeof ApiTenantsRoute
   '/_auth/app/admin': typeof AuthAppAdminRouteRouteWithChildren
   '/_auth/app/addresses': typeof AuthAppAddressesRoute
   '/_auth/app/articles': typeof AuthAppArticlesRoute
   '/_auth/app/documents': typeof AuthAppDocumentsRoute
+  '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
+  '/api/documents/tree': typeof ApiDocumentsTreeRoute
+  '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
+  '/api/stats/dashboard': typeof ApiStatsDashboardRoute
   '/_auth/app/': typeof AuthAppIndexRoute
+  '/_auth/app/admin/llm-config': typeof AuthAppAdminLlmConfigRoute
   '/_auth/app/admin/organizations': typeof AuthAppAdminOrganizationsRoute
   '/_auth/app/admin/tenants': typeof AuthAppAdminTenantsRoute
   '/_auth/app/admin/users': typeof AuthAppAdminUsersRoute
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
+  '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
+  '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
+  '/api/documents/$documentId/delta': typeof ApiDocumentsDocumentIdDeltaRoute
+  '/api/documents/$documentId/post': typeof ApiDocumentsDocumentIdPostRoute
+  '/api/documents/$documentId/storno': typeof ApiDocumentsDocumentIdStornoRoute
+  '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
+  '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/_auth/app/admin/': typeof AuthAppAdminIndexRoute
   '/_auth/app/settings/': typeof AuthAppSettingsIndexRoute
 }
@@ -207,19 +340,33 @@ export interface FileRouteTypes {
     | '/app'
     | '/login'
     | '/signup'
+    | '/api/active-tenant'
     | '/api/me'
+    | '/api/tenants'
     | '/app/admin'
     | '/app/addresses'
     | '/app/articles'
     | '/app/documents'
+    | '/api/admin/llm-config'
     | '/api/auth/$'
     | '/api/data/$'
+    | '/api/documents/tree'
+    | '/api/feedback/submit'
     | '/api/metadata/$'
+    | '/api/stats/dashboard'
     | '/app/'
+    | '/app/admin/llm-config'
     | '/app/admin/organizations'
     | '/app/admin/tenants'
     | '/app/admin/users'
     | '/api/admin/data/$'
+    | '/api/articles/$articleId/pricing'
+    | '/api/documents/$documentId/convert'
+    | '/api/documents/$documentId/delta'
+    | '/api/documents/$documentId/post'
+    | '/api/documents/$documentId/storno'
+    | '/api/stats/address/$addressId'
+    | '/api/stats/article/$articleId'
     | '/app/admin/'
     | '/app/settings/'
   fileRoutesByTo: FileRoutesByTo
@@ -227,18 +374,32 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/signup'
+    | '/api/active-tenant'
     | '/api/me'
+    | '/api/tenants'
     | '/app/addresses'
     | '/app/articles'
     | '/app/documents'
+    | '/api/admin/llm-config'
     | '/api/auth/$'
     | '/api/data/$'
+    | '/api/documents/tree'
+    | '/api/feedback/submit'
     | '/api/metadata/$'
+    | '/api/stats/dashboard'
     | '/app'
+    | '/app/admin/llm-config'
     | '/app/admin/organizations'
     | '/app/admin/tenants'
     | '/app/admin/users'
     | '/api/admin/data/$'
+    | '/api/articles/$articleId/pricing'
+    | '/api/documents/$documentId/convert'
+    | '/api/documents/$documentId/delta'
+    | '/api/documents/$documentId/post'
+    | '/api/documents/$documentId/storno'
+    | '/api/stats/address/$addressId'
+    | '/api/stats/article/$articleId'
     | '/app/admin'
     | '/app/settings'
   id:
@@ -249,19 +410,33 @@ export interface FileRouteTypes {
     | '/_auth/app'
     | '/_guest/login'
     | '/_guest/signup'
+    | '/api/active-tenant'
     | '/api/me'
+    | '/api/tenants'
     | '/_auth/app/admin'
     | '/_auth/app/addresses'
     | '/_auth/app/articles'
     | '/_auth/app/documents'
+    | '/api/admin/llm-config'
     | '/api/auth/$'
     | '/api/data/$'
+    | '/api/documents/tree'
+    | '/api/feedback/submit'
     | '/api/metadata/$'
+    | '/api/stats/dashboard'
     | '/_auth/app/'
+    | '/_auth/app/admin/llm-config'
     | '/_auth/app/admin/organizations'
     | '/_auth/app/admin/tenants'
     | '/_auth/app/admin/users'
     | '/api/admin/data/$'
+    | '/api/articles/$articleId/pricing'
+    | '/api/documents/$documentId/convert'
+    | '/api/documents/$documentId/delta'
+    | '/api/documents/$documentId/post'
+    | '/api/documents/$documentId/storno'
+    | '/api/stats/address/$addressId'
+    | '/api/stats/article/$articleId'
     | '/_auth/app/admin/'
     | '/_auth/app/settings/'
   fileRoutesById: FileRoutesById
@@ -270,11 +445,24 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
+  ApiActiveTenantRoute: typeof ApiActiveTenantRoute
   ApiMeRoute: typeof ApiMeRoute
+  ApiTenantsRoute: typeof ApiTenantsRoute
+  ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDataSplatRoute: typeof ApiDataSplatRoute
+  ApiDocumentsTreeRoute: typeof ApiDocumentsTreeRoute
+  ApiFeedbackSubmitRoute: typeof ApiFeedbackSubmitRoute
   ApiMetadataSplatRoute: typeof ApiMetadataSplatRoute
+  ApiStatsDashboardRoute: typeof ApiStatsDashboardRoute
   ApiAdminDataSplatRoute: typeof ApiAdminDataSplatRoute
+  ApiArticlesArticleIdPricingRoute: typeof ApiArticlesArticleIdPricingRoute
+  ApiDocumentsDocumentIdConvertRoute: typeof ApiDocumentsDocumentIdConvertRoute
+  ApiDocumentsDocumentIdDeltaRoute: typeof ApiDocumentsDocumentIdDeltaRoute
+  ApiDocumentsDocumentIdPostRoute: typeof ApiDocumentsDocumentIdPostRoute
+  ApiDocumentsDocumentIdStornoRoute: typeof ApiDocumentsDocumentIdStornoRoute
+  ApiStatsAddressAddressIdRoute: typeof ApiStatsAddressAddressIdRoute
+  ApiStatsArticleArticleIdRoute: typeof ApiStatsArticleArticleIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -300,11 +488,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/tenants': {
+      id: '/api/tenants'
+      path: '/api/tenants'
+      fullPath: '/api/tenants'
+      preLoaderRoute: typeof ApiTenantsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/me': {
       id: '/api/me'
       path: '/api/me'
       fullPath: '/api/me'
       preLoaderRoute: typeof ApiMeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/active-tenant': {
+      id: '/api/active-tenant'
+      path: '/api/active-tenant'
+      fullPath: '/api/active-tenant'
+      preLoaderRoute: typeof ApiActiveTenantRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_guest/signup': {
@@ -335,11 +537,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAppIndexRouteImport
       parentRoute: typeof AuthAppRouteRoute
     }
+    '/api/stats/dashboard': {
+      id: '/api/stats/dashboard'
+      path: '/api/stats/dashboard'
+      fullPath: '/api/stats/dashboard'
+      preLoaderRoute: typeof ApiStatsDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/metadata/$': {
       id: '/api/metadata/$'
       path: '/api/metadata/$'
       fullPath: '/api/metadata/$'
       preLoaderRoute: typeof ApiMetadataSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/feedback/submit': {
+      id: '/api/feedback/submit'
+      path: '/api/feedback/submit'
+      fullPath: '/api/feedback/submit'
+      preLoaderRoute: typeof ApiFeedbackSubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/tree': {
+      id: '/api/documents/tree'
+      path: '/api/documents/tree'
+      fullPath: '/api/documents/tree'
+      preLoaderRoute: typeof ApiDocumentsTreeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/data/$': {
@@ -354,6 +577,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/llm-config': {
+      id: '/api/admin/llm-config'
+      path: '/api/admin/llm-config'
+      fullPath: '/api/admin/llm-config'
+      preLoaderRoute: typeof ApiAdminLlmConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_auth/app/documents': {
@@ -398,6 +628,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAppAdminIndexRouteImport
       parentRoute: typeof AuthAppAdminRouteRoute
     }
+    '/api/stats/article/$articleId': {
+      id: '/api/stats/article/$articleId'
+      path: '/api/stats/article/$articleId'
+      fullPath: '/api/stats/article/$articleId'
+      preLoaderRoute: typeof ApiStatsArticleArticleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/stats/address/$addressId': {
+      id: '/api/stats/address/$addressId'
+      path: '/api/stats/address/$addressId'
+      fullPath: '/api/stats/address/$addressId'
+      preLoaderRoute: typeof ApiStatsAddressAddressIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/$documentId/storno': {
+      id: '/api/documents/$documentId/storno'
+      path: '/api/documents/$documentId/storno'
+      fullPath: '/api/documents/$documentId/storno'
+      preLoaderRoute: typeof ApiDocumentsDocumentIdStornoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/$documentId/post': {
+      id: '/api/documents/$documentId/post'
+      path: '/api/documents/$documentId/post'
+      fullPath: '/api/documents/$documentId/post'
+      preLoaderRoute: typeof ApiDocumentsDocumentIdPostRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/$documentId/delta': {
+      id: '/api/documents/$documentId/delta'
+      path: '/api/documents/$documentId/delta'
+      fullPath: '/api/documents/$documentId/delta'
+      preLoaderRoute: typeof ApiDocumentsDocumentIdDeltaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/$documentId/convert': {
+      id: '/api/documents/$documentId/convert'
+      path: '/api/documents/$documentId/convert'
+      fullPath: '/api/documents/$documentId/convert'
+      preLoaderRoute: typeof ApiDocumentsDocumentIdConvertRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/articles/$articleId/pricing': {
+      id: '/api/articles/$articleId/pricing'
+      path: '/api/articles/$articleId/pricing'
+      fullPath: '/api/articles/$articleId/pricing'
+      preLoaderRoute: typeof ApiArticlesArticleIdPricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/data/$': {
       id: '/api/admin/data/$'
       path: '/api/admin/data/$'
@@ -426,10 +705,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAppAdminOrganizationsRouteImport
       parentRoute: typeof AuthAppAdminRouteRoute
     }
+    '/_auth/app/admin/llm-config': {
+      id: '/_auth/app/admin/llm-config'
+      path: '/llm-config'
+      fullPath: '/app/admin/llm-config'
+      preLoaderRoute: typeof AuthAppAdminLlmConfigRouteImport
+      parentRoute: typeof AuthAppAdminRouteRoute
+    }
   }
 }
 
 interface AuthAppAdminRouteRouteChildren {
+  AuthAppAdminLlmConfigRoute: typeof AuthAppAdminLlmConfigRoute
   AuthAppAdminOrganizationsRoute: typeof AuthAppAdminOrganizationsRoute
   AuthAppAdminTenantsRoute: typeof AuthAppAdminTenantsRoute
   AuthAppAdminUsersRoute: typeof AuthAppAdminUsersRoute
@@ -437,6 +724,7 @@ interface AuthAppAdminRouteRouteChildren {
 }
 
 const AuthAppAdminRouteRouteChildren: AuthAppAdminRouteRouteChildren = {
+  AuthAppAdminLlmConfigRoute: AuthAppAdminLlmConfigRoute,
   AuthAppAdminOrganizationsRoute: AuthAppAdminOrganizationsRoute,
   AuthAppAdminTenantsRoute: AuthAppAdminTenantsRoute,
   AuthAppAdminUsersRoute: AuthAppAdminUsersRoute,
@@ -498,11 +786,24 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRouteRoute: AuthRouteRouteWithChildren,
   GuestRouteRoute: GuestRouteRouteWithChildren,
+  ApiActiveTenantRoute: ApiActiveTenantRoute,
   ApiMeRoute: ApiMeRoute,
+  ApiTenantsRoute: ApiTenantsRoute,
+  ApiAdminLlmConfigRoute: ApiAdminLlmConfigRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDataSplatRoute: ApiDataSplatRoute,
+  ApiDocumentsTreeRoute: ApiDocumentsTreeRoute,
+  ApiFeedbackSubmitRoute: ApiFeedbackSubmitRoute,
   ApiMetadataSplatRoute: ApiMetadataSplatRoute,
+  ApiStatsDashboardRoute: ApiStatsDashboardRoute,
   ApiAdminDataSplatRoute: ApiAdminDataSplatRoute,
+  ApiArticlesArticleIdPricingRoute: ApiArticlesArticleIdPricingRoute,
+  ApiDocumentsDocumentIdConvertRoute: ApiDocumentsDocumentIdConvertRoute,
+  ApiDocumentsDocumentIdDeltaRoute: ApiDocumentsDocumentIdDeltaRoute,
+  ApiDocumentsDocumentIdPostRoute: ApiDocumentsDocumentIdPostRoute,
+  ApiDocumentsDocumentIdStornoRoute: ApiDocumentsDocumentIdStornoRoute,
+  ApiStatsAddressAddressIdRoute: ApiStatsAddressAddressIdRoute,
+  ApiStatsArticleArticleIdRoute: ApiStatsArticleArticleIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -4,6 +4,7 @@ import { useFocus, FocusContextState } from "./focus-manager";
 export interface Command {
   id: string;
   scope: "global" | "context" | "local";
+  group?: string;
   label: { en: string; de: string };
   shortcut?: string; // e.g., "Alt+1", "F3", "?"
   icon?: string;
@@ -47,6 +48,9 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
   // Keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If another handler (e.g. EntityMask) already claimed this event, skip.
+      if (e.defaultPrevented) return;
+
       const isInput =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
@@ -67,14 +71,13 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
         shortcut = "?";
       }
 
+      // Skip all shortcuts (except Escape) when focus is inside an editable element.
+      if (isInput && key !== "Escape") {
+        return;
+      }
+
       const command = commands.find((c) => c.shortcut === shortcut);
       if (command) {
-        if (isInput && (key.startsWith("F") || alt)) {
-           // Allow
-        } else if (isInput && key !== "Escape") {
-           return;
-        }
-
         e.preventDefault();
         executeCommand(command.id);
       }

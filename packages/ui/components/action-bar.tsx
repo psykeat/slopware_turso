@@ -15,7 +15,7 @@ export interface ActionBarProps {
 export function ActionBar({ className, scope, crumbs, subCrumb }: ActionBarProps) {
   const { state: focusState } = useFocus();
   const { commands, executeCommand } = useCommands();
-  const { t } = useTranslation("ui");
+  const { t, i18n } = useTranslation("ui");
 
   // Compute full breadcrumb array
   const allCrumbs = [...(crumbs ?? []), ...(subCrumb ? [subCrumb] : [])];
@@ -26,9 +26,6 @@ export function ActionBar({ className, scope, crumbs, subCrumb }: ActionBarProps
     if (scope && c.scope !== scope) return false;
     return !c.isVisible || c.isVisible(focusState);
   });
-
-  // Suppress render when nothing to show
-  if (visibleCommands.length === 0 && allCrumbs.length === 0) return null;
 
   return (
     <div
@@ -72,7 +69,7 @@ export function ActionBar({ className, scope, crumbs, subCrumb }: ActionBarProps
           })}
           className="h-6 px-3 rounded-full text-[13px] border border-hairline bg-canvas text-ink-secondary hover:border-primary hover:text-primary transition-colors flex-shrink-0 flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none"
         >
-          {cmd.label.en}
+          {i18n.language === "de" ? cmd.label.de : cmd.label.en}
           {cmd.shortcut && (
             <span className="font-mono text-[10px] text-ink-mute border border-hairline rounded-[3px] px-1 bg-canvas-soft">
               {cmd.shortcut}

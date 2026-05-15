@@ -17,6 +17,7 @@ fi
 
 # Shutdown compose services on exit
 CLEANUP_RAN=0
+LLM_PID=""
 cleanup() {
     if [ "$CLEANUP_RAN" -eq 1 ]; then
         return
@@ -25,6 +26,7 @@ cleanup() {
     CLEANUP_RAN=1
 
     echo "Shutting down..."
+    [ -n "$LLM_PID" ] && kill "$LLM_PID" 2>/dev/null
     $COMPOSE_CMD down
 }
 trap cleanup SIGINT SIGTERM EXIT
@@ -44,5 +46,18 @@ else
     echo "Starting all development servers..."
 fi
 
-# Start the development server
+# Start LiteLLM Python microservice
+LLM_PORT="${LLM_SERVICE_PORT:-11435}"
+LLM_DIR="$(cd "$(dirname "$0")/services/llm" && pwd)"
+LLM_UVICORN="$LLM_DIR/.venv/bin/uvicorn"
+if [ -x "$LLM_UVICORN" ] || command -v uvicorn &> /dev/null; then
+    UVICORN_CMD="${LLM_UVICORN:-uvicorn}"
+    echo "Starting LiteLLM service on port $LLM_PORT..."
+    (cd "$LLM_DIR" && "$UVICORN_CMD" main:app --port "$LLM_PORT" --reload) &
+    LLM_PID=$!
+else
+    echo "Warning: uvicorn not found — skipping LiteLLM service. Install with: pip install -r services/llm/requirements.txt"
+fi
+
+# Start the development server (blocks until Ctrl+C)
 pnpm run $DEV_CMD

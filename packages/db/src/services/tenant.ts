@@ -9,7 +9,7 @@ import {
   documentType,
   documentGroup,
 } from "../schema/app.schema";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 export async function initializeDefaultTenant(userId: string, name: string) {
   return await db.transaction(async (tx) => {
@@ -122,4 +122,44 @@ export async function getUserTenantInfo(userId: string) {
     .limit(1);
 
   return result[0] || null;
+}
+
+export async function getTenantInfoById(tenantId: string) {
+  const result = await db
+    .select({
+      tenantId: tenant.tenantId,
+      tenantName: tenant.name,
+      organizationId: tenant.organizationId,
+      orgName: organization.name,
+    })
+    .from(tenant)
+    .innerJoin(organization, eq(tenant.organizationId, organization.organizationId))
+    .where(eq(tenant.tenantId, tenantId))
+    .limit(1);
+
+  return result[0] || null;
+}
+
+export async function getTenantContextById(tenantId: string) {
+  const result = await db
+    .select({ tenantId: tenant.tenantId, organizationId: tenant.organizationId })
+    .from(tenant)
+    .where(eq(tenant.tenantId, tenantId))
+    .limit(1);
+
+  return result[0] || null;
+}
+
+export async function getAllTenants() {
+  return await db
+    .select({
+      tenantId: tenant.tenantId,
+      tenantName: tenant.name,
+      orgName: organization.name,
+      isBase: tenant.isBase,
+    })
+    .from(tenant)
+    .innerJoin(organization, eq(tenant.organizationId, organization.organizationId))
+    .where(eq(tenant.isActive, true))
+    .orderBy(asc(organization.name), asc(tenant.name));
 }

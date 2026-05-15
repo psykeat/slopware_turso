@@ -26,6 +26,14 @@ pnpm ui add <component>                  # add shadcn primitive
 pnpm tanstack search-docs "<q>" --library <lib> --json
 ```
 
+## Environment Constants (Base Tenant)
+
+- **Organization Slug:** `base`
+- **Tenant Slug:** `base` (isBase: true)
+- **Company No:** `1000`
+
+For specific UUIDs and local credentials, refer to the private project memory.
+
 ## Deep Dives
 
 | Topic | File |

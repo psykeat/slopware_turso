@@ -13,6 +13,7 @@
     "generate": "drizzle-kit generate && pnpm run docs",
     "migrate": "drizzle-kit migrate && pnpm run docs",
     "docs": "tsx src/scripts/generate-docs.ts",
+    "seed": "tsx src/scripts/seed.ts",
     "seed:metadata": "tsx src/scripts/seed-metadata.ts",
     "auth:generate": "vpx https://pkg.pr.new/auth@9489 generate --config ../auth/src/auth.ts --y --output ./src/schema/auth.schema.ts"
   },

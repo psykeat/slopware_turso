@@ -17,8 +17,28 @@ export const auth = betterAuth({
     schema,
   }),
 
+  user: {
+    additionalFields: {
+      isSystemAdmin: {
+        type: "boolean",
+        required: false,
+        defaultValue: false,
+      },
+    },
+  },
+
   // https://www.better-auth.com/docs/integrations/tanstack#usage-tips
   plugins: [tanstackStartCookies()],
+
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          await initializeDefaultTenant(user.id, user.name);
+        },
+      },
+    },
+  },
 
   // https://www.better-auth.com/docs/authentication/email-password
   emailAndPassword: {

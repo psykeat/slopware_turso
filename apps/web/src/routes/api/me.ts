@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
-import { getUserTenantInfo } from "@repo/db/services/tenant";
+import { getUserTenantInfo, getTenantInfoById } from "@repo/db/services/tenant";
+
+function parseCookie(header: string | null, name: string): string | null {
+  if (!header) return null;
+  const match = header.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 export const Route = createFileRoute("/api/me")({
   server: {
@@ -10,12 +16,27 @@ export const Route = createFileRoute("/api/me")({
         if (!session || !session.user) {
           return new Response("Unauthorized", { status: 401 });
         }
-        const info = await getUserTenantInfo(session.user.id);
+
+        const isSystemAdmin = (session.user as any).isSystemAdmin;
+        let info = null;
+
+        if (isSystemAdmin) {
+          const activeTenantId = parseCookie(request.headers.get("cookie"), "x-active-tenant");
+          if (activeTenantId) {
+            info = await getTenantInfoById(activeTenantId);
+          }
+        }
+
         if (!info) {
-          return new Response(JSON.stringify({ tenantName: "Default", orgName: "" }), {
+          info = await getUserTenantInfo(session.user.id);
+        }
+
+        if (!info) {
+          return new Response(JSON.stringify({ tenantId: null, tenantName: "Default", orgName: "" }), {
             headers: { "content-type": "application/json" },
           });
         }
+
         return new Response(JSON.stringify(info), {
           headers: { "content-type": "application/json" },
         });

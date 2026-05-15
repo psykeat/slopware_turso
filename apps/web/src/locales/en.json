@@ -26,14 +26,14 @@
     "refresh": "Refresh"
   },
   "shortcuts": {
-    "title": "Keyboard Shortcuts",
+    "title": "Shortcuts",
     "navigation": "Navigation",
     "recordOps": "Record Operations",
     "workflow": "Workflow",
-    "navKeys": "Navigation Keys",
-    "moveUpDown": "Move up / down",
-    "firstLast": "First / last row",
-    "nextPrevField": "Next / previous field",
+    "gridNavigation": "Grid Navigation",
+    "moveUpDown": "Move Up / Down",
+    "firstLast": "First / Last Row",
+    "nextPrevField": "Next / Previous Field",
     "confirm": "Confirm"
   },
   "status": {
@@ -42,7 +42,7 @@
   },
   "empty": {
     "title": "No results.",
-    "subtitle": "Try a different filter, or create a new record."
+    "subtitle": "Try a different filter or create a new record."
   },
   "grid": {
     "records": "{{count}} records"
@@ -64,11 +64,11 @@
     "night": "Night",
     "auto": "Auto",
     "signOut": "Sign Out",
-    "userConfig": "User Config"
+    "userConfig": "User Configuration"
   },
   "form": {
-    "requiredHint": "Required fields marked *. Press F10 to save, Esc to cancel.",
-    "saving": "Saving…",
+    "requiredHint": "Fields marked with * are required. F10 to save, Esc to cancel.",
+    "saving": "Saving...",
     "create": "Create",
     "update": "Update"
   },
@@ -79,7 +79,7 @@
     "saveClose": "Save & Close",
     "statistics": "Statistics",
     "palette": "Command Palette",
-    "help": "Keyboard Shortcuts",
+    "help": "Shortcuts",
     "openDocument": "Open Document",
     "postDocument": "Post Document",
     "transform": "Transform"
@@ -88,8 +88,88 @@
     "title": "Statistics",
     "total": "Total",
     "newThisMonth": "New this month",
-    "lowStock": "Low stock",
+    "lowStock": "Low Stock",
     "draftCount": "Drafts",
-    "totalValue": "Total value"
+    "totalValue": "Total Value",
+    "revenue": "Revenue",
+    "profit": "Gross Profit",
+    "cogs": "Cost of Goods",
+    "openOrders": "Open Orders",
+    "openInvoices": "Open Invoices",
+    "inventoryValue": "Inventory Value",
+    "period": "Period",
+    "fiscalYear": "Fiscal Year",
+    "stockLedger": "Stock Ledger",
+    "movements": "Movements",
+    "documents": "Documents",
+    "openItems": "Open Items",
+    "inbound": "Inbound",
+    "outbound": "Outbound",
+    "reserved": "Reserved",
+    "available": "Available",
+    "expected": "Expected"
+  },
+  "settings": {
+    "groups": {
+      "organisation": "Organisation",
+      "vertrieb": "Sales",
+      "lager_artikel": "Inventory & Articles",
+      "finanzen": "Finance",
+      "geodaten": "Geodata"
+    },
+    "entities": {
+      "company": "Company",
+      "bank_account": "Bank Accounts",
+      "number_sequence": "Number Sequences",
+      "payment_term": "Payment Terms",
+      "shipping_method": "Shipping Methods",
+      "price_list": "Price Lists",
+      "discount_group": "Discount Groups",
+      "address_category": "Address Categories",
+      "document_group": "Document Groups",
+      "industry": "Industries",
+      "unit": "Units",
+      "article_group": "Article Groups",
+      "warehouse": "Warehouses",
+      "tax_class": "Tax Classes",
+      "tax_code": "Tax Codes",
+      "cost_center": "Cost Centers",
+      "gl_account": "GL Accounts",
+      "currency": "Currencies",
+      "country": "Countries",
+      "postal_code": "Postal Codes",
+      "bankAccount": "Bank Accounts",
+      "numberSequence": "Number Sequences",
+      "paymentTerm": "Payment Terms",
+      "shippingMethod": "Shipping Methods",
+      "priceList": "Price Lists",
+      "discountGroup": "Discount Groups",
+      "addressCategory": "Address Categories",
+      "documentGroup": "Document Groups",
+      "articleGroup": "Article Groups",
+      "taxClass": "Tax Classes",
+      "taxCode": "Tax Codes",
+      "costCenter": "Cost Centers",
+      "glAccount": "GL Accounts",
+      "postalCode": "Postal Codes"
+    }
+  },
+  "feedback": {
+    "title": "Report Issue or Feedback",
+    "description": "Describe the issue or what you'd like to see improved",
+    "submit": "Submit",
+    "submitting": "Submitting...",
+    "success": "Issue created:",
+    "error": "Failed to submit. Please try again.",
+    "retry": "Retry",
+    "contextLabel": "System context (read-only)",
+    "notConfigured": "AI service not configured. Contact your system administrator.",
+    "placeholder": "What went wrong, or what would you like to improve?"
+  },
+  "documentDirections": {
+    "OUTBOUND": "Outbound",
+    "INBOUND": "Inbound",
+    "ADJUSTMENT": "Adjustments",
+    "other": "Other"
   }
 }

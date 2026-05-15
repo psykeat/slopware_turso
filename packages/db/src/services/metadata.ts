@@ -1,6 +1,13 @@
 import { db } from "../index";
-import { tenantFields, tenantLayouts, systemSettings } from "../schema/app.schema";
-import { eq, and } from "drizzle-orm";
+import { 
+  tenantFields, 
+  tenantLayouts, 
+  systemSettings, 
+  schemaAnnotations,
+  helperTableRegistry
+} from "../schema/app.schema";
+import * as schema from "../schema/index";
+import { eq, and, getColumns } from "drizzle-orm";
 
 export interface MetadataContext {
   tenantId: string;
@@ -15,41 +22,122 @@ export class MetadataResolver {
   }
 
   /**
-   * Resolves effective fields by merging global (Base Tenant), organization, and tenant scope.
+   * Resolves effective fields by combining schema introspection with persistent annotations and tenant overrides.
    */
   async getEffectiveFields(entityName: string) {
-    const rawFields = await db
+    // 1. Physical Schema Introspection
+    const table = (schema as any)[entityName];
+    const introspectedFields = new Map<string, any>();
+
+    if (table) {
+      const columns = getColumns(table);
+      for (const [colName, col] of Object.entries(columns)) {
+        const columnType = (col as any).columnType;
+
+        // Auto-discover lookups by naming convention (e.g. addressCategoryId -> addressCategory)
+        let lookupTable: string | undefined = undefined;
+        if (colName.endsWith("Id") && colName !== "tenantId") {
+            const potentialEntity = colName.slice(0, -2);
+            if ((schema as any)[potentialEntity]) {
+                lookupTable = potentialEntity;
+            }
+        }
+
+        introspectedFields.set(colName, {
+          fieldName: colName,
+          entityName,
+          fieldType: 
+            columnType === "PgNumeric" ? "numeric" :
+            columnType === "PgInteger" ? "integer" :
+            columnType === "PgBoolean" ? "boolean" :
+            columnType === "PgTimestamp" || columnType === "PgDate" ? "timestamp" : "text",
+          isVisible: !colName.endsWith("Id") && colName !== "tenantId" && colName !== "createdAt",
+          isRequired: (col as any).notNull || false,
+          label: { en: colName, de: colName },
+          scope: "introspection",
+          lookupTable,
+        });
+      }
+    }
+
+    // 2. Fetch Schema Annotations (The "Automatic" Business Layer)
+    const annotations = await db
+      .select()
+      .from(schemaAnnotations)
+      .where(eq(schemaAnnotations.tableName, entityName));
+
+    for (const ann of annotations) {
+      const field = introspectedFields.get(ann.columnName);
+      if (field) {
+        field.label = { en: ann.businessName, de: ann.businessName };
+        field.helpText = { en: ann.description, de: ann.description };
+        field.scope = "annotation";
+      }
+    }
+
+    // 3. Fetch Metadata Overrides (Tenant-Specific Layer)
+    const overrides = await db
       .select()
       .from(tenantFields)
       .where(eq(tenantFields.entityName, entityName));
 
-    // Priorities: tenant > organization > global
-    const merged = new Map<string, typeof rawFields[0]>();
+    // 4. Merge: Introspection < Annotation < Global < Org < Tenant
+    const merged = new Map<string, any>(introspectedFields);
 
-    // 1. Global fields
-    rawFields
-      .filter((f) => f.scope === "global")
-      .forEach((f) => merged.set(f.fieldName, f));
+    // Apply tenant-level overrides (Global/Org/Tenant)
+    const scopes = ["global", "org", "tenant"];
+    for (const scope of scopes) {
+      const scopeOverrides = overrides.filter(o => {
+        if (o.scope !== scope) return false;
+        if (scope === "org") return o.organizationId === this.context.organizationId;
+        if (scope === "tenant") return o.tenantId === this.context.tenantId;
+        return true;
+      });
 
-    // 2. Organization overrides
-    if (this.context.organizationId) {
-      rawFields
-        .filter((f) => f.scope === "org" && f.organizationId === this.context.organizationId)
-        .forEach((f) => merged.set(f.fieldName, { ...merged.get(f.fieldName), ...f }));
+      for (const o of scopeOverrides) {
+        merged.set(o.fieldName, { ...merged.get(o.fieldName), ...o });
+      }
     }
 
-    // 3. Tenant overrides
-    rawFields
-      .filter((f) => f.scope === "tenant" && f.tenantId === this.context.tenantId)
-      .forEach((f) => merged.set(f.fieldName, { ...merged.get(f.fieldName), ...f }));
+    // 5. Fetch Lookup Information from Registry
+    const registries = await db
+      .select()
+      .from(helperTableRegistry);
 
-    // Extract English label from JSONB, or fallback to fieldName
+    // 6. Finalize structure and i18n
     return Array.from(merged.values()).map(f => {
-      const labelData = f.label as any;
+      let labelEn = f.fieldName;
+      let labelDe = f.fieldName;
+      let helpTextEn = "";
+      let helpTextDe = "";
+
+      const labelData = typeof f.label === 'string' ? JSON.parse(f.label) : f.label;
+      if (labelData) {
+        labelEn = labelData.en || labelData.de || f.fieldName;
+        labelDe = labelData.de || labelData.en || f.fieldName;
+      }
+
+      const helpData = typeof f.helpText === 'string' ? JSON.parse(f.helpText) : f.helpText;
+      if (helpData) {
+        helpTextEn = helpData.en || "";
+        helpTextDe = helpData.de || "";
+      }
+
+      const registry = registries.find(r => r.tableName === f.lookupTable);
+      
       return {
         ...f,
-        labelEn: labelData?.en || f.fieldName,
-        labelDe: labelData?.de || f.fieldName,
+        labelEn,
+        labelDe,
+        helpTextEn,
+        helpTextDe,
+        // Enforce basic invariants
+        isVisible: f.isVisible !== false && f.fieldName !== "tenantId",
+        // Map lookup info
+        lookupTable: f.lookupTable,
+        lookupFilter: f.lookupFilter,
+        lookupDisplayColumn: registry?.displayColumn,
+        lookupIsI18n: registry?.displayIsI18n,
       };
     });
   }
@@ -109,5 +197,12 @@ export class MetadataResolver {
     if (tenantSetting) effectiveValue = tenantSetting.value;
 
     return effectiveValue;
+  }
+
+  async getSettingsRegistry() {
+    return await db
+      .select()
+      .from(helperTableRegistry)
+      .where(eq(helperTableRegistry.category, "settings"));
   }
 }

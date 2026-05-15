@@ -13,7 +13,7 @@ const GROUPS = [
   {
     key: "recordOps",
     labelKey: "shortcuts.recordOps" as const,
-    ids: ["create-record", "archive-record", "duplicate-record", "save-close"],
+    ids: ["edit-record", "create-record", "archive-record", "duplicate-record", "save-close"],
   },
   {
     key: "workflow",
@@ -63,6 +63,7 @@ export function ShortcutHelp() {
     return registerCommand({
       id: "show-help",
       scope: "global",
+      group: "navigation",
       label: { en: "Keyboard Shortcuts", de: "Tastenkürzel" },
       shortcut: "?",
       handler: () => setOpen(true),

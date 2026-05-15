@@ -8,6 +8,7 @@ import {
   GlobeIcon,
   SearchIcon,
   HelpCircleIcon,
+  MessageSquarePlusIcon,
   ChevronDownIcon,
   SunIcon,
   MoonIcon,
@@ -22,11 +23,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { ActionBar } from "@repo/ui/components/action-bar";
 import { StatusBar } from "@repo/ui/components/status-bar";
+import { FeedbackModal } from "@repo/ui/components/feedback-modal";
 import { useTheme, type AccentTheme } from "@repo/ui/lib/theme-provider";
 import { useCommands } from "@repo/ui/platform/command-registry";
+import { useFocus } from "@repo/ui/platform/focus-manager";
+import { ActionBarProvider, useActionBar } from "@repo/ui/platform/action-bar-context";
 import { cn } from "@repo/ui/lib/utils";
+import { useDismiss } from "@repo/ui/lib/use-dismiss";
 import { useTranslation } from "react-i18next";
 import i18n from "#/lib/i18n";
+import { captureFeedbackSnapshot, type FeedbackSnapshot } from "#/lib/feedback-snapshot";
 
 export const Route = createFileRoute("/_auth/app")({
   component: AppLayout,
@@ -51,25 +57,12 @@ const ACCENT_THEMES: { id: AccentTheme; label: string; primary: string }[] = [
   { id: "slate",   label: "Slate",   primary: "#475569" },
 ];
 
-function useDismiss(open: boolean, onClose: () => void, ref: React.RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose, ref]);
-}
+type TenantEntry = { tenantId: string; tenantName: string; orgName: string; isBase: boolean };
 
-function TenantSwitcher() {
+function TenantSwitcher({ isSystemAdmin }: { isSystemAdmin: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
   useDismiss(open, () => setOpen(false), ref);
 
   const { data: tenantInfo } = useQuery({
@@ -77,13 +70,36 @@ function TenantSwitcher() {
     queryFn: async () => {
       const res = await fetch("/api/me");
       if (!res.ok) return null;
-      return res.json() as Promise<{ tenantName: string; orgName: string }>;
+      return res.json() as Promise<{ tenantId: string; tenantName: string; orgName: string }>;
     },
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: allTenants = [] } = useQuery({
+    queryKey: ["tenants", "all"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenants");
+      if (!res.ok) return [] as TenantEntry[];
+      return res.json() as Promise<TenantEntry[]>;
+    },
+    enabled: isSystemAdmin,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const handleSwitch = async (tenantId: string) => {
+    setOpen(false);
+    await fetch("/api/active-tenant", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tenantId }),
+    });
+    await queryClient.invalidateQueries({ queryKey: ["me"] });
+    queryClient.invalidateQueries({ queryKey: ["data"] });
+  };
+
   const tenantName = tenantInfo?.tenantName ?? "…";
   const orgName = tenantInfo?.orgName ?? "";
+  const activeTenantId = tenantInfo?.tenantId;
 
   return (
     <div ref={ref} className="relative flex-none">
@@ -106,21 +122,50 @@ function TenantSwitcher() {
       {open && (
         <div className="absolute top-[calc(100%+6px)] left-0 w-64 bg-canvas border border-hairline rounded-md shadow-lg z-50 py-1">
           <div className="px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-ink-mute">Switch Tenant</div>
-          <div
-            className="flex items-center gap-2.5 px-2.5 py-2 mx-1 rounded-sm cursor-default text-[13px] bg-[color-mix(in_oklab,var(--primary)_9%,transparent)]"
-          >
-            <span className="size-2 rounded-full flex-none" style={{ background: "var(--primary)" }} />
-            <span className="flex flex-col leading-none">
-              {orgName && <span className="text-[10px] uppercase tracking-wider text-ink-mute">{orgName}</span>}
-              <span className="text-ink">{tenantName}</span>
-            </span>
-            <CheckIcon className="size-3.5 ml-auto text-ink-mute" />
-          </div>
-          <div className="h-px bg-hairline my-1 mx-1.5" />
-          <div className="flex items-center gap-2 px-2.5 py-2 mx-1 rounded-sm text-[13px] text-ink-mute hover:bg-canvas-soft cursor-default">
-            <PlusIcon className="size-3.5" />
-            <span>New Tenant…</span>
-          </div>
+
+          {isSystemAdmin && allTenants.length > 0 ? (
+            allTenants.map((t) => {
+              const isActive = t.tenantId === activeTenantId;
+              return (
+                <button
+                  key={t.tenantId}
+                  onClick={() => !isActive && handleSwitch(t.tenantId)}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-2.5 py-2 mx-0 rounded-sm text-[13px] text-left transition-colors",
+                    isActive
+                      ? "bg-[color-mix(in_oklab,var(--primary)_9%,transparent)] cursor-default"
+                      : "hover:bg-canvas-soft cursor-pointer",
+                  )}
+                >
+                  <span className="size-2 rounded-full flex-none" style={{ background: isActive ? "var(--primary)" : "var(--ink-mute)" }} />
+                  <span className="flex flex-col leading-none min-w-0 flex-1">
+                    <span className="text-[10px] uppercase tracking-wider text-ink-mute truncate">{t.orgName}</span>
+                    <span className={cn("truncate", isActive ? "text-ink" : "text-ink-secondary")}>{t.tenantName}</span>
+                  </span>
+                  {isActive && <CheckIcon className="size-3.5 ml-auto flex-none text-ink-mute" />}
+                </button>
+              );
+            })
+          ) : (
+            <div className="flex items-center gap-2.5 px-2.5 py-2 mx-1 rounded-sm cursor-default text-[13px] bg-[color-mix(in_oklab,var(--primary)_9%,transparent)]">
+              <span className="size-2 rounded-full flex-none" style={{ background: "var(--primary)" }} />
+              <span className="flex flex-col leading-none">
+                {orgName && <span className="text-[10px] uppercase tracking-wider text-ink-mute">{orgName}</span>}
+                <span className="text-ink">{tenantName}</span>
+              </span>
+              <CheckIcon className="size-3.5 ml-auto text-ink-mute" />
+            </div>
+          )}
+
+          {!isSystemAdmin && (
+            <>
+              <div className="h-px bg-hairline my-1 mx-1.5" />
+              <div className="flex items-center gap-2 px-2.5 py-2 mx-1 rounded-sm text-[13px] text-ink-mute hover:bg-canvas-soft cursor-default">
+                <PlusIcon className="size-3.5" />
+                <span>New Tenant…</span>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -331,10 +376,11 @@ function AvatarMenu({ userName, userEmail }: { userName: string; userEmail: stri
   );
 }
 
-function AppBar({ isSystemAdmin, userName, userEmail }: {
+function AppBar({ isSystemAdmin, userName, userEmail, onFeedbackClick }: {
   isSystemAdmin: boolean;
   userName: string;
   userEmail: string;
+  onFeedbackClick: () => void;
 }) {
   const location = useLocation();
   const { executeCommand } = useCommands();
@@ -358,7 +404,7 @@ function AppBar({ isSystemAdmin, userName, userEmail }: {
 
       <div className="w-px h-5 bg-hairline flex-none" />
 
-      <TenantSwitcher />
+      <TenantSwitcher isSystemAdmin={isSystemAdmin} />
 
       <div className="w-px h-5 bg-hairline flex-none" />
 
@@ -426,9 +472,126 @@ function AppBar({ isSystemAdmin, userName, userEmail }: {
         >
           <HelpCircleIcon className="size-[15px]" />
         </button>
+        <button
+          onClick={onFeedbackClick}
+          className="size-7 grid place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink transition-colors"
+          title="Report issue or feedback (Shift+F1)"
+        >
+          <MessageSquarePlusIcon className="size-[15px]" />
+        </button>
         <AvatarMenu userName={userName} userEmail={userEmail} />
       </div>
     </header>
+  );
+}
+
+const DEFAULT_SNAPSHOT: FeedbackSnapshot = {
+  url: "",
+  userAgent: "",
+  viewport: { width: 0, height: 0 },
+  userId: "",
+  tenantId: "",
+  locale: "",
+  lastError: null,
+  timestamp: "",
+  focusState: {},
+};
+
+function AppLayoutInner({ isSystemAdmin, userName, userEmail, tenantName, moduleCrumb, userId, tenantId }: {
+  isSystemAdmin: boolean;
+  userName: string;
+  userEmail: string;
+  tenantName: string;
+  moduleCrumb: string | undefined;
+  userId: string;
+  tenantId: string;
+}) {
+  const { subCrumb } = useActionBar();
+  const { state: focusState } = useFocus();
+  const { registerCommand } = useCommands();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [lastError, setLastError] = useState<{ message: string; stack?: string } | null>(null);
+  const [snapshot, setSnapshot] = useState<FeedbackSnapshot>(DEFAULT_SNAPSHOT);
+  const prevFeedbackOpen = useRef(false);
+
+  // Global error capture
+  useEffect(() => {
+    const handler = (event: ErrorEvent) => {
+      setLastError({ message: event.message, stack: event.error?.stack });
+    };
+    const unhandledHandler = (event: PromiseRejectionEvent) => {
+      setLastError({ message: String(event.reason), stack: event.reason?.stack });
+    };
+    window.addEventListener("error", handler);
+    window.addEventListener("unhandledrejection", unhandledHandler);
+    return () => {
+      window.removeEventListener("error", handler);
+      window.removeEventListener("unhandledrejection", unhandledHandler);
+    };
+  }, []);
+
+  // Capture snapshot when modal transitions to open
+  useEffect(() => {
+    if (feedbackOpen && !prevFeedbackOpen.current) {
+      setSnapshot(
+        captureFeedbackSnapshot(
+          userId,
+          tenantId,
+          i18n.language,
+          {
+            entity: focusState.entity ?? undefined,
+            recordId: focusState.recordId ?? undefined,
+            panelId: focusState.panel ?? undefined,
+          },
+          lastError,
+        ),
+      );
+    }
+    prevFeedbackOpen.current = feedbackOpen;
+  }, [feedbackOpen, userId, tenantId, focusState, lastError]);
+
+  // Register open-feedback command
+  useEffect(() => {
+    const unregister = registerCommand({
+      id: "open-feedback",
+      scope: "global",
+      group: "workflow",
+      label: { en: "Report Issue / Feedback", de: "Problem / Feedback melden" },
+      shortcut: "Shift+F1",
+      handler: () => setFeedbackOpen(true),
+    });
+    return unregister;
+  }, [registerCommand]);
+
+  const handleFeedbackClick = () => setFeedbackOpen(true);
+
+  return (
+    <div className="flex flex-col h-screen overflow-hidden bg-canvas">
+      <AppBar
+        isSystemAdmin={isSystemAdmin}
+        userName={userName}
+        userEmail={userEmail}
+        onFeedbackClick={handleFeedbackClick}
+      />
+
+      <ActionBar
+        crumbs={moduleCrumb ? [moduleCrumb] : undefined}
+        subCrumb={subCrumb}
+        className="shrink-0"
+      />
+
+      <main className="flex-1 overflow-hidden min-h-0">
+        <Outlet />
+      </main>
+
+      <StatusBar tenantName={tenantName} className="shrink-0" />
+
+      <FeedbackModal
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        snapshot={snapshot}
+      />
+    </div>
   );
 }
 
@@ -439,6 +602,7 @@ function AppLayout() {
 
   const userName = (user as any)?.name ?? (user as any)?.user?.name ?? "User";
   const userEmail = (user as any)?.email ?? (user as any)?.user?.email ?? "";
+  const userId = (user as any)?.id ?? (user as any)?.user?.id ?? "";
   const isSystemAdmin = (user as any)?.isSystemAdmin ?? false;
 
   const { data: tenantInfo } = useQuery({
@@ -446,12 +610,13 @@ function AppLayout() {
     queryFn: async () => {
       const res = await fetch("/api/me");
       if (!res.ok) return null;
-      return res.json() as Promise<{ tenantName: string; orgName: string }>;
+      return res.json() as Promise<{ tenantName: string; orgName: string; tenantId?: string }>;
     },
     staleTime: 5 * 60 * 1000,
   });
 
   const tenantName = tenantInfo?.tenantName ?? "";
+  const tenantId = tenantInfo?.tenantId ?? "";
 
   const activeModule = PRIMARY_MODULES.find((m) =>
     location.pathname.startsWith(m.to),
@@ -459,23 +624,16 @@ function AppLayout() {
   const moduleCrumb = activeModule ? t(activeModule.labelKey) : undefined;
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-canvas">
-      <AppBar
+    <ActionBarProvider>
+      <AppLayoutInner
         isSystemAdmin={isSystemAdmin}
         userName={userName}
         userEmail={userEmail}
+        tenantName={tenantName}
+        moduleCrumb={moduleCrumb}
+        userId={userId}
+        tenantId={tenantId}
       />
-
-      <ActionBar
-        crumbs={moduleCrumb ? [moduleCrumb] : undefined}
-        className="shrink-0"
-      />
-
-      <main className="flex-1 overflow-hidden min-h-0">
-        <Outlet />
-      </main>
-
-      <StatusBar tenantName={tenantName} className="shrink-0" />
-    </div>
+    </ActionBarProvider>
   );
 }

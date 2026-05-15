@@ -34,6 +34,8 @@ export interface DataGridProps<T> {
   emptySubtitle?: string;
   emptyAction?: { label: string; kbd?: string; onClick: () => void };
   toolbar?: boolean;
+  onRowClick?: (row: T) => void;
+  flush?: boolean;
 }
 
 export function DataGrid<T>({
@@ -49,8 +51,10 @@ export function DataGrid<T>({
   emptySubtitle,
   emptyAction,
   toolbar = true,
+  onRowClick,
+  flush,
 }: DataGridProps<T>) {
-  const { t } = useTranslation("ui");
+  const { t, i18n } = useTranslation("ui");
   const { state: focusState, setFocus } = useFocus();
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -71,17 +75,18 @@ export function DataGrid<T>({
         })
         .then((meta) => {
           if (!isMounted) return;
-          const mappedColumns: ColumnDef<T>[] = (meta as Array<Record<string, unknown>>)
-            .filter((f) => f["listVisible"] !== false)
+          const isDe = i18n.language === "de";
+          const mappedColumns: ColumnDef<T>[] = (meta as Array<Record<string, any>>)
+            .filter((f) => f.isVisible !== false)
             .map((f) => ({
-              key: f["fieldName"] as string,
-              header: (f["labelEn"] as string) || (f["fieldName"] as string),
+              key: f.fieldName,
+              header: (isDe ? f.labelDe : f.labelEn) || f.fieldName,
               align:
-                f["fieldType"] === "numeric" || f["fieldType"] === "integer"
+                f.fieldType === "numeric" || f.fieldType === "integer"
                   ? "right"
                   : "left",
               isNumeric:
-                f["fieldType"] === "numeric" || f["fieldType"] === "integer",
+                f.fieldType === "numeric" || f.fieldType === "integer",
             }));
           setColumns(mappedColumns);
           setInternalLoading(false);
@@ -94,7 +99,7 @@ export function DataGrid<T>({
     return () => {
       isMounted = false;
     };
-  }, [entityName, initialColumns]);
+  }, [entityName, initialColumns, i18n.language]);
 
   useEffect(() => {
     if (data.length > 0) {
@@ -146,7 +151,11 @@ export function DataGrid<T>({
   return (
     <div
       ref={containerRef}
-      className={cn("flex flex-col h-full w-full overflow-hidden", className)}
+      className={cn(
+        "flex flex-col h-full w-full overflow-hidden",
+        !flush && "rounded-lg border border-hairline",
+        className,
+      )}
     >
       {toolbar && (
         <div className="h-9 shrink-0 flex items-center px-3 gap-2 bg-canvas-soft border-b border-hairline">
@@ -296,23 +305,31 @@ export function DataGrid<T>({
                         area: "grid",
                         row: idx,
                       });
+                      onRowClick?.(row);
                     }}
                   >
-                    {columns.map((col) => (
-                      <td
-                        key={col.key}
-                        className={cn(
-                          "px-4 py-0 text-[13px] text-ink font-light",
-                          col.isNumeric && "text-right font-mono tabular-nums",
-                          col.align === "center" && "text-center",
-                          col.align === "right" && "text-right",
-                        )}
-                      >
-                        {col.render
-                          ? col.render(row)
-                          : (row as Record<string, unknown>)[col.key] as React.ReactNode}
-                      </td>
-                    ))}
+                    {columns.map((col) => {
+                      const value = (row as Record<string, any>)[col.key];
+                      const renderedValue = col.render ? col.render(row) : (
+                        typeof value === "object" && value !== null && ("en" in value || "de" in value)
+                          ? (value[i18n.language] || value.en || value.de)
+                          : value
+                      );
+
+                      return (
+                        <td
+                          key={col.key}
+                          className={cn(
+                            "px-4 py-0 text-[13px] text-ink font-light",
+                            col.isNumeric && "text-right font-mono tabular-nums",
+                            col.align === "center" && "text-center",
+                            col.align === "right" && "text-right",
+                          )}
+                        >
+                          {renderedValue as React.ReactNode}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}

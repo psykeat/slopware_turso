@@ -12,6 +12,7 @@ import {
   date,
   char,
   unique,
+  uniqueIndex,
   index,
   check,
 } from "drizzle-orm/pg-core";
@@ -52,7 +53,7 @@ export const tenant = pgTable(
   (table) => [
     index("idx_tenant_organization").on(table.organizationId),
     index("tenant_slug_key").on(table.slug),
-    unique("uq_single_base_tenant").on(table.isBase),
+    uniqueIndex("uq_single_base_tenant").on(table.isBase).where(sql`is_base = true`),
   ],
 );
 
@@ -666,6 +667,9 @@ export const document = pgTable(
     documentTypeId: uuid("document_type_id").references(() => documentType.documentTypeId),
     warehouseId: uuid("warehouse_id"),
     targetWarehouseId: uuid("target_warehouse_id"),
+    isPaid: boolean("is_paid").notNull().default(false),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paidAmount: numeric("paid_amount"),
   },
   (table) => [
     unique("document_tenant_id_company_id_document_no_unique").on(
@@ -843,6 +847,8 @@ export const factSalesEvent = pgTable(
     bookingPeriod: date("booking_period").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     transactionId: uuid("transaction_id"),
+    cogsDelta: numeric("cogs_delta"),
+    fiscalPeriodId: uuid("fiscal_period_id"),
   },
   (table) => [
     index("idx_fact_sales_article").on(table.tenantId, table.articleId),
@@ -891,6 +897,8 @@ export const helperTableRegistry = pgTable("helper_table_registry", {
   sortColumn: text("sort_column").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   valueColumn: text("value_column"),
+  group: text("group"),
+  category: text("category"),
 });
 
 export const importBatch = pgTable(
@@ -1654,5 +1662,51 @@ export const unit = pgTable(
   (table) => [
     unique("unit_tenant_id_code_unique").on(table.tenantId, table.code),
     index("idx_unit_tenant").on(table.tenantId),
+  ],
+);
+
+export const fiscalPeriod = pgTable(
+  "fiscal_period",
+  {
+    fiscalPeriodId: uuid("fiscal_period_id").primaryKey().default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id").notNull().references(() => tenant.tenantId),
+    companyId: uuid("company_id").notNull().references(() => company.companyId),
+    fiscalYear: integer("fiscal_year").notNull(),
+    periodNo: integer("period_no").notNull(),
+    startDate: date("start_date").notNull(),
+    endDate: date("end_date").notNull(),
+    isClosed: boolean("is_closed").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("fiscal_period_company_year_period").on(table.companyId, table.fiscalYear, table.periodNo),
+    index("idx_fiscal_period_tenant_date").on(table.tenantId, table.companyId, table.startDate, table.endDate),
+  ],
+);
+
+export const factPurchaseEvent = pgTable(
+  "fact_purchase_event",
+  {
+    factPurchaseEventId: uuid("fact_purchase_event_id").primaryKey().default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id").notNull(),
+    companyId: uuid("company_id").notNull(),
+    sourceDocumentId: uuid("source_document_id"),
+    sourceDocumentLineId: uuid("source_document_line_id"),
+    supplierId: uuid("supplier_id"),
+    articleId: uuid("article_id"),
+    eventType: text("event_type").notNull().default("purchase"),
+    quantityDelta: numeric("quantity_delta").notNull(),
+    amountNetDelta: numeric("amount_net_delta").notNull(),
+    avgCostBefore: numeric("avg_cost_before"),
+    avgCostAfter: numeric("avg_cost_after"),
+    fiscalPeriodId: uuid("fiscal_period_id"),
+    bookingPeriod: date("booking_period"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_fact_purchase_tenant_company").on(table.tenantId, table.companyId),
+    index("idx_fact_purchase_supplier").on(table.tenantId, table.supplierId),
+    index("idx_fact_purchase_article").on(table.tenantId, table.articleId),
+    index("idx_fact_purchase_period").on(table.tenantId, table.fiscalPeriodId),
   ],
 );

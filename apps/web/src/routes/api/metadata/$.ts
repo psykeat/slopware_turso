@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MetadataResolver } from "@repo/db/services/metadata";
-import { getTenantContext } from "@repo/db/services/tenant";
 import { auth } from "@repo/auth/auth";
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/metadata/$")({
   server: {
@@ -13,18 +13,31 @@ export const Route = createFileRoute("/api/metadata/$")({
           return new Response("Unauthorized", { status: 401 });
         }
 
-        const context = await getTenantContext(session.user.id);
+        const isSystemAdmin = (session.user as any).isSystemAdmin;
+        let context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context) {
-          return new Response("No active tenant found", { status: 403 });
+          console.warn(`[Metadata API] No tenant context for user ${session.user.id}, falling back to global.`);
+          context = { tenantId: "", organizationId: "" }; // Empty context for global resolution
         }
 
         const resolver = new MetadataResolver(context);
-        const url = new URL(request.url);
+        const url = new URL(request.url, "http://localhost");
         const pathname = url.pathname;
+        console.log(`[Metadata API] Request: ${request.method} ${pathname}`);
 
         try {
+          if (pathname.includes("/settings-registry")) {
+            console.log(`[Metadata API] Resolving settings registry`);
+            const registry = await resolver.getSettingsRegistry();
+            return new Response(JSON.stringify(registry), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+
           if (pathname.includes("/fields/")) {
-            const entityName = pathname.split("/").pop();
+            const segments = pathname.split("/").filter(Boolean);
+            const entityName = segments.pop();
+            console.log(`[Metadata API] Resolving fields for entity: ${entityName}`);
             if (!entityName) return new Response("Bad Request", { status: 400 });
             const fields = await resolver.getEffectiveFields(entityName);
             return new Response(JSON.stringify(fields), {
@@ -33,9 +46,10 @@ export const Route = createFileRoute("/api/metadata/$")({
           }
 
           if (pathname.includes("/layout/")) {
-            const segments = pathname.split("/");
+            const segments = pathname.split("/").filter(Boolean);
             const layoutKey = segments.pop();
             const entityName = segments.pop();
+            console.log(`[Metadata API] Resolving layout for entity: ${entityName}, key: ${layoutKey}`);
             if (!entityName || !layoutKey) return new Response("Bad Request", { status: 400 });
             const layout = await resolver.getEffectiveLayout(entityName, layoutKey);
             return new Response(JSON.stringify(layout), {

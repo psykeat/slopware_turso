@@ -18,16 +18,50 @@ export const Route = createFileRoute("/api/documents/$documentId/convert")({
           return new Response("No active tenant found", { status: 403 });
         }
 
+        let targetGroupId: string | undefined;
+        try {
+          const body = await request.json();
+          targetGroupId = body?.targetGroupId;
+        } catch {
+          // no body or invalid JSON — that's fine
+        }
+
         try {
           const svc = new DocumentService();
-          const result = await svc.convertDocument(
+
+          if (targetGroupId) {
+            const result = await svc.convertDocument(
+              params.documentId,
+              session.user.id,
+              context.tenantId,
+              targetGroupId,
+            );
+            return new Response(JSON.stringify(result), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+
+          const resolution = await svc.getConversionCandidates(
             params.documentId,
-            session.user.id,
             context.tenantId,
           );
-          return new Response(JSON.stringify(result), {
-            headers: { "content-type": "application/json" },
-          });
+
+          if (resolution.mode === "direct") {
+            const result = await svc.convertDocument(
+              params.documentId,
+              session.user.id,
+              context.tenantId,
+              resolution.targetGroupId,
+            );
+            return new Response(JSON.stringify(result), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+
+          return new Response(
+            JSON.stringify({ requiresSelection: true, candidates: resolution.candidates }),
+            { headers: { "content-type": "application/json" } },
+          );
         } catch (err: any) {
           return new Response(err.message, { status: 400 });
         }

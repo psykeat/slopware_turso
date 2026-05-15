@@ -39,7 +39,7 @@ export const Route = createFileRoute("/api/data/$")({
           }
 
           // Extract query params for FK filtering; exclude pagination/reserved keys
-          const reserved = new Set(["limit", "offset", "page", "orderBy"]);
+          const reserved = new Set(["limit", "offset", "page", "orderBy", "paginated", "search", "filters"]);
           const filters: Record<string, string> = {};
           for (const [key, value] of url.searchParams.entries()) {
             if (!reserved.has(key)) {
@@ -51,9 +51,35 @@ export const Route = createFileRoute("/api/data/$")({
             ? Number(url.searchParams.get("limit"))
             : undefined;
           const orderBy = url.searchParams.get("orderBy") ?? undefined;
+          const paginated = url.searchParams.get("paginated") === "true";
+          const page = Math.max(1, Number(url.searchParams.get("page") ?? "1"));
+          const effectiveLimit = limit ?? 50;
+          const offset = paginated ? (page - 1) * effectiveLimit : undefined;
+
+          const search = url.searchParams.get("search") ?? undefined;
+          const filtersParam = url.searchParams.get("filters");
+          let filterRules: Array<{ col: string; op: string; val: string }> | undefined;
+          if (filtersParam) {
+            try { filterRules = JSON.parse(filtersParam); } catch { /* ignore */ }
+          }
 
           console.log(`[Data API] GET List: ${entityName} Filters:`, filters);
-          const data = await service.list(entityName, filters, { limit, orderBy });
+
+          if (paginated) {
+            const result = await service.list(entityName, filters, {
+              limit: effectiveLimit,
+              offset,
+              orderBy,
+              count: true,
+              search,
+              filterRules,
+            }) as { data: any[]; total: number };
+            return new Response(JSON.stringify(result), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+
+          const data = await service.list(entityName, filters, { limit, orderBy, search, filterRules });
           return new Response(JSON.stringify(data), {
             headers: { "content-type": "application/json" },
           });
@@ -74,11 +100,16 @@ export const Route = createFileRoute("/api/data/$")({
         const entityName = new URL(request.url).pathname.split("/").filter(Boolean)[2];
         if (!entityName) return new Response("Bad Request", { status: 400 });
 
-        const body = await request.json();
-        const result = await service.create(entityName, body);
-        return new Response(JSON.stringify(result), {
-          headers: { "content-type": "application/json" },
-        });
+        try {
+          const body = await request.json();
+          const result = await service.create(entityName, body);
+          return new Response(JSON.stringify(result), {
+            headers: { "content-type": "application/json" },
+          });
+        } catch (err: any) {
+          console.error(`[Data API] POST Error:`, err);
+          return new Response(err.message ?? "Internal error", { status: 400 });
+        }
       },
       PATCH: async ({ request }) => {
         const session = await auth.api.getSession({ headers: request.headers });
@@ -95,11 +126,16 @@ export const Route = createFileRoute("/api/data/$")({
 
         if (!entityName || !id) return new Response("Bad Request", { status: 400 });
 
-        const body = await request.json();
-        const result = await service.patch(entityName, id, body);
-        return new Response(JSON.stringify(result), {
-          headers: { "content-type": "application/json" },
-        });
+        try {
+          const body = await request.json();
+          const result = await service.patch(entityName, id, body);
+          return new Response(JSON.stringify(result), {
+            headers: { "content-type": "application/json" },
+          });
+        } catch (err: any) {
+          console.error(`[Data API] PATCH Error:`, err);
+          return new Response(err.message ?? "Internal error", { status: 400 });
+        }
       },
     },
   },

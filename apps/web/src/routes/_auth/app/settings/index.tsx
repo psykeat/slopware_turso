@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { useTranslation } from "react-i18next";
 import { DataGrid } from "@repo/ui/components/data-grid";
 import { EntityMask } from "@repo/ui/components/entity-mask";
@@ -20,7 +21,7 @@ interface SettingsRegistryEntry {
   group: string;
 }
 
-const GROUP_ORDER = ["organisation", "vertrieb", "lager_artikel", "finanzen", "geodaten"];
+const GROUP_ORDER = ["master", "organisation", "vertrieb", "lager_artikel", "finanzen", "geodaten"];
 
 function SettingsView() {
   const [selectedKey, setSelectedKey] = useState<string>("company");
@@ -32,6 +33,9 @@ function SettingsView() {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   // Fetch the dynamic settings registry
   const { data: registry = [], isLoading: isRegistryLoading } = useQuery<SettingsRegistryEntry[]>({
@@ -67,25 +71,35 @@ function SettingsView() {
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
-  // Fetch data for the selected entity
-  const { data = [], isLoading: isDataLoading } = useQuery({
-    queryKey: ["data", selectedKey],
+  // Fetch data for the selected entity — paginated
+  const { data: entityData, isLoading: isDataLoading } = useQuery({
+    queryKey: ["data", selectedKey, gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
     queryFn: async () => {
-      const res = await fetch(`/api/data/${selectedKey}`);
-      if (!res.ok) return [];
-      return res.json();
+      const p = new URLSearchParams({
+        paginated: "true",
+        page: String(gridState.queryParams.page),
+        limit: String(gridState.queryParams.limit),
+      });
+      if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
+      if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
+      if (gridState.queryParams.filters) p.set("filters", JSON.stringify(gridState.queryParams.filters));
+      const res = await fetch(`/api/data/${selectedKey}?${p}`);
+      if (!res.ok) return { data: [], total: 0 };
+      return res.json() as Promise<{ data: any[]; total: number }>;
     },
     enabled: !!selectedKey,
   });
 
+  const data = useMemo(() => entityData?.data ?? [], [entityData]);
+
   useEffect(() => {
-    const isSingleton = selectedKey === "company";
+    const isDeletable = selectedKey !== "company";
     const unregCreate = registerCommand({
       id: "create-record",
       scope: "context",
       label: { en: t("commands.newRecord"), de: "Neu" },
       shortcut: "F3",
-      isEnabled: () => !isSingleton,
+      isEnabled: () => true,
       handler: () => setShowCreate(true),
     });
     const unregEdit = registerCommand({
@@ -93,20 +107,27 @@ function SettingsView() {
       scope: "context",
       label: { en: "Edit", de: "Bearbeiten" },
       shortcut: "F2",
-      isEnabled: () => !isSingleton,
+      isEnabled: () => true,
       handler: () => {
         // Handled via onRowClick
+      },
+    });
+    const unregDelete = registerCommand({
+      id: "delete-record",
+      scope: "context",
+      label: { en: "Delete", de: "Löschen" },
+      shortcut: "F4",
+      isEnabled: () => isDeletable && !!editId,
+      handler: () => {
+        if (editId) { setDeleteId(editId); setDeleteConfirm(true); }
       },
     });
     return () => {
       unregCreate();
       unregEdit();
+      unregDelete();
     };
-  }, [registerCommand, selectedKey, t]);
-
-  const firstCompanyId = (selectedKey === "company" && data && data.length > 0) 
-    ? (data[0].companyId || data[0].id || data[0].code) 
-    : null;
+  }, [registerCommand, selectedKey, t, editId]);
 
   return (
     <div className="flex h-full w-full overflow-hidden sw-root">
@@ -137,7 +158,7 @@ function SettingsView() {
                 return (
                   <button
                     key={entity.tableName}
-                    onClick={() => setSelectedKey(entity.tableName)}
+                    onClick={() => { setSelectedKey(entity.tableName); gridState.setPage(1); }}
                     className={cn(
                       "w-full flex items-center h-7 px-3 text-left text-[13px] cursor-pointer transition-colors group",
                       isActive ? "bg-primary text-primary-fg" : "text-ink-secondary hover:bg-canvas-soft hover:text-ink"
@@ -154,64 +175,50 @@ function SettingsView() {
 
       {/* Main content area */}
       <div className="flex-1 min-w-0 overflow-hidden bg-canvas flex flex-col">
-        {selectedKey === "company" ? (
-          <div className="flex-1 overflow-auto p-8">
-            <div className="max-w-4xl mx-auto">
-              <h1 className="text-2xl font-light mb-8">{tableLabel}</h1>
-              {isDataLoading ? (
-                <div className="space-y-4">
-                  <div className="h-8 w-64 bg-canvas-soft animate-pulse rounded" />
-                  <div className="grid grid-cols-2 gap-4">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <div key={i} className="h-20 bg-canvas-soft animate-pulse rounded" />
-                    ))}
-                  </div>
-                </div>
-              ) : firstCompanyId ? (
-                <EntityMask
-                  entityName={selectedKey}
-                  recordId={firstCompanyId}
-                  mode="edit"
-                  embedded
-                  className="p-0 border-none shadow-none"
-                  onSaved={() => queryClient.invalidateQueries({ queryKey: ["data", selectedKey] })}
-                />
-              ) : (
-                <div className="p-12 text-center border-2 border-dashed border-hairline rounded-xl">
-                  <p className="text-ink-mute">{t("empty.noData")}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <DataGrid
-            entityName={selectedKey}
-            data={data}
-            keyExtractor={(row: any) => 
-                row[`${selectedKey}Id`] ?? 
-                row.id ?? 
-                row.code ?? 
-                row.iso2Code ?? 
-                row.accountNo ?? 
-                row.batchId ?? 
-                row.rowId
-            }
-            isLoading={isDataLoading}
-            title={tableLabel}
-            emptyTitle={`${t("empty.noData")} ${tableLabel}`}
-            emptySubtitle={t("empty.subtitle")}
-            emptyAction={{
-              label: `${t("actions.new")} ${tableLabel}`,
-              kbd: "F3",
-              onClick: () => setShowCreate(true),
-            }}
-            onRowClick={(row: any) => {
-              setEditId(row[`${selectedKey}Id`] ?? row.id ?? row.code);
-              setShowEdit(true);
-            }}
-            panelId="settings-grid"
-          />
-        )}
+        <DataGrid
+          entityName={selectedKey}
+          data={data}
+          keyExtractor={(row: any) =>
+            row[`${selectedKey}Id`] ??
+            row.id ??
+            row.code ??
+            row.iso2Code ??
+            row.accountNo ??
+            row.batchId ??
+            row.rowId
+          }
+          isLoading={isDataLoading}
+          title={tableLabel}
+          totalCount={entityData?.total}
+          page={gridState.page}
+          pageSize={gridState.pageSize}
+          sort={gridState.sort}
+          onPageChange={gridState.setPage}
+          onPageSizeChange={gridState.setPageSize}
+          onSortChange={gridState.setSort}
+          search={gridState.search}
+          onSearchChange={gridState.setSearch}
+          filters={gridState.filters}
+          onFiltersChange={gridState.setFilters}
+          emptyTitle={`${t("empty.noData")} ${tableLabel}`}
+          emptySubtitle={t("empty.subtitle")}
+          emptyAction={{
+            label: `${t("actions.new")} ${tableLabel}`,
+            kbd: "F3",
+            onClick: () => setShowCreate(true),
+          }}
+          onRowClick={(row: any) => {
+            const id = row[`${selectedKey}Id`] ?? row.id ?? row.code;
+            setEditId(id);
+            setShowEdit(true);
+          }}
+          onRowOpen={(row: any) => {
+            const id = row[`${selectedKey}Id`] ?? row.id ?? row.code;
+            setEditId(id);
+            setShowEdit(true);
+          }}
+          panelId="settings-grid"
+        />
       </div>
 
       {/* Create Dialog */}
@@ -246,6 +253,45 @@ function SettingsView() {
             }}
             className="border-none shadow-none rounded-none m-0"
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm */}
+      <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
+        <DialogContent className="max-w-sm sw-root">
+          <div className="p-6 flex flex-col gap-5">
+            <div>
+              <h3 className="text-[15px] font-medium text-ink">Eintrag löschen?</h3>
+              <p className="text-[13px] text-ink-mute mt-1">Der Eintrag wird permanent aus der Liste entfernt.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
+                onClick={() => setDeleteConfirm(false)}
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
+                onClick={async () => {
+                  if (!deleteId) return;
+                  await fetch(`/api/data/${selectedKey}/${deleteId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ archived: true }),
+                  });
+                  setDeleteConfirm(false);
+                  setDeleteId(null);
+                  setEditId(null);
+                  queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
+                }}
+              >
+                Löschen
+              </button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

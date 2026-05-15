@@ -3,9 +3,10 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { Skeleton } from "./skeleton";
-import { SearchIcon, XIcon } from "lucide-react";
+import { SearchIcon, XIcon, AlertCircleIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 import { DataGrid } from "./data-grid";
+import { toast } from "sonner";
 
 export interface FieldDef {
   key: string;
@@ -24,6 +25,7 @@ export interface FieldDef {
   lookupFilter?: any;
   lookupDisplayColumn?: string;
   lookupIsI18n?: boolean;
+  lookupPkColumn?: string;
 }
 
 export interface EntityMaskProps {
@@ -143,10 +145,10 @@ function LookupInput({
                 data={list}
                 isLoading={isLoading}
                 keyExtractor={(row: any) =>
-                  row[`${field.lookupTable}Id`] || row.id || row.code
+                  row[field.lookupPkColumn || ""] || row[`${field.lookupTable}Id`] || row.id || row.code
                 }
                 onRowClick={(row: any) => {
-                  const id = row[`${field.lookupTable}Id`] || row.id || row.code;
+                  const id = row[field.lookupPkColumn || ""] || row[`${field.lookupTable}Id`] || row.id || row.code;
                   onChange(id);
                   setOpen(false);
                 }}
@@ -264,10 +266,12 @@ export function EntityMask({
   const [metaFields, setMetaFields] = useState<FieldDef[]>([]);
   const [loading, setLoading] = useState(!propFields && !!entityName);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [globalError, setGlobalError] = useState<string | null>(null);
 
   // Reset form and fetch data when record changes
   useEffect(() => {
     setFormData({});
+    setGlobalError(null);
     if (recordId && (mode === "edit" || !mode)) {
       fetch(`${apiBase}/${entityName}/${recordId}`)
         .then((res) => res.json())
@@ -327,6 +331,7 @@ export function EntityMask({
             helpTextDe: f.helpTextDe,
             lookupTable: f.lookupTable,
             lookupFilter: f.lookupFilter,
+            lookupPkColumn: f.lookupPkColumn,
             lookupDisplayColumn: f.lookupDisplayColumn,
             lookupIsI18n: f.lookupIsI18n,
           }));
@@ -350,6 +355,7 @@ export function EntityMask({
 
   const saveMutation = useMutation({
     mutationFn: async (data: Record<string, any>) => {
+      setGlobalError(null);
       const isEdit = recordId && mode !== "create";
       const url = isEdit ? `${apiBase}/${entityName}/${recordId}` : `${apiBase}/${entityName}`;
       const method = isEdit ? "PATCH" : "POST";
@@ -358,12 +364,19 @@ export function EntityMask({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `Save failed: ${res.status}`);
+      }
       return res.json();
     },
     onSuccess: (result: unknown) => {
+      toast.success(recordId ? t("form.updateSuccess") : t("form.createSuccess"));
       queryClient.invalidateQueries({ queryKey: ["data", entityName] });
       onSaved?.(result);
+    },
+    onError: (error: Error) => {
+      setGlobalError(error.message);
     },
   });
 
@@ -386,7 +399,40 @@ export function EntityMask({
   }, [formData, recordId, onCancel, saveMutation]);
 
   const handleChange = (key: string, val: any) => {
-    setFormData((prev) => ({ ...prev, [key]: val }));
+    setFormData((prev) => {
+      const next = { ...prev, [key]: val };
+      
+      // Auto-generate slug from name if slug exists in fields
+      if (key === "name" && fields.some(f => f.key === "slug")) {
+        const generatedSlug = val.toString().toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)+/g, '');
+        
+        // Only auto-generate if slug is empty or matches the old auto-generated version of name
+        const oldGeneratedSlug = prev.name ? prev.name.toString().toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)+/g, '') : "";
+
+        if (!next.slug || next.slug === oldGeneratedSlug) {
+            next.slug = generatedSlug;
+        }
+      }
+
+      // Auto-lookup city if countryCode and postalCode are present
+      if ((key === "countryCode" || key === "postalCode") && next.countryCode && next.postalCode) {
+        // Trigger lookup
+        fetch(`/api/data/postalCode?countryCode=${next.countryCode}&plz=${next.postalCode}`)
+          .then(res => res.ok ? res.json() : [])
+          .then(data => {
+            if (Array.isArray(data) && data.length === 1) {
+              setFormData(curr => ({ ...curr, city: data[0].city }));
+            }
+          })
+          .catch(err => console.warn("City lookup failed", err));
+      }
+      
+      return next;
+    });
   };
 
   const fieldLabel = (field: FieldDef) =>
@@ -409,29 +455,40 @@ export function EntityMask({
   }
 
   const fieldsGrid = (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-      {fields.map((field) => (
-        <div key={field.key} className={cn("flex flex-col gap-1", field.fullWidth && "col-span-2")}>
-          {field.type !== "boolean" && (
-            <label className="text-[12px] font-medium text-ink-secondary flex items-center gap-1">
-              {fieldLabel(field)}
-              {field.required && <span className="text-[var(--destructive)] leading-none">*</span>}
-            </label>
-          )}
-          <FieldInput
-            field={field}
-            value={formData[field.key] ?? field.value ?? ""}
-            disabled={saveMutation.isPending}
-            onChange={(val) => handleChange(field.key, val)}
-          />
-          {field.error && (
-            <span className="text-[11px] text-[var(--destructive)]">{field.error}</span>
-          )}
-          {!field.error && helpText(field) && (
-            <span className="text-[11px] text-ink-mute">{helpText(field)}</span>
-          )}
+    <div className="flex flex-col gap-6">
+      {globalError && (
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200">
+          <AlertCircleIcon className="size-4 text-destructive shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-1">
+            <span className="text-[13px] font-medium text-destructive">Save Failed</span>
+            <span className="text-[12px] text-destructive/80 leading-relaxed">{globalError}</span>
+          </div>
         </div>
-      ))}
+      )}
+      <div className={cn("grid gap-x-6 gap-y-5", _layout === "single" ? "grid-cols-1" : "grid-cols-2")}>
+        {fields.map((field) => (
+          <div key={field.key} className={cn("flex flex-col gap-1", field.fullWidth && _layout !== "single" && "col-span-2")}>
+            {field.type !== "boolean" && (
+              <label className="text-[12px] font-medium text-ink-secondary flex items-center gap-1">
+                {fieldLabel(field)}
+                {field.required && <span className="text-[var(--destructive)] leading-none">*</span>}
+              </label>
+            )}
+            <FieldInput
+              field={field}
+              value={formData[field.key] ?? field.value ?? ""}
+              disabled={saveMutation.isPending}
+              onChange={(val) => handleChange(field.key, val)}
+            />
+            {field.error && (
+              <span className="text-[11px] text-[var(--destructive)]">{field.error}</span>
+            )}
+            {!field.error && helpText(field) && (
+              <span className="text-[11px] text-ink-mute">{helpText(field)}</span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 

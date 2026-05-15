@@ -33,12 +33,14 @@ export class MetadataResolver {
       const columns = getColumns(table);
       for (const [colName, col] of Object.entries(columns)) {
         const columnType = (col as any).columnType;
+        const isPk = (col as any).primary || false;
+        const isUuid = columnType === "PgUUID" || (col as any).dataType === "uuid";
 
         // Auto-discover lookups by naming convention (e.g. addressCategoryId -> addressCategory)
         let lookupTable: string | undefined = undefined;
         if (colName.endsWith("Id") && colName !== "tenantId") {
             const potentialEntity = colName.slice(0, -2);
-            if ((schema as any)[potentialEntity]) {
+            if ((schema as any)[potentialEntity] && potentialEntity !== entityName) {
                 lookupTable = potentialEntity;
             }
         }
@@ -51,11 +53,13 @@ export class MetadataResolver {
             columnType === "PgInteger" ? "integer" :
             columnType === "PgBoolean" ? "boolean" :
             columnType === "PgTimestamp" || columnType === "PgDate" ? "timestamp" : "text",
-          isVisible: !colName.endsWith("Id") && colName !== "tenantId" && colName !== "createdAt",
+          isVisible: !isPk && !isUuid && !colName.endsWith("Id") && colName !== "tenantId" && colName !== "createdAt" && colName !== "archived" && colName !== "isActive",
           isRequired: (col as any).notNull || false,
           label: { en: colName, de: colName },
           scope: "introspection",
           lookupTable,
+          isUuid,
+          isPk,
         });
       }
     }
@@ -136,6 +140,7 @@ export class MetadataResolver {
         // Map lookup info
         lookupTable: f.lookupTable,
         lookupFilter: f.lookupFilter,
+        lookupPkColumn: registry?.pkColumn,
         lookupDisplayColumn: registry?.displayColumn,
         lookupIsI18n: registry?.displayIsI18n,
       };

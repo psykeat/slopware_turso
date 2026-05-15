@@ -1,7 +1,7 @@
 # Slopware — Live Schema
 
-> Generated: 2026-05-14 15:32:19 UTC
-> Tables: 62
+> Generated: 2026-05-15 10:53:06 UTC
+> Tables: 64
 
 ## Module: uncategorized
 
@@ -96,6 +96,7 @@
 | tenant_id | tenant_id | uuid | — | NOT NULL |  |
 | name | name | jsonb | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | custom_attributes | custom_attributes | jsonb | — |  |  |
 
@@ -118,6 +119,7 @@
 | role_function | role_function | text | — |  |  |
 | is_primary | is_primary | boolean | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_address_contact_address` (address_id) [btree]
@@ -180,6 +182,7 @@
 | quantity | quantity | numeric | — | NOT NULL |  |
 | scrap_percentage | scrap_percentage | numeric | — | NOT NULL, DEFAULT 0 |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > CHECK `article_bom_quantity_check`: [object Object]
@@ -195,6 +198,7 @@
 | code | code | text | — | NOT NULL |  |
 | name | name | text | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_article_group_tenant` (tenant_id) [btree]
@@ -207,7 +211,6 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | bank_account_id | bank_account_id | uuid | PK | NOT NULL, DEFAULT uuidv7() |  |
 | tenant_id | tenant_id | uuid | — | NOT NULL |  |
-| company_id | company_id | uuid | — |  |  |
 | address_id | address_id | uuid | — |  |  |
 | iban | iban | text | — | NOT NULL |  |
 | bic | bic | text | — |  |  |
@@ -215,14 +218,12 @@
 | currency_id | currency_id | char(3) | — |  |  |
 | is_default | is_default | boolean | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | custom_attributes | custom_attributes | jsonb | — |  |  |
 
 > INDEX `idx_bank_account_address` (address_id) [btree]
-> INDEX `idx_bank_account_company` (company_id) [btree]
 > INDEX `idx_bank_account_tenant` (tenant_id) [btree]
-
-> CHECK `chk_bank_account_target`: [object Object]
 
 ### `company`
 
@@ -239,6 +240,7 @@
 | currency_id | currency_id | char(3) | — | NOT NULL |  |
 | vat_id | vat_id | text | — |  |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | address_line_1 | address_line_1 | text | — |  |  |
 | address_line_2 | address_line_2 | text | — |  |  |
@@ -293,6 +295,7 @@
 | code | code | text | — | NOT NULL |  |
 | name | name | text | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_cost_center_tenant` (tenant_id) [btree]
@@ -309,6 +312,7 @@
 | name | name | jsonb | — | NOT NULL |  |
 | is_eu | is_eu | boolean | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `country_iso2_code_key` (iso2_code) [btree]
@@ -326,6 +330,7 @@
 | symbol | symbol | varchar(5) | — |  |  |
 | decimals | decimals | integer | — | NOT NULL, DEFAULT 2 |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `currency_code_key` (code) [btree]
@@ -365,6 +370,7 @@
 | name | name | text | — | NOT NULL |  |
 | percentage | percentage | numeric | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_discount_group_tenant` (tenant_id) [btree]
@@ -409,6 +415,9 @@
 | document_type_id | document_type_id | uuid | — |  |  |
 | warehouse_id | warehouse_id | uuid | — |  |  |
 | target_warehouse_id | target_warehouse_id | uuid | — |  |  |
+| is_paid | is_paid | boolean | — | NOT NULL |  |
+| paid_at | paid_at | timestamp with time zone | — |  |  |
+| paid_amount | paid_amount | numeric | — |  |  |
 
 > INDEX `idx_document_company` (tenant_id, company_id) [btree]
 > INDEX `idx_document_customer` (tenant_id, customer_id) [btree]
@@ -572,6 +581,33 @@
 > INDEX `idx_entity_commands_org` (organization_id) [btree]
 > INDEX `idx_entity_commands_tenant` (tenant_id) [btree]
 
+### `fact_purchase_event`
+
+> _⚠ pending annotation_
+
+| Column | Business Name | Type | Class | Constraints | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| fact_purchase_event_id | fact_purchase_event_id | uuid | PK | NOT NULL, DEFAULT uuidv7() |  |
+| tenant_id | tenant_id | uuid | — | NOT NULL |  |
+| company_id | company_id | uuid | — | NOT NULL |  |
+| source_document_id | source_document_id | uuid | — |  |  |
+| source_document_line_id | source_document_line_id | uuid | — |  |  |
+| supplier_id | supplier_id | uuid | — |  |  |
+| article_id | article_id | uuid | — |  |  |
+| event_type | event_type | text | — | NOT NULL, DEFAULT purchase |  |
+| quantity_delta | quantity_delta | numeric | — | NOT NULL |  |
+| amount_net_delta | amount_net_delta | numeric | — | NOT NULL |  |
+| avg_cost_before | avg_cost_before | numeric | — |  |  |
+| avg_cost_after | avg_cost_after | numeric | — |  |  |
+| fiscal_period_id | fiscal_period_id | uuid | — |  |  |
+| booking_period | booking_period | date | — |  |  |
+| created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
+
+> INDEX `idx_fact_purchase_tenant_company` (tenant_id, company_id) [btree]
+> INDEX `idx_fact_purchase_supplier` (tenant_id, supplier_id) [btree]
+> INDEX `idx_fact_purchase_article` (tenant_id, article_id) [btree]
+> INDEX `idx_fact_purchase_period` (tenant_id, fiscal_period_id) [btree]
+
 ### `fact_sales_event`
 
 > _⚠ pending annotation_
@@ -591,12 +627,32 @@
 | booking_period | booking_period | date | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | transaction_id | transaction_id | uuid | — |  |  |
+| cogs_delta | cogs_delta | numeric | — |  |  |
+| fiscal_period_id | fiscal_period_id | uuid | — |  |  |
 
 > INDEX `idx_fact_sales_article` (tenant_id, article_id) [btree]
 > INDEX `idx_fact_sales_customer` (tenant_id, customer_id) [btree]
 > INDEX `idx_fact_sales_period` (tenant_id, booking_period) [btree]
 > INDEX `idx_fact_sales_tenant` (tenant_id) [btree]
 > INDEX `idx_fact_sales_tx` (tenant_id, transaction_id) [btree]
+
+### `fiscal_period`
+
+> _⚠ pending annotation_
+
+| Column | Business Name | Type | Class | Constraints | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| fiscal_period_id | fiscal_period_id | uuid | PK | NOT NULL, DEFAULT uuidv7() |  |
+| tenant_id | tenant_id | uuid | — | NOT NULL |  |
+| company_id | company_id | uuid | — | NOT NULL |  |
+| fiscal_year | fiscal_year | integer | — | NOT NULL |  |
+| period_no | period_no | integer | — | NOT NULL |  |
+| start_date | start_date | date | — | NOT NULL |  |
+| end_date | end_date | date | — | NOT NULL |  |
+| is_closed | is_closed | boolean | — | NOT NULL |  |
+| created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
+
+> INDEX `idx_fiscal_period_tenant_date` (tenant_id, company_id, start_date, end_date) [btree]
 
 ### `gl_account`
 
@@ -611,6 +667,7 @@
 | name | name | text | — | NOT NULL |  |
 | account_type | account_type | text | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_gl_account_tenant` (tenant_id) [btree]
@@ -633,6 +690,8 @@
 | sort_column | sort_column | text | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | value_column | value_column | text | — |  |  |
+| group | group | text | — |  |  |
+| category | category | text | — |  |  |
 
 ### `import_batch`
 
@@ -697,6 +756,7 @@
 | tenant_id | tenant_id | uuid | — | NOT NULL |  |
 | name | name | jsonb | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | custom_attributes | custom_attributes | jsonb | — |  |  |
 
@@ -823,6 +883,7 @@
 | prefix | prefix | varchar(10) | — | NOT NULL |  |
 | next_value | next_value | integer | — | NOT NULL, DEFAULT 1 |  |
 | padding | padding | integer | — | NOT NULL, DEFAULT 5 |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | updated_at | updated_at | timestamp with time zone | — |  |  |
 
@@ -839,6 +900,7 @@
 | slug | slug | varchar(63) | — | NOT NULL |  |
 | name | name | text | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `organization_slug_key` (slug) [btree]
@@ -856,6 +918,7 @@
 | discount_days | discount_days | integer | — |  |  |
 | discount_percentage | discount_percentage | numeric | — |  |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | custom_attributes | custom_attributes | jsonb | — |  |  |
 
@@ -872,6 +935,7 @@
 | plz | plz | text | — | NOT NULL |  |
 | city | city | text | — | NOT NULL |  |
 | state | state | text | — |  |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_postal_code_lookup` (country_code, plz) [btree]
@@ -888,6 +952,7 @@
 | currency_id | currency_id | char(3) | — | NOT NULL |  |
 | is_net | is_net | boolean | — | NOT NULL, DEFAULT true |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_price_list_tenant` (tenant_id) [btree]
@@ -928,6 +993,7 @@
 | actual_start_date | actual_start_date | date | — |  |  |
 | actual_end_date | actual_end_date | date | — |  |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | updated_at | updated_at | timestamp with time zone | — |  |  |
 
@@ -998,6 +1064,7 @@
 | name | name | jsonb | — | NOT NULL |  |
 | tracking_url_template | tracking_url_template | text | — |  |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | custom_attributes | custom_attributes | jsonb | — |  |  |
 
@@ -1029,6 +1096,7 @@
 | code | code | text | — | NOT NULL |  |
 | name | name | jsonb | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | custom_attributes | custom_attributes | jsonb | — |  |  |
 
@@ -1046,6 +1114,7 @@
 | description | description | text | — |  |  |
 | tax_rate | tax_rate | numeric | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_tax_code_tenant` (tenant_id) [btree]
@@ -1081,10 +1150,12 @@
 | name | name | text | — | NOT NULL |  |
 | is_base | is_base | boolean | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_tenant_organization` (organization_id) [btree]
 > INDEX `tenant_slug_key` (slug) [btree]
+> INDEX `uq_single_base_tenant` (is_base) [btree]
 
 ### `tenant_connector`
 
@@ -1097,6 +1168,7 @@
 | connector_id | connector_id | uuid | — | NOT NULL |  |
 | credentials | credentials | jsonb | — | NOT NULL, DEFAULT [object Object] |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | updated_at | updated_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
@@ -1204,6 +1276,7 @@
 | code | code | varchar(10) | — | NOT NULL |  |
 | name | name | jsonb | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | custom_attributes | custom_attributes | jsonb | — |  |  |
 
@@ -1269,6 +1342,7 @@
 | code | code | text | — | NOT NULL |  |
 | name | name | text | — | NOT NULL |  |
 | is_active | is_active | boolean | — | NOT NULL, DEFAULT true |  |
+| archived | archived | boolean | — | NOT NULL |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 
 > INDEX `idx_warehouse_tenant` (tenant_id) [btree]

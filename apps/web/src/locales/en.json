@@ -45,7 +45,10 @@
     "subtitle": "Try a different filter or create a new record."
   },
   "grid": {
-    "records": "{{count}} records"
+    "records": "{{count}} records",
+    "columns": "Columns",
+    "of": "of",
+    "perPage": "per page"
   },
   "tree": {
     "categories": "Categories",
@@ -138,7 +141,7 @@
       "currency": "Currencies",
       "country": "Countries",
       "postal_code": "Postal Codes",
-      "bankAccount": "Bank Accounts",
+      "bankAccount": "Bank Balances",
       "numberSequence": "Number Sequences",
       "paymentTerm": "Payment Terms",
       "shippingMethod": "Shipping Methods",
@@ -171,5 +174,57 @@
     "INBOUND": "Inbound",
     "ADJUSTMENT": "Adjustments",
     "other": "Other"
+  },
+  "document": {
+    "breadcrumb": "Documents",
+    "technicalFields": "Technical Fields",
+    "loading": "Loading…",
+    "fields": {
+      "documentType": "Document Type",
+      "documentGroup": "Document Group",
+      "billingAddress": "Billing Address",
+      "deliveryAddress": "Delivery Address",
+      "warehouse": "Warehouse",
+      "paymentTerm": "Payment Terms",
+      "shippingMethod": "Shipping Method",
+      "date": "Date",
+      "currency": "Currency"
+    },
+    "lookup": {
+      "search": "Search…",
+      "noEntries": "No entries",
+      "selectTypeFirst": "Select type first",
+      "selectType": "Select type…",
+      "selectGroup": "Select group…"
+    },
+    "lines": {
+      "empty": "No lines — press Enter to add",
+      "articleSearch": "Article no. / description…",
+      "description": "Description",
+      "pos": "Pos",
+      "article": "Article",
+      "qty": "Qty",
+      "unit": "Unit",
+      "price": "Price",
+      "discount": "Disc.",
+      "taxRate": "Tax%",
+      "net": "Net",
+      "qtyDelta": "Qty delta",
+      "apply": "Apply",
+      "cancel": "Cancel",
+      "korrekturPosted": "Correction posted",
+      "korrekturError": "Correction failed"
+    },
+    "actions": {
+      "close": "Close (Esc)",
+      "convert": "Convert",
+      "storno": "Cancel/Reverse",
+      "save": "Save",
+      "post": "Post",
+      "saving": "Saving…",
+      "posting": "Posting…",
+      "converting": "Converting…",
+      "cancelling": "Cancelling…"
+    }
   }
 }

@@ -21,10 +21,12 @@ export const Route = createFileRoute("/api/documents/tree")({
         try {
           const svc = new DocumentService();
           const tree = await svc.getDocumentTree(context.tenantId);
+          console.log("[Tree API] tenantId:", context.tenantId, "sections:", tree.length, JSON.stringify(tree));
           return new Response(JSON.stringify(tree), {
             headers: { "content-type": "application/json" },
           });
         } catch (err: any) {
+          console.error("[Tree API] error:", err);
           return new Response(err.message, { status: 500 });
         }
       },

@@ -1,7 +1,6 @@
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
-import { eq, and, asc, desc, getColumns } from "drizzle-orm";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { eq, and, asc, desc, getColumns, count as drizzleCount, ilike, ne, isNull, isNotNull, gt, gte, lt, lte, inArray, or, not } from "drizzle-orm";
 
 export class DataService {
   private tenantId: string;
@@ -32,14 +31,67 @@ export class DataService {
   async list(
     entityName: string,
     filters: Record<string, string> = {},
-    options: { limit?: number; orderBy?: string } = {},
-  ) {
+    options: {
+      limit?: number;
+      offset?: number;
+      orderBy?: string;
+      count?: boolean;
+      search?: string;
+      filterRules?: Array<{ col: string; op: string; val: string }>;
+    } = {},
+  ): Promise<any[] | { data: any[]; total: number }> {
     const table = this.getTable(entityName);
 
-    // Build filter conditions from caller-supplied key/value pairs
-    const filterConditions = Object.entries(filters)
+    const conditions = Object.entries(filters)
       .filter(([key]) => key in table)
       .map(([key, value]) => eq((table as any)[key], value));
+
+    // Tenant isolation
+    if ("tenantId" in table) {
+      conditions.push(eq(table.tenantId, this.tenantId));
+    }
+
+    // Non-destructive deletion filtering
+    if ("archived" in table) {
+      conditions.push(eq((table as any).archived, false));
+    }
+
+    // Free-text search — skip id/UUID columns, only text columns
+    if (options.search?.trim()) {
+      const term = `%${options.search.trim()}%`;
+      const textCols = Object.entries(getColumns(table)).filter(([name, col]) => {
+        if (name === "id" || name.endsWith("Id")) return false;
+        return (col as any).dataType === "string";
+      });
+      if (textCols.length > 0) {
+        conditions.push(or(...textCols.map(([, col]) => ilike(col as any, term)))!);
+      }
+    }
+
+    // Structured filter rules
+    for (const rule of options.filterRules ?? []) {
+      const col = (table as any)[rule.col];
+      if (!col) continue;
+      switch (rule.op) {
+        case "contains":      conditions.push(ilike(col, `%${rule.val}%`)); break;
+        case "not_contains":  conditions.push(not(ilike(col, `%${rule.val}%`))); break;
+        case "eq":            conditions.push(eq(col, rule.val)); break;
+        case "neq":           conditions.push(ne(col, rule.val)); break;
+        case "starts_with":   conditions.push(ilike(col, `${rule.val}%`)); break;
+        case "ends_with":     conditions.push(ilike(col, `%${rule.val}`)); break;
+        case "gt":            conditions.push(gt(col, rule.val)); break;
+        case "gte":           conditions.push(gte(col, rule.val)); break;
+        case "lt":            conditions.push(lt(col, rule.val)); break;
+        case "lte":           conditions.push(lte(col, rule.val)); break;
+        case "is_empty":      conditions.push(isNull(col)); break;
+        case "is_not_empty":  conditions.push(isNotNull(col)); break;
+        case "in": {
+          const vals = rule.val.split(",").map((x) => x.trim()).filter(Boolean);
+          if (vals.length) conditions.push(inArray(col, vals));
+          break;
+        }
+      }
+    }
 
     const buildOrderBy = () => {
       if (options.orderBy) {
@@ -55,37 +107,24 @@ export class DataService {
       const order = buildOrderBy();
       if (order) query.orderBy(order);
       if (options.limit) query.limit(options.limit);
+      if (options.offset) query.offset(options.offset);
       return query;
     };
 
-    if (this.isSystemAdmin) {
-      const query = db.select().from(table);
-      if (filterConditions.length > 0) {
-        query.where(filterConditions.length === 1 ? filterConditions[0] : and(...filterConditions));
-      }
-      applyOptions(query);
-      return await query;
-    }
+    const whereClause =
+      conditions.length === 0 ? undefined : conditions.length === 1 ? conditions[0] : and(...conditions);
 
-    // Regular users are isolated by tenantId if the column exists
-    const hasTenantId = "tenantId" in table;
+    const dataQ = db.select().from(table);
+    if (whereClause) dataQ.where(whereClause);
+    applyOptions(dataQ);
 
-    if (!hasTenantId) {
-      const query = db.select().from(table);
-      if (filterConditions.length > 0) {
-        query.where(filterConditions.length === 1 ? filterConditions[0] : and(...filterConditions));
-      }
-      applyOptions(query);
-      return await query;
-    }
+    if (!options.count) return await dataQ;
 
-    const tenantCondition = eq(table.tenantId, this.tenantId);
-    const allConditions =
-      filterConditions.length === 0 ? tenantCondition : and(tenantCondition, ...filterConditions);
+    const countQ = db.select({ total: drizzleCount() }).from(table);
+    if (whereClause) countQ.where(whereClause);
 
-    const baseQuery = db.select().from(table).where(allConditions);
-    applyOptions(baseQuery);
-    return await baseQuery;
+    const [data, countRows] = await Promise.all([dataQ, countQ]);
+    return { data, total: Number(countRows[0]?.total ?? 0) };
   }
 
   async get(entityName: string, id: string) {
@@ -94,11 +133,16 @@ export class DataService {
     const pkColumn = (table as any)[pkName];
     const hasTenantId = "tenantId" in table;
 
-    const condition = this.isSystemAdmin || !hasTenantId
-      ? eq(pkColumn, id)
-      : and(eq(pkColumn, id), eq(table.tenantId, this.tenantId));
+    const conditions = [eq(pkColumn, id)];
+    if (hasTenantId) {
+      conditions.push(eq(table.tenantId, this.tenantId));
+    }
 
-    const results = await db.select().from(table).where(condition).limit(1);
+    const results = await db
+      .select()
+      .from(table)
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+      .limit(1);
     return results[0] || null;
   }
 
@@ -106,11 +150,8 @@ export class DataService {
     const table = this.getTable(entityName);
     const hasTenantId = "tenantId" in table;
     const values = hasTenantId ? { ...data, tenantId: this.tenantId } : data;
-    
-    return await db
-      .insert(table)
-      .values(values)
-      .returning();
+
+    return await db.insert(table).values(values).returning();
   }
 
   async patch(entityName: string, id: string, data: any) {
@@ -120,26 +161,21 @@ export class DataService {
     const hasTenantId = "tenantId" in table;
 
     // Strip keys that should not be part of the update payload
-    const { 
-      [pkName]: _pk, 
-      tenantId: _t, 
-      createdAt: _c, 
-      updatedAt: _u,
-      ...updateData 
-    } = data;
+    const { [pkName]: _pk, tenantId: _t, createdAt: _c, updatedAt: _u, ...updateData } = data;
 
     // Also strip [entityName]Id if it was passed explicitly (Drizzle doesn't like updating PKs even to same value)
     const entityPkName = `${entityName}Id`;
     if (entityPkName in updateData) delete updateData[entityPkName];
 
-    const condition = this.isSystemAdmin || !hasTenantId
-      ? eq(pkColumn, id)
-      : and(eq(pkColumn, id), eq(table.tenantId, this.tenantId));
+    const conditions = [eq(pkColumn, id)];
+    if (hasTenantId) {
+      conditions.push(eq(table.tenantId, this.tenantId));
+    }
 
     return await db
       .update(table)
       .set(updateData)
-      .where(condition)
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .returning();
   }
 }

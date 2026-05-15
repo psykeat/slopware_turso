@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { useTranslation } from "react-i18next";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
 import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
@@ -28,18 +29,29 @@ function ArticlesModule() {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
-  // Fetch articles
-  const { data: articles = [], isLoading: isDataLoading } = useQuery({
-    queryKey: ["data", "article"],
+  // Fetch articles — paginated
+  const { data: articleData, isLoading: isDataLoading } = useQuery({
+    queryKey: ["data", "article", gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
     queryFn: async () => {
-      const res = await fetch("/api/data/article");
+      const p = new URLSearchParams({
+        paginated: "true",
+        page: String(gridState.queryParams.page),
+        limit: String(gridState.queryParams.limit),
+      });
+      if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
+      if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
+      if (gridState.queryParams.filters) p.set("filters", JSON.stringify(gridState.queryParams.filters));
+      const res = await fetch(`/api/data/article?${p}`);
       if (!res.ok) throw new Error("Failed to fetch articles");
-      return res.json();
+      return res.json() as Promise<{ data: any[]; total: number }>;
     },
   });
+
+  const articles = useMemo(() => articleData?.data ?? [], [articleData]);
 
   // Fetch article groups
   const { data: groups = [], isLoading: isTreeLoading } = useQuery({
@@ -130,9 +142,10 @@ function ArticlesModule() {
       shortcut: "F8",
       isEnabled: (s) => !!s.recordId && s.entity === "article",
       handler: async (s) => {
-        const src = articles.find((a: any) => a.articleId === s.recordId);
-        if (!src) return;
-        const { articleId: _id, ...copy } = src as any;
+        if (!s.recordId) return;
+        const srcRes = await fetch(`/api/data/article/${s.recordId}`);
+        if (!srcRes.ok) return;
+        const { articleId: _id, ...copy } = await srcRes.json();
         await fetch("/api/data/article", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -142,7 +155,7 @@ function ArticlesModule() {
       },
     });
     return () => { unregF3(); unregEdit(); unregF4(); unregDup(); };
-  }, [registerCommand, t, queryClient, articles]);
+  }, [registerCommand, t, queryClient]);
 
   const selectedArticle = articles.find((a: any) => a.articleId === focusState.recordId);
 
@@ -265,6 +278,7 @@ function ArticlesModule() {
             onSelect={(id) => {
               const group = groups.find((g: TreeNode) => g.id === id);
               setSubCrumb(group?.label);
+              gridState.setPage(1);
             }}
           />
         }
@@ -277,13 +291,40 @@ function ArticlesModule() {
             keyExtractor={(row: any) => row.articleId}
             title={t("nav.articles")}
             columns={[
-              { key: "articleNo", header: "No.", render: (r: any) => <span className="font-mono tabular-nums text-ink-mute">{r.articleNo}</span> },
-              { key: "name", header: "Name" },
+              { key: "articleNo", header: "No.", sortable: true, render: (r: any) => <span className="font-mono tabular-nums text-ink-mute">{r.articleNo}</span> },
+              { key: "name", header: "Name", sortable: true },
               { key: "baseUnit", header: "Unit" },
-              { key: "salesPrice", header: "Price", isNumeric: true, render: (r: any) => <span className="tabular-nums">{formatMoney(r.salesPrice ?? 0)}</span> },
-              { key: "stockQty", header: "Stock", isNumeric: true, render: (r: any) => <span className="tabular-nums">{r.stockQty ?? 0}</span> },
+              { key: "salesPrice", header: "Price", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{formatMoney(r.salesPrice ?? 0)}</span> },
+              { key: "stockQty", header: "Stock", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{r.stockQty ?? 0}</span> },
               { key: "defaultWarehouseId", header: "Location", render: (r: any) => <span className="font-mono text-[12px]">{r.defaultWarehouseId}</span> },
             ]}
+            totalCount={articleData?.total}
+            page={gridState.page}
+            pageSize={gridState.pageSize}
+            sort={gridState.sort}
+            onPageChange={gridState.setPage}
+            onPageSizeChange={gridState.setPageSize}
+            onSortChange={gridState.setSort}
+            search={gridState.search}
+            onSearchChange={gridState.setSearch}
+            filters={gridState.filters}
+            onFiltersChange={gridState.setFilters}
+            selectable
+            bulkActions={[{
+              label: "Archive",
+              variant: "destructive" as const,
+              onClick: async (keys: string[]) => {
+                await Promise.all(keys.map(id =>
+                  fetch(`/api/data/article/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ archived: true }),
+                  })
+                ));
+                queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+              },
+            }]}
+            onRowOpen={() => setShowEdit(true)}
             emptyTitle="No articles yet."
             emptySubtitle="Create the first article in this group."
             emptyAction={{

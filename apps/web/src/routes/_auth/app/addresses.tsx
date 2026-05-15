@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { useTranslation } from "react-i18next";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
 import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
@@ -28,18 +29,29 @@ function AddressesModule() {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
-  // Fetch addresses
-  const { data: addresses = [], isLoading: isDataLoading } = useQuery({
-    queryKey: ["data", "address"],
+  // Fetch addresses — paginated
+  const { data: addressData, isLoading: isDataLoading } = useQuery({
+    queryKey: ["data", "address", gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
     queryFn: async () => {
-      const res = await fetch("/api/data/address");
+      const p = new URLSearchParams({
+        paginated: "true",
+        page: String(gridState.queryParams.page),
+        limit: String(gridState.queryParams.limit),
+      });
+      if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
+      if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
+      if (gridState.queryParams.filters) p.set("filters", JSON.stringify(gridState.queryParams.filters));
+      const res = await fetch(`/api/data/address?${p}`);
       if (!res.ok) throw new Error("Failed to fetch addresses");
-      return res.json();
+      return res.json() as Promise<{ data: any[]; total: number }>;
     },
   });
+
+  const addresses = useMemo(() => addressData?.data ?? [], [addressData]);
 
   // Fetch categories for tree
   const { data: categories = [], isLoading: isTreeLoading } = useQuery({
@@ -131,9 +143,10 @@ function AddressesModule() {
       shortcut: "F8",
       isEnabled: (s) => !!s.recordId && s.entity === "address",
       handler: async (s) => {
-        const src = addresses.find((a: any) => a.addressId === s.recordId);
-        if (!src) return;
-        const { addressId: _id, ...copy } = src as any;
+        if (!s.recordId) return;
+        const srcRes = await fetch(`/api/data/address/${s.recordId}`);
+        if (!srcRes.ok) return;
+        const { addressId: _id, ...copy } = await srcRes.json();
         await fetch("/api/data/address", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -143,7 +156,7 @@ function AddressesModule() {
       },
     });
     return () => { unregF3(); unregEdit(); unregF4(); unregDup(); };
-  }, [registerCommand, t, queryClient, addresses]);
+  }, [registerCommand, t, queryClient]);
 
   const selectedAddress = addresses.find((a: any) => a.addressId === focusState.recordId);
 
@@ -356,6 +369,7 @@ function AddressesModule() {
             onSelect={(id) => {
               const cat = categories.find((c: TreeNode) => c.id === id);
               setSubCrumb(cat?.label);
+              gridState.setPage(1);
             }}
           />
         }
@@ -363,18 +377,46 @@ function AddressesModule() {
           <DataGrid
             entityName="address"
             panelId="address-grid"
+            virtualized
             data={addresses}
             isLoading={isDataLoading}
             keyExtractor={(row: any) => row.addressId}
             title={t("nav.addresses")}
             columns={[
-              { key: "addressNo", header: "No.", render: (r: any) => <span className="font-mono tabular-nums text-ink-mute">{r.addressNo}</span> },
-              { key: "companyName", header: "Company" },
-              { key: "city", header: "City" },
+              { key: "addressNo", header: "No.", sortable: true, render: (r: any) => <span className="font-mono tabular-nums text-ink-mute">{r.addressNo}</span> },
+              { key: "companyName", header: "Company", sortable: true },
+              { key: "city", header: "City", sortable: true },
               { key: "countryCode", header: "Country" },
               { key: "phone", header: "Phone", render: (r: any) => <span className="font-mono text-[12px]">{r.phone}</span> },
-              { key: "addressType", header: "Segment" },
+              { key: "addressType", header: "Segment", sortable: true },
             ]}
+            totalCount={addressData?.total}
+            page={gridState.page}
+            pageSize={gridState.pageSize}
+            sort={gridState.sort}
+            onPageChange={gridState.setPage}
+            onPageSizeChange={gridState.setPageSize}
+            onSortChange={gridState.setSort}
+            search={gridState.search}
+            onSearchChange={gridState.setSearch}
+            filters={gridState.filters}
+            onFiltersChange={gridState.setFilters}
+            selectable
+            bulkActions={[{
+              label: "Archive",
+              variant: "destructive" as const,
+              onClick: async (keys: string[]) => {
+                await Promise.all(keys.map(id =>
+                  fetch(`/api/data/address/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ archived: true }),
+                  })
+                ));
+                queryClient.invalidateQueries({ queryKey: ["data", "address"] });
+              },
+            }]}
+            onRowOpen={() => setShowEdit(true)}
             emptyTitle="No addresses yet."
             emptySubtitle="Create the first address in this category."
             emptyAction={{

@@ -2,7 +2,43 @@ import "dotenv/config";
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
 import { user } from "../schema/auth.schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
+
+const CANONICAL_DOC_TYPES: Array<{ movementType: string; name: string }> = [
+  { movementType: "N", name: "Angebot" },
+  { movementType: "A", name: "Auftrag" },
+  { movementType: "L", name: "Lieferschein" },
+  { movementType: "R", name: "Rechnung" },
+  { movementType: "G", name: "Gutschrift" },
+  { movementType: "b", name: "Bestellung" },
+  { movementType: "l", name: "WE-Lieferschein" },
+  { movementType: "r", name: "WE-Rechnung" },
+  { movementType: "g", name: "WE-Gutschrift" },
+  { movementType: "V", name: "Inventurbuchung" },
+  { movementType: "Z", name: "Zubuchung" },
+  { movementType: "E", name: "Entnahme" },
+  { movementType: "U", name: "Umlagerung" },
+];
+
+async function seedCanonicalDocumentGroups(tenantId: string, companyId: string) {
+  for (const dt of CANONICAL_DOC_TYPES) {
+    await db
+      .insert(schema.documentGroup)
+      .values({
+        tenantId,
+        companyId,
+        name: dt.name,
+        documentType: dt.movementType,
+        groupNumber: 0,
+        requireSerialTracking: false,
+        requireBatchTracking: false,
+      })
+      .onConflictDoUpdate({
+        target: [schema.documentGroup.tenantId, schema.documentGroup.documentType, schema.documentGroup.groupNumber],
+        set: { name: sql`excluded.name` },
+      });
+  }
+}
 
 async function seed() {
   // ── 1. Admin user ──────────────────────────────────────────────────────
@@ -90,6 +126,38 @@ async function seed() {
     console.log(`Created base company: ${baseCompany.companyId}`);
   }
 
+  // ── 4b. Default warehouse ──────────────────────────────────────────────
+  let defaultWarehouse: typeof schema.warehouse.$inferSelect;
+  const [existingWh] = await db
+    .select()
+    .from(schema.warehouse)
+    .where(and(eq(schema.warehouse.tenantId, baseTenant.tenantId), eq(schema.warehouse.code, "MAIN")))
+    .limit(1);
+
+  if (existingWh) {
+    defaultWarehouse = existingWh;
+    console.log(`Default warehouse exists: ${defaultWarehouse.warehouseId}`);
+  } else {
+    [defaultWarehouse] = await db
+      .insert(schema.warehouse)
+      .values({
+        tenantId: baseTenant.tenantId,
+        companyId: baseCompany.companyId,
+        code: "MAIN",
+        name: "Hauptlager",
+        isActive: true,
+      })
+      .returning();
+    console.log(`Created default warehouse: ${defaultWarehouse.warehouseId}`);
+  }
+
+  // Link to company
+  await db
+    .update(schema.company)
+    .set({ defaultWarehouseId: defaultWarehouse.warehouseId })
+    .where(eq(schema.company.companyId, baseCompany.companyId));
+  console.log("Linked default warehouse to base company.");
+
   // ── 5. Link admin user to base tenant ──────────────────────────────────
   const [existingLink] = await db
     .select()
@@ -140,46 +208,89 @@ async function seed() {
 
   // ── 8. Document types ──────────────────────────────────────────────────
   const docTypes = [
-    { code: "LS", name: "Sales Invoice", movementType: "L", sortOrder: 10 },
-    { code: "LK", name: "Credit Note", movementType: "l", sortOrder: 20 },
-    { code: "AB", name: "Outbound Delivery", movementType: "A", sortOrder: 30 },
-    { code: "EB", name: "Inbound Delivery", movementType: "N", sortOrder: 40 },
-    { code: "RR", name: "Return Receipt", movementType: "R", sortOrder: 50 },
-    { code: "RS", name: "Return Shipment", movementType: "r", sortOrder: 60 },
+    { code: "N", name: "Angebot",         movementType: "N", sortOrder: 10  },
+    { code: "A", name: "Auftrag",          movementType: "A", sortOrder: 20  },
+    { code: "L", name: "Lieferschein",     movementType: "L", sortOrder: 30  },
+    { code: "R", name: "Rechnung",         movementType: "R", sortOrder: 40  },
+    { code: "G", name: "Gutschrift",       movementType: "G", sortOrder: 50  },
+    { code: "b", name: "Bestellung",       movementType: "b", sortOrder: 60  },
+    { code: "l", name: "WE-Lieferschein",  movementType: "l", sortOrder: 70  },
+    { code: "r", name: "WE-Rechnung",      movementType: "r", sortOrder: 80  },
+    { code: "g", name: "WE-Gutschrift",    movementType: "g", sortOrder: 90  },
+    { code: "V", name: "Inventurbuchung",  movementType: "V", sortOrder: 100 },
+    { code: "Z", name: "Zubuchung",        movementType: "Z", sortOrder: 110 },
+    { code: "E", name: "Entnahme",         movementType: "E", sortOrder: 120 },
+    { code: "U", name: "Umlagerung",       movementType: "U", sortOrder: 130 },
   ];
   const insertedDocTypes: Array<typeof schema.documentType.$inferSelect> = [];
   for (const dt of docTypes) {
     const [inserted] = await db
       .insert(schema.documentType)
       .values({ tenantId: baseTenant.tenantId, ...dt })
-      .onConflictDoNothing()
+      .onConflictDoUpdate({
+        target: [schema.documentType.tenantId, schema.documentType.code],
+        set: { name: sql`excluded.name`, movementType: sql`excluded.movement_type`, sortOrder: sql`excluded.sort_order` },
+      })
       .returning();
     if (inserted) insertedDocTypes.push(inserted);
   }
   console.log("Document types seeded.");
 
-  // ── 9. Document groups ─────────────────────────────────────────────────
-  const docGroups = [
-    { name: "Standard Sales Invoices", documentType: "L", groupNumber: 1 },
-    { name: "Credit Notes", documentType: "l", groupNumber: 1 },
-    { name: "Outbound Deliveries", documentType: "A", groupNumber: 1 },
-    { name: "Inbound Deliveries", documentType: "N", groupNumber: 1 },
-    { name: "Customer Returns", documentType: "R", groupNumber: 1 },
-    { name: "Supplier Returns", documentType: "r", groupNumber: 1 },
+  // ── 9. Document groups — canonical groups (groupNumber=0, protected from delete) ──
+  await seedCanonicalDocumentGroups(baseTenant.tenantId, baseCompany.companyId);
+  console.log("Document groups seeded.");
+
+  // ── 9b. Number sequences — one per movement type, linked to canonical groups ──
+  const NUMBER_SEQUENCES: Array<{ movementType: string; prefix: string }> = [
+    { movementType: "N", prefix: "ANG-" },
+    { movementType: "A", prefix: "AUF-" },
+    { movementType: "L", prefix: "LIS-" },
+    { movementType: "R", prefix: "RE-"  },
+    { movementType: "G", prefix: "GU-"  },
+    { movementType: "b", prefix: "BES-" },
+    { movementType: "l", prefix: "WEL-" },
+    { movementType: "r", prefix: "WER-" },
+    { movementType: "g", prefix: "WEG-" },
+    { movementType: "V", prefix: "INV-" },
+    { movementType: "Z", prefix: "ZUB-" },
+    { movementType: "E", prefix: "ENT-" },
+    { movementType: "U", prefix: "UMB-" },
   ];
-  for (const dg of docGroups) {
-    await db
-      .insert(schema.documentGroup)
+
+  for (const seq of NUMBER_SEQUENCES) {
+    // Upsert the number sequence (conflict on tenantId + companyId + prefix)
+    const [inserted] = await db
+      .insert(schema.numberSequence)
       .values({
         tenantId: baseTenant.tenantId,
         companyId: baseCompany.companyId,
-        requireSerialTracking: false,
-        requireBatchTracking: false,
-        ...dg,
+        prefix: seq.prefix,
+        nextValue: 1,
+        padding: 6,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [
+          schema.numberSequence.tenantId,
+          schema.numberSequence.companyId,
+          schema.numberSequence.prefix,
+        ],
+        set: { padding: 6 },
+      })
+      .returning();
+
+    // Link the canonical document group (groupNumber=0) to this sequence
+    await db
+      .update(schema.documentGroup)
+      .set({ numberSequenceId: inserted.numberSequenceId })
+      .where(
+        and(
+          eq(schema.documentGroup.tenantId, baseTenant.tenantId),
+          eq(schema.documentGroup.documentType, seq.movementType),
+          eq(schema.documentGroup.groupNumber, 0),
+        ),
+      );
   }
-  console.log("Document groups seeded.");
+  console.log("Number sequences seeded and linked to document groups.");
 
   // ── 10. Sample addresses ───────────────────────────────────────────────
   const [customerCat] = await db
@@ -338,7 +449,7 @@ async function seed() {
 
     await db
       .insert(schema.documentType)
-      .values({ tenantId: demoTenant.tenantId, code: "LS", name: "Sales Invoice", movementType: "L" })
+      .values({ tenantId: demoTenant.tenantId, code: "R", name: "Rechnung", movementType: "R", sortOrder: 40 })
       .onConflictDoNothing();
 
     await db

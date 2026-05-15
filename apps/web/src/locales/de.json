@@ -45,7 +45,10 @@
     "subtitle": "Versuchen Sie einen anderen Filter oder erstellen Sie einen neuen Datensatz."
   },
   "grid": {
-    "records": "{{count}} Einträge"
+    "records": "{{count}} Einträge",
+    "columns": "Spalten",
+    "of": "von",
+    "perPage": "pro Seite"
   },
   "tree": {
     "categories": "Kategorien",
@@ -171,5 +174,57 @@
     "INBOUND": "Wareneingang",
     "ADJUSTMENT": "Lagerbuchungen",
     "other": "Sonstiges"
+  },
+  "document": {
+    "breadcrumb": "Belege",
+    "technicalFields": "Technische Felder",
+    "loading": "Lade…",
+    "fields": {
+      "documentType": "Belegart",
+      "documentGroup": "Beleggruppe",
+      "billingAddress": "Rechnungsadresse",
+      "deliveryAddress": "Lieferadresse",
+      "warehouse": "Lager",
+      "paymentTerm": "Zahlungsbedingung",
+      "shippingMethod": "Versandart",
+      "date": "Datum",
+      "currency": "Währung"
+    },
+    "lookup": {
+      "search": "Suchen…",
+      "noEntries": "Keine Einträge",
+      "selectTypeFirst": "Erst Belegart wählen",
+      "selectType": "Belegart wählen…",
+      "selectGroup": "Gruppe wählen…"
+    },
+    "lines": {
+      "empty": "Keine Positionen — Enter drücken zum Hinzufügen",
+      "articleSearch": "Artikelnr. / Bezeichnung…",
+      "description": "Bezeichnung",
+      "pos": "Pos",
+      "article": "Artikel",
+      "qty": "Mge",
+      "unit": "Einh.",
+      "price": "EP",
+      "discount": "R%",
+      "taxRate": "MwSt%",
+      "net": "Netto",
+      "qtyDelta": "Mengendelta",
+      "apply": "Anwenden",
+      "cancel": "Abbrechen",
+      "korrekturPosted": "Korrektur gebucht",
+      "korrekturError": "Fehler bei Korrektur"
+    },
+    "actions": {
+      "close": "Schließen (Esc)",
+      "convert": "Wandeln",
+      "storno": "Stornieren",
+      "save": "Speichern",
+      "post": "Buchen",
+      "saving": "Wird gespeichert…",
+      "posting": "Wird gebucht…",
+      "converting": "Wird gewandelt…",
+      "cancelling": "Wird storniert…"
+    }
   }
 }

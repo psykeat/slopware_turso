@@ -28,21 +28,26 @@ pnpm tanstack search-docs "<q>" --library <lib> --json
 
 ## Environment Constants (Base Tenant)
 
-- **Organization Slug:** `base`
-- **Tenant Slug:** `base` (isBase: true)
-- **Company No:** `1000`
+| Key | Value |
+|---|---|
+| Organization Slug | `base` |
+| Tenant Slug | `base` (isBase: true) |
+| Company No | `1000` |
+| **Tenant ID** | **`019e2889-5cd7-714b-9922-08a75fdfbaac`** |
 
-For specific UUIDs and local credentials, refer to the private project memory.
+For other local credentials, refer to the private project memory.
 
 ## Deep Dives
 
 | Topic | File |
 |---|---|
-| Architecture invariants | `.gemini/00_core_architecture.md` |
-| TanStack patterns | `.gemini/tanstack-patterns.md` |
-| Auth patterns | `.gemini/auth.md` |
-| TypeScript conventions | `.gemini/typescript.md` |
-| Design token spec | `.gemini/design.md` |
-| DB schema reference | `.gemini/schema.md` |
-| Postgres patterns | `.gemini/postgres.md` |
-| Implementation checklist | `.gemini/04_redesign.md` |
+| **Gap Analysis (DIF)** | [`.gemini/dif.md`](.gemini/dif.md) |
+| Architecture invariants | [`.gemini/00_core_architecture.md`](.gemini/00_core_architecture.md) |
+| TanStack patterns | [`.gemini/tanstack-patterns.md`](.gemini/tanstack-patterns.md) |
+| Auth patterns | [`.gemini/auth.md`](.gemini/auth.md) |
+| TypeScript conventions | [`.gemini/typescript.md`](.gemini/typescript.md) |
+| Design token spec | [`.gemini/design.md`](.gemini/design.md) |
+| DB schema reference | [`.gemini/schema.md`](.gemini/schema.md) |
+| Postgres patterns | [`.gemini/postgres.md`](.gemini/postgres.md) |
+| Redesign checklist | [`.gemini/04_redesign.md`](.gemini/04_redesign.md) |
+| Documents & Stats | [`.gemini/05_documents.md`](.gemini/05_documents.md) |

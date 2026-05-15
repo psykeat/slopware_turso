@@ -1,0 +1,1 @@
+ALTER TABLE "document" ALTER COLUMN "posted_by" SET DATA TYPE text USING "posted_by"::text;

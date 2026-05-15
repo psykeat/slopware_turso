@@ -3,6 +3,7 @@ import {
   document,
   documentLine,
   documentGroup,
+  company,
   inventoryBalance,
   inventoryMovement,
   factSalesEvent,
@@ -15,9 +16,9 @@ import {
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { resolveFiscalPeriodId } from "./fiscal-period-generator";
 
-export interface TreeSection {
-  direction: string;
-  label: string;
+export interface TypeNode {
+  documentType: string;
+  typeLabel: string;
   groups: Array<{
     documentGroupId: string;
     name: string;
@@ -26,10 +27,45 @@ export interface TreeSection {
   }>;
 }
 
+export interface TreeSection {
+  direction: string;
+  label: string;
+  types: TypeNode[];
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  N: "Angebote", A: "Aufträge", L: "Lieferscheine", R: "Rechnungen", G: "Gutschriften",
+  b: "Bestellungen", l: "Wareneingänge", r: "Eingangsrechnungen", g: "Eingangsgutschriften",
+  V: "Inventur", U: "Umbuchungen", Z: "Zugänge", E: "Entnahmen",
+  q: "Produktionsaufträge", p: "Fertigmeldungen",
+};
+
+export const DIRECTION_FROM_TYPE: Record<string, string> = {
+  N: "OUTBOUND", A: "OUTBOUND", L: "OUTBOUND", R: "OUTBOUND", G: "OUTBOUND",
+  b: "INBOUND", l: "INBOUND", r: "INBOUND", g: "INBOUND",
+  V: "ADJUSTMENT", Z: "ADJUSTMENT", E: "ADJUSTMENT", U: "ADJUSTMENT",
+  q: "PRODUCTION", p: "PRODUCTION",
+};
+
+const TYPE_SEQUENCE: Record<string, number> = {
+  N: 1, A: 2, L: 3, R: 4, G: 5,
+  b: 1, l: 2, r: 3, g: 4,
+  V: 1, Z: 2, E: 3, U: 4,
+  q: 1, p: 2,
+};
+
+const NEXT_TYPE: Record<string, string | undefined> = {
+  N: "A", A: "L", L: "R", R: "G", G: undefined,
+  b: "l", l: "r", r: "g", g: undefined,
+  V: "Z", Z: "E", E: "U", U: undefined,
+  q: "p", p: undefined,
+};
+
 const DIRECTION_LABELS: Record<string, string> = {
   OUTBOUND: "Warenausgang",
   INBOUND: "Wareneingang",
   ADJUSTMENT: "Lagerbuchungen",
+  PRODUCTION: "Produktion",
 };
 
 function directionLabel(direction: string | null | undefined): string {
@@ -315,6 +351,44 @@ export class DocumentService {
           });
         }
 
+        if (movementType === "g") {
+          // WE-Gutschrift (vendor credit note): record a correction event with negative qty
+          const balances = await tx
+            .select({
+              gldPurchase: inventoryBalance.gldPurchase,
+            })
+            .from(inventoryBalance)
+            .where(
+              and(
+                eq(inventoryBalance.tenantId, tenantId),
+                eq(inventoryBalance.warehouseId, warehouseId),
+                eq(inventoryBalance.articleId, line.articleId),
+              ),
+            )
+            .limit(1);
+
+          const avgCost = Number(balances[0]?.gldPurchase ?? 0);
+          const lineQty = qty;
+          const linePrice = Number(line.netPrice ?? 0);
+          const fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
+
+          await tx.insert(factPurchaseEvent).values({
+            tenantId,
+            companyId: doc.companyId,
+            sourceDocumentId: documentId,
+            sourceDocumentLineId: line.documentLineId,
+            supplierId: doc.customerId,
+            articleId: line.articleId,
+            eventType: "correction",
+            quantityDelta: String(-lineQty),
+            amountNetDelta: String(-(lineQty * linePrice)),
+            avgCostBefore: String(avgCost),
+            avgCostAfter: String(avgCost),
+            fiscalPeriodId,
+            bookingPeriod: doc.documentDate,
+          });
+        }
+
         if (movementType === "R" || movementType === "L") {
           let cogsDelta: string | null = null;
           let fiscalPeriodId: string | null = null;
@@ -420,7 +494,6 @@ export class DocumentService {
           documentGroupId: doc.documentGroupId,
           billingAddress: doc.billingAddress,
           deliveryAddress: doc.deliveryAddress,
-          deliveryAddressId: doc.deliveryAddressId,
           paymentTermId: doc.paymentTermId,
           shippingMethodId: doc.shippingMethodId,
           documentTypeId: doc.documentTypeId,
@@ -438,13 +511,13 @@ export class DocumentService {
             lineNo: l.lineNo,
             articleId: l.articleId,
             articleTextSnapshot: l.articleTextSnapshot,
-            quantity: String(-Number(l.quantity)),
+            quantity: String(Math.abs(Number(l.quantity))),
             unit: l.unit,
             netPrice: l.netPrice,
             discountPercentage: l.discountPercentage,
             taxCodeId: l.taxCodeId,
-            taxAmount: l.taxAmount ? String(-Number(l.taxAmount)) : null,
-            lineTotalNet: l.lineTotalNet ? String(-Number(l.lineTotalNet)) : null,
+            taxAmount: l.taxAmount ? String(Math.abs(Number(l.taxAmount))) : null,
+            lineTotalNet: l.lineTotalNet ? String(Math.abs(Number(l.lineTotalNet))) : null,
             warehouseId: l.warehouseId,
             costCenterId: l.costCenterId,
             movementType: reversalType,
@@ -470,11 +543,13 @@ export class DocumentService {
     });
   }
 
-  async convertDocument(
+  async getConversionCandidates(
     documentId: string,
-    userId: string,
     tenantId: string,
-  ): Promise<{ success: boolean; newDocumentId: string }> {
+  ): Promise<
+    | { mode: "direct"; targetGroupId: string }
+    | { mode: "select"; candidates: Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }> }
+  > {
     const [doc] = await db
       .select()
       .from(document)
@@ -487,22 +562,66 @@ export class DocumentService {
     const [sourceGroup] = await db
       .select()
       .from(documentGroup)
-      .where(
-        and(
-          eq(documentGroup.documentGroupId, doc.documentGroupId),
-          eq(documentGroup.tenantId, tenantId),
-        ),
-      )
+      .where(and(eq(documentGroup.documentGroupId, doc.documentGroupId), eq(documentGroup.tenantId, tenantId)))
       .limit(1);
 
-    if (!sourceGroup?.nextGroupId) throw new Error("No conversion target");
+    if (!sourceGroup) throw new Error("Source group not found");
+
+    if (sourceGroup.nextGroupId) {
+      return { mode: "direct", targetGroupId: sourceGroup.nextGroupId };
+    }
+
+    const nextType = NEXT_TYPE[sourceGroup.documentType];
+    if (!nextType) throw new Error("No next document type in sequence");
+
+    const candidates = await db
+      .select()
+      .from(documentGroup)
+      .where(
+        and(
+          eq(documentGroup.tenantId, tenantId),
+          eq(documentGroup.documentType, nextType),
+          eq(documentGroup.isActive, true),
+        ),
+      );
+
+    if (candidates.length === 0) throw new Error("Keine Zielgruppe gefunden");
+
+    if (candidates.length === 1) {
+      return { mode: "direct", targetGroupId: candidates[0].documentGroupId };
+    }
+
+    return {
+      mode: "select",
+      candidates: candidates.map((g) => ({
+        documentGroupId: g.documentGroupId,
+        name: g.name,
+        documentType: g.documentType,
+        groupNumber: g.groupNumber,
+      })),
+    };
+  }
+
+  async convertDocument(
+    documentId: string,
+    userId: string,
+    tenantId: string,
+    targetGroupId: string,
+  ): Promise<{ success: boolean; newDocumentId: string }> {
+    const [doc] = await db
+      .select()
+      .from(document)
+      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .limit(1);
+
+    if (!doc) throw new Error("Document not found");
 
     const [targetGroup] = await db
       .select()
       .from(documentGroup)
       .where(
         and(
-          eq(documentGroup.documentGroupId, sourceGroup.nextGroupId),
+          eq(documentGroup.documentGroupId, targetGroupId),
           eq(documentGroup.tenantId, tenantId),
         ),
       )
@@ -552,7 +671,6 @@ export class DocumentService {
           documentGroupId: targetGroup.documentGroupId,
           billingAddress: doc.billingAddress,
           deliveryAddress: doc.deliveryAddress,
-          deliveryAddressId: doc.deliveryAddressId,
           paymentTermId: doc.paymentTermId,
           shippingMethodId: doc.shippingMethodId,
           warehouseId: targetGroup.defaultWarehouseId ?? doc.warehouseId,
@@ -583,6 +701,11 @@ export class DocumentService {
         );
       }
 
+      await tx
+        .update(document)
+        .set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+
       return { success: true, newDocumentId: newDoc.documentId };
     });
   }
@@ -593,61 +716,50 @@ export class DocumentService {
       .from(documentGroup)
       .where(eq(documentGroup.tenantId, tenantId));
 
-    const byDirection = new Map<string, typeof groups>();
+    // direction → documentType → groups[]
+    const byDirection = new Map<string, Map<string, typeof groups>>();
 
     for (const g of groups) {
-      const dir = g.direction ?? "null";
-      if (!byDirection.has(dir)) byDirection.set(dir, []);
-      byDirection.get(dir)!.push(g);
+      const dir = (g.direction && g.direction.length > 0)
+        ? g.direction
+        : (DIRECTION_FROM_TYPE[g.documentType] ?? "OTHER");
+      if (!byDirection.has(dir)) byDirection.set(dir, new Map());
+      const byType = byDirection.get(dir)!;
+      if (!byType.has(g.documentType)) byType.set(g.documentType, []);
+      byType.get(g.documentType)!.push(g);
     }
+
+    const buildTypes = (byType: Map<string, typeof groups>): TypeNode[] => {
+      return [...byType.entries()]
+        .sort(([ta], [tb]) => (TYPE_SEQUENCE[ta] ?? 99) - (TYPE_SEQUENCE[tb] ?? 99))
+        .map(([docType, typeGroups]) => ({
+          documentType: docType,
+          typeLabel: TYPE_LABELS[docType] ?? docType,
+          groups: typeGroups
+            .filter((g) => g.groupNumber >= 0)
+            .sort((a, b) => a.groupNumber - b.groupNumber)
+            .map((g) => ({
+              documentGroupId: g.documentGroupId,
+              name: g.name,
+              documentType: g.documentType,
+              groupNumber: g.groupNumber,
+            })),
+        }));
+    };
 
     const sections: TreeSection[] = [];
-    const dirOrder = ["OUTBOUND", "INBOUND", "ADJUSTMENT"];
+    const dirOrder = ["OUTBOUND", "INBOUND", "ADJUSTMENT", "PRODUCTION"];
 
     for (const dir of dirOrder) {
-      const key = dir === "null" ? "null" : dir;
-      const groupsForDir = byDirection.get(key) ?? [];
-      if (groupsForDir.length === 0) continue;
-
-      groupsForDir.sort((a, b) => {
-        const sa = a.sortOrder ?? 0;
-        const sb = b.sortOrder ?? 0;
-        if (sa !== sb) return sa - sb;
-        return a.groupNumber - b.groupNumber;
-      });
-
-      sections.push({
-        direction: dir,
-        label: directionLabel(dir),
-        groups: groupsForDir.map((g) => ({
-          documentGroupId: g.documentGroupId,
-          name: g.name,
-          documentType: g.documentType,
-          groupNumber: g.groupNumber,
-        })),
-      });
-
-      byDirection.delete(key);
+      const byType = byDirection.get(dir);
+      if (!byType || byType.size === 0) continue;
+      sections.push({ direction: dir, label: directionLabel(dir), types: buildTypes(byType) });
+      byDirection.delete(dir);
     }
 
-    for (const [dir, groupsForDir] of byDirection) {
-      groupsForDir.sort((a, b) => {
-        const sa = a.sortOrder ?? 0;
-        const sb = b.sortOrder ?? 0;
-        if (sa !== sb) return sa - sb;
-        return a.groupNumber - b.groupNumber;
-      });
-
-      sections.push({
-        direction: dir === "null" ? "" : dir,
-        label: directionLabel(dir === "null" ? null : dir),
-        groups: groupsForDir.map((g) => ({
-          documentGroupId: g.documentGroupId,
-          name: g.name,
-          documentType: g.documentType,
-          groupNumber: g.groupNumber,
-        })),
-      });
+    for (const [dir, byType] of byDirection) {
+      if (byType.size === 0) continue;
+      sections.push({ direction: dir, label: directionLabel(dir), types: buildTypes(byType) });
     }
 
     return sections;
@@ -763,6 +875,100 @@ export class DocumentService {
       });
 
       return { success: true };
+    });
+  }
+
+  async createDocument(
+    tenantId: string,
+    data: {
+      documentGroupId: string;
+      documentType: string;
+      documentDirection: string;
+      documentDate: string;
+      status: string;
+      customerId?: string | null;
+      billingAddress?: unknown;
+      deliveryAddress?: unknown;
+      deliveryAddressId?: string | null;
+      currencyId?: string | null;
+      warehouseId?: string | null;
+      paymentTermId?: string | null;
+      shippingMethodId?: string | null;
+    },
+  ): Promise<{ documentId: string; documentNo: string }> {
+    const [grp] = await db
+      .select()
+      .from(documentGroup)
+      .where(and(eq(documentGroup.documentGroupId, data.documentGroupId), eq(documentGroup.tenantId, tenantId)))
+      .limit(1);
+
+    if (!grp) throw new Error("Document group not found");
+
+    let companyId = grp.companyId;
+    let resolvedWarehouseId = data.warehouseId ?? grp.defaultWarehouseId ?? null;
+
+    if (!companyId) {
+      const [co] = await db
+        .select({ companyId: company.companyId, defaultWarehouseId: company.defaultWarehouseId })
+        .from(company)
+        .where(eq(company.tenantId, tenantId))
+        .limit(1);
+      if (!co) throw new Error("No company found for tenant");
+      companyId = co.companyId;
+      if (!resolvedWarehouseId) resolvedWarehouseId = co.defaultWarehouseId ?? null;
+    } else if (!resolvedWarehouseId) {
+      const [co] = await db
+        .select({ defaultWarehouseId: company.defaultWarehouseId })
+        .from(company)
+        .where(eq(company.companyId, companyId))
+        .limit(1);
+      if (co) resolvedWarehouseId = co.defaultWarehouseId ?? null;
+    }
+
+    return await db.transaction(async (tx) => {
+      let documentNo = `DRAFT-${Date.now()}`;
+
+      if (grp.numberSequenceId) {
+        const [seq] = await tx
+          .select()
+          .from(numberSequence)
+          .where(eq(numberSequence.numberSequenceId, grp.numberSequenceId))
+          .limit(1)
+          .for("update");
+
+        if (seq) {
+          documentNo = generateDocumentNo(seq.prefix, seq.nextValue, seq.padding);
+          await tx
+            .update(numberSequence)
+            .set({ nextValue: seq.nextValue + 1, updatedAt: new Date() })
+            .where(eq(numberSequence.numberSequenceId, seq.numberSequenceId));
+        }
+      }
+
+      const [newDoc] = await tx
+        .insert(document)
+        .values({
+          tenantId,
+          companyId,
+          documentType: data.documentType,
+          documentDirection: data.documentDirection,
+          documentGroupId: data.documentGroupId,
+          documentNo,
+          status: data.status,
+          documentDate: data.documentDate,
+          customerId: data.customerId ?? null,
+          billingAddress: data.billingAddress ?? null,
+          deliveryAddress: data.deliveryAddress ?? null,
+          deliveryAddressId: data.deliveryAddressId ?? null,
+          currencyId: data.currencyId ?? null,
+          warehouseId: resolvedWarehouseId,
+          paymentTermId: data.paymentTermId ?? null,
+          shippingMethodId: data.shippingMethodId ?? null,
+          transactionId: crypto.randomUUID(),
+        })
+        .returning();
+
+      return { documentId: newDoc.documentId, documentNo: newDoc.documentNo };
     });
   }
 }

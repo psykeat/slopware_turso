@@ -3,6 +3,7 @@ import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { systemSettings } from "@repo/db/schema";
 import { eq, and } from "drizzle-orm";
+import { decrypt } from "../admin/llm-config";
 
 export const Route = createFileRoute("/api/feedback/submit")({
   server: {
@@ -34,12 +35,19 @@ export const Route = createFileRoute("/api/feedback/submit")({
           });
         }
 
-        const llmConfig = configRow[0].value as {
+        const storedConfig = configRow[0].value as {
           endpointUrl: string;
           model: string;
           apiKey: string;
           githubToken: string;
           githubRepo: string; // format: "owner/repo"
+        };
+
+        // Decrypt secrets before use
+        const llmConfig = {
+          ...storedConfig,
+          apiKey: decrypt(storedConfig.apiKey ?? ""),
+          githubToken: decrypt(storedConfig.githubToken ?? ""),
         };
 
         // 2. Build LLM prompt

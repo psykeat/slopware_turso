@@ -111,7 +111,11 @@ async function main() {
       if (colName === "createdAt") sortColumn = "createdAt";
     }
 
+    if (key === "currency") pkColumn = "code";
+    if (key === "country") pkColumn = "iso2Code";
+
     if (!displayColumn && pkColumn) displayColumn = pkColumn;
+    if (key === "postalCode") displayColumn = "plz";
     if (!displayColumn) displayColumn = Object.keys(columns)[0];
 
     // 2. Register in Helper Registry
@@ -119,7 +123,8 @@ async function main() {
     
     // Grouping logic based on PRD
     let group: string | undefined = undefined;
-    if (["company", "bankAccount", "numberSequence"].includes(key)) group = "organisation";
+    if (key === "company") group = "master";
+    else if (["bankAccount", "numberSequence"].includes(key)) group = "organisation";
     else if (["paymentTerm", "shippingMethod", "priceList", "discountGroup", "addressCategory", "documentGroup", "industry"].includes(key)) group = "vertrieb";
     else if (["unit", "articleGroup", "warehouse"].includes(key)) group = "lager_artikel";
     else if (["taxClass", "taxCode", "costCenter", "glAccount", "currency"].includes(key)) group = "finanzen";
@@ -154,25 +159,25 @@ async function main() {
     for (const [colName, col] of Object.entries(columns)) {
         const columnType = (col as any).columnType;
         const fieldLabel = fieldLabelMap[colName] || { en: colName, de: colName };
+        const isPk = (col as any).primary || false;
+        const isUuid = columnType === "PgUUID" || (col as any).dataType === "uuid";
 
         // Auto-discover lookup target
         let lookupTable: string | undefined = undefined;
-        if (colName !== "tenantId") {
-            if (colName.endsWith("Id")) {
-                const potentialEntity = colName.slice(0, -2);
-                if ((schema as any)[potentialEntity]) {
-                    lookupTable = potentialEntity;
-                } else if (colName === "addressCategoryId") {
-                    lookupTable = "addressCategory";
-                }
-            } else if (colName === "countryCode") {
-                lookupTable = "country";
-            } else if (colName === "currencyId") {
-                lookupTable = "currency";
+        if (colName.endsWith("Id")) {
+            const potentialEntity = colName.slice(0, -2);
+            if ((schema as any)[potentialEntity] && potentialEntity !== key) {
+                lookupTable = potentialEntity;
+            } else if (colName === "addressCategoryId") {
+                lookupTable = "addressCategory";
             }
+        } else if (colName === "countryCode") {
+            lookupTable = "country";
+        } else if (colName === "currencyId") {
+            lookupTable = "currency";
         }
 
-        const isVisible = (lookupTable !== undefined) || (!colName.endsWith("Id") && colName !== "tenantId" && colName !== "createdAt" && colName !== "updatedAt");
+        const isVisible = (lookupTable !== undefined) || (!isPk && !isUuid && !colName.endsWith("Id") && colName !== "createdAt" && colName !== "updatedAt");
 
         await db.insert(tenantFields).values({
             entityName: key,
@@ -198,6 +203,7 @@ async function main() {
                 isRequired: (col as any).notNull || false,
                 lookupTable: lookupTable || undefined,
                 label: fieldLabel,
+                isVisible,
             }
         });
     }

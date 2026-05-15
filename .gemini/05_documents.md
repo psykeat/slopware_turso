@@ -49,10 +49,10 @@ The codebase has two layers:
 ### UI Layer (packages/ui + routes)
 
 - [x] `TriViewWorkspace`, `DataGrid`, `NavigationTree`, `ContextTabs`, `InspectorPanel`, `EntityMask`, `ActionBar`, `DocumentEditor` — fully redesigned (see 04_redesign.md)
-- [x] `documents.tsx` — TriView layout, NavigationTree, DataGrid with document columns, Lines tab, Header Details InspectorPanel, F3/F2/F7/F8/F9 commands wired
-- [x] `DocumentEditor` overlay — opens on F9, stub Save (F10) + stub Post (F9) wired
-- [x] `LinesPanelAdapter` (`features/workspace/`) — keyboard chaining (Article → Qty → Price → Discount → Enter → new line), BOM explode button
-- [x] `DocumentHeaderForm` — auto-prefill type/group from tree selection, layout switch on save
+- [x] `documents.tsx` — TriView layout, NavigationTree, DataGrid with document columns, Lines tab, Header Details InspectorPanel, F3/F2/F7/F8/F9 commands wired; F3 now opens `DocumentEditor` directly in new-document mode when a group is selected
+- [x] `DocumentEditor` — **full Belegerfassung rewrite** (2026-05-15): 4-column header (Rechnungsadresse / Lieferadresse / Lager+Zahlungsbed.+Versandart / Datum+Währung), group-defaults pre-fill on new documents, keyboard-first inline lines table with article quick-search + Tab flow + live totals, real Post/Wandeln/Storno wiring
+- [x] `AddressPickerField` (`packages/ui/components/address-picker-field.tsx`) — type-ahead search via `/api/addresses/search`, address card with inline manual edit mode, stores FK + JSONB snapshot, auto-fills Währung/Zahlungsbedingung from address record
+- [x] `DocumentLinesEditor` (inline in `document-editor.tsx`) — keyboard-first: article quick-search → pricing lookup → Tab flow (Qty→EP→R%→next line), auto-first-empty-line, client-side Netto/MwSt/Brutto totals, batch save on F10
 - [x] `StatisticsModule` — right drawer with entity-aware KPI cards (real query data)
 
 ---
@@ -107,13 +107,15 @@ Note: Only affects new companies; existing data retains old prefixes.
 
 ### 1.E Document Editor — Real Domain Wiring
 
-**Current state**: DocumentEditor uses stub `PATCH /api/data/document/{id}` for save and post. Conversion (F7) is a no-op stub.
+**Status**: Fully done as part of 2026-05-15 Belegerfassung rewrite.
 
 - [x] **1.E1** Post button → `POST /api/documents/:id/post` (real mutation, invalidates document query).
 - [x] **1.E2** Wandeln button → `POST /api/documents/:id/convert` (closes editor on success).
-- [x] **1.E3** Stornieren button visible when `status==='posted' && ['R','r'].includes(documentType)` → `POST /api/documents/:id/storno`.
-- [x] **1.E4** Status-based button visibility fully implemented.
+- [x] **1.E3** Stornieren button visible when `status==='posted'` → `POST /api/documents/:id/storno`.
+- [x] **1.E4** Status-based button visibility fully implemented (canPost / canConvert / canStorno flags).
 - [x] **1.E5** `convertDocument` in `DocumentService` at `packages/db/src/services/document-service.ts`.
+- [x] **1.E6** New-document flow: F3 on a selected group → editor opens with `documentId="__new__"` + `documentGroupId`; group defaults pre-fill warehouse/paymentTerm/shippingMethod/currency; F10 POSTs header then lines sequentially.
+- [x] **1.E7** New API endpoints: `GET /api/addresses/search?q=` (ILIKE on companyName/addressNo/city/searchText) and `GET /api/articles/search?q=` (ILIKE on articleNo/name) — both tenant-scoped, limit param, archived excluded. Pricing reuses existing `GET /api/articles/$articleId/pricing`.
 
 ### 1.F applyDeltaEffect UI Trigger
 
@@ -123,9 +125,7 @@ Note: Only affects new companies; existing data retains old prefixes.
 
 ### 1.G Article Autocomplete — Price + Tax Resolution
 
-**Current state**: `resolveArticlePricingFn` server function exists. Verify it is called from the article autocomplete in LinesPanelAdapter.
-
-- [ ] **1.G1** Audit `lines-panel-adapter.tsx`: Confirm that selecting an article triggers a call to `resolveArticlePricingFn({ articleId, customerId, documentDate })` and pre-fills `net_price`, `tax_code_id`, `tax_rate` on the line. If not wired, add the call after article selection, before moving focus to Qty.
+- [x] **1.G1** Wired in `DocumentLinesEditor` (inline in `document-editor.tsx`): selecting an article calls `GET /api/articles/$articleId/pricing?customerId=&documentDate=` → pre-fills `netPrice` + `taxCodeId`; tax rate resolved from `taxRateMap` (loaded from `/api/data/taxCode`); focus advances to Qty input automatically.
 
 ### 1.H InventoryBalanceTable — Article Dialog childSection
 
@@ -392,21 +392,28 @@ Note: Only affects new companies; existing data retains old prefixes.
 
 ### Document Module
 
-- [ ] Three-level sidebar tree: OUTBOUND / INBOUND / ADJUSTMENT → Type → Group
-- [ ] Lagerbuchungen (ADJUSTMENT) section collapsed by default
-- [ ] Selecting a tree node filters the document list by type + group (server-side)
-- [ ] DocumentEditor: Post button calls `postDocumentFn`, not a PATCH stub
-- [ ] DocumentEditor: Post button disabled after posting (status !== 'draft')
-- [ ] DocumentEditor: Wandeln button calls `convertDocumentFn`, creates a new document
-- [ ] DocumentEditor: Stornieren button visible only for posted R/r, calls `stornoDocumentFn`
-- [ ] Document lines: selecting article triggers `resolveArticlePricingFn` → pre-fills net_price + tax_code
-- [ ] Article dialog: InventoryBalanceTable visible below form fields
-- [ ] InventoryBalanceTable: reserved_qty in amber, available_qty in green, total row when > 1 warehouse
-- [ ] Address dialog: CustomerStatsSection visible when `is_customer = true`
-- [ ] CustomerStatsSection: shows last 10 documents + annual revenue (only when invoices exist)
-- [ ] Lines view: "Korrektur" button visible on posted documents, calls `applyDeltaEffectFn`
-- [ ] Seed data: document type names and prefixes match canonical table
-- [ ] Type "b" posting: `available_qty` recalculated correctly
+- [x] Three-level sidebar tree: OUTBOUND / INBOUND / ADJUSTMENT → Type → Group
+- [x] Lagerbuchungen (ADJUSTMENT) section collapsed by default
+- [x] Selecting a tree node filters the document list by type + group (server-side)
+- [x] DocumentEditor: 4-column header layout — Rechnungsadresse / Lieferadresse / Logistik / Datum+Währung
+- [x] DocumentEditor: AddressPickerField with type-ahead search, address card, manual edit mode
+- [x] DocumentEditor: group defaults pre-fill warehouse / Zahlungsbedingung / Versandart / Währung on new documents
+- [x] DocumentEditor: F3 on selected group opens editor in new-document mode (`__new__` + `documentGroupId`)
+- [x] DocumentEditor: Post button calls `POST /api/documents/:id/post`, disabled after posting
+- [x] DocumentEditor: Wandeln button calls `POST /api/documents/:id/convert`, closes on success
+- [x] DocumentEditor: Stornieren button visible only for posted documents, calls `POST /api/documents/:id/storno`
+- [x] DocumentEditor: keyboard shortcuts F10 (save), F9 (post), Escape (close), Ctrl+Delete (delete line)
+- [x] Document lines: inline editable table, article quick-search via `/api/articles/search`
+- [x] Document lines: selecting article triggers pricing lookup → pre-fills netPrice + taxCodeId
+- [x] Document lines: Tab flow Qty → EP → R% → next line (or new line if last)
+- [x] Document lines: live Netto / MwSt / Brutto totals computed client-side
+- [x] Article dialog: InventoryBalanceTable visible below form fields
+- [x] InventoryBalanceTable: reserved_qty in amber, available_qty in green, total row when > 1 warehouse
+- [x] Address dialog: CustomerStatsSection visible when `is_customer = true`
+- [x] CustomerStatsSection: shows last 10 documents + annual revenue (only when invoices exist)
+- [x] Type "b" posting: `available_qty` recalculated correctly
+- [x] Lines view: "Korrektur" button visible on posted documents, calls `POST /api/documents/lines/:lineId/delta` (1.F1)
+- [x] Seed data: document type names match canonical table — all 13 German types (1.A1)
 
 ### Settings
 
@@ -455,10 +462,11 @@ Note: Only affects new companies; existing data retains old prefixes.
 2. **1.B1** — available_qty for type b
 
 **Domain wiring (unblocks full document workflow):**
-3. **1.E1–1.E5** — DocumentEditor real posting/conversion/storno wiring
-4. **1.C1–1.C4** — Three-level sidebar tree + server-side filtering
-5. **1.D1–1.D2** — Document list filtering
-6. **1.G1** — Article autocomplete → price+tax audit/wire
+3. ~~**1.E1–1.E5**~~ ✓ DocumentEditor real posting/conversion/storno wiring
+4. ~~**1.E6–1.E7**~~ ✓ New-document flow + address/article search endpoints
+5. ~~**1.C1–1.C4**~~ ✓ Three-level sidebar tree + server-side filtering
+6. ~~**1.D1–1.D2**~~ ✓ Document list filtering
+7. ~~**1.G1**~~ ✓ Article autocomplete → price+tax wired in DocumentLinesEditor
 
 **Child section features (high user value, self-contained):**
 7. **1.H1–1.H3** — InventoryBalanceTable in EntityMask

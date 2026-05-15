@@ -12,11 +12,11 @@ TanStack Start is the application runtime for routing, SSR, middleware, loaders,
 
 ## Foundational invariants
 
-- PostgreSQL is the authoritative persistence layer for operational data, metadata, import staging data, and derived data.[cite:2]
+- PostgreSQL is the authoritative persistence layer for operational data, metadata, import staging data, and derived data.[cite:2] Materialized Views are a sanctioned pattern for high-performance derived data (e.g., statistics). They must remain read-only and be refreshed through controlled mechanisms (e.g., pg_notify, pg_cron, or service-level triggers) to ensure data integrity.
 - Every tenant-scoped table must be protected by row-level security and tenant-aware access patterns.[cite:1][cite:2]
 - Framework logic never replaces database invariants.[cite:2]
 - Frontend, backend, imports, and assistant flows consume only effective metadata views, not raw metadata tables.[cite:1][cite:2]
-- Mutations occur only through validated create, patch, upsert paths or explicit domain commands.[cite:1][cite:2]
+- Mutations occur only through validated paths (REST-style route handlers or server functions) or explicit domain commands.[cite:1][cite:2] The architecture prioritizes authentication, validation, and controlled domain commands over specific transport implementations.
 - Posting and derived-data generation remain controlled domain concerns and must never degrade into unrestricted CRUD behavior.[cite:1][cite:2]
 - Hard delete is forbidden for business master data; archive or deactivate semantics must be used instead.[cite:2]
 

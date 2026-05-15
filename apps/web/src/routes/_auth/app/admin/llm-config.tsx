@@ -1,12 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 
-export const Route = createFileRoute("/_auth/app/admin/llm-config")({
-  component: LlmConfigPage,
-});
-
-interface LlmConfig {
+export interface LlmConfig {
   endpointUrl: string;
   model: string;
   apiKey: string;
@@ -14,7 +9,7 @@ interface LlmConfig {
   githubRepo: string;
 }
 
-function LlmConfigPage() {
+export function LlmConfigView() {
   const [config, setConfig] = useState<LlmConfig>({
     endpointUrl: "",
     model: "openai/gpt-4o-mini",

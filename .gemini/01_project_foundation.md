@@ -151,3 +151,12 @@ The first implementation phase should stabilize at least the following runtime c
 - Keyboard-first ActionBar and shortcut cheat sheet.[cite:1]
 - DocumentEditor with command-driven save, transform, and posting handoff.[cite:1][cite:2]
 - StatisticsModule invoked from current context.[cite:1]
+
+## Implementation Alignment & As-Built Notes
+
+This section records implementation choices and drifts that differ from the idealized architectural vision while maintaining core invariants.
+
+- **Service Location:** Business logic (posting, conversion, storno) is consolidated in database-backed services within `@repo/db/src/services/` rather than a separate domain package.
+- **API Strategy:** The platform utilizes REST-style API route handlers in `apps/web/src/routes/api/` for mutations and specialized data needs, complementing TanStack Start server functions.
+- **Derived Data:** Materialized Views (MVs) are the primary engine for statistics and complex aggregations, refreshed via service-level triggers and `pg_notify`.
+- **Specialized UI:** High-ergonomy modules like `SettingsView` may use custom layouts while adhering to platform-wide command, focus, and metadata contracts.

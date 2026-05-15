@@ -1,0 +1,25 @@
+ALTER TABLE "address_category" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "address_contact" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "article_bom" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "article_group" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "bank_account" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "company" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "cost_center" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "country" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "currency" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "discount_group" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "gl_account" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "industry" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "number_sequence" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "organization" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "payment_term" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "postal_code" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "price_list" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "production_order" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "shipping_method" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "tax_class" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "tax_code" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "tenant" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "tenant_connector" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "unit" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "warehouse" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;

@@ -106,6 +106,10 @@ Document browsing in TriView and document editing in DocumentEditor should remai
 
 ActionBar is the visible execution surface for commands in the current context. It should display command labels, enablement state, shortcut hints, and contextual availability derived from the command registry and active focus context.[cite:1]
 
+- It must **always render** as a 36px bar (even when empty) to preserve layout stability.
+- It supports a **subCrumb** architecture, allowing modules to push dynamic labels (e.g., selected category or group) into the breadcrumb tail.
+- Command labels are localized based on the active UI language (DE/EN).
+
 ### InspectorPanel
 
 InspectorPanel is a compact dependent-context panel used for secondary record information, read-mostly detail, or subordinate operational context. It is especially useful in the lower-right region of TriView workspaces.[cite:1]
@@ -147,3 +151,4 @@ Tenant-defined extensibility should therefore change interpretation and presenta
 The implementation should provide a runtime entity introspection pipeline that produces effective entity definitions from schema, annotations, helper registries, command metadata, and effective tenant metadata. Standard components then consume these definitions consistently rather than duplicating entity-specific wiring.[cite:1][cite:2]
 
 This keeps the product generic-first, keyboard-first, metadata-driven, and aligned with the database-centered architecture.[cite:2][cite:1]
+riven, and aligned with the database-centered architecture.[cite:2][cite:1]

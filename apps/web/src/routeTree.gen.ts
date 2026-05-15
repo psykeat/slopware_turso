@@ -23,13 +23,17 @@ import { Route as ApiStatsDashboardRouteImport } from './routes/api/stats/dashbo
 import { Route as ApiMetadataSplatRouteImport } from './routes/api/metadata/$'
 import { Route as ApiFeedbackSubmitRouteImport } from './routes/api/feedback/submit'
 import { Route as ApiDocumentsTreeRouteImport } from './routes/api/documents/tree'
+import { Route as ApiDocumentsCreateRouteImport } from './routes/api/documents/create'
 import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiArticlesSearchRouteImport } from './routes/api/articles/search'
 import { Route as ApiAdminLlmConfigRouteImport } from './routes/api/admin/llm-config'
+import { Route as ApiAddressesSearchRouteImport } from './routes/api/addresses/search'
 import { Route as AuthAppDocumentsRouteImport } from './routes/_auth/app/documents'
 import { Route as AuthAppArticlesRouteImport } from './routes/_auth/app/articles'
 import { Route as AuthAppAddressesRouteImport } from './routes/_auth/app/addresses'
 import { Route as AuthAppAdminRouteRouteImport } from './routes/_auth/app/admin/route'
+import { Route as ApiAdminDocumentGroupsIndexRouteImport } from './routes/api/admin/document-groups/index'
 import { Route as AuthAppSettingsIndexRouteImport } from './routes/_auth/app/settings/index'
 import { Route as AuthAppAdminIndexRouteImport } from './routes/_auth/app/admin/index'
 import { Route as ApiStatsArticleArticleIdRouteImport } from './routes/api/stats/article/$articleId'
@@ -39,11 +43,9 @@ import { Route as ApiDocumentsDocumentIdPostRouteImport } from './routes/api/doc
 import { Route as ApiDocumentsDocumentIdDeltaRouteImport } from './routes/api/documents/$documentId/delta'
 import { Route as ApiDocumentsDocumentIdConvertRouteImport } from './routes/api/documents/$documentId/convert'
 import { Route as ApiArticlesArticleIdPricingRouteImport } from './routes/api/articles/$articleId/pricing'
+import { Route as ApiAdminDocumentGroupsIdRouteImport } from './routes/api/admin/document-groups/$id'
 import { Route as ApiAdminDataSplatRouteImport } from './routes/api/admin/data/$'
-import { Route as AuthAppAdminUsersRouteImport } from './routes/_auth/app/admin/users'
-import { Route as AuthAppAdminTenantsRouteImport } from './routes/_auth/app/admin/tenants'
-import { Route as AuthAppAdminOrganizationsRouteImport } from './routes/_auth/app/admin/organizations'
-import { Route as AuthAppAdminLlmConfigRouteImport } from './routes/_auth/app/admin/llm-config'
+import { Route as ApiDocumentsLinesLineIdDeltaRouteImport } from './routes/api/documents/lines/$lineId/delta'
 
 const GuestRouteRoute = GuestRouteRouteImport.update({
   id: '/_guest',
@@ -113,6 +115,11 @@ const ApiDocumentsTreeRoute = ApiDocumentsTreeRouteImport.update({
   path: '/api/documents/tree',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDocumentsCreateRoute = ApiDocumentsCreateRouteImport.update({
+  id: '/api/documents/create',
+  path: '/api/documents/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDataSplatRoute = ApiDataSplatRouteImport.update({
   id: '/api/data/$',
   path: '/api/data/$',
@@ -123,9 +130,19 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiArticlesSearchRoute = ApiArticlesSearchRouteImport.update({
+  id: '/api/articles/search',
+  path: '/api/articles/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminLlmConfigRoute = ApiAdminLlmConfigRouteImport.update({
   id: '/api/admin/llm-config',
   path: '/api/admin/llm-config',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAddressesSearchRoute = ApiAddressesSearchRouteImport.update({
+  id: '/api/addresses/search',
+  path: '/api/addresses/search',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthAppDocumentsRoute = AuthAppDocumentsRouteImport.update({
@@ -148,6 +165,12 @@ const AuthAppAdminRouteRoute = AuthAppAdminRouteRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthAppRouteRoute,
 } as any)
+const ApiAdminDocumentGroupsIndexRoute =
+  ApiAdminDocumentGroupsIndexRouteImport.update({
+    id: '/api/admin/document-groups/',
+    path: '/api/admin/document-groups/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthAppSettingsIndexRoute = AuthAppSettingsIndexRouteImport.update({
   id: '/settings/',
   path: '/settings/',
@@ -200,32 +223,23 @@ const ApiArticlesArticleIdPricingRoute =
     path: '/api/articles/$articleId/pricing',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAdminDocumentGroupsIdRoute =
+  ApiAdminDocumentGroupsIdRouteImport.update({
+    id: '/api/admin/document-groups/$id',
+    path: '/api/admin/document-groups/$id',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAdminDataSplatRoute = ApiAdminDataSplatRouteImport.update({
   id: '/api/admin/data/$',
   path: '/api/admin/data/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthAppAdminUsersRoute = AuthAppAdminUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => AuthAppAdminRouteRoute,
-} as any)
-const AuthAppAdminTenantsRoute = AuthAppAdminTenantsRouteImport.update({
-  id: '/tenants',
-  path: '/tenants',
-  getParentRoute: () => AuthAppAdminRouteRoute,
-} as any)
-const AuthAppAdminOrganizationsRoute =
-  AuthAppAdminOrganizationsRouteImport.update({
-    id: '/organizations',
-    path: '/organizations',
-    getParentRoute: () => AuthAppAdminRouteRoute,
+const ApiDocumentsLinesLineIdDeltaRoute =
+  ApiDocumentsLinesLineIdDeltaRouteImport.update({
+    id: '/api/documents/lines/$lineId/delta',
+    path: '/api/documents/lines/$lineId/delta',
+    getParentRoute: () => rootRouteImport,
   } as any)
-const AuthAppAdminLlmConfigRoute = AuthAppAdminLlmConfigRouteImport.update({
-  id: '/llm-config',
-  path: '/llm-config',
-  getParentRoute: () => AuthAppAdminRouteRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -239,19 +253,19 @@ export interface FileRoutesByFullPath {
   '/app/addresses': typeof AuthAppAddressesRoute
   '/app/articles': typeof AuthAppArticlesRoute
   '/app/documents': typeof AuthAppDocumentsRoute
+  '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
+  '/api/documents/create': typeof ApiDocumentsCreateRoute
   '/api/documents/tree': typeof ApiDocumentsTreeRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
   '/app/': typeof AuthAppIndexRoute
-  '/app/admin/llm-config': typeof AuthAppAdminLlmConfigRoute
-  '/app/admin/organizations': typeof AuthAppAdminOrganizationsRoute
-  '/app/admin/tenants': typeof AuthAppAdminTenantsRoute
-  '/app/admin/users': typeof AuthAppAdminUsersRoute
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
+  '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
   '/api/documents/$documentId/delta': typeof ApiDocumentsDocumentIdDeltaRoute
@@ -261,6 +275,8 @@ export interface FileRoutesByFullPath {
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/app/admin/': typeof AuthAppAdminIndexRoute
   '/app/settings/': typeof AuthAppSettingsIndexRoute
+  '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
+  '/api/documents/lines/$lineId/delta': typeof ApiDocumentsLinesLineIdDeltaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -272,19 +288,19 @@ export interface FileRoutesByTo {
   '/app/addresses': typeof AuthAppAddressesRoute
   '/app/articles': typeof AuthAppArticlesRoute
   '/app/documents': typeof AuthAppDocumentsRoute
+  '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
+  '/api/documents/create': typeof ApiDocumentsCreateRoute
   '/api/documents/tree': typeof ApiDocumentsTreeRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
   '/app': typeof AuthAppIndexRoute
-  '/app/admin/llm-config': typeof AuthAppAdminLlmConfigRoute
-  '/app/admin/organizations': typeof AuthAppAdminOrganizationsRoute
-  '/app/admin/tenants': typeof AuthAppAdminTenantsRoute
-  '/app/admin/users': typeof AuthAppAdminUsersRoute
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
+  '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
   '/api/documents/$documentId/delta': typeof ApiDocumentsDocumentIdDeltaRoute
@@ -294,6 +310,8 @@ export interface FileRoutesByTo {
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/app/admin': typeof AuthAppAdminIndexRoute
   '/app/settings': typeof AuthAppSettingsIndexRoute
+  '/api/admin/document-groups': typeof ApiAdminDocumentGroupsIndexRoute
+  '/api/documents/lines/$lineId/delta': typeof ApiDocumentsLinesLineIdDeltaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -310,19 +328,19 @@ export interface FileRoutesById {
   '/_auth/app/addresses': typeof AuthAppAddressesRoute
   '/_auth/app/articles': typeof AuthAppArticlesRoute
   '/_auth/app/documents': typeof AuthAppDocumentsRoute
+  '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
+  '/api/documents/create': typeof ApiDocumentsCreateRoute
   '/api/documents/tree': typeof ApiDocumentsTreeRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
   '/_auth/app/': typeof AuthAppIndexRoute
-  '/_auth/app/admin/llm-config': typeof AuthAppAdminLlmConfigRoute
-  '/_auth/app/admin/organizations': typeof AuthAppAdminOrganizationsRoute
-  '/_auth/app/admin/tenants': typeof AuthAppAdminTenantsRoute
-  '/_auth/app/admin/users': typeof AuthAppAdminUsersRoute
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
+  '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
   '/api/documents/$documentId/delta': typeof ApiDocumentsDocumentIdDeltaRoute
@@ -332,6 +350,8 @@ export interface FileRoutesById {
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/_auth/app/admin/': typeof AuthAppAdminIndexRoute
   '/_auth/app/settings/': typeof AuthAppSettingsIndexRoute
+  '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
+  '/api/documents/lines/$lineId/delta': typeof ApiDocumentsLinesLineIdDeltaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -347,19 +367,19 @@ export interface FileRouteTypes {
     | '/app/addresses'
     | '/app/articles'
     | '/app/documents'
+    | '/api/addresses/search'
     | '/api/admin/llm-config'
+    | '/api/articles/search'
     | '/api/auth/$'
     | '/api/data/$'
+    | '/api/documents/create'
     | '/api/documents/tree'
     | '/api/feedback/submit'
     | '/api/metadata/$'
     | '/api/stats/dashboard'
     | '/app/'
-    | '/app/admin/llm-config'
-    | '/app/admin/organizations'
-    | '/app/admin/tenants'
-    | '/app/admin/users'
     | '/api/admin/data/$'
+    | '/api/admin/document-groups/$id'
     | '/api/articles/$articleId/pricing'
     | '/api/documents/$documentId/convert'
     | '/api/documents/$documentId/delta'
@@ -369,6 +389,8 @@ export interface FileRouteTypes {
     | '/api/stats/article/$articleId'
     | '/app/admin/'
     | '/app/settings/'
+    | '/api/admin/document-groups/'
+    | '/api/documents/lines/$lineId/delta'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -380,19 +402,19 @@ export interface FileRouteTypes {
     | '/app/addresses'
     | '/app/articles'
     | '/app/documents'
+    | '/api/addresses/search'
     | '/api/admin/llm-config'
+    | '/api/articles/search'
     | '/api/auth/$'
     | '/api/data/$'
+    | '/api/documents/create'
     | '/api/documents/tree'
     | '/api/feedback/submit'
     | '/api/metadata/$'
     | '/api/stats/dashboard'
     | '/app'
-    | '/app/admin/llm-config'
-    | '/app/admin/organizations'
-    | '/app/admin/tenants'
-    | '/app/admin/users'
     | '/api/admin/data/$'
+    | '/api/admin/document-groups/$id'
     | '/api/articles/$articleId/pricing'
     | '/api/documents/$documentId/convert'
     | '/api/documents/$documentId/delta'
@@ -402,6 +424,8 @@ export interface FileRouteTypes {
     | '/api/stats/article/$articleId'
     | '/app/admin'
     | '/app/settings'
+    | '/api/admin/document-groups'
+    | '/api/documents/lines/$lineId/delta'
   id:
     | '__root__'
     | '/'
@@ -417,19 +441,19 @@ export interface FileRouteTypes {
     | '/_auth/app/addresses'
     | '/_auth/app/articles'
     | '/_auth/app/documents'
+    | '/api/addresses/search'
     | '/api/admin/llm-config'
+    | '/api/articles/search'
     | '/api/auth/$'
     | '/api/data/$'
+    | '/api/documents/create'
     | '/api/documents/tree'
     | '/api/feedback/submit'
     | '/api/metadata/$'
     | '/api/stats/dashboard'
     | '/_auth/app/'
-    | '/_auth/app/admin/llm-config'
-    | '/_auth/app/admin/organizations'
-    | '/_auth/app/admin/tenants'
-    | '/_auth/app/admin/users'
     | '/api/admin/data/$'
+    | '/api/admin/document-groups/$id'
     | '/api/articles/$articleId/pricing'
     | '/api/documents/$documentId/convert'
     | '/api/documents/$documentId/delta'
@@ -439,6 +463,8 @@ export interface FileRouteTypes {
     | '/api/stats/article/$articleId'
     | '/_auth/app/admin/'
     | '/_auth/app/settings/'
+    | '/api/admin/document-groups/'
+    | '/api/documents/lines/$lineId/delta'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -448,14 +474,18 @@ export interface RootRouteChildren {
   ApiActiveTenantRoute: typeof ApiActiveTenantRoute
   ApiMeRoute: typeof ApiMeRoute
   ApiTenantsRoute: typeof ApiTenantsRoute
+  ApiAddressesSearchRoute: typeof ApiAddressesSearchRoute
   ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRoute
+  ApiArticlesSearchRoute: typeof ApiArticlesSearchRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDataSplatRoute: typeof ApiDataSplatRoute
+  ApiDocumentsCreateRoute: typeof ApiDocumentsCreateRoute
   ApiDocumentsTreeRoute: typeof ApiDocumentsTreeRoute
   ApiFeedbackSubmitRoute: typeof ApiFeedbackSubmitRoute
   ApiMetadataSplatRoute: typeof ApiMetadataSplatRoute
   ApiStatsDashboardRoute: typeof ApiStatsDashboardRoute
   ApiAdminDataSplatRoute: typeof ApiAdminDataSplatRoute
+  ApiAdminDocumentGroupsIdRoute: typeof ApiAdminDocumentGroupsIdRoute
   ApiArticlesArticleIdPricingRoute: typeof ApiArticlesArticleIdPricingRoute
   ApiDocumentsDocumentIdConvertRoute: typeof ApiDocumentsDocumentIdConvertRoute
   ApiDocumentsDocumentIdDeltaRoute: typeof ApiDocumentsDocumentIdDeltaRoute
@@ -463,6 +493,8 @@ export interface RootRouteChildren {
   ApiDocumentsDocumentIdStornoRoute: typeof ApiDocumentsDocumentIdStornoRoute
   ApiStatsAddressAddressIdRoute: typeof ApiStatsAddressAddressIdRoute
   ApiStatsArticleArticleIdRoute: typeof ApiStatsArticleArticleIdRoute
+  ApiAdminDocumentGroupsIndexRoute: typeof ApiAdminDocumentGroupsIndexRoute
+  ApiDocumentsLinesLineIdDeltaRoute: typeof ApiDocumentsLinesLineIdDeltaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -565,6 +597,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDocumentsTreeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/documents/create': {
+      id: '/api/documents/create'
+      path: '/api/documents/create'
+      fullPath: '/api/documents/create'
+      preLoaderRoute: typeof ApiDocumentsCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/data/$': {
       id: '/api/data/$'
       path: '/api/data/$'
@@ -579,11 +618,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/articles/search': {
+      id: '/api/articles/search'
+      path: '/api/articles/search'
+      fullPath: '/api/articles/search'
+      preLoaderRoute: typeof ApiArticlesSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/llm-config': {
       id: '/api/admin/llm-config'
       path: '/api/admin/llm-config'
       fullPath: '/api/admin/llm-config'
       preLoaderRoute: typeof ApiAdminLlmConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/addresses/search': {
+      id: '/api/addresses/search'
+      path: '/api/addresses/search'
+      fullPath: '/api/addresses/search'
+      preLoaderRoute: typeof ApiAddressesSearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_auth/app/documents': {
@@ -613,6 +666,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/admin'
       preLoaderRoute: typeof AuthAppAdminRouteRouteImport
       parentRoute: typeof AuthAppRouteRoute
+    }
+    '/api/admin/document-groups/': {
+      id: '/api/admin/document-groups/'
+      path: '/api/admin/document-groups'
+      fullPath: '/api/admin/document-groups/'
+      preLoaderRoute: typeof ApiAdminDocumentGroupsIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_auth/app/settings/': {
       id: '/_auth/app/settings/'
@@ -677,6 +737,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiArticlesArticleIdPricingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/document-groups/$id': {
+      id: '/api/admin/document-groups/$id'
+      path: '/api/admin/document-groups/$id'
+      fullPath: '/api/admin/document-groups/$id'
+      preLoaderRoute: typeof ApiAdminDocumentGroupsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/data/$': {
       id: '/api/admin/data/$'
       path: '/api/admin/data/$'
@@ -684,50 +751,21 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminDataSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_auth/app/admin/users': {
-      id: '/_auth/app/admin/users'
-      path: '/users'
-      fullPath: '/app/admin/users'
-      preLoaderRoute: typeof AuthAppAdminUsersRouteImport
-      parentRoute: typeof AuthAppAdminRouteRoute
-    }
-    '/_auth/app/admin/tenants': {
-      id: '/_auth/app/admin/tenants'
-      path: '/tenants'
-      fullPath: '/app/admin/tenants'
-      preLoaderRoute: typeof AuthAppAdminTenantsRouteImport
-      parentRoute: typeof AuthAppAdminRouteRoute
-    }
-    '/_auth/app/admin/organizations': {
-      id: '/_auth/app/admin/organizations'
-      path: '/organizations'
-      fullPath: '/app/admin/organizations'
-      preLoaderRoute: typeof AuthAppAdminOrganizationsRouteImport
-      parentRoute: typeof AuthAppAdminRouteRoute
-    }
-    '/_auth/app/admin/llm-config': {
-      id: '/_auth/app/admin/llm-config'
-      path: '/llm-config'
-      fullPath: '/app/admin/llm-config'
-      preLoaderRoute: typeof AuthAppAdminLlmConfigRouteImport
-      parentRoute: typeof AuthAppAdminRouteRoute
+    '/api/documents/lines/$lineId/delta': {
+      id: '/api/documents/lines/$lineId/delta'
+      path: '/api/documents/lines/$lineId/delta'
+      fullPath: '/api/documents/lines/$lineId/delta'
+      preLoaderRoute: typeof ApiDocumentsLinesLineIdDeltaRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
 
 interface AuthAppAdminRouteRouteChildren {
-  AuthAppAdminLlmConfigRoute: typeof AuthAppAdminLlmConfigRoute
-  AuthAppAdminOrganizationsRoute: typeof AuthAppAdminOrganizationsRoute
-  AuthAppAdminTenantsRoute: typeof AuthAppAdminTenantsRoute
-  AuthAppAdminUsersRoute: typeof AuthAppAdminUsersRoute
   AuthAppAdminIndexRoute: typeof AuthAppAdminIndexRoute
 }
 
 const AuthAppAdminRouteRouteChildren: AuthAppAdminRouteRouteChildren = {
-  AuthAppAdminLlmConfigRoute: AuthAppAdminLlmConfigRoute,
-  AuthAppAdminOrganizationsRoute: AuthAppAdminOrganizationsRoute,
-  AuthAppAdminTenantsRoute: AuthAppAdminTenantsRoute,
-  AuthAppAdminUsersRoute: AuthAppAdminUsersRoute,
   AuthAppAdminIndexRoute: AuthAppAdminIndexRoute,
 }
 
@@ -789,14 +827,18 @@ const rootRouteChildren: RootRouteChildren = {
   ApiActiveTenantRoute: ApiActiveTenantRoute,
   ApiMeRoute: ApiMeRoute,
   ApiTenantsRoute: ApiTenantsRoute,
+  ApiAddressesSearchRoute: ApiAddressesSearchRoute,
   ApiAdminLlmConfigRoute: ApiAdminLlmConfigRoute,
+  ApiArticlesSearchRoute: ApiArticlesSearchRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDataSplatRoute: ApiDataSplatRoute,
+  ApiDocumentsCreateRoute: ApiDocumentsCreateRoute,
   ApiDocumentsTreeRoute: ApiDocumentsTreeRoute,
   ApiFeedbackSubmitRoute: ApiFeedbackSubmitRoute,
   ApiMetadataSplatRoute: ApiMetadataSplatRoute,
   ApiStatsDashboardRoute: ApiStatsDashboardRoute,
   ApiAdminDataSplatRoute: ApiAdminDataSplatRoute,
+  ApiAdminDocumentGroupsIdRoute: ApiAdminDocumentGroupsIdRoute,
   ApiArticlesArticleIdPricingRoute: ApiArticlesArticleIdPricingRoute,
   ApiDocumentsDocumentIdConvertRoute: ApiDocumentsDocumentIdConvertRoute,
   ApiDocumentsDocumentIdDeltaRoute: ApiDocumentsDocumentIdDeltaRoute,
@@ -804,6 +846,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDocumentsDocumentIdStornoRoute: ApiDocumentsDocumentIdStornoRoute,
   ApiStatsAddressAddressIdRoute: ApiStatsAddressAddressIdRoute,
   ApiStatsArticleArticleIdRoute: ApiStatsArticleArticleIdRoute,
+  ApiAdminDocumentGroupsIndexRoute: ApiAdminDocumentGroupsIndexRoute,
+  ApiDocumentsLinesLineIdDeltaRoute: ApiDocumentsLinesLineIdDeltaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

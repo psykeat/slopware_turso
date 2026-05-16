@@ -330,6 +330,7 @@ export interface FileRoutesById {
   '/_auth/app/documents': typeof AuthAppDocumentsRoute
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
@@ -350,6 +351,7 @@ export interface FileRoutesById {
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/_auth/app/admin/': typeof AuthAppAdminIndexRoute
   '/_auth/app/settings/': typeof AuthAppSettingsIndexRoute
+  '/_auth/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
   '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
   '/api/documents/lines/$lineId/delta': typeof ApiDocumentsLinesLineIdDeltaRoute
 }
@@ -369,6 +371,7 @@ export interface FileRouteTypes {
     | '/app/documents'
     | '/api/addresses/search'
     | '/api/admin/llm-config'
+    | '/api/admin/cycles'
     | '/api/articles/search'
     | '/api/auth/$'
     | '/api/data/$'
@@ -389,6 +392,7 @@ export interface FileRouteTypes {
     | '/api/stats/article/$articleId'
     | '/app/admin/'
     | '/app/settings/'
+    | '/app/settings/cycles'
     | '/api/admin/document-groups/'
     | '/api/documents/lines/$lineId/delta'
   fileRoutesByTo: FileRoutesByTo
@@ -404,6 +408,7 @@ export interface FileRouteTypes {
     | '/app/documents'
     | '/api/addresses/search'
     | '/api/admin/llm-config'
+    | '/api/admin/cycles'
     | '/api/articles/search'
     | '/api/auth/$'
     | '/api/data/$'
@@ -424,6 +429,7 @@ export interface FileRouteTypes {
     | '/api/stats/article/$articleId'
     | '/app/admin'
     | '/app/settings'
+    | '/app/settings/cycles'
     | '/api/admin/document-groups'
     | '/api/documents/lines/$lineId/delta'
   id:
@@ -443,6 +449,7 @@ export interface FileRouteTypes {
     | '/_auth/app/documents'
     | '/api/addresses/search'
     | '/api/admin/llm-config'
+    | '/api/admin/cycles'
     | '/api/articles/search'
     | '/api/auth/$'
     | '/api/data/$'
@@ -463,6 +470,7 @@ export interface FileRouteTypes {
     | '/api/stats/article/$articleId'
     | '/_auth/app/admin/'
     | '/_auth/app/settings/'
+    | '/_auth/app/settings/cycles'
     | '/api/admin/document-groups/'
     | '/api/documents/lines/$lineId/delta'
   fileRoutesById: FileRoutesById
@@ -476,6 +484,7 @@ export interface RootRouteChildren {
   ApiTenantsRoute: typeof ApiTenantsRoute
   ApiAddressesSearchRoute: typeof ApiAddressesSearchRoute
   ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRoute
+  ApiAdminCyclesRoute: typeof ApiAdminCyclesRoute
   ApiArticlesSearchRoute: typeof ApiArticlesSearchRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDataSplatRoute: typeof ApiDataSplatRoute
@@ -632,6 +641,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminLlmConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/cycles': {
+      id: '/api/admin/cycles'
+      path: '/api/admin/cycles'
+      fullPath: '/api/admin/cycles'
+      preLoaderRoute: typeof ApiAdminCyclesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/addresses/search': {
       id: '/api/addresses/search'
       path: '/api/addresses/search'
@@ -679,6 +695,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/app/settings/'
       preLoaderRoute: typeof AuthAppSettingsIndexRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
+    '/_auth/app/settings/cycles': {
+      id: '/_auth/app/settings/cycles'
+      path: '/cycles'
+      fullPath: '/app/settings/cycles'
+      preLoaderRoute: typeof AuthAppSettingsCyclesRouteImport
       parentRoute: typeof AuthAppRouteRoute
     }
     '/_auth/app/admin/': {
@@ -779,6 +802,7 @@ interface AuthAppRouteRouteChildren {
   AuthAppDocumentsRoute: typeof AuthAppDocumentsRoute
   AuthAppIndexRoute: typeof AuthAppIndexRoute
   AuthAppSettingsIndexRoute: typeof AuthAppSettingsIndexRoute
+  AuthAppSettingsCyclesRoute: typeof AuthAppSettingsCyclesRoute
 }
 
 const AuthAppRouteRouteChildren: AuthAppRouteRouteChildren = {
@@ -788,6 +812,7 @@ const AuthAppRouteRouteChildren: AuthAppRouteRouteChildren = {
   AuthAppDocumentsRoute: AuthAppDocumentsRoute,
   AuthAppIndexRoute: AuthAppIndexRoute,
   AuthAppSettingsIndexRoute: AuthAppSettingsIndexRoute,
+  AuthAppSettingsCyclesRoute: AuthAppSettingsCyclesRoute,
 }
 
 const AuthAppRouteRouteWithChildren = AuthAppRouteRoute._addFileChildren(
@@ -829,6 +854,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiTenantsRoute: ApiTenantsRoute,
   ApiAddressesSearchRoute: ApiAddressesSearchRoute,
   ApiAdminLlmConfigRoute: ApiAdminLlmConfigRoute,
+  ApiAdminCyclesRoute: ApiAdminCyclesRoute,
   ApiArticlesSearchRoute: ApiArticlesSearchRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDataSplatRoute: ApiDataSplatRoute,

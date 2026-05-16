@@ -3,6 +3,7 @@
     "addresses": "Adressen",
     "articles": "Artikel",
     "documents": "Belege",
+    "accounting": "Buchhaltung",
     "settings": "Einstellungen",
     "administration": "Administration",
     "baseTenant": "Basis-Mandant"
@@ -225,6 +226,18 @@
       "posting": "Wird gebucht…",
       "converting": "Wird gewandelt…",
       "cancelling": "Wird storniert…"
+    },
     }
+  },
+  "devCycles": {
+    "title": "Dev Cycles",
+    "cycleNumber": "Zyklus",
+    "sliceFit": "Slice-Fit",
+    "storyCoverage": "Story-Coverage",
+    "testsAdded": "Tests",
+    "vpTestPass": "VP Pass",
+    "blocker": "Blocker",
+    "noData": "Noch keine Zyklen erfasst.",
+    "apiHelp": "POST /api/admin/cycles · Bearer: $CYCLE_API_KEY"
   }
 }

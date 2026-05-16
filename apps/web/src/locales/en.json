@@ -3,6 +3,7 @@
     "addresses": "Addresses",
     "articles": "Articles",
     "documents": "Documents",
+    "accounting": "Accounting",
     "settings": "Settings",
     "administration": "Administration",
     "baseTenant": "Base Tenant"
@@ -225,6 +226,18 @@
       "posting": "Posting…",
       "converting": "Converting…",
       "cancelling": "Cancelling…"
+    },
     }
+  },
+  "devCycles": {
+    "title": "Dev Cycles",
+    "cycleNumber": "Cycle",
+    "sliceFit": "Slice-Fit",
+    "storyCoverage": "Story-Coverage",
+    "testsAdded": "Tests",
+    "vpTestPass": "VP Pass",
+    "blocker": "Blocker",
+    "noData": "No cycles recorded yet.",
+    "apiHelp": "POST /api/admin/cycles · Bearer: $CYCLE_API_KEY"
   }
 }

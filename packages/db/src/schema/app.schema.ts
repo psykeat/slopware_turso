@@ -1167,6 +1167,8 @@ export const journalLine = pgTable(
       .references(() => glAccount.glAccountId),
     debitAmount: numeric("debit_amount").notNull().default("0"),
     creditAmount: numeric("credit_amount").notNull().default("0"),
+    costCenterId: uuid("cost_center_id").references(() => costCenter.costCenterId),
+    taxCodeId: uuid("tax_code_id").references(() => taxCode.taxCodeId),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -1730,3 +1732,63 @@ export const factPurchaseEvent = pgTable(
     index("idx_fact_purchase_period").on(table.tenantId, table.fiscalPeriodId),
   ],
 );
+
+export const accountingExportBatch = pgTable(
+  "accounting_export_batch",
+  {
+    batchId: uuid("batch_id").primaryKey().default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id").notNull().references(() => tenant.tenantId),
+    companyId: uuid("company_id").notNull().references(() => company.companyId),
+    fiscalPeriodId: uuid("fiscal_period_id").notNull().references(() => fiscalPeriod.fiscalPeriodId),
+    status: text("status").notNull().default("pending"),
+    rowCount: integer("row_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    exportedAt: timestamp("exported_at", { withTimezone: true }),
+    createdBy: uuid("created_by"),
+  },
+  (table) => [
+    unique("accounting_export_batch_period_company").on(table.tenantId, table.fiscalPeriodId, table.companyId),
+    index("idx_accounting_export_batch_tenant").on(table.tenantId),
+    index("idx_accounting_export_batch_period").on(table.tenantId, table.fiscalPeriodId),
+    check("chk_accounting_export_batch_status", sql`status IN ('pending', 'exported', 'failed')`),
+  ],
+);
+
+export const accountingExportRow = pgTable(
+  "accounting_export_row",
+  {
+    rowId: uuid("row_id").primaryKey().default(sql`uuidv7()`),
+    batchId: uuid("batch_id").notNull().references(() => accountingExportBatch.batchId),
+    tenantId: uuid("tenant_id").notNull().references(() => tenant.tenantId),
+    companyId: uuid("company_id").notNull().references(() => company.companyId),
+    postingDate: date("posting_date").notNull(),
+    glAccountId: uuid("gl_account_id").notNull().references(() => glAccount.glAccountId),
+    costCenterId: uuid("cost_center_id").references(() => costCenter.costCenterId),
+    taxCodeId: uuid("tax_code_id").references(() => taxCode.taxCodeId),
+    debitAmount: numeric("debit_amount").notNull().default("0"),
+    creditAmount: numeric("credit_amount").notNull().default("0"),
+    currencyId: char("currency_id", { length: 3 }),
+    sourceDocumentId: uuid("source_document_id").references(() => document.documentId),
+    sourceDocumentNo: text("source_document_no"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_accounting_export_row_batch").on(table.batchId),
+    index("idx_accounting_export_row_tenant").on(table.tenantId),
+  ],
+);
+
+export const devCycles = pgTable("dev_cycles", {
+  cycleId: uuid("cycle_id").primaryKey().default(sql`uuidv7()`),
+  cycleNumber: integer("cycle_number").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  sliceFitScore: integer("slice_fit_score").notNull(),
+  sliceFitMax: integer("slice_fit_max").notNull(),
+  storyCoverage: integer("story_coverage").notNull(),
+  storyCoverageMax: integer("story_coverage_max").notNull(),
+  testsAdded: integer("tests_added").notNull().default(0),
+  vpTestPass: boolean("vp_test_pass"),
+  blocker: text("blocker"),
+  processAdjustment: text("process_adjustment"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

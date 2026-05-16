@@ -54,6 +54,11 @@ export const Route = createFileRoute("/api/feedback/submit")({
         const prompt = `You are an ERP system issue tracker. Based on this context and user report, write a GitHub issue.
 Respond with JSON only: {"title": "...", "body": "...", "label": "bug" | "enhancement" | "question"}
 
+The issue body should contain:
+- A "## Summary" section with the user's description
+- A "## Context" section with the app state (url, viewport, focusState, locale)
+- A "## Telemetry" section summarizing: recent JS errors, API calls (url, method, status, latency), navigation trail, and executed commands from the telemetry data in the snapshot
+
 System context: ${JSON.stringify(body.snapshot, null, 2)}
 
 User says: ${body.description}`;

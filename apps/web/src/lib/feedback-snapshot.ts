@@ -1,3 +1,5 @@
+import type { TelemetrySnapshot } from "@repo/ui/platform/telemetry-context";
+
 export interface FeedbackSnapshot {
   url: string;
   userAgent: string;
@@ -8,6 +10,7 @@ export interface FeedbackSnapshot {
   lastError: { message: string; stack?: string } | null;
   timestamp: string;
   focusState: { entity?: string; recordId?: string; panelId?: string };
+  telemetry: TelemetrySnapshot;
 }
 
 export function captureFeedbackSnapshot(
@@ -15,7 +18,8 @@ export function captureFeedbackSnapshot(
   tenantId: string,
   locale: string,
   focusState: { entity?: string; recordId?: string; panelId?: string },
-  lastError: { message: string; stack?: string } | null
+  lastError: { message: string; stack?: string } | null,
+  telemetry: TelemetrySnapshot
 ): FeedbackSnapshot {
   return {
     url: typeof window !== 'undefined' ? window.location.href : '',
@@ -29,5 +33,6 @@ export function captureFeedbackSnapshot(
     lastError,
     timestamp: new Date().toISOString(),
     focusState,
+    telemetry,
   };
 }

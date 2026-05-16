@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useFocus, FocusContextState } from "./focus-manager";
 
 export interface Command {
@@ -17,6 +17,7 @@ interface CommandContextValue {
   commands: Command[];
   registerCommand: (command: Command) => () => void;
   executeCommand: (commandId: string) => void;
+  subscribeToExecutions: (cb: (commandId: string) => void) => () => void;
 }
 
 const CommandContext = createContext<CommandContextValue | undefined>(undefined);
@@ -24,6 +25,7 @@ const CommandContext = createContext<CommandContextValue | undefined>(undefined)
 export function CommandProvider({ children }: { children: React.ReactNode }) {
   const { state: focusState } = useFocus();
   const [commands, setCommands] = useState<Command[]>([]);
+  const executionSubscribers = useRef<Set<(id: string) => void>>(new Set());
 
   const registerCommand = useCallback((command: Command) => {
     setCommands((prev) => {
@@ -35,11 +37,19 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const subscribeToExecutions = useCallback((cb: (id: string) => void) => {
+    executionSubscribers.current.add(cb);
+    return () => {
+      executionSubscribers.current.delete(cb);
+    };
+  }, []);
+
   const executeCommand = useCallback(
     (commandId: string) => {
       const command = commands.find((c) => c.id === commandId);
       if (command && (!command.isEnabled || command.isEnabled(focusState))) {
         command.handler(focusState);
+        executionSubscribers.current.forEach((cb) => cb(commandId));
       }
     },
     [commands, focusState],
@@ -88,8 +98,8 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
   }, [commands, executeCommand]);
 
   const value = useMemo(
-    () => ({ commands, registerCommand, executeCommand }),
-    [commands, registerCommand, executeCommand],
+    () => ({ commands, registerCommand, executeCommand, subscribeToExecutions }),
+    [commands, registerCommand, executeCommand, subscribeToExecutions],
   );
 
   return <CommandContext.Provider value={value}>{children}</CommandContext.Provider>;

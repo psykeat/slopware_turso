@@ -12,6 +12,7 @@ interface FeedbackSnapshot {
   timestamp: string;
   viewport: unknown;
   userAgent: string;
+  telemetry?: unknown;
 }
 
 interface FeedbackModalProps {

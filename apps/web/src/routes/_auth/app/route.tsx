@@ -28,6 +28,7 @@ import { useTheme, type AccentTheme } from "@repo/ui/lib/theme-provider";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useFocus } from "@repo/ui/platform/focus-manager";
 import { ActionBarProvider, useActionBar } from "@repo/ui/platform/action-bar-context";
+import { TelemetryProvider, useTelemetry } from "@repo/ui/platform/telemetry-context";
 import { cn } from "@repo/ui/lib/utils";
 import { useDismiss } from "@repo/ui/lib/use-dismiss";
 import { useTranslation } from "react-i18next";
@@ -495,6 +496,7 @@ const DEFAULT_SNAPSHOT: FeedbackSnapshot = {
   lastError: null,
   timestamp: "",
   focusState: {},
+  telemetry: { errors: [], apiCalls: [], navigation: [], commands: [] },
 };
 
 function AppLayoutInner({ isSystemAdmin, userName, userEmail, tenantName, moduleCrumb, userId, tenantId }: {
@@ -509,30 +511,17 @@ function AppLayoutInner({ isSystemAdmin, userName, userEmail, tenantName, module
   const { subCrumb } = useActionBar();
   const { state: focusState } = useFocus();
   const { registerCommand } = useCommands();
+  const { getSnapshot } = useTelemetry();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [lastError, setLastError] = useState<{ message: string; stack?: string } | null>(null);
   const [snapshot, setSnapshot] = useState<FeedbackSnapshot>(DEFAULT_SNAPSHOT);
   const prevFeedbackOpen = useRef(false);
-
-  // Global error capture
-  useEffect(() => {
-    const handler = (event: ErrorEvent) => {
-      setLastError({ message: event.message, stack: event.error?.stack });
-    };
-    const unhandledHandler = (event: PromiseRejectionEvent) => {
-      setLastError({ message: String(event.reason), stack: event.reason?.stack });
-    };
-    window.addEventListener("error", handler);
-    window.addEventListener("unhandledrejection", unhandledHandler);
-    return () => {
-      window.removeEventListener("error", handler);
-      window.removeEventListener("unhandledrejection", unhandledHandler);
-    };
-  }, []);
 
   // Capture snapshot when modal transitions to open
   useEffect(() => {
     if (feedbackOpen && !prevFeedbackOpen.current) {
+      const telemetry = getSnapshot();
+      const errors = telemetry.errors;
+      const lastError = errors.length > 0 ? { message: errors[errors.length - 1].message, stack: errors[errors.length - 1].stack } : null;
       setSnapshot(
         captureFeedbackSnapshot(
           userId,
@@ -544,11 +533,12 @@ function AppLayoutInner({ isSystemAdmin, userName, userEmail, tenantName, module
             panelId: focusState.panel ?? undefined,
           },
           lastError,
+          telemetry,
         ),
       );
     }
     prevFeedbackOpen.current = feedbackOpen;
-  }, [feedbackOpen, userId, tenantId, focusState, lastError]);
+  }, [feedbackOpen, userId, tenantId, focusState, getSnapshot]);
 
   // Register open-feedback command
   useEffect(() => {
@@ -624,16 +614,18 @@ function AppLayout() {
   const moduleCrumb = activeModule ? t(activeModule.labelKey) : undefined;
 
   return (
-    <ActionBarProvider>
-      <AppLayoutInner
-        isSystemAdmin={isSystemAdmin}
-        userName={userName}
-        userEmail={userEmail}
-        tenantName={tenantName}
-        moduleCrumb={moduleCrumb}
-        userId={userId}
-        tenantId={tenantId}
-      />
-    </ActionBarProvider>
+    <TelemetryProvider>
+      <ActionBarProvider>
+        <AppLayoutInner
+          isSystemAdmin={isSystemAdmin}
+          userName={userName}
+          userEmail={userEmail}
+          tenantName={tenantName}
+          moduleCrumb={moduleCrumb}
+          userId={userId}
+          tenantId={tenantId}
+        />
+      </ActionBarProvider>
+    </TelemetryProvider>
   );
 }

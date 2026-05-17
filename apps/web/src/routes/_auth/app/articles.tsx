@@ -11,6 +11,10 @@ import { EntityMask } from "@repo/ui/components/entity-mask";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
 import { InventoryBalanceTable } from "@repo/ui/components/inventory-balance-table";
 import { StockLedgerTable } from "@repo/ui/components/stock-ledger-table";
+import { SerialInventoryTable } from "@repo/ui/components/serial-inventory-table";
+import { BatchInventoryTable } from "@repo/ui/components/batch-inventory-table";
+import { BomEditor } from "@repo/ui/components/bom-editor";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/components/tabs";
 import { formatDate } from "@repo/ui/lib/formatters";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { useFocus } from "@repo/ui/platform/focus-manager";
@@ -455,10 +459,11 @@ function ArticlesModule() {
 
       {/* Edit dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent>
+        <DialogContent className="max-w-7xl h-[85vh] p-0 overflow-hidden">
           <EntityMask
             entityName="article"
             mode="edit"
+            layout="single"
             recordId={focusState.recordId ?? undefined}
             fieldOverrides={ARTICLE_FIELD_OVERRIDES}
             onCancel={() => setShowEdit(false)}
@@ -466,8 +471,57 @@ function ArticlesModule() {
               setShowEdit(false);
               queryClient.invalidateQueries({ queryKey: ["data", "article"] });
             }}
+            embedded
+            childLayout="side"
             childSection={(record) => (
-              <InventoryBalanceTable articleId={record.articleId as string} />
+              <div className="flex flex-col gap-6">
+                <div>
+                  <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Lagerbewegungen</div>
+                  <div className="border border-hairline rounded-md overflow-hidden bg-canvas">
+                    <Tabs defaultValue="bestand">
+                      <TabsList variant="line" className="px-2 border-b border-hairline rounded-none w-full justify-start h-8">
+                        <TabsTrigger value="bestand" className="text-[12px] h-7">Bestand</TabsTrigger>
+                        <TabsTrigger value="journal" className="text-[12px] h-7">Journal</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="bestand" className="p-0">
+                        <InventoryBalanceTable articleId={record.articleId as string} />
+                      </TabsContent>
+                      <TabsContent value="journal" className="p-0">
+                        <StockLedgerTable articleId={record.articleId as string} />
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                </div>
+
+                {record.trackingMode === "serial" && (
+                  <div>
+                    <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Seriennummern Inventory</div>
+                    <div className="border border-hairline rounded-md overflow-hidden bg-canvas">
+                      <SerialInventoryTable articleId={record.articleId as string} />
+                    </div>
+                  </div>
+                )}
+
+                {record.trackingMode === "batch" && (
+                  <div>
+                    <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Batch Inventory</div>
+                    <div className="border border-hairline rounded-md overflow-hidden bg-canvas">
+                      <BatchInventoryTable articleId={record.articleId as string} />
+                    </div>
+                  </div>
+                )}
+
+                {(record.bomType === "sales" || record.bomType === "production") && (
+                  <div>
+                    <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">
+                      {record.bomType === "sales" ? "Handelsstücklisteneditor" : "Produktionsstücklisteneditor"}
+                    </div>
+                    <div className="border border-hairline rounded-md overflow-visible bg-canvas min-h-[300px]">
+                      <BomEditor articleId={record.articleId as string} />
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           />
         </DialogContent>

@@ -189,7 +189,7 @@ function AdminView() {
 
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-2xl p-0 overflow-hidden sw-root">
+        <DialogContent className="max-w-2xl p-0 overflow-hidden sw-root">
           <EntityMask
             entityName={selectedKey}
             mode="create"
@@ -207,12 +207,13 @@ function AdminView() {
 
       {/* Edit Dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent 
+        <DialogContent
             className={cn(
                 "p-0 overflow-hidden sw-root",
-                selectedKey === "user" ? "sm:max-w-4xl" : "sm:max-w-2xl"
+                selectedKey === "user" ? "max-w-4xl" : "max-w-2xl"
             )}
         >
+
           {selectedKey === "user" && editId ? (
             <UserManagementView
               userId={editId}

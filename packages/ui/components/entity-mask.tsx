@@ -490,19 +490,21 @@ export function EntityMask({
                 </span>
               </div>
             )}
-            <div className={cn("flex flex-col gap-1", field.fullWidth && !isSingleColumn && "col-span-2")}>
+            <div className={cn("flex flex-col gap-1.5 min-w-0", field.fullWidth && !isSingleColumn && "col-span-2")}>
               {field.type !== "boolean" && (
-                <label className="text-[12px] font-medium text-ink-secondary flex items-center gap-1">
-                  {fieldLabel(field)}
-                  {field.required && <span className="text-[var(--destructive)] leading-none">*</span>}
+                <label className="text-[12px] font-medium text-ink-secondary flex items-center gap-1 select-none">
+                  <span className="truncate">{fieldLabel(field)}</span>
+                  {field.required && <span className="text-destructive leading-none shrink-0">*</span>}
                 </label>
               )}
-              <FieldInput
-                field={field}
-                value={formData[field.key] ?? field.value ?? ""}
-                disabled={saveMutation.isPending}
-                onChange={(val) => handleChange(field.key, val)}
-              />
+              <div className="w-full min-w-0">
+                <FieldInput
+                  field={field}
+                  value={formData[field.key] ?? field.value ?? ""}
+                  disabled={saveMutation.isPending}
+                  onChange={(val) => handleChange(field.key, val)}
+                />
+              </div>
               {field.error && (
                 <span className="text-[11px] text-[var(--destructive)]">{field.error}</span>
               )}

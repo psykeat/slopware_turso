@@ -26,6 +26,9 @@ export interface FieldDef {
   lookupDisplayColumn?: string;
   lookupIsI18n?: boolean;
   lookupPkColumn?: string;
+  /** Renders a visual section divider above this field */
+  sectionLabel?: string;
+  sectionLabelDe?: string;
 }
 
 export interface EntityMaskProps {
@@ -33,6 +36,7 @@ export interface EntityMaskProps {
   recordId?: string | null;
   mode?: "create" | "edit";
   fields?: FieldDef[];
+  fieldOverrides?: Partial<FieldDef>[];
   title?: string;
   className?: string;
   layout?: "single" | "two-column";
@@ -44,6 +48,8 @@ export interface EntityMaskProps {
   inline?: boolean;
   /** Renders after the form fields when a record is loaded and not in loading state */
   childSection?: (record: Record<string, unknown>) => React.ReactNode;
+  /** "side" splits the mask into a left fields panel and right child-section panel */
+  childLayout?: "below" | "side";
 }
 
 const inputBase =
@@ -250,6 +256,7 @@ export function EntityMask({
   recordId,
   mode,
   fields: propFields,
+  fieldOverrides,
   title,
   className,
   layout: _layout = "two-column",
@@ -259,6 +266,7 @@ export function EntityMask({
   embedded = false,
   inline = false,
   childSection,
+  childLayout = "below",
 }: EntityMaskProps) {
   const { t, i18n } = useTranslation("ui");
   const queryClient = useQueryClient();
@@ -351,7 +359,10 @@ export function EntityMask({
     };
   }, [entityName, propFields, i18n.language]);
 
-  const fields = propFields ?? metaFields;
+  const fields = (propFields ?? metaFields).map((f) => {
+    const ov = fieldOverrides?.find((o) => o.key === f.key);
+    return ov ? { ...f, ...ov } : f;
+  });
 
   const saveMutation = useMutation({
     mutationFn: async (data: Record<string, any>) => {
@@ -454,6 +465,10 @@ export function EntityMask({
     );
   }
 
+  const showCancel = !inline && !!onCancel;
+  const hasChildContent = !!childSection && !loading && Object.keys(formData).length > 0;
+  const isSingleColumn = _layout === "single" || (childLayout === "side" && hasChildContent);
+
   const fieldsGrid = (
     <div className="flex flex-col gap-6">
       {globalError && (
@@ -465,37 +480,52 @@ export function EntityMask({
           </div>
         </div>
       )}
-      <div className={cn("grid gap-x-6 gap-y-5", _layout === "single" ? "grid-cols-1" : "grid-cols-2")}>
+      <div className={cn("grid gap-x-6 gap-y-5", isSingleColumn ? "grid-cols-1" : "grid-cols-2")}>
         {fields.map((field) => (
-          <div key={field.key} className={cn("flex flex-col gap-1", field.fullWidth && _layout !== "single" && "col-span-2")}>
-            {field.type !== "boolean" && (
-              <label className="text-[12px] font-medium text-ink-secondary flex items-center gap-1">
-                {fieldLabel(field)}
-                {field.required && <span className="text-[var(--destructive)] leading-none">*</span>}
-              </label>
+          <React.Fragment key={field.key}>
+            {field.sectionLabel && (
+              <div className={cn("border-t border-hairline pt-2 -mb-2", !isSingleColumn ? "col-span-2" : "")}>
+                <span className="text-[11px] font-medium text-ink-mute uppercase tracking-wider">
+                  {i18n.language === "de" && field.sectionLabelDe ? field.sectionLabelDe : field.sectionLabel}
+                </span>
+              </div>
             )}
-            <FieldInput
-              field={field}
-              value={formData[field.key] ?? field.value ?? ""}
-              disabled={saveMutation.isPending}
-              onChange={(val) => handleChange(field.key, val)}
-            />
-            {field.error && (
-              <span className="text-[11px] text-[var(--destructive)]">{field.error}</span>
-            )}
-            {!field.error && helpText(field) && (
-              <span className="text-[11px] text-ink-mute">{helpText(field)}</span>
-            )}
-          </div>
+            <div className={cn("flex flex-col gap-1", field.fullWidth && !isSingleColumn && "col-span-2")}>
+              {field.type !== "boolean" && (
+                <label className="text-[12px] font-medium text-ink-secondary flex items-center gap-1">
+                  {fieldLabel(field)}
+                  {field.required && <span className="text-[var(--destructive)] leading-none">*</span>}
+                </label>
+              )}
+              <FieldInput
+                field={field}
+                value={formData[field.key] ?? field.value ?? ""}
+                disabled={saveMutation.isPending}
+                onChange={(val) => handleChange(field.key, val)}
+              />
+              {field.error && (
+                <span className="text-[11px] text-[var(--destructive)]">{field.error}</span>
+              )}
+              {!field.error && helpText(field) && (
+                <span className="text-[11px] text-ink-mute">{helpText(field)}</span>
+              )}
+            </div>
+          </React.Fragment>
         ))}
       </div>
     </div>
   );
 
-  const showCancel = !inline && !!onCancel;
+  const childSectionNode = hasChildContent
+    ? (
+      <div className="mt-4 border-t border-hairline pt-4">
+        {childSection!(formData as Record<string, unknown>)}
+      </div>
+    )
+    : null;
 
-  const footer = (
-    <div className="mt-6 pt-5 border-t border-hairline flex justify-end gap-3">
+  const footerButtons = (
+    <div className="flex justify-end gap-3">
       {showCancel && (
         <button
           onClick={onCancel}
@@ -520,14 +550,11 @@ export function EntityMask({
     </div>
   );
 
-  const childSectionNode =
-    childSection && !loading && Object.keys(formData).length > 0
-      ? (
-        <div className="mt-4 border-t border-hairline pt-4">
-          {childSection(formData as Record<string, unknown>)}
-        </div>
-      )
-      : null;
+  const footer = (
+    <div className="mt-6 pt-5 border-t border-hairline">
+      {footerButtons}
+    </div>
+  );
 
   if (inline) {
     return (
@@ -537,6 +564,32 @@ export function EntityMask({
         {fieldsGrid}
         {childSectionNode}
         {footer}
+      </div>
+    );
+  }
+
+  if (embedded && childLayout === "side" && hasChildContent) {
+    return (
+      <div className={cn("flex flex-col overflow-hidden h-full", className)}>
+        <div className="flex flex-1 overflow-hidden min-h-0 divide-x divide-hairline">
+          <div className="w-[35%] shrink-0 overflow-y-auto p-6 bg-canvas-soft/30">
+            {title && <h2 className="text-[18px] font-light text-ink mb-1">{title}</h2>}
+            <p className="text-[13px] text-ink-mute mb-4">{t("form.requiredHint")}</p>
+            {globalError && (
+              <div className="mb-4 bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex gap-3 items-start">
+                <AlertCircleIcon className="size-4 text-destructive shrink-0 mt-0.5" />
+                <span className="text-[12px] text-destructive/80">{globalError}</span>
+              </div>
+            )}
+            {fieldsGrid}
+          </div>
+          <div className="flex-1 overflow-y-auto overflow-x-auto p-6">
+            {childSection!(formData as Record<string, unknown>)}
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-hairline shrink-0 bg-canvas">
+          {footerButtons}
+        </div>
       </div>
     );
   }

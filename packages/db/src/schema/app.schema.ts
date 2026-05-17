@@ -74,7 +74,6 @@ export const company = pgTable(
     countryCode: char("country_code", { length: 2 }).notNull(),
     currencyId: char("currency_id", { length: 3 }).notNull(),
     vatId: text("vat_id"),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     addressLine1: text("address_line_1"),
@@ -101,7 +100,7 @@ export const company = pgTable(
     unique("company_tenant_id_company_id_key").on(table.tenantId, table.companyId),
     unique("company_tenant_id_company_no_unique").on(table.tenantId, table.companyNo),
     index("idx_company_tenant").on(table.tenantId),
-    index("idx_company_tenant_active").on(table.tenantId, table.isActive),
+    index("idx_company_tenant_archived").on(table.tenantId, table.archived),
     check(
       "company_fiscal_year_start_month_check",
       sql`fiscal_year_start_month >= 1 AND fiscal_year_start_month <= 12`,
@@ -221,7 +220,6 @@ export const addressCategory = pgTable(
       .notNull()
       .references(() => tenant.tenantId),
     name: jsonb("name").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     customAttributes: jsonb("custom_attributes"),
@@ -259,7 +257,6 @@ export const address = pgTable(
     taxClassId: uuid("tax_class_id"),
     currencyId: char("currency_id", { length: 3 }),
     paymentTermId: uuid("payment_term_id"),
-    isActive: boolean("is_active").notNull().default(true),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     customAttributes: jsonb("custom_attributes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -299,7 +296,6 @@ export const addressContact = pgTable(
     phoneLandline: text("phone_landline"),
     roleFunction: text("role_function"),
     isPrimary: boolean("is_primary").notNull().default(false),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -331,7 +327,6 @@ export const articleGroup = pgTable(
       .references(() => tenant.tenantId),
     code: text("code").notNull(),
     name: text("name").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -359,7 +354,6 @@ export const article = pgTable(
     baseUnit: text("base_unit"),
     salesUnit: text("sales_unit"),
     purchaseUnit: text("purchase_unit"),
-    isActive: boolean("is_active").notNull().default(true),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     customAttributes: jsonb("custom_attributes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -374,7 +368,7 @@ export const article = pgTable(
     index("idx_article_default_wh").on(table.tenantId, table.defaultWarehouseId),
     index("idx_article_group_fk").on(table.articleGroupId),
     index("idx_article_tenant").on(table.tenantId),
-    index("idx_article_tenant_active").on(table.tenantId, table.isActive),
+    index("idx_article_tenant_archived").on(table.tenantId, table.archivedAt),
     check("article_bom_type_check", sql`bom_type IN ('none', 'production', 'sales')`),
     check(
       "article_tracking_mode_check",
@@ -400,7 +394,7 @@ export const articleBom = pgTable(
       .references(() => article.articleId),
     quantity: numeric("quantity").notNull(),
     scrapPercentage: numeric("scrap_percentage").notNull().default("0"),
-    isActive: boolean("is_active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -429,7 +423,6 @@ export const bankAccount = pgTable(
     bankName: text("bank_name"),
     currencyId: char("currency_id", { length: 3 }),
     isDefault: boolean("is_default").notNull().default(false),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     customAttributes: jsonb("custom_attributes"),
@@ -453,7 +446,6 @@ export const costCenter = pgTable(
     companyId: uuid("company_id").references(() => company.companyId),
     code: text("code").notNull(),
     name: text("name").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -474,7 +466,6 @@ export const country = pgTable(
     iso3Code: varchar("iso3_code", { length: 3 }).notNull().unique(),
     name: jsonb("name").notNull(),
     isEu: boolean("is_eu").notNull().default(false),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -494,7 +485,6 @@ export const currency = pgTable(
     name: jsonb("name").notNull(),
     symbol: varchar("symbol", { length: 5 }),
     decimals: integer("decimals").notNull().default(2),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -519,8 +509,8 @@ export const deliveryAddress = pgTable(
     postalCode: text("postal_code").notNull(),
     city: text("city").notNull(),
     countryCode: char("country_code", { length: 2 }).notNull(),
-    isActive: boolean("is_active").default(true),
     defaultForShipping: boolean("default_for_shipping").default(false),
+    archived: boolean("archived").notNull().default(false),
     customAttributes: jsonb("custom_attributes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
@@ -542,7 +532,6 @@ export const discountGroup = pgTable(
       .references(() => tenant.tenantId),
     name: text("name").notNull(),
     percentage: numeric("percentage").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -567,7 +556,7 @@ export const documentType = pgTable(
     nextDocumentTypeId: uuid("next_document_type_id"),
     requiresWarehouse: boolean("requires_warehouse").notNull().default(true),
     requiresCostCenter: boolean("requires_cost_center").notNull().default(false),
-    isActive: boolean("is_active").notNull().default(true),
+    archived: boolean("archived").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -600,7 +589,7 @@ export const documentGroup = pgTable(
     defaultTaxCodeId: uuid("default_tax_code_id"),
     defaultSalesAccountId: uuid("default_sales_account_id"),
     defaultCostAccountId: uuid("default_cost_account_id"),
-    isActive: boolean("is_active").default(true),
+    archived: boolean("archived").notNull().default(false),
     sortOrder: integer("sort_order").default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
     defaultPaymentTermId: uuid("default_payment_term_id"),
@@ -879,7 +868,6 @@ export const glAccount = pgTable(
     accountNo: text("account_no").notNull(),
     name: text("name").notNull(),
     accountType: text("account_type").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -919,6 +907,10 @@ export const importBatch = pgTable(
       .notNull()
       .references(() => tenant.tenantId),
     connectorId: uuid("connector_id"),
+    profileId: uuid("profile_id").references(() => importProfile.profileId),
+    mappingVersionId: uuid("mapping_version_id").references(
+      () => importProfileMappingVersion.versionId,
+    ),
     atomicityMode: text("atomicity_mode").notNull(),
     status: text("status").notNull().default("pending"),
     isRerun: boolean("is_rerun").notNull().default(false),
@@ -960,6 +952,66 @@ export const importRow = pgTable(
   (_table) => [check("import_row_status_check", sql`status IN ('pending', 'posted', 'failed')`)],
 );
 
+export const importProfile = pgTable(
+  "import_profile",
+  {
+    profileId: uuid("profile_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    slug: text("slug").notNull(),
+    label: text("label").notNull(),
+    targetEntity: text("target_entity").notNull(),
+    targetCommandKey: text("target_command_key").notNull(),
+    requiresApproval: boolean("requires_approval").notNull().default(true),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("uq_import_profile_tenant_slug").on(table.tenantId, table.slug),
+    index("idx_import_profile_tenant").on(table.tenantId),
+  ],
+);
+
+export const importProfileMappingVersion = pgTable(
+  "import_profile_mapping_version",
+  {
+    versionId: uuid("version_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    tenantConnectorId: uuid("tenant_connector_id")
+      .notNull()
+      .references(() => tenantConnector.tenantConnectorId),
+    profileId: uuid("profile_id")
+      .notNull()
+      .references(() => importProfile.profileId),
+    versionNo: integer("version_no").notNull().default(1),
+    mappings: jsonb("mappings").notNull(),
+    isActive: boolean("is_active").notNull().default(false),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    activatedBy: text("activated_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("uq_import_profile_mapping_version").on(
+      table.tenantConnectorId,
+      table.profileId,
+      table.versionNo,
+    ),
+    index("idx_import_mapping_version_lookup").on(
+      table.tenantConnectorId,
+      table.profileId,
+      table.isActive,
+    ),
+  ],
+);
+
 export const incoterm = pgTable(
   "incoterm",
   {
@@ -983,7 +1035,6 @@ export const industry = pgTable(
       .notNull()
       .references(() => tenant.tenantId),
     name: jsonb("name").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     customAttributes: jsonb("custom_attributes"),
@@ -1006,7 +1057,6 @@ export const warehouse = pgTable(
     companyId: uuid("company_id").references(() => company.companyId),
     code: text("code").notNull(),
     name: text("name").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1229,7 +1279,6 @@ export const paymentTerm = pgTable(
     netDays: integer("net_days").notNull(),
     discountDays: integer("discount_days"),
     discountPercentage: numeric("discount_percentage"),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     customAttributes: jsonb("custom_attributes"),
@@ -1277,7 +1326,6 @@ export const priceList = pgTable(
     name: text("name").notNull(),
     currencyId: char("currency_id", { length: 3 }).notNull(),
     isNet: boolean("is_net").notNull().default(true),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1338,7 +1386,6 @@ export const productionOrder = pgTable(
     plannedEndDate: date("planned_end_date"),
     actualStartDate: date("actual_start_date"),
     actualEndDate: date("actual_end_date"),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
@@ -1420,7 +1467,6 @@ export const shippingMethod = pgTable(
       .references(() => tenant.tenantId),
     name: jsonb("name").notNull(),
     trackingUrlTemplate: text("tracking_url_template"),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     customAttributes: jsonb("custom_attributes"),
@@ -1446,7 +1492,6 @@ export const taxClass = pgTable(
       .references(() => tenant.tenantId),
     code: text("code").notNull(),
     name: jsonb("name").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     customAttributes: jsonb("custom_attributes"),
@@ -1469,7 +1514,6 @@ export const taxCode = pgTable(
     code: text("code").notNull(),
     description: text("description"),
     taxRate: numeric("tax_rate").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1549,6 +1593,9 @@ export const tenantConnectorMapping = pgTable(
     tenantConnectorId: uuid("tenant_connector_id")
       .notNull()
       .references(() => tenantConnector.tenantConnectorId),
+    profileId: uuid("profile_id")
+      .notNull()
+      .references(() => importProfile.profileId),
     sourceField: text("source_field").notNull(),
     targetTable: text("target_table").notNull(),
     targetColumn: text("target_column").notNull(),
@@ -1556,8 +1603,9 @@ export const tenantConnectorMapping = pgTable(
     defaultValue: jsonb("default_value"),
   },
   (table) => [
-    unique("tenant_connector_mapping_tenant_connector_id_source_field_uniqu").on(
+    unique("uq_tenant_connector_mapping_connector_profile_field").on(
       table.tenantConnectorId,
+      table.profileId,
       table.sourceField,
     ),
   ],
@@ -1676,7 +1724,6 @@ export const unit = pgTable(
       .references(() => tenant.tenantId),
     code: varchar("code", { length: 10 }).notNull(),
     name: jsonb("name").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     customAttributes: jsonb("custom_attributes"),

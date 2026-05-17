@@ -54,7 +54,7 @@ export function ContextTabs({ tabs, defaultValue, className }: ContextTabsProps)
         </div>
       </div>
       {/* Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-hidden min-h-0">
         {activeTab?.content}
       </div>
     </div>

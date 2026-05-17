@@ -76,6 +76,13 @@ interface TaxCodeRow {
   taxRate: string;
 }
 
+interface ConvertCandidate {
+  documentGroupId: string;
+  name: string;
+  documentType: string;
+  groupNumber: number;
+}
+
 // Stable empty arrays — inline `= []` in useQuery creates a new ref every render,
 // which makes useMemo deps change every render and causes an infinite setState loop.
 const EMPTY_TAX_CODES: TaxCodeRow[] = [];
@@ -819,6 +826,8 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
   const [isHeaderDirty, setIsHeaderDirty] = useState(false);
   const [pendingLines, setPendingLines] = useState<LineRow[]>([]);
   const [showTechnical, setShowTechnical] = useState(false);
+  const [convertCandidates, setConvertCandidates] = useState<ConvertCandidate[] | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const linesEditorRef = useRef<DocumentLinesEditorHandle>(null);
 
   // ── fetch existing document ──
@@ -1048,14 +1057,39 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
   });
 
   const convertMutation = useMutation({
+    mutationFn: async (targetGroupId?: string) => {
+      const res = await fetch(`/api/documents/${documentId}/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: targetGroupId ? JSON.stringify({ targetGroupId }) : undefined,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json() as Promise<{ candidates?: ConvertCandidate[]; success?: boolean; newDocumentId?: string }>;
+    },
+    onSuccess: (data) => {
+      if (data.candidates) {
+        setConvertCandidates(data.candidates);
+        setSelectedCandidateId(data.candidates.length === 1 ? data.candidates[0].documentGroupId : null);
+      } else {
+        setConvertCandidates(null);
+        setSelectedCandidateId(null);
+        queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+        toast.success(t('document.actions.convert'));
+        onClose();
+      }
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const duplicateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/documents/${documentId}/convert`, { method: "POST" });
+      const res = await fetch(`/api/documents/${documentId}/duplicate`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
-      toast.success(t('document.actions.convert'));
+      toast.success(t('document.actions.duplicate'));
       onClose();
     },
     onError: (err: any) => toast.error(err.message),
@@ -1105,6 +1139,24 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
     });
   }, [registerCommand, handlePost, header, isNew]);
 
+  const { mutate: convertDocMutate } = convertMutation;
+  const handleConvert = useCallback(() => convertDocMutate(undefined), [convertDocMutate]);
+
+  useEffect(() => {
+    const type = (header as any).documentType ?? "";
+    const archived = (header as any).archivedAt ?? null;
+    const status = (header as any).status ?? "draft";
+    return registerCommand({
+      id: "doc-convert",
+      label: { en: "Convert Document", de: "Beleg wandeln" },
+      shortcut: "F7",
+      group: "document",
+      scope: "context",
+      isEnabled: () => !isNew && status !== "cancelled" && !archived && !["G", "g", "R", "r"].includes(type),
+      handler: handleConvert,
+    });
+  }, [registerCommand, handleConvert, header, isNew]);
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); onClose(); }
@@ -1122,9 +1174,13 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
   const docStatus = (header as any).status ?? (isNew ? "draft" : "—");
   const docNo = isNew ? "wird vergeben" : ((header.documentNo ?? documentId));
   const groupLabel = groupData ? `${groupData.documentType}${String(groupData.documentGroupId).slice(-2)} · ${groupData.name}` : (documentGroupId ?? "");
+  const docType = (header as any).documentType ?? "";
+  const archivedAt = (header as any).archivedAt ?? null;
+  const stornoDocumentId = (header as any).stornoDocumentId ?? null;
   const canPost = !isNew && docStatus === "draft";
-  const canConvert = !isNew && docStatus === "draft";
-  const canStorno = !isNew && docStatus === "posted";
+  const canConvert = !isNew && docStatus !== "cancelled" && !archivedAt && !["G", "g", "R", "r"].includes(docType);
+  const canStorno = !isNew && docStatus === "posted" && ["R", "r"].includes(docType) && !stornoDocumentId;
+  const canDuplicate = !isNew && docStatus !== "cancelled";
 
   if (!isNew && isDocLoading) {
     return (
@@ -1309,7 +1365,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
       </div>
 
       {/* Lines */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <DocumentLinesEditor
           ref={linesEditorRef}
           documentId={isNew ? null : documentId}
@@ -1319,6 +1375,58 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
           onLinesChange={setPendingLines}
         />
       </div>
+
+      {/* Convert dialog */}
+      {convertCandidates && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setConvertCandidates(null); setSelectedCandidateId(null); }}>
+          <div className="w-96 rounded-lg border border-hairline bg-canvas shadow-xl p-5 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <div>
+              <div className="text-[14px] font-semibold text-ink">{t('document.convert.title')}</div>
+              <div className="text-[12px] text-ink-mute mt-0.5">
+                {docType} {header.documentNo} → {t('document.convert.selectTarget')}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {convertCandidates.map((c) => (
+                <button
+                  key={c.documentGroupId}
+                  className={cn(
+                    "text-left px-3 py-2 rounded border text-[13px] transition-colors",
+                    (selectedCandidateId === c.documentGroupId || convertCandidates.length === 1)
+                      ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] text-ink"
+                      : "border-hairline hover:border-primary text-ink-secondary hover:text-ink",
+                  )}
+                  onClick={() => setSelectedCandidateId(c.documentGroupId)}
+                >
+                  <span className="font-mono text-[11px] text-ink-mute mr-2">{c.documentType}{String(c.groupNumber).padStart(2, "0")}</span>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink transition-colors"
+                onClick={() => { setConvertCandidates(null); setSelectedCandidateId(null); }}
+              >
+                {t('document.actions.close')}
+              </button>
+              <button
+                className="h-7 px-4 rounded-full text-[13px] disabled:opacity-40 transition-colors"
+                style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
+                disabled={convertMutation.isPending || (convertCandidates.length > 1 && !selectedCandidateId)}
+                onClick={() => {
+                  const target = convertCandidates.length === 1
+                    ? convertCandidates[0].documentGroupId
+                    : selectedCandidateId;
+                  if (target) convertMutation.mutate(target);
+                }}
+              >
+                {convertMutation.isPending ? t('document.actions.converting') : t('document.convert.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="h-11 shrink-0 border-t border-hairline flex items-center px-4 gap-2 bg-canvas">
@@ -1330,13 +1438,22 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
         </button>
         <div className="flex-1" />
 
+        {canDuplicate && (
+          <button
+            onClick={() => duplicateMutation.mutate()}
+            disabled={duplicateMutation.isPending}
+            className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink hover:border-hairline-input transition-colors disabled:opacity-40"
+          >
+            {duplicateMutation.isPending ? t('document.actions.duplicating') : t('document.actions.duplicate')}
+          </button>
+        )}
         {canConvert && (
           <button
-            onClick={() => convertMutation.mutate()}
+            onClick={() => convertMutation.mutate(undefined)}
             disabled={convertMutation.isPending}
             className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink hover:border-hairline-input transition-colors disabled:opacity-40"
           >
-            {convertMutation.isPending ? t('document.actions.converting') : t('document.actions.convert')}
+            {convertMutation.isPending && !convertCandidates ? t('document.actions.converting') : `${t('document.actions.convert')} (F7)`}
           </button>
         )}
         {canStorno && (

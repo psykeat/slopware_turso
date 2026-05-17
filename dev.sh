@@ -10,8 +10,10 @@ if command -v podman-compose &> /dev/null; then
     COMPOSE_CMD="podman-compose"
 elif command -v docker-compose &> /dev/null; then
     COMPOSE_CMD="docker-compose"
+elif docker compose version &> /dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
 else
-    echo "Error: Neither podman-compose nor docker-compose found!"
+    echo "Error: No compose tool found (tried podman-compose, docker-compose, docker compose)!"
     exit 1
 fi
 

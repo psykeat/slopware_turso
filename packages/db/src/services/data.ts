@@ -55,6 +55,9 @@ export class DataService {
     if ("archived" in table) {
       conditions.push(eq((table as any).archived, false));
     }
+    if ("archivedAt" in table) {
+      conditions.push(isNull((table as any).archivedAt));
+    }
 
     // Free-text search — skip id/UUID columns, only text columns
     if (options.search?.trim()) {
@@ -177,5 +180,26 @@ export class DataService {
       .set(updateData)
       .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .returning();
+  }
+
+  async delete(entityName: string, id: string): Promise<{ deleted: boolean; fkViolation: boolean }> {
+    const table = this.getTable(entityName);
+    const pkName = this.getPrimaryKey(table);
+    const pkColumn = (table as any)[pkName];
+    const hasTenantId = "tenantId" in table;
+
+    const conditions = [eq(pkColumn, id)];
+    if (hasTenantId) conditions.push(eq(table.tenantId, this.tenantId));
+
+    try {
+      const result = await db
+        .delete(table)
+        .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+        .returning({ id: pkColumn });
+      return { deleted: result.length > 0, fkViolation: false };
+    } catch (err: any) {
+      if (err.code === "23503") return { deleted: false, fkViolation: true };
+      throw err;
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
@@ -10,6 +10,7 @@ import { useCommands } from "@repo/ui/platform/command-registry";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { cn } from "@repo/ui/lib/utils";
 import { Skeleton } from "@repo/ui/components/skeleton";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_auth/app/settings/")({
   component: SettingsPage,
@@ -27,6 +28,7 @@ function SettingsView() {
   const [selectedKey, setSelectedKey] = useState<string>("company");
   const { t, i18n } = useTranslation("ui");
   const { registerCommand } = useCommands();
+  const location = useLocation();
   const { setSubCrumb } = useActionBar();
   const queryClient = useQueryClient();
 
@@ -35,6 +37,7 @@ function SettingsView() {
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteFkViolation, setDeleteFkViolation] = useState(false);
   const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   // Fetch the dynamic settings registry
@@ -137,6 +140,24 @@ function SettingsView() {
           {t("nav.settings")}
         </div>
         <div className="flex-1 overflow-y-auto py-2">
+          {/* Custom pages */}
+          <div className="mb-4">
+            <div className="px-3 mb-1 text-[10px] uppercase tracking-widest font-bold text-ink-mute/60">
+              Integration
+            </div>
+            <Link
+              to="/app/settings/import-profiles"
+              className={cn(
+                "w-full flex items-center h-7 px-3 text-left text-[13px] cursor-pointer transition-colors",
+                location.pathname === "/app/settings/import-profiles"
+                  ? "bg-primary text-primary-fg"
+                  : "text-ink-secondary hover:bg-canvas-soft hover:text-ink",
+              )}
+            >
+              Import Profiles
+            </Link>
+          </div>
+
           {isRegistryLoading ? (
              <div className="px-3 space-y-4">
                 {[1, 2, 3].map(i => (
@@ -257,39 +278,70 @@ function SettingsView() {
       </Dialog>
 
       {/* Delete confirm */}
-      <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
+      <Dialog open={deleteConfirm} onOpenChange={(open) => { setDeleteConfirm(open); if (!open) setDeleteFkViolation(false); }}>
         <DialogContent className="max-w-sm sw-root">
           <div className="p-6 flex flex-col gap-5">
             <div>
-              <h3 className="text-[15px] font-medium text-ink">Eintrag löschen?</h3>
-              <p className="text-[13px] text-ink-mute mt-1">Der Eintrag wird permanent aus der Liste entfernt.</p>
+              <h3 className="text-[15px] font-medium text-ink">{t("form.deleteConfirmTitle")}</h3>
+              <p className="text-[13px] text-ink-mute mt-1">{t("form.deleteConfirmBody")}</p>
+              {deleteFkViolation && (
+                <p className="text-[13px] text-destructive mt-2">{t("form.fkViolationError")}</p>
+              )}
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 flex-wrap">
               <button
                 type="button"
                 className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
-                onClick={() => setDeleteConfirm(false)}
+                onClick={() => { setDeleteConfirm(false); setDeleteFkViolation(false); }}
               >
-                Abbrechen
+                {t("actions.cancel")}
               </button>
-              <button
-                type="button"
-                className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
-                onClick={async () => {
-                  if (!deleteId) return;
-                  await fetch(`/api/data/${selectedKey}/${deleteId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ archived: true }),
-                  });
-                  setDeleteConfirm(false);
-                  setDeleteId(null);
-                  setEditId(null);
-                  queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
-                }}
-              >
-                Löschen
-              </button>
+              {deleteFkViolation && (
+                <button
+                  type="button"
+                  className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
+                  onClick={async () => {
+                    if (!deleteId) return;
+                    await fetch(`/api/data/${selectedKey}/${deleteId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ archived: true }),
+                    });
+                    setDeleteConfirm(false);
+                    setDeleteFkViolation(false);
+                    setDeleteId(null);
+                    setEditId(null);
+                    queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
+                    toast.success(t("form.archiveSuccess"));
+                  }}
+                >
+                  {t("actions.archiveInstead")}
+                </button>
+              )}
+              {!deleteFkViolation && (
+                <button
+                  type="button"
+                  className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
+                  onClick={async () => {
+                    if (!deleteId) return;
+                    const res = await fetch(`/api/data/${selectedKey}/${deleteId}`, {
+                      method: "DELETE",
+                    });
+                    if (res.status === 409) {
+                      setDeleteFkViolation(true);
+                      return;
+                    }
+                    setDeleteConfirm(false);
+                    setDeleteFkViolation(false);
+                    setDeleteId(null);
+                    setEditId(null);
+                    queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
+                    toast.success(t("form.deleteSuccess"));
+                  }}
+                >
+                  {t("actions.delete")}
+                </button>
+              )}
             </div>
           </div>
         </DialogContent>

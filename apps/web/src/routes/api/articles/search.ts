@@ -32,7 +32,6 @@ export const Route = createFileRoute("/api/articles/search")({
           .where(
             and(
               eq(article.tenantId, context.tenantId),
-              eq(article.isActive, true),
               isNull(article.archivedAt),
               q.length > 0
                 ? or(ilike(article.articleNo, `%${q}%`), ilike(article.name, `%${q}%`))

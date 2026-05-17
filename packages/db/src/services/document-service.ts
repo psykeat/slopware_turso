@@ -12,8 +12,11 @@ import {
   priceList,
   priceListItem,
   numberSequence,
+  journalEntry,
+  journalLine,
+  accountDeterminationRule,
 } from "../schema/app.schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, asc } from "drizzle-orm";
 import { resolveFiscalPeriodId } from "./fiscal-period-generator";
 
 export interface TypeNode {
@@ -55,8 +58,8 @@ const TYPE_SEQUENCE: Record<string, number> = {
 };
 
 const NEXT_TYPE: Record<string, string | undefined> = {
-  N: "A", A: "L", L: "R", R: "G", G: undefined,
-  b: "l", l: "r", r: "g", g: undefined,
+  N: "A", A: "L", L: "R", R: undefined, G: undefined,
+  b: "l", l: "r", r: undefined, g: undefined,
   V: "Z", Z: "E", E: "U", U: undefined,
   q: "p", p: undefined,
 };
@@ -430,6 +433,184 @@ export class DocumentService {
         }
       }
 
+      // ── Journal entry writing ──────────────────────────────────────────────
+      // Only write journal entries for financial posting types.
+      // Skip: N (Angebot), b (Bestellung), A (Auftrag), q (Produktionsauftrag),
+      //        L (Lieferschein), l (Wareneingang), Z, E, U, V, p
+      const JOURNAL_POSTING_CONTEXTS: Record<string, { lineContext: string; counterContext: string }> = {
+        R: { lineContext: "SALES_REVENUE", counterContext: "ACCOUNTS_RECEIVABLE" },
+        G: { lineContext: "SALES_CREDIT", counterContext: "ACCOUNTS_RECEIVABLE" },
+        r: { lineContext: "PURCHASE_COST", counterContext: "ACCOUNTS_PAYABLE" },
+        g: { lineContext: "PURCHASE_CREDIT", counterContext: "ACCOUNTS_PAYABLE" },
+      };
+
+      const journalContexts = JOURNAL_POSTING_CONTEXTS[movementType];
+
+      if (journalContexts) {
+        // Fetch the document group for fallback GL accounts
+        const [docGroup] = doc.documentGroupId
+          ? await tx
+              .select({
+                defaultSalesAccountId: documentGroup.defaultSalesAccountId,
+                defaultCostAccountId: documentGroup.defaultCostAccountId,
+              })
+              .from(documentGroup)
+              .where(
+                and(
+                  eq(documentGroup.documentGroupId, doc.documentGroupId),
+                  eq(documentGroup.tenantId, tenantId),
+                ),
+              )
+              .limit(1)
+          : [undefined];
+
+        // Resolve counter-account (receivables / payables) — same for all lines
+        // Use the counterContext against account_determination_rule with no articleGroupId
+        const resolveGlAccount = async (
+          postingContext: string,
+          articleGroupId: string | null,
+          taxCodeId: string | null,
+        ): Promise<string | null> => {
+          try {
+            // Try specific rule first (with articleGroupId + taxCodeId)
+            if (articleGroupId || taxCodeId) {
+              const rules = await tx
+                .select({ glAccountId: accountDeterminationRule.glAccountId })
+                .from(accountDeterminationRule)
+                .where(
+                  and(
+                    eq(accountDeterminationRule.tenantId, tenantId),
+                    eq(accountDeterminationRule.postingContext, postingContext),
+                    articleGroupId
+                      ? eq(accountDeterminationRule.articleGroupId, articleGroupId)
+                      : sql`${accountDeterminationRule.articleGroupId} IS NULL`,
+                    taxCodeId
+                      ? eq(accountDeterminationRule.taxCodeId, taxCodeId)
+                      : sql`${accountDeterminationRule.taxCodeId} IS NULL`,
+                  ),
+                )
+                .limit(1);
+              if (rules[0]?.glAccountId) return rules[0].glAccountId;
+            }
+
+            // Fall back to context-only rule (no articleGroup, no taxCode specificity)
+            const fallbackRules = await tx
+              .select({ glAccountId: accountDeterminationRule.glAccountId })
+              .from(accountDeterminationRule)
+              .where(
+                and(
+                  eq(accountDeterminationRule.tenantId, tenantId),
+                  eq(accountDeterminationRule.postingContext, postingContext),
+                  sql`${accountDeterminationRule.articleGroupId} IS NULL`,
+                  sql`${accountDeterminationRule.taxCodeId} IS NULL`,
+                ),
+              )
+              .limit(1);
+            if (fallbackRules[0]?.glAccountId) return fallbackRules[0].glAccountId;
+
+            // Fall back to document group defaults
+            if (docGroup) {
+              const isOutbound = movementType === "R" || movementType === "G";
+              if (isOutbound && docGroup.defaultSalesAccountId) return docGroup.defaultSalesAccountId;
+              if (!isOutbound && docGroup.defaultCostAccountId) return docGroup.defaultCostAccountId;
+            }
+
+            return null;
+          } catch {
+            return null;
+          }
+        };
+
+        // Resolve counter GL account (receivables/payables) — no article context
+        const counterGlAccountId = await resolveGlAccount(journalContexts.counterContext, null, null);
+
+        // Collect lines that have amounts
+        const journalLines: Array<{
+          glAccountId: string;
+          debitAmount: string;
+          creditAmount: string;
+          costCenterId: string | null;
+          taxCodeId: string | null;
+        }> = [];
+
+        for (const line of lines) {
+          const amount = Number(line.lineTotalNet ?? "0");
+          if (!amount) continue;
+
+          const absAmount = Math.abs(amount);
+
+          // Look up article group for this line
+          let articleGroupId: string | null = null;
+          if (line.articleId) {
+            const [art] = await tx
+              .select({ articleGroupId: article.articleGroupId })
+              .from(article)
+              .where(and(eq(article.articleId, line.articleId), eq(article.tenantId, tenantId)))
+              .limit(1);
+            articleGroupId = art?.articleGroupId ?? null;
+          }
+
+          const lineGlAccountId = await resolveGlAccount(
+            journalContexts.lineContext,
+            articleGroupId,
+            line.taxCodeId ?? null,
+          );
+
+          if (!lineGlAccountId) continue; // silent skip — GL setup incomplete
+
+          // OUTBOUND R/G: debit receivables, credit revenue
+          // INBOUND r/g: debit expense, credit payables
+          const isOutbound = movementType === "R" || movementType === "G";
+
+          journalLines.push({
+            glAccountId: lineGlAccountId,
+            debitAmount: isOutbound ? "0" : String(absAmount),
+            creditAmount: isOutbound ? String(absAmount) : "0",
+            costCenterId: line.costCenterId ?? null,
+            taxCodeId: line.taxCodeId ?? null,
+          });
+
+          if (counterGlAccountId) {
+            journalLines.push({
+              glAccountId: counterGlAccountId,
+              debitAmount: isOutbound ? String(absAmount) : "0",
+              creditAmount: isOutbound ? "0" : String(absAmount),
+              costCenterId: null,
+              taxCodeId: null,
+            });
+          }
+        }
+
+        if (journalLines.length > 0) {
+          const postingDate = doc.postingDate ?? doc.documentDate;
+
+          const [entry] = await tx
+            .insert(journalEntry)
+            .values({
+              tenantId,
+              companyId: doc.companyId,
+              postingDate,
+              sourceDocumentId: documentId,
+              description: doc.documentNo,
+            })
+            .returning({ journalEntryId: journalEntry.journalEntryId });
+
+          await tx.insert(journalLine).values(
+            journalLines.map((jl) => ({
+              tenantId,
+              companyId: doc.companyId,
+              journalEntryId: entry.journalEntryId,
+              glAccountId: jl.glAccountId,
+              debitAmount: jl.debitAmount,
+              creditAmount: jl.creditAmount,
+              costCenterId: jl.costCenterId,
+              taxCodeId: jl.taxCodeId,
+            })),
+          );
+        }
+      }
+      // ── End journal entry writing ──────────────────────────────────────────
+
       const [updated] = await tx
         .update(document)
         .set({
@@ -461,6 +642,9 @@ export class DocumentService {
 
       if (!doc) throw new Error("Document not found");
       if (doc.status !== "posted") throw new Error("Only posted documents can be reversed");
+      if (!["R", "r"].includes(doc.documentType)) {
+        throw new Error("Storno is only allowed for invoices (R) and purchase invoices (r)");
+      }
 
       const lines = await tx
         .select()
@@ -470,10 +654,6 @@ export class DocumentService {
       const reversalTypeMap: Record<string, string> = {
         R: "G",
         r: "g",
-        L: "l",
-        l: "L",
-        G: "R",
-        g: "r",
       };
       const reversalType = reversalTypeMap[doc.documentType] ?? doc.documentType;
 
@@ -546,10 +726,7 @@ export class DocumentService {
   async getConversionCandidates(
     documentId: string,
     tenantId: string,
-  ): Promise<
-    | { mode: "direct"; targetGroupId: string }
-    | { mode: "select"; candidates: Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }> }
-  > {
+  ): Promise<Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }>> {
     const [doc] = await db
       .select()
       .from(document)
@@ -568,11 +745,17 @@ export class DocumentService {
     if (!sourceGroup) throw new Error("Source group not found");
 
     if (sourceGroup.nextGroupId) {
-      return { mode: "direct", targetGroupId: sourceGroup.nextGroupId };
+      const [targetGroup] = await db
+        .select()
+        .from(documentGroup)
+        .where(and(eq(documentGroup.documentGroupId, sourceGroup.nextGroupId), eq(documentGroup.tenantId, tenantId)))
+        .limit(1);
+      if (!targetGroup) throw new Error("Configured next group not found");
+      return [{ documentGroupId: targetGroup.documentGroupId, name: targetGroup.name, documentType: targetGroup.documentType, groupNumber: targetGroup.groupNumber }];
     }
 
     const nextType = NEXT_TYPE[sourceGroup.documentType];
-    if (!nextType) throw new Error("No next document type in sequence");
+    if (!nextType) throw new Error("Keine weitere Wandlung möglich");
 
     const candidates = await db
       .select()
@@ -581,25 +764,18 @@ export class DocumentService {
         and(
           eq(documentGroup.tenantId, tenantId),
           eq(documentGroup.documentType, nextType),
-          eq(documentGroup.isActive, true),
+          eq(documentGroup.archived, false),
         ),
       );
 
     if (candidates.length === 0) throw new Error("Keine Zielgruppe gefunden");
 
-    if (candidates.length === 1) {
-      return { mode: "direct", targetGroupId: candidates[0].documentGroupId };
-    }
-
-    return {
-      mode: "select",
-      candidates: candidates.map((g) => ({
-        documentGroupId: g.documentGroupId,
-        name: g.name,
-        documentType: g.documentType,
-        groupNumber: g.groupNumber,
-      })),
-    };
+    return candidates.map((g) => ({
+      documentGroupId: g.documentGroupId,
+      name: g.name,
+      documentType: g.documentType,
+      groupNumber: g.groupNumber,
+    }));
   }
 
   async convertDocument(
@@ -783,7 +959,7 @@ export class DocumentService {
       const activeLists = await db
         .select({ priceListId: priceList.priceListId })
         .from(priceList)
-        .where(and(eq(priceList.tenantId, tenantId), eq(priceList.isActive, true)));
+        .where(and(eq(priceList.tenantId, tenantId), eq(priceList.archived, false)));
 
       if (activeLists.length > 0) {
         const priceListIds = activeLists.map((p) => p.priceListId);
@@ -969,6 +1145,221 @@ export class DocumentService {
         .returning();
 
       return { documentId: newDoc.documentId, documentNo: newDoc.documentNo };
+    });
+  }
+
+  async duplicateDocument(
+    documentId: string,
+    userId: string,
+    tenantId: string,
+  ): Promise<{ documentId: string; documentNo: string }> {
+    const [src] = await db
+      .select()
+      .from(document)
+      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .limit(1);
+    if (!src) throw new Error("Document not found");
+
+    const lines = await db
+      .select()
+      .from(documentLine)
+      .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)))
+      .orderBy(asc(documentLine.lineNo));
+
+    return await db.transaction(async (tx) => {
+      let newDocumentNo = `COPY-${Date.now()}`;
+      if (src.documentGroupId) {
+        const [grp] = await tx
+          .select()
+          .from(documentGroup)
+          .where(eq(documentGroup.documentGroupId, src.documentGroupId))
+          .limit(1);
+        if (grp?.numberSequenceId) {
+          const [seq] = await tx
+            .select()
+            .from(numberSequence)
+            .where(eq(numberSequence.numberSequenceId, grp.numberSequenceId))
+            .limit(1)
+            .for("update");
+          if (seq) {
+            newDocumentNo = generateDocumentNo(seq.prefix, seq.nextValue, seq.padding);
+            await tx
+              .update(numberSequence)
+              .set({ nextValue: seq.nextValue + 1, updatedAt: new Date() })
+              .where(eq(numberSequence.numberSequenceId, seq.numberSequenceId));
+          }
+        }
+      }
+
+      const [newDoc] = await tx
+        .insert(document)
+        .values({
+          tenantId: src.tenantId,
+          companyId: src.companyId,
+          documentType: src.documentType,
+          documentDirection: src.documentDirection,
+          documentGroupId: src.documentGroupId,
+          documentNo: newDocumentNo,
+          status: "draft",
+          documentDate: src.documentDate,
+          customerId: src.customerId,
+          billingAddress: src.billingAddress,
+          deliveryAddress: src.deliveryAddress,
+          deliveryAddressId: src.deliveryAddressId,
+          currencyId: src.currencyId,
+          warehouseId: src.warehouseId,
+          paymentTermId: src.paymentTermId,
+          shippingMethodId: src.shippingMethodId,
+          transactionId: crypto.randomUUID(),
+        })
+        .returning();
+
+      if (lines.length > 0) {
+        await tx.insert(documentLine).values(
+          lines.map((l) => ({
+            tenantId: l.tenantId,
+            documentId: newDoc.documentId,
+            lineNo: l.lineNo,
+            lineType: l.lineType,
+            articleId: l.articleId,
+            articleTextSnapshot: l.articleTextSnapshot,
+            quantity: l.quantity,
+            unit: l.unit,
+            netPrice: l.netPrice,
+            discountPercentage: l.discountPercentage,
+            taxCodeId: l.taxCodeId,
+            taxAmount: l.taxAmount,
+            lineTotalNet: l.lineTotalNet,
+            warehouseId: l.warehouseId,
+            costCenterId: l.costCenterId,
+          })),
+        );
+      }
+
+      return { documentId: newDoc.documentId, documentNo: newDoc.documentNo };
+    });
+  }
+
+  async deleteDocument(
+    documentId: string,
+    tenantId: string,
+  ): Promise<{ deleted: boolean; archived: boolean; notAllowed: boolean; fkViolation?: boolean }> {
+    const [doc] = await db
+      .select()
+      .from(document)
+      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .limit(1);
+    if (!doc) throw new Error("Document not found");
+
+    const type = doc.documentType;
+    const isDraft = doc.status === "draft";
+
+    if (["R", "G", "r", "g"].includes(type)) {
+      return { deleted: false, archived: false, notAllowed: true };
+    }
+
+    if (!isDraft && ["A", "b"].includes(type)) {
+      await this._archiveWithStockReversal(documentId, tenantId, doc);
+      return { deleted: false, archived: true, notAllowed: false };
+    }
+
+    if (!isDraft && ["L", "l", "V", "U", "Z", "E"].includes(type)) {
+      await db
+        .update(document)
+        .set({ archivedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+      return { deleted: false, archived: true, notAllowed: false };
+    }
+
+    // Draft N/q/p/A/b/L/l/V/U/Z/E → hard delete
+    try {
+      await db.transaction(async (tx) => {
+        await tx.delete(documentLine).where(
+          and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)),
+        );
+        await tx.delete(document).where(
+          and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)),
+        );
+      });
+      return { deleted: true, archived: false, notAllowed: false };
+    } catch (err: any) {
+      if (err.code === "23503") return { deleted: false, archived: false, notAllowed: false, fkViolation: true };
+      throw err;
+    }
+  }
+
+  private async _archiveWithStockReversal(documentId: string, tenantId: string, doc: any): Promise<void> {
+    await db.transaction(async (tx) => {
+      const lines = await tx
+        .select()
+        .from(documentLine)
+        .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)));
+
+      for (const line of lines) {
+        if (!line.articleId) continue;
+        const warehouseId = line.warehouseId ?? doc.warehouseId;
+        if (!warehouseId) continue;
+        const qty = Number(line.quantity);
+
+        if (doc.documentType === "A") {
+          await tx
+            .update(inventoryBalance)
+            .set({
+              reservedQty: sql`${inventoryBalance.reservedQty} - ${qty}`,
+              availableQty: sql`${inventoryBalance.availableQty} + ${qty}`,
+            })
+            .where(
+              and(
+                eq(inventoryBalance.tenantId, tenantId),
+                eq(inventoryBalance.warehouseId, warehouseId),
+                eq(inventoryBalance.articleId, line.articleId),
+              ),
+            );
+          await tx.insert(inventoryMovement).values({
+            tenantId,
+            companyId: doc.companyId,
+            warehouseId,
+            articleId: line.articleId,
+            movementType: "A",
+            qtyDelta: String(-qty),
+            movementDate: new Date(),
+            sourceDocumentId: documentId,
+            referenceText: `ARCHIVE:${doc.documentNo}`,
+            transactionId: crypto.randomUUID(),
+          });
+        } else if (doc.documentType === "b") {
+          await tx
+            .update(inventoryBalance)
+            .set({
+              expectedPurchaseQty: sql`${inventoryBalance.expectedPurchaseQty} - ${qty}`,
+              availableQty: sql`${inventoryBalance.availableQty} + ${qty}`,
+            })
+            .where(
+              and(
+                eq(inventoryBalance.tenantId, tenantId),
+                eq(inventoryBalance.warehouseId, warehouseId),
+                eq(inventoryBalance.articleId, line.articleId),
+              ),
+            );
+          await tx.insert(inventoryMovement).values({
+            tenantId,
+            companyId: doc.companyId,
+            warehouseId,
+            articleId: line.articleId,
+            movementType: "b",
+            qtyDelta: String(-qty),
+            movementDate: new Date(),
+            sourceDocumentId: documentId,
+            referenceText: `ARCHIVE:${doc.documentNo}`,
+            transactionId: crypto.randomUUID(),
+          });
+        }
+      }
+
+      await tx
+        .update(document)
+        .set({ archivedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
     });
   }
 }

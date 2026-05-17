@@ -41,25 +41,13 @@ export const Route = createFileRoute("/api/documents/$documentId/convert")({
             });
           }
 
-          const resolution = await svc.getConversionCandidates(
+          const candidates = await svc.getConversionCandidates(
             params.documentId,
             context.tenantId,
           );
 
-          if (resolution.mode === "direct") {
-            const result = await svc.convertDocument(
-              params.documentId,
-              session.user.id,
-              context.tenantId,
-              resolution.targetGroupId,
-            );
-            return new Response(JSON.stringify(result), {
-              headers: { "content-type": "application/json" },
-            });
-          }
-
           return new Response(
-            JSON.stringify({ requiresSelection: true, candidates: resolution.candidates }),
+            JSON.stringify({ candidates }),
             { headers: { "content-type": "application/json" } },
           );
         } catch (err: any) {

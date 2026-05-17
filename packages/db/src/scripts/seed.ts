@@ -145,7 +145,6 @@ async function seed() {
         companyId: baseCompany.companyId,
         code: "MAIN",
         name: "Hauptlager",
-        isActive: true,
       })
       .returning();
     console.log(`Created default warehouse: ${defaultWarehouse.warehouseId}`);

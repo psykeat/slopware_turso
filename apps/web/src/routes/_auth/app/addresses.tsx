@@ -9,6 +9,7 @@ import { DataGrid } from "@repo/ui/components/data-grid";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
 import { EntityMask } from "@repo/ui/components/entity-mask";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
+import { InlineEditGrid } from "@repo/ui/components/inline-edit-grid";
 import { CustomerStatsSection } from "@repo/ui/components/customer-stats-section";
 import { formatMoney, formatDate, StatusDot } from "@repo/ui/lib/formatters";
 
@@ -16,10 +17,17 @@ import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { useFocus } from "@repo/ui/platform/focus-manager";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_auth/app/addresses")({
   component: AddressesModule,
 });
+
+const ADDRESS_FIELD_OVERRIDES = [
+  { key: "addressNo", sectionLabel: "Identification", sectionLabelDe: "Identifikation" },
+  { key: "addressLine1", sectionLabel: "Postal Address", sectionLabelDe: "Postanschrift" },
+  { key: "vatId", sectionLabel: "Commercial", sectionLabelDe: "Kaufmännisch" },
+];
 
 function AddressesModule() {
   const { state: focusState } = useFocus();
@@ -29,19 +37,24 @@ function AddressesModule() {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteFkViolation, setDeleteFkViolation] = useState(false);
   const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
   // Fetch addresses — paginated
   const { data: addressData, isLoading: isDataLoading } = useQuery({
-    queryKey: ["data", "address", gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
+    queryKey: ["data", "address", selectedCategoryId, gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
     queryFn: async () => {
       const p = new URLSearchParams({
         paginated: "true",
         page: String(gridState.queryParams.page),
         limit: String(gridState.queryParams.limit),
       });
+      if (selectedCategoryId) p.set("addressCategoryId", selectedCategoryId);
       if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
       if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
       if (gridState.queryParams.filters) p.set("filters", JSON.stringify(gridState.queryParams.filters));
@@ -87,12 +100,22 @@ function AddressesModule() {
     enabled: !!focusState.recordId,
   });
 
-  // Fetch contacts for selected address (server-side FK filter)
+
   const { data: contacts = [] } = useQuery({
     queryKey: ["data", "addressContact", focusState.recordId],
     queryFn: async () => {
       const res = await fetch(`/api/data/addressContact?addressId=${focusState.recordId}`);
       if (!res.ok) throw new Error("Failed to fetch contacts");
+      return res.json();
+    },
+    enabled: !!focusState.recordId,
+  });
+
+  const { data: deliveryAddresses = [] } = useQuery({
+    queryKey: ["data", "deliveryAddress", focusState.recordId],
+    queryFn: async () => {
+      const res = await fetch(`/api/data/deliveryAddress?addressId=${focusState.recordId}`);
+      if (!res.ok) throw new Error("Failed to fetch delivery addresses");
       return res.json();
     },
     enabled: !!focusState.recordId,
@@ -119,20 +142,16 @@ function AddressesModule() {
       handler: () => setShowEdit(true),
     });
     const unregF4 = registerCommand({
-      id: "archive-record",
+      id: "delete-record",
       scope: "context",
       group: "recordOps",
-      label: { en: t("commands.archive"), de: "Archivieren" },
+      label: { en: t("actions.delete"), de: "Löschen" },
       shortcut: "F4",
       isEnabled: (s) => !!s.recordId && s.entity === "address",
-      handler: async (s) => {
+      handler: (s) => {
         if (!s.recordId) return;
-        await fetch(`/api/data/address/${s.recordId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ archived: true }),
-        });
-        queryClient.invalidateQueries({ queryKey: ["data", "address"] });
+        setDeleteId(s.recordId);
+        setDeleteConfirm(true);
       },
     });
     const unregDup = registerCommand({
@@ -210,8 +229,15 @@ function AddressesModule() {
           keyExtractor={(row: any) => row.contactId || row.addressContactId || row.id}
           title="Contacts"
           toolbar={false}
+          columns={[
+            { key: "firstName", header: "First" },
+            { key: "lastName", header: "Last" },
+            { key: "email", header: "Email" },
+            { key: "phoneMobile", header: "Mobile" },
+            { key: "roleFunction", header: "Role" },
+          ]}
           emptyTitle="No contacts yet."
-          emptySubtitle="Add the first contact for this address."
+          emptySubtitle="Open the address edit mask (F2) to add contacts."
           className="h-full border-none rounded-none"
         />
       ),
@@ -219,23 +245,24 @@ function AddressesModule() {
     {
       id: "deliveryAddresses",
       label: "Delivery Addresses",
+      count: deliveryAddresses.length || undefined,
       content: (
         <DataGrid
           entityName="deliveryAddress"
           panelId="delivery-addresses-grid"
-          data={[]}
+          data={deliveryAddresses}
           keyExtractor={(row: any) => row.deliveryAddressId || row.id}
           title="Delivery Addresses"
           toolbar={false}
           columns={[
             { key: "name", header: "Name" },
             { key: "addressLine1", header: "Street" },
+            { key: "postalCode", header: "ZIP" },
             { key: "city", header: "City" },
-            { key: "postalCode", header: "Postal Code" },
             { key: "countryCode", header: "Country" },
           ]}
           emptyTitle="No delivery addresses yet."
-          emptySubtitle="Delivery addresses for this partner appear here."
+          emptySubtitle="Open the address edit mask (F2) to add delivery addresses."
           className="h-full border-none rounded-none"
         />
       ),
@@ -243,18 +270,19 @@ function AddressesModule() {
     {
       id: "relatedDocuments",
       label: "Related Documents",
+      count: (addressStats?.recentDocuments?.length || undefined),
       content: (
         <DataGrid
           entityName="document"
           panelId="related-documents-grid"
-          data={[]}
+          data={(addressStats?.recentDocuments ?? []) as any[]}
           keyExtractor={(row: any) => row.documentId || row.id}
           title="Related Documents"
           toolbar={false}
           columns={[
             { key: "documentNo", header: "No.", render: (r: any) => <span className="font-mono tabular-nums">{r.documentNo}</span> },
             { key: "documentDate", header: "Date", isNumeric: true, render: (r: any) => <span className="tabular-nums">{formatDate(r.documentDate)}</span> },
-            { key: "documentTypeId", header: "Type" },
+            { key: "documentType", header: "Type" },
             { key: "totalGross", header: "Total", isNumeric: true, render: (r: any) => <span className="tabular-nums">{formatMoney(r.totalGross ?? 0)}</span> },
             { key: "status", header: "Status", render: (r: any) => <StatusDot status={r.status ?? "draft"} /> },
           ]}
@@ -317,7 +345,7 @@ function AddressesModule() {
         <DataGrid
           entityName="document"
           panelId="open-items-grid"
-          data={(addressStats?.recentDocuments ?? []) as any[]}
+          data={(addressStats?.recentDocuments ?? []).filter((d: any) => !d.isPaid) as any[]}
           keyExtractor={(row: any) => row.documentId || row.id}
           title={t("stats.openItems")}
           toolbar={false}
@@ -369,6 +397,7 @@ function AddressesModule() {
             onSelect={(id) => {
               const cat = categories.find((c: TreeNode) => c.id === id);
               setSubCrumb(cat?.label);
+              setSelectedCategoryId(id);
               gridState.setPage(1);
             }}
           />
@@ -387,7 +416,10 @@ function AddressesModule() {
               { key: "companyName", header: "Company", sortable: true },
               { key: "city", header: "City", sortable: true },
               { key: "countryCode", header: "Country" },
-              { key: "phone", header: "Phone", render: (r: any) => <span className="font-mono text-[12px]">{r.phone}</span> },
+              { key: "isCustomer", header: "Type", render: (r: any) => {
+                const tags = [r.isCustomer && "C", r.isSupplier && "S"].filter(Boolean).join("/");
+                return <span className="font-mono text-[11px] text-ink-mute">{tags || "—"}</span>;
+              }},
               { key: "addressType", header: "Segment", sortable: true },
             ]}
             totalCount={addressData?.total}
@@ -440,27 +472,132 @@ function AddressesModule() {
             onCancel={() => setShowCreate(false)}
             onSaved={() => setShowCreate(false)}
             className="border-none shadow-none rounded-none"
+            fieldOverrides={ADDRESS_FIELD_OVERRIDES}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm dialog */}
+      <Dialog open={deleteConfirm} onOpenChange={(open) => { setDeleteConfirm(open); if (!open) setDeleteFkViolation(false); }}>
+        <DialogContent className="max-w-sm">
+          <div className="p-6 flex flex-col gap-5">
+            <div>
+              <h3 className="text-[15px] font-medium text-ink">{t("form.deleteConfirmTitle")}</h3>
+              <p className="text-[13px] text-ink-mute mt-1">{t("form.deleteConfirmBody")}</p>
+              {deleteFkViolation && (
+                <p className="text-[13px] text-destructive mt-2">{t("form.fkViolationError")}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 flex-wrap">
+              <button
+                type="button"
+                className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
+                onClick={() => { setDeleteConfirm(false); setDeleteFkViolation(false); }}
+              >
+                {t("actions.cancel")}
+              </button>
+              {deleteFkViolation && (
+                <button
+                  type="button"
+                  className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
+                  onClick={async () => {
+                    if (!deleteId) return;
+                    await fetch(`/api/data/address/${deleteId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ archivedAt: new Date().toISOString() }),
+                    });
+                    setDeleteConfirm(false);
+                    setDeleteFkViolation(false);
+                    setDeleteId(null);
+                    queryClient.invalidateQueries({ queryKey: ["data", "address"] });
+                    toast.success(t("form.archiveSuccess"));
+                  }}
+                >
+                  {t("actions.archiveInstead")}
+                </button>
+              )}
+              {!deleteFkViolation && (
+                <button
+                  type="button"
+                  className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
+                  onClick={async () => {
+                    if (!deleteId) return;
+                    const res = await fetch(`/api/data/address/${deleteId}`, {
+                      method: "DELETE",
+                    });
+                    if (res.status === 409) {
+                      setDeleteFkViolation(true);
+                      return;
+                    }
+                    setDeleteConfirm(false);
+                    setDeleteFkViolation(false);
+                    setDeleteId(null);
+                    queryClient.invalidateQueries({ queryKey: ["data", "address"] });
+                    toast.success(t("form.deleteSuccess"));
+                  }}
+                >
+                  {t("actions.delete")}
+                </button>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Edit dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent>
+        <DialogContent className="max-w-7xl h-[85vh] p-0 overflow-hidden">
           <EntityMask
             entityName="address"
             mode="edit"
+            layout="single"
             recordId={focusState.recordId ?? undefined}
             onCancel={() => setShowEdit(false)}
             onSaved={() => {
               setShowEdit(false);
               queryClient.invalidateQueries({ queryKey: ["data", "address"] });
             }}
-            childSection={(record) =>
-              record.isCustomer ? (
-                <CustomerStatsSection addressId={record.addressId as string} />
-              ) : null
-            }
+            fieldOverrides={ADDRESS_FIELD_OVERRIDES}
+            embedded
+            childLayout="side"
+            childSection={(record) => (
+              <div className="flex flex-col gap-6">
+                <div>
+                  <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Contacts</div>
+                  <InlineEditGrid
+                    entityName="addressContact"
+                    parentKey={{ addressId: record.addressId as string }}
+                    keyColumn="contactId"
+                    columns={[
+                      { key: "firstName", header: "First Name", type: "text" },
+                      { key: "lastName", header: "Last Name", type: "text", required: true },
+                      { key: "email", header: "Email", type: "text" },
+                      { key: "phoneMobile", header: "Mobile", type: "text" },
+                      { key: "roleFunction", header: "Role", type: "text" },
+                      { key: "isPrimary", header: "Primary", type: "boolean", width: "60px" },
+                    ]}
+                  />
+                </div>
+                <div>
+                  <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Delivery Addresses</div>
+                  <InlineEditGrid
+                    entityName="deliveryAddress"
+                    parentKey={{ addressId: record.addressId as string }}
+                    keyColumn="deliveryAddressId"
+                    columns={[
+                      { key: "name", header: "Name", type: "text" },
+                      { key: "addressLine1", header: "Street", type: "text", required: true },
+                      { key: "postalCode", header: "ZIP", type: "text", required: true, width: "80px" },
+                      { key: "city", header: "City", type: "text", required: true },
+                      { key: "countryCode", header: "Country", type: "text", required: true, width: "70px" },
+                      { key: "defaultForShipping", header: "Default", type: "boolean", width: "60px" },
+                    ]}
+                  />
+                </div>
+                {!!record.isCustomer && <CustomerStatsSection addressId={record.addressId as string} />}
+              </div>
+            )}
           />
         </DialogContent>
       </Dialog>

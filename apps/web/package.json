@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "catalog:",
+    "@react-pdf/renderer": "catalog:",
     "@icons-pack/react-simple-icons": "catalog:",
     "@repo/auth": "workspace:*",
     "@repo/db": "workspace:*",

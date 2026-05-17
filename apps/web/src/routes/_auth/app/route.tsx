@@ -3,6 +3,8 @@ import {
   UsersIcon,
   PackageIcon,
   FileTextIcon,
+  LandmarkIcon,
+  UploadCloudIcon,
   SettingsIcon,
   ShieldCheckIcon,
   GlobeIcon,
@@ -40,9 +42,11 @@ export const Route = createFileRoute("/_auth/app")({
 });
 
 const PRIMARY_MODULES = [
-  { label: "Addresses", labelKey: "nav.addresses" as const, to: "/app/addresses" as const, icon: UsersIcon, kbd: "⌥1" },
-  { label: "Articles",  labelKey: "nav.articles" as const,  to: "/app/articles"  as const, icon: PackageIcon, kbd: "⌥2" },
-  { label: "Documents", labelKey: "nav.documents" as const, to: "/app/documents" as const, icon: FileTextIcon, kbd: "⌥3" },
+  { label: "Addresses",  labelKey: "nav.addresses"  as const, to: "/app/addresses"  as const, icon: UsersIcon,       kbd: "⌥1" },
+  { label: "Articles",   labelKey: "nav.articles"   as const, to: "/app/articles"   as const, icon: PackageIcon,     kbd: "⌥2" },
+  { label: "Documents",  labelKey: "nav.documents"  as const, to: "/app/documents"  as const, icon: FileTextIcon,    kbd: "⌥3" },
+  { label: "Accounting", labelKey: "nav.accounting" as const, to: "/app/accounting" as const, icon: LandmarkIcon,    kbd: "⌥4" },
+  { label: "Import",     labelKey: "nav.import"     as const, to: "/app/import"     as const, icon: UploadCloudIcon, kbd: "⌥5" },
 ] as const;
 
 const ACCENT_THEMES: { id: AccentTheme; label: string; primary: string }[] = [

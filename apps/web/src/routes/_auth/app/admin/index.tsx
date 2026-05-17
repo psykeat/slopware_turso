@@ -9,8 +9,8 @@ import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { cn } from "@repo/ui/lib/utils";
-import { LlmConfigView } from "./llm-config";
-import { UserManagementView } from "./user-management";
+import { LlmConfigView } from "./-llm-config";
+import { UserManagementView } from "./-user-management";
 
 export const Route = createFileRoute("/_auth/app/admin/")({
   beforeLoad: ({ context }) => {
@@ -264,7 +264,7 @@ function AdminView() {
                   await fetch(`/api/admin/data/${selectedKey}/${deleteId}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ isActive: false }),
+                    body: JSON.stringify({ archived: true }),
                   });
                   setDeleteConfirm(false);
                   setDeleteId(null);

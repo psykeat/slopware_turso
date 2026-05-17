@@ -4,6 +4,7 @@
     "articles": "Articles",
     "documents": "Documents",
     "accounting": "Accounting",
+    "import": "Import",
     "settings": "Settings",
     "administration": "Administration",
     "baseTenant": "Base Tenant"
@@ -24,7 +25,9 @@
     "close": "Close",
     "export": "Export",
     "filter": "Filter",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "delete": "Delete",
+    "archiveInstead": "Archive instead"
   },
   "shortcuts": {
     "title": "Shortcuts",
@@ -74,7 +77,15 @@
     "requiredHint": "Fields marked with * are required. F10 to save, Esc to cancel.",
     "saving": "Saving...",
     "create": "Create",
-    "update": "Update"
+    "update": "Update",
+    "createSuccess": "Created",
+    "updateSuccess": "Saved",
+    "deleteSuccess": "Deleted successfully",
+    "archiveSuccess": "Archived successfully",
+    "deleteConfirmTitle": "Permanently delete?",
+    "deleteConfirmBody": "This cannot be undone.",
+    "deleteNotAllowed": "This document type cannot be deleted.",
+    "fkViolationError": "Cannot delete: record is in use."
   },
   "commands": {
     "newRecord": "New Record",
@@ -220,13 +231,19 @@
       "close": "Close (Esc)",
       "convert": "Convert",
       "storno": "Cancel/Reverse",
+      "duplicate": "Duplicate",
       "save": "Save",
       "post": "Post",
       "saving": "Saving…",
       "posting": "Posting…",
       "converting": "Converting…",
-      "cancelling": "Cancelling…"
+      "cancelling": "Cancelling…",
+      "duplicating": "Duplicating…"
     },
+    "convert": {
+      "title": "Convert Document",
+      "selectTarget": "select target group",
+      "confirm": "Convert"
     }
   },
   "devCycles": {

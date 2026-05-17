@@ -137,6 +137,38 @@ export const Route = createFileRoute("/api/data/$")({
           return new Response(err.message ?? "Internal error", { status: 400 });
         }
       },
+      DELETE: async ({ request }) => {
+        const session = await auth.api.getSession({ headers: request.headers });
+        if (!session || !session.user) return new Response("Unauthorized", { status: 401 });
+
+        const isSystemAdmin = (session.user as any).isSystemAdmin;
+        const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
+        if (!context && !isSystemAdmin) return new Response("Forbidden", { status: 403 });
+
+        const service = new DataService(context?.tenantId ?? "", isSystemAdmin);
+        const segments = new URL(request.url).pathname.split("/").filter(Boolean);
+        const entityName = segments[2];
+        const id = segments[3];
+
+        if (!entityName || !id) return new Response("Bad Request", { status: 400 });
+
+        try {
+          const result = await service.delete(entityName, id);
+          if (result.fkViolation) {
+            return new Response(JSON.stringify({ fkViolation: true }), {
+              status: 409,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (!result.deleted) return new Response("Not Found", { status: 404 });
+          return new Response(JSON.stringify({ deleted: true }), {
+            headers: { "content-type": "application/json" },
+          });
+        } catch (err: any) {
+          console.error("[Data API] DELETE Error:", err);
+          return new Response(err.message ?? "Internal error", { status: 400 });
+        }
+      },
     },
   },
 });

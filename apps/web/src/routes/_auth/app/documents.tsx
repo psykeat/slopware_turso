@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { useTranslation } from "react-i18next";
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
+import { toast } from "sonner";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
 import { DataGrid } from "@repo/ui/components/data-grid";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
@@ -19,6 +20,18 @@ import { useActionBar } from "@repo/ui/platform/action-bar-context";
 export const Route = createFileRoute("/_auth/app/documents")({
   component: DocumentsModule,
 });
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  N: "Angebot", A: "Auftrag", L: "Lieferschein", R: "Rechnung", G: "Gutschrift",
+  b: "Bestellung", l: "Wareneingang", r: "Eingangsrechnung", g: "Eingangsgutschrift",
+  V: "Inventur", U: "Umbuchung", Z: "Zugang", E: "Entnahme",
+  q: "Prod.-Auftrag", p: "Fertigmeldung",
+};
+
+function addressDisplayName(addr: any): string {
+  if (!addr) return "";
+  return addr.companyName || [addr.firstName, addr.lastName].filter(Boolean).join(" ") || addr.addressNo || "";
+}
 
 interface DocumentGroup {
   documentGroupId: string;
@@ -210,6 +223,8 @@ function buildFlatNodes(
   return nodes;
 }
 
+const NO_DELETE_TYPES = new Set(["R", "G", "r", "g"]);
+
 function DocumentsModule() {
   const { state: focusState } = useFocus();
   const { registerCommand } = useCommands();
@@ -278,6 +293,53 @@ function DocumentsModule() {
   });
 
   if (treeError) console.error("[Tree] query error", treeError);
+
+  const { data: addresses = [] } = useQuery({
+    queryKey: ["data", "address", "all"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const res = await fetch("/api/data/address");
+      if (!res.ok) throw new Error("Failed to fetch addresses");
+      return res.json();
+    },
+  });
+
+  const { data: documentGroups = [] } = useQuery({
+    queryKey: ["data", "documentGroup", "all"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const res = await fetch("/api/data/documentGroup");
+      if (!res.ok) throw new Error("Failed to fetch document groups");
+      return res.json();
+    },
+  });
+
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["data", "warehouse", "all"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const res = await fetch("/api/data/warehouse");
+      if (!res.ok) throw new Error("Failed to fetch warehouses");
+      return res.json();
+    },
+  });
+
+  const addressMap = useMemo(
+    () => new Map((addresses as any[]).map((a) => [a.addressId, a])),
+    [addresses],
+  );
+  const groupMap = useMemo(
+    () => new Map((documentGroups as any[]).map((g) => [g.documentGroupId, g])),
+    [documentGroups],
+  );
+  const warehouseMap = useMemo(
+    () => new Map((warehouses as any[]).map((w) => [w.warehouseId, w])),
+    [warehouses],
+  );
+  const documentMap = useMemo(
+    () => new Map((documents as any[]).map((d) => [d.documentId, d])),
+    [documents],
+  );
 
   // Fetch document lines for selected document (server-side FK filter)
   const { data: lines = [] } = useQuery({
@@ -372,19 +434,36 @@ function DocumentsModule() {
       },
     });
     const unregF4 = registerCommand({
-      id: "archive-record",
+      id: "delete-record",
       scope: "context",
       group: "recordOps",
-      label: { en: t("commands.archive"), de: "Archivieren" },
+      label: { en: t("actions.delete"), de: "Löschen" },
       shortcut: "F4",
-      isEnabled: (s) => !!s.recordId && s.entity === "document",
+      isEnabled: (s) => {
+        if (!s.recordId || s.entity !== "document") return false;
+        const doc = documentMap.get(s.recordId);
+        if (!doc) return false;
+        return !NO_DELETE_TYPES.has(doc.documentType);
+      },
       handler: async (s) => {
         if (!s.recordId) return;
-        await fetch(`/api/data/document/${s.recordId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ archived: true }),
+        const res = await fetch(`/api/documents/${s.recordId}/delete`, {
+          method: "POST",
         });
+        if (res.status === 403) {
+          toast.error(t("form.deleteNotAllowed"));
+          return;
+        }
+        if (!res.ok) {
+          toast.error(t("form.fkViolationError"));
+          return;
+        }
+        const result = await res.json();
+        if (result.archived) {
+          toast.success(t("form.archiveSuccess"));
+        } else if (result.deleted) {
+          toast.success(t("form.deleteSuccess"));
+        }
         queryClient.invalidateQueries({ queryKey: ["data", "document"] });
       },
     });
@@ -425,7 +504,7 @@ function DocumentsModule() {
       },
     });
     return () => { unregF3(); unregEdit(); unregF9(); unregF7(); unregF4(); unregDup(); unregPost(); };
-  }, [registerCommand, t, queryClient]);
+  }, [registerCommand, t, queryClient, documentMap]);
 
   // Tree keyboard navigation
   useEffect(() => {
@@ -600,10 +679,15 @@ function DocumentsModule() {
               keyExtractor={(row: any) => row.documentId}
               title={t("nav.documents")}
               columns={[
-                { key: "documentNo", header: "No.", sortable: true, render: (r: any) => <span className="font-mono tabular-nums">{r.documentNo}</span> },
-                { key: "documentDate", header: "Date", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{formatDate(r.documentDate)}</span> },
-                { key: "customerId", header: "Customer" },
-                { key: "totalGross", header: "Total", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{formatMoney(r.totalGross ?? 0)}</span> },
+                { key: "documentNo", header: "Beleg-Nr.", sortable: true, render: (r: any) => <span className="font-mono tabular-nums">{r.documentNo}</span> },
+                { key: "documentType", header: "Typ", render: (r: any) => <span className="font-mono text-[11px]" title={DOC_TYPE_LABELS[r.documentType]}>{r.documentType}</span> },
+                { key: "documentGroupId", header: "Gruppe", render: (r: any) => <span>{groupMap.get(r.documentGroupId)?.name ?? ""}</span> },
+                { key: "documentDate", header: "Datum", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{formatDate(r.documentDate)}</span> },
+                { key: "customerId", header: "Adresse", render: (r: any) => <span>{addressDisplayName(addressMap.get(r.customerId))}</span> },
+                { key: "warehouseId", header: "Lager", render: (r: any) => <span>{warehouseMap.get(r.warehouseId)?.name ?? ""}</span> },
+                { key: "currencyId", header: "Währung" },
+                { key: "totalNet", header: "Netto", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{r.totalNet != null ? formatMoney(r.totalNet) : ""}</span> },
+                { key: "totalGross", header: "Gesamt", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{r.totalGross != null ? formatMoney(r.totalGross) : ""}</span> },
                 { key: "status", header: "Status", sortable: true, render: (r: any) => <StatusDot status={r.status ?? "draft"} /> },
               ]}
               totalCount={documentData?.total}

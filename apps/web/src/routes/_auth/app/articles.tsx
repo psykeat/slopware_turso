@@ -11,15 +11,37 @@ import { EntityMask } from "@repo/ui/components/entity-mask";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
 import { InventoryBalanceTable } from "@repo/ui/components/inventory-balance-table";
 import { StockLedgerTable } from "@repo/ui/components/stock-ledger-table";
-import { formatMoney } from "@repo/ui/lib/formatters";
+import { formatDate } from "@repo/ui/lib/formatters";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { useFocus } from "@repo/ui/platform/focus-manager";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_auth/app/articles")({
   component: ArticlesModule,
 });
+
+const ARTICLE_FIELD_OVERRIDES = [
+  {
+    key: "bomType",
+    type: "select" as const,
+    options: [
+      { value: "none", label: "None" },
+      { value: "sales", label: "Sales (H)" },
+      { value: "production", label: "Production (P)" },
+    ],
+  },
+  {
+    key: "trackingMode",
+    type: "select" as const,
+    options: [
+      { value: "none", label: "None" },
+      { value: "serial", label: "Serial" },
+      { value: "batch", label: "Batch" },
+    ],
+  },
+];
 
 function ArticlesModule() {
   const { state: focusState } = useFocus();
@@ -29,19 +51,24 @@ function ArticlesModule() {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteFkViolation, setDeleteFkViolation] = useState(false);
   const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
   // Fetch articles — paginated
   const { data: articleData, isLoading: isDataLoading } = useQuery({
-    queryKey: ["data", "article", gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
+    queryKey: ["data", "article", selectedGroupId, gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
     queryFn: async () => {
       const p = new URLSearchParams({
         paginated: "true",
         page: String(gridState.queryParams.page),
         limit: String(gridState.queryParams.limit),
       });
+      if (selectedGroupId) p.set("articleGroupId", selectedGroupId);
       if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
       if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
       if (gridState.queryParams.filters) p.set("filters", JSON.stringify(gridState.queryParams.filters));
@@ -66,6 +93,8 @@ function ArticlesModule() {
       }));
     },
   });
+
+  const groupMap = useMemo(() => new Map(groups.map((g: TreeNode) => [g.id, g.label])), [groups]);
 
   // Fetch inventory movements for selected article (server-side FK filter)
   const { data: movements = [] } = useQuery({
@@ -118,20 +147,16 @@ function ArticlesModule() {
       handler: () => setShowEdit(true),
     });
     const unregF4 = registerCommand({
-      id: "archive-record",
+      id: "delete-record",
       scope: "context",
       group: "recordOps",
-      label: { en: t("commands.archive"), de: "Archivieren" },
+      label: { en: t("actions.delete"), de: "Löschen" },
       shortcut: "F4",
       isEnabled: (s) => !!s.recordId && s.entity === "article",
-      handler: async (s) => {
+      handler: (s) => {
         if (!s.recordId) return;
-        await fetch(`/api/data/article/${s.recordId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ archived: true }),
-        });
-        queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+        setDeleteId(s.recordId);
+        setDeleteConfirm(true);
       },
     });
     const unregDup = registerCommand({
@@ -197,9 +222,16 @@ function ArticlesModule() {
           entityName="inventoryMovement"
           panelId="inventory-grid"
           data={movements}
-          keyExtractor={(row: any) => row.movementId || row.inventoryMovementId || row.id}
+          keyExtractor={(row: any) => row.inventoryMovementId || row.id}
           title="Inventory Movements"
           toolbar={false}
+          columns={[
+            { key: "movementDate", header: "Date", render: (r: any) => <span className="tabular-nums">{formatDate(r.movementDate)}</span> },
+            { key: "movementType", header: "Type", render: (r: any) => <span className="font-mono">{r.movementType}</span> },
+            { key: "qtyDelta", header: "Qty", isNumeric: true, render: (r: any) => <span className="tabular-nums">{r.qtyDelta}</span> },
+            { key: "referenceText", header: "Reference" },
+            { key: "batchNo", header: "Batch", render: (r: any) => <span className="font-mono text-[12px]">{r.batchNo ?? "—"}</span> },
+          ]}
           emptyTitle="No movements recorded."
           emptySubtitle="Inventory movements appear here when stock changes."
           className="h-full border-none rounded-none"
@@ -278,6 +310,7 @@ function ArticlesModule() {
             onSelect={(id) => {
               const group = groups.find((g: TreeNode) => g.id === id);
               setSubCrumb(group?.label);
+              setSelectedGroupId(id);
               gridState.setPage(1);
             }}
           />
@@ -294,9 +327,9 @@ function ArticlesModule() {
               { key: "articleNo", header: "No.", sortable: true, render: (r: any) => <span className="font-mono tabular-nums text-ink-mute">{r.articleNo}</span> },
               { key: "name", header: "Name", sortable: true },
               { key: "baseUnit", header: "Unit" },
-              { key: "salesPrice", header: "Price", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{formatMoney(r.salesPrice ?? 0)}</span> },
-              { key: "stockQty", header: "Stock", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{r.stockQty ?? 0}</span> },
-              { key: "defaultWarehouseId", header: "Location", render: (r: any) => <span className="font-mono text-[12px]">{r.defaultWarehouseId}</span> },
+              { key: "articleGroupId", header: "Group", render: (r: any) => <span>{String(groupMap.get(r.articleGroupId) ?? "—")}</span> },
+              { key: "trackingMode", header: "Tracking", render: (r: any) => <span className="font-mono text-[11px] text-ink-mute">{r.trackingMode ?? "—"}</span> },
+              { key: "bomType", header: "BOM", render: (r: any) => <span className="font-mono text-[11px] text-ink-mute">{r.bomType ?? "—"}</span> },
             ]}
             totalCount={articleData?.total}
             page={gridState.page}
@@ -338,12 +371,81 @@ function ArticlesModule() {
         dependentContext={<ContextTabs tabs={dependentTabs} />}
       />
 
+      {/* Delete confirm dialog */}
+      <Dialog open={deleteConfirm} onOpenChange={(open) => { setDeleteConfirm(open); if (!open) setDeleteFkViolation(false); }}>
+        <DialogContent className="max-w-sm">
+          <div className="p-6 flex flex-col gap-5">
+            <div>
+              <h3 className="text-[15px] font-medium text-ink">{t("form.deleteConfirmTitle")}</h3>
+              <p className="text-[13px] text-ink-mute mt-1">{t("form.deleteConfirmBody")}</p>
+              {deleteFkViolation && (
+                <p className="text-[13px] text-destructive mt-2">{t("form.fkViolationError")}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 flex-wrap">
+              <button
+                type="button"
+                className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
+                onClick={() => { setDeleteConfirm(false); setDeleteFkViolation(false); }}
+              >
+                {t("actions.cancel")}
+              </button>
+              {deleteFkViolation && (
+                <button
+                  type="button"
+                  className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
+                  onClick={async () => {
+                    if (!deleteId) return;
+                    await fetch(`/api/data/article/${deleteId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ archivedAt: new Date().toISOString() }),
+                    });
+                    setDeleteConfirm(false);
+                    setDeleteFkViolation(false);
+                    setDeleteId(null);
+                    queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+                    toast.success(t("form.archiveSuccess"));
+                  }}
+                >
+                  {t("actions.archiveInstead")}
+                </button>
+              )}
+              {!deleteFkViolation && (
+                <button
+                  type="button"
+                  className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
+                  onClick={async () => {
+                    if (!deleteId) return;
+                    const res = await fetch(`/api/data/article/${deleteId}`, {
+                      method: "DELETE",
+                    });
+                    if (res.status === 409) {
+                      setDeleteFkViolation(true);
+                      return;
+                    }
+                    setDeleteConfirm(false);
+                    setDeleteFkViolation(false);
+                    setDeleteId(null);
+                    queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+                    toast.success(t("form.deleteSuccess"));
+                  }}
+                >
+                  {t("actions.delete")}
+                </button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-2xl p-0 overflow-hidden">
           <EntityMask
             entityName="article"
             mode="create"
             title="New Article"
+            fieldOverrides={ARTICLE_FIELD_OVERRIDES}
             onCancel={() => setShowCreate(false)}
             onSaved={() => setShowCreate(false)}
             className="border-none shadow-none rounded-none"
@@ -358,6 +460,7 @@ function ArticlesModule() {
             entityName="article"
             mode="edit"
             recordId={focusState.recordId ?? undefined}
+            fieldOverrides={ARTICLE_FIELD_OVERRIDES}
             onCancel={() => setShowEdit(false)}
             onSaved={() => {
               setShowEdit(false);

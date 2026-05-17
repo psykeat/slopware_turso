@@ -63,7 +63,6 @@ export const Route = createFileRoute("/api/admin/document-groups/")({
           documentType: string;
           name: string;
           groupNumber: number;
-          isActive?: boolean;
           nextGroupId?: string | null;
           numberSequenceId?: string | null;
           defaultWarehouseId?: string | null;
@@ -81,7 +80,6 @@ export const Route = createFileRoute("/api/admin/document-groups/")({
               name: body.name,
               groupNumber: body.groupNumber,
               direction,
-              isActive: body.isActive ?? true,
               nextGroupId: body.nextGroupId ?? null,
               numberSequenceId: body.numberSequenceId ?? null,
               defaultWarehouseId: body.defaultWarehouseId ?? null,

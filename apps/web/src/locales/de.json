@@ -4,6 +4,7 @@
     "articles": "Artikel",
     "documents": "Belege",
     "accounting": "Buchhaltung",
+    "import": "Import",
     "settings": "Einstellungen",
     "administration": "Administration",
     "baseTenant": "Basis-Mandant"
@@ -24,7 +25,9 @@
     "close": "Schließen",
     "export": "Exportieren",
     "filter": "Filtern",
-    "refresh": "Aktualisieren"
+    "refresh": "Aktualisieren",
+    "delete": "Löschen",
+    "archiveInstead": "Stattdessen archivieren"
   },
   "shortcuts": {
     "title": "Tastenkürzel",
@@ -74,7 +77,15 @@
     "requiredHint": "Pflichtfelder mit * markiert. F10 zum Speichern, Esc zum Abbrechen.",
     "saving": "Wird gespeichert…",
     "create": "Erstellen",
-    "update": "Aktualisieren"
+    "update": "Aktualisieren",
+    "createSuccess": "Erstellt",
+    "updateSuccess": "Gespeichert",
+    "deleteSuccess": "Erfolgreich gelöscht",
+    "archiveSuccess": "Erfolgreich archiviert",
+    "deleteConfirmTitle": "Dauerhaft löschen?",
+    "deleteConfirmBody": "Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteNotAllowed": "Dieser Belegtyp kann nicht gelöscht werden.",
+    "fkViolationError": "Löschen nicht möglich: Datensatz ist in Verwendung."
   },
   "commands": {
     "newRecord": "Neuer Datensatz",
@@ -220,13 +231,19 @@
       "close": "Schließen (Esc)",
       "convert": "Wandeln",
       "storno": "Stornieren",
+      "duplicate": "Duplizieren",
       "save": "Speichern",
       "post": "Buchen",
       "saving": "Wird gespeichert…",
       "posting": "Wird gebucht…",
       "converting": "Wird gewandelt…",
-      "cancelling": "Wird storniert…"
+      "cancelling": "Wird storniert…",
+      "duplicating": "Wird dupliziert…"
     },
+    "convert": {
+      "title": "Beleg wandeln",
+      "selectTarget": "Zielgruppe auswählen",
+      "confirm": "Wandeln bestätigen"
     }
   },
   "devCycles": {

@@ -1,0 +1,3 @@
+ALTER TABLE "article_bom" ADD COLUMN "sort_order" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "document_line" ADD COLUMN "bom_group_id" uuid;--> statement-breakpoint
+ALTER TABLE "document_line" DROP CONSTRAINT "document_line_line_type_check", ADD CONSTRAINT "document_line_line_type_check" CHECK (line_type IN ('article', 'comment', 'production_output', 'sales_bom_header', 'bom_component'));

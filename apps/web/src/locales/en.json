@@ -73,6 +73,45 @@
     "signOut": "Sign Out",
     "userConfig": "User Configuration"
   },
+  "account": {
+    "title": "Account",
+    "selfService": "Self-service",
+    "back": "Settings",
+    "description": "Update your personal profile, email, and password from one place.",
+    "displayNameTitle": "Display name",
+    "displayNameDescription": "This name is used across the app and in tenant setup.",
+    "displayNameLabel": "Name",
+    "displayNamePlaceholder": "Jane Doe",
+    "saveName": "Save name",
+    "nameRequired": "Enter a display name.",
+    "nameSuccess": "Display name updated.",
+    "nameError": "Could not update your display name.",
+    "emailTitle": "Email address",
+    "emailDescription": "Changing your email sends a verification link before it is updated.",
+    "currentEmailLabel": "Current email",
+    "newEmailLabel": "New email",
+    "newEmailPlaceholder": "new@example.com",
+    "changeEmail": "Change email",
+    "emailRequired": "Enter a new email address.",
+    "emailSuccess": "Verification email sent.",
+    "emailError": "Could not start the email change flow.",
+    "emailNote": "You will need to confirm the change from your inbox.",
+    "passwordTitle": "Password",
+    "passwordDescription": "Set a new password and revoke other sessions for safety.",
+    "currentPasswordLabel": "Current password",
+    "currentPasswordPlaceholder": "Enter current password",
+    "newPasswordLabel": "New password",
+    "newPasswordPlaceholder": "Enter new password",
+    "confirmPasswordLabel": "Confirm password",
+    "confirmPasswordPlaceholder": "Repeat new password",
+    "changePassword": "Change password",
+    "currentPasswordRequired": "Enter your current password.",
+    "newPasswordRequired": "Enter a new password.",
+    "passwordMismatch": "Passwords do not match.",
+    "passwordSuccess": "Password updated.",
+    "passwordError": "Could not update your password.",
+    "passwordNote": "Other active sessions will be signed out."
+  },
   "form": {
     "requiredHint": "Fields marked with * are required. F10 to save, Esc to cancel.",
     "saving": "Saving...",
@@ -185,7 +224,25 @@
     "OUTBOUND": "Outbound",
     "INBOUND": "Inbound",
     "ADJUSTMENT": "Adjustments",
+    "PRODUCTION": "Production",
     "other": "Other"
+  },
+  "documentTypes": {
+    "N": "Quote",
+    "A": "Order",
+    "L": "Delivery Note",
+    "R": "Invoice",
+    "G": "Credit Note",
+    "b": "Purchase Order",
+    "l": "Goods Receipt",
+    "r": "Purchase Invoice",
+    "g": "Purchase Credit Note",
+    "V": "Stock Count",
+    "U": "Transfer",
+    "Z": "Stock Receipt",
+    "E": "Stock Issue",
+    "q": "Production Order",
+    "p": "Completion Report"
   },
   "document": {
     "breadcrumb": "Documents",
@@ -232,6 +289,8 @@
       "convert": "Convert",
       "storno": "Cancel/Reverse",
       "duplicate": "Duplicate",
+      "lock": "Lock",
+      "unlock": "Unlock",
       "save": "Save",
       "post": "Post",
       "saving": "Saving…",
@@ -240,10 +299,20 @@
       "cancelling": "Cancelling…",
       "duplicating": "Duplicating…"
     },
+    "closePrompt": {
+      "title": "Discard changes?",
+      "description": "This document has unsaved changes. You can discard them, save the draft, or cancel.",
+      "closeWithoutSaving": "Close without saving",
+      "saveDraftAndClose": "Save as draft and close",
+      "cancel": "Cancel"
+    },
     "convert": {
       "title": "Convert Document",
       "selectTarget": "select target group",
       "confirm": "Convert"
+    },
+    "duplicate": {
+      "noTargets": "No valid duplicate targets"
     }
   },
   "devCycles": {

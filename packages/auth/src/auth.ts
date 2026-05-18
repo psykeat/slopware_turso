@@ -25,6 +25,9 @@ export const auth = betterAuth({
         defaultValue: false,
       },
     },
+    changeEmail: {
+      enabled: true,
+    },
   },
 
   // https://www.better-auth.com/docs/integrations/tanstack#usage-tips

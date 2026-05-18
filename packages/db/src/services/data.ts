@@ -1,6 +1,6 @@
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
-import { eq, and, asc, desc, getColumns, count as drizzleCount, ilike, ne, isNull, isNotNull, gt, gte, lt, lte, inArray, or, not } from "drizzle-orm";
+import { eq, and, asc, desc, getColumns, count as drizzleCount, ilike, ne, isNull, isNotNull, gt, gte, lt, lte, inArray, or, not, sql } from "drizzle-orm";
 
 export class DataService {
   private tenantId: string;
@@ -26,6 +26,25 @@ export class DataService {
     if ("id" in columns) return "id";
     const entityId = Object.keys(columns).find(k => k.toLowerCase().endsWith("id"));
     return entityId || Object.keys(columns)[0];
+  }
+
+  private normalizeLifecyclePayload(table: any, data: Record<string, any>) {
+    const values = { ...data };
+    const hasArchived = "archived" in table;
+    const hasArchivedAt = "archivedAt" in table;
+
+    if ("archived" in values) {
+      const archived = Boolean(values.archived);
+      delete values.archived;
+      if (hasArchived) {
+        values.archived = archived;
+      }
+      if (hasArchivedAt) {
+        values.archivedAt = archived ? new Date() : null;
+      }
+    }
+
+    return values;
   }
 
   async list(
@@ -59,15 +78,22 @@ export class DataService {
       conditions.push(isNull((table as any).archivedAt));
     }
 
-    // Free-text search — skip id/UUID columns, only text columns
+    // Free-text search — skip id/UUID columns, search text-like and JSON columns.
     if (options.search?.trim()) {
       const term = `%${options.search.trim()}%`;
-      const textCols = Object.entries(getColumns(table)).filter(([name, col]) => {
+      const searchableCols = Object.entries(getColumns(table)).filter(([name, col]) => {
         if (name === "id" || name.endsWith("Id")) return false;
-        return (col as any).dataType === "string";
+        return (col as any).dataType === "string" || (col as any).dataType === "json";
       });
-      if (textCols.length > 0) {
-        conditions.push(or(...textCols.map(([, col]) => ilike(col as any, term)))!);
+      if (searchableCols.length > 0) {
+        conditions.push(
+          or(
+            ...searchableCols.map(([, col]) => {
+              const expr = (col as any).dataType === "json" ? sql`${col}::text` : (col as any);
+              return ilike(expr as any, term);
+            }),
+          )!,
+        );
       }
     }
 
@@ -152,7 +178,8 @@ export class DataService {
   async create(entityName: string, data: any) {
     const table = this.getTable(entityName);
     const hasTenantId = "tenantId" in table;
-    const values = hasTenantId ? { ...data, tenantId: this.tenantId } : data;
+    const lifecycleValues = this.normalizeLifecyclePayload(table, data);
+    const values = hasTenantId ? { ...lifecycleValues, tenantId: this.tenantId } : lifecycleValues;
 
     return await db.insert(table).values(values).returning();
   }
@@ -170,6 +197,8 @@ export class DataService {
     const entityPkName = `${entityName}Id`;
     if (entityPkName in updateData) delete updateData[entityPkName];
 
+    const normalizedUpdateData = this.normalizeLifecyclePayload(table, updateData);
+
     const conditions = [eq(pkColumn, id)];
     if (hasTenantId) {
       conditions.push(eq(table.tenantId, this.tenantId));
@@ -177,7 +206,7 @@ export class DataService {
 
     return await db
       .update(table)
-      .set(updateData)
+      .set(normalizedUpdateData)
       .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .returning();
   }

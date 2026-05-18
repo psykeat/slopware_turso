@@ -13,6 +13,8 @@ export interface Command {
   handler: (state: FocusContextState) => void | Promise<void>;
 }
 
+const COMMAND_SCOPE_PRIORITY: Record<Command["scope"], number> = { local: 0, context: 1, global: 2 };
+
 interface CommandContextValue {
   commands: Command[];
   registerCommand: (command: Command) => () => void;
@@ -55,6 +57,22 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
     [commands, focusState],
   );
 
+  const resolveShortcut = useCallback(
+    (shortcut: string) => {
+      return [...commands]
+        .map((command, index) => ({ command, index }))
+        .filter(({ command }) => command.shortcut === shortcut)
+        .sort((a, b) => {
+          const scopeDelta = COMMAND_SCOPE_PRIORITY[a.command.scope] - COMMAND_SCOPE_PRIORITY[b.command.scope];
+          if (scopeDelta !== 0) return scopeDelta;
+          return a.index - b.index;
+        })
+        .map(({ command }) => command)
+        .find((command) => !command.isEnabled || command.isEnabled(focusState));
+    },
+    [commands, focusState],
+  );
+
   // Keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -70,10 +88,12 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
       const ctrl = e.ctrlKey;
       const alt = e.altKey;
       const shift = e.shiftKey;
+      const meta = e.metaKey;
 
       let shortcut = "";
       if (alt) shortcut += "Alt+";
       if (ctrl) shortcut += "Ctrl+";
+      if (meta) shortcut += "Meta+";
       if (shift) shortcut += "Shift+";
       shortcut += key.length === 1 ? key.toUpperCase() : key;
 
@@ -81,12 +101,17 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
         shortcut = "?";
       }
 
-      // Skip all shortcuts (except Escape) when focus is inside an editable element.
-      if (isInput && key !== "Escape") {
+      const isModifierShortcut = ctrl || alt || meta;
+      const isFunctionKey = /^F\d{1,2}$/i.test(key);
+      const allowInEditable = key === "?" || key === "Escape" || isModifierShortcut || isFunctionKey;
+
+      // Skip plain text editing keys in editable elements, but allow function keys
+      // and modifier shortcuts so local commands still work in forms and lookups.
+      if (isInput && !allowInEditable) {
         return;
       }
 
-      const command = commands.find((c) => c.shortcut === shortcut);
+      const command = resolveShortcut(shortcut);
       if (command) {
         e.preventDefault();
         executeCommand(command.id);
@@ -95,7 +120,7 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [commands, executeCommand]);
+  }, [commands, executeCommand, resolveShortcut]);
 
   const value = useMemo(
     () => ({ commands, registerCommand, executeCommand, subscribeToExecutions }),

@@ -98,6 +98,9 @@ const entities: EntitySpec[] = [
       { fieldName: "documentType", fieldType: "text", labelEn: "Document Type", labelDe: "Belegart", isRequired: true },
       { fieldName: "groupNumber", fieldType: "integer", labelEn: "Group Number", labelDe: "Gruppenummer", isRequired: true },
       { fieldName: "direction", fieldType: "text", labelEn: "Direction", labelDe: "Richtung" },
+      { fieldName: "nextGroupId", fieldType: "text", labelEn: "Next Group", labelDe: "Nächste Gruppe", lookupTable: "documentGroup" },
+      { fieldName: "requireSerialTracking", fieldType: "boolean", labelEn: "Require Serial Tracking", labelDe: "Seriennummernpflicht" },
+      { fieldName: "requireBatchTracking", fieldType: "boolean", labelEn: "Require Batch Tracking", labelDe: "Chargenpflicht" },
     ],
   },
   {

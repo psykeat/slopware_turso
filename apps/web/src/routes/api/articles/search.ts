@@ -27,6 +27,8 @@ export const Route = createFileRoute("/api/articles/search")({
             name: article.name,
             baseUnit: article.baseUnit,
             taxClassId: article.taxClassId,
+            bomType: article.bomType,
+            trackingMode: article.trackingMode,
           })
           .from(article)
           .where(

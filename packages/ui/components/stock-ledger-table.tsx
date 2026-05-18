@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Skeleton } from "./skeleton";
 import { formatDate } from "../lib/formatters";
 
@@ -37,6 +37,7 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
       return res.json();
     },
     enabled: !!articleId,
+    placeholderData: keepPreviousData,
   });
 
   const rows = data?.stockLedger ?? [];

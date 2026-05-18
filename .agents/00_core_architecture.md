@@ -149,6 +149,36 @@ Document browsing and document editing should be separated. TriView is well suit
 
 Posting logic, status transitions, inventory effects, ledger generation, and fact generation remain controlled domain concerns and must not be moved into the frontend interaction model.[cite:1][cite:2]
 
+### Canonical document types
+
+The `document_type` / movement-type vocabulary is part of the core schema, not a UI convenience. These types are the canonical business grammar for the document module, posting engine, inventory derivation, financial facts, and audit chain. They must remain explicitly documented here and in the schema because they define the behavior of the entire document lifecycle.[cite:1][cite:2]
+
+| Type | Label | Direction | Inventory effect | Reservation effect | Finance effect |
+|---|---|---|---|---|---|
+| `N` | Angebot | Outbound | None | None | None |
+| `A` | Auftrag | Outbound | None | `reserved +` | None |
+| `L` | Lieferschein | Outbound | `on_hand -` | `reserved -` from `A` | Sales fact |
+| `R` | Rechnung | Outbound | None if `L` exists, otherwise `on_hand -` | None | Revenue, AR, tax, COGS |
+| `G` | Gutschrift | Outbound | `on_hand +` | None | Revenue -, AR - |
+| `b` | Bestellung | Inbound | None | None | None |
+| `l` | Wareneingang | Inbound | `on_hand +` | `expected -` from `b` | Purchase fact |
+| `r` | Eingangsrechnung | Inbound | None if `l` exists, otherwise `on_hand +` | None | Cost, AP, AVCO |
+| `g` | Eingangsgutschrift | Inbound | `on_hand -` | None | Cost -, AP - |
+| `V` | Inventur | Adjustment | Absolute set | None | Stock correction fact |
+| `U` | Umbuchung | Adjustment | `wh_a -`, `wh_b +` | None | None |
+| `Z` | Zugang | Inbound | `on_hand +` | None | Valuation fact |
+| `E` | Entnahme | Outbound | `on_hand -` | None | Valuation fact |
+| `p` | Fertigungsauftrag | Outbound | None | Component reservation + | None |
+| `q` | Fertigmeldung | Inbound | Product `+`, components `-` | Component reservation - | Production fact |
+
+### Audit and chain rules
+
+- `transactionId` is the chain key for audit navigation across conversions and storno. It is copied through conversion and reversal chains, not regenerated for those operations.[cite:1][cite:2]
+- `parentDocumentId` tracks the immediate predecessor document.
+- `stornoDocumentId` links a posted invoice to its reversing document.
+- Conversion and storno must preserve the audit chain even when a new `documentId` or `documentNo` is created.[cite:1][cite:2]
+- Posting must continue to treat type-specific inventory and finance effects as domain logic, not as frontend state derivation.[cite:1][cite:2]
+
 ## Priority of truth
 
 In case of conflict, architecture priority should remain:

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRightIcon,
   ChevronDownIcon,
@@ -26,6 +26,7 @@ export interface NavigationTreeProps {
   className?: string;
   isLoading?: boolean;
   onSelect?: (id: string) => void;
+  onSelectCommit?: (id: string) => void;
 }
 
 export function NavigationTree({
@@ -36,32 +37,84 @@ export function NavigationTree({
   className,
   isLoading,
   onSelect,
+  onSelectCommit,
 }: NavigationTreeProps) {
   const { t } = useTranslation("ui");
   const { state: focusState, setFocus } = useFocus();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const treeRef = useRef<HTMLDivElement>(null);
+
+  const flatNodes = useMemo(() => {
+    const nodes: TreeNode[] = [];
+    const walk = (items: TreeNode[]) => {
+      for (const item of items) {
+        nodes.push(item);
+        if (item.children && (expanded[item.id] ?? false)) {
+          walk(item.children);
+        }
+      }
+    };
+    walk(data);
+    return nodes;
+  }, [data, expanded]);
+
+  const currentTreeId = focusState.treePanel === panelId ? focusState.treeRecordId : null;
+  const currentIndex = currentTreeId ? flatNodes.findIndex((node) => node.id === currentTreeId) : -1;
+
+  const commitSelection = useCallback((id: string) => {
+    onSelect?.(id);
+    requestAnimationFrame(() => onSelectCommit?.(id));
+  }, [onSelect, onSelectCommit]);
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleSelect = (node: TreeNode) => {
+  const handleSelect = useCallback((node: TreeNode) => {
     setFocus({
-      entity: entityName,
-      recordId: node.id,
+      area: "tree",
+      treeEntity: entityName,
+      treePanel: panelId,
+      treeRecordId: node.id,
       panel: panelId,
-      area: "workspace",
     });
-    onSelect?.(node.id);
-  };
+    commitSelection(node.id);
+  }, [commitSelection, entityName, panelId, setFocus]);
+
+  const navigate = useCallback((delta: number) => {
+    if (flatNodes.length === 0) return;
+    const base = currentIndex < 0 ? (delta > 0 ? -1 : flatNodes.length) : currentIndex;
+    const nextIndex = Math.max(0, Math.min(base + delta, flatNodes.length - 1));
+    const node = flatNodes[nextIndex];
+    if (!node) return;
+    handleSelect(node);
+  }, [currentIndex, flatNodes, handleSelect]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !treeRef.current || !treeRef.current.contains(active)) return;
+      if (!e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [navigate]);
 
   const renderTree = (nodes: TreeNode[], level = 0): React.ReactNode => {
     return nodes.map((node) => {
       const hasChildren = Boolean(node.children && node.children.length > 0);
       const isExpanded = expanded[node.id] ?? false;
       const isSelected =
-        focusState.recordId === node.id && focusState.panel === panelId;
+        focusState.treeRecordId === node.id && focusState.treePanel === panelId;
       const effectiveLevel = node.level ?? level;
 
       return (
@@ -138,6 +191,7 @@ export function NavigationTree({
 
   return (
     <div
+      ref={treeRef}
       className={cn(
         "flex flex-col h-full w-full overflow-hidden bg-canvas-soft border-r border-hairline",
         className,

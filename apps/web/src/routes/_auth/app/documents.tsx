@@ -1,15 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import React, { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { useTranslation } from "react-i18next";
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
 import { toast } from "sonner";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
-import { DataGrid } from "@repo/ui/components/data-grid";
+import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
 import { DocumentEditor } from "@repo/ui/components/document-editor";
+import { DocumentTargetGroupDialog, type DocumentTargetGroupCandidate } from "@repo/ui/components/document-target-group-dialog";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { formatMoney, formatDate, StatusDot } from "@repo/ui/lib/formatters";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
@@ -43,6 +44,7 @@ interface DocumentGroup {
 interface TypeNode {
   documentType: string;
   typeLabel: string;
+  mainGroup: DocumentGroup | null;
   groups: DocumentGroup[];
 }
 
@@ -54,7 +56,7 @@ interface TreeSection {
 
 type TreeSelection =
   | { kind: "all" }
-  | { kind: "type"; documentType: string; direction: string }
+  | { kind: "type"; documentType: string; direction: string; groupId: string | null }
   | { kind: "group"; groupId: string; documentType: string; direction: string };
 
 function DocumentNavigationTree({
@@ -65,15 +67,21 @@ function DocumentNavigationTree({
   onSelectGroup,
   expandedDirections,
   onToggleDirection,
+  getTypeLabel,
+  getDirectionLabel,
+  onSelectCommit,
   header,
 }: {
   sections: TreeSection[];
   isLoading: boolean;
   selection: TreeSelection;
-  onSelectType: (documentType: string, direction: string, label: string) => void;
+  onSelectType: (documentType: string, direction: string, label: string, groupId: string | null) => void;
   onSelectGroup: (groupId: string, documentType: string, direction: string, label: string) => void;
   expandedDirections: Set<string>;
   onToggleDirection: (direction: string) => void;
+  getTypeLabel: (documentType: string, fallback: string) => string;
+  getDirectionLabel: (direction: string, fallback: string) => string;
+  onSelectCommit?: () => void;
   header?: string;
 }) {
   const isTypeSelected = (docType: string) =>
@@ -133,7 +141,7 @@ function DocumentNavigationTree({
                       <FolderIcon size={13} strokeWidth={1.4} />
                     )}
                   </span>
-                  <span className="flex-1 truncate">{section.label}</span>
+                  <span className="flex-1 truncate">{getDirectionLabel(section.direction, section.label)}</span>
                 </div>
 
                 {/* Layer 2: Type nodes */}
@@ -150,14 +158,20 @@ function DocumentNavigationTree({
                           paddingLeft: 22,
                           ...(sel ? { background: "var(--primary)", color: "var(--primary-fg)" } : {}),
                         }}
-                        onClick={() => onSelectType(type.documentType, section.direction, type.typeLabel)}
+                        onClick={() => {
+                          onSelectType(type.documentType, section.direction, getTypeLabel(type.documentType, type.typeLabel), type.mainGroup?.documentGroupId ?? null);
+                          requestAnimationFrame(() => onSelectCommit?.());
+                        }}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") onSelectType(type.documentType, section.direction, type.typeLabel);
+                          if (e.key === "Enter" || e.key === " ") {
+                            onSelectType(type.documentType, section.direction, getTypeLabel(type.documentType, type.typeLabel), type.mainGroup?.documentGroupId ?? null);
+                            requestAnimationFrame(() => onSelectCommit?.());
+                          }
                         }}
                       >
                         <span className="size-3 shrink-0" />
                         <span className="flex-1 truncate">
-                          <span className="font-mono text-[11px] opacity-60 mr-1.5">{type.documentType}00</span>
+                          <span className="font-mono text-[11px] opacity-60 mr-1.5">{type.documentType}</span>
                           {type.typeLabel}
                         </span>
                       </div>
@@ -177,9 +191,15 @@ function DocumentNavigationTree({
                               paddingLeft: 36,
                               ...(gsel ? { background: "var(--primary)", color: "var(--primary-fg)" } : {}),
                             }}
-                            onClick={() => onSelectGroup(group.documentGroupId, group.documentType, section.direction, groupLabel)}
+                            onClick={() => {
+                              onSelectGroup(group.documentGroupId, group.documentType, section.direction, groupLabel);
+                              requestAnimationFrame(() => onSelectCommit?.());
+                            }}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") onSelectGroup(group.documentGroupId, group.documentType, section.direction, groupLabel);
+                              if (e.key === "Enter" || e.key === " ") {
+                                onSelectGroup(group.documentGroupId, group.documentType, section.direction, groupLabel);
+                                requestAnimationFrame(() => onSelectCommit?.());
+                              }
                             }}
                           >
                             <span className="size-3 shrink-0" />
@@ -202,18 +222,25 @@ function DocumentNavigationTree({
 function buildFlatNodes(
   sections: TreeSection[],
   expandedDirs: Set<string>,
+  getTypeLabel: (documentType: string, fallback: string) => string,
 ): Array<
-  | { kind: "type"; documentType: string; direction: string; label: string }
+  | { kind: "type"; documentType: string; direction: string; label: string; groupId: string | null }
   | { kind: "group"; groupId: string; documentType: string; direction: string; label: string }
 > {
   const nodes: Array<
-    | { kind: "type"; documentType: string; direction: string; label: string }
+    | { kind: "type"; documentType: string; direction: string; label: string; groupId: string | null }
     | { kind: "group"; groupId: string; documentType: string; direction: string; label: string }
   > = [];
   for (const section of sections) {
     if (!expandedDirs.has(section.direction)) continue;
     for (const type of section.types) {
-      nodes.push({ kind: "type", documentType: type.documentType, direction: section.direction, label: type.typeLabel });
+      nodes.push({
+        kind: "type",
+        documentType: type.documentType,
+        direction: section.direction,
+        label: getTypeLabel(type.documentType, type.typeLabel),
+        groupId: type.mainGroup?.documentGroupId ?? null,
+      });
       for (const group of type.groups) {
         const label = `${group.documentType}${String(group.groupNumber).padStart(2, "0")} – ${group.name}`;
         nodes.push({ kind: "group", groupId: group.documentGroupId, documentType: group.documentType, direction: section.direction, label });
@@ -223,14 +250,21 @@ function buildFlatNodes(
   return nodes;
 }
 
-const NO_DELETE_TYPES = new Set(["R", "G", "r", "g"]);
-
 function DocumentsModule() {
-  const { state: focusState } = useFocus();
+  const { state: focusState, setFocus } = useFocus();
   const { registerCommand } = useCommands();
   const { setSubCrumb } = useActionBar();
   const { t } = useTranslation("ui");
+  const getTypeLabel = useCallback(
+    (documentType: string, fallback: string) => t(`documentTypes.${documentType}`, { defaultValue: fallback }),
+    [t],
+  );
+  const getDirectionLabel = useCallback(
+    (direction: string, fallback: string) => t(`documentDirections.${direction}`, { defaultValue: fallback }),
+    [t],
+  );
   const queryClient = useQueryClient();
+  const documentGridRef = React.useRef<DataGridHandle>(null);
   const [editorDocId, setEditorDocId] = useState<string | null>(null);
   const [editorGroupId, setEditorGroupId] = useState<string | undefined>(undefined);
   const [selection, setSelection] = useState<TreeSelection>({ kind: "all" });
@@ -245,9 +279,38 @@ function DocumentsModule() {
     recordId: string | null;
     candidates: Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }>;
   }>({ open: false, recordId: null, candidates: [] });
+  const [duplicateDialog, setDuplicateDialog] = useState<{
+    open: boolean;
+    recordId: string | null;
+    candidates: DocumentTargetGroupCandidate[];
+    selectedGroupId: string | null;
+    isPending: boolean;
+  }>({ open: false, recordId: null, candidates: [], selectedGroupId: null, isPending: false });
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(
+    focusState.entity === "document" ? focusState.recordId : null,
+  );
   const gridState = useGridUrlState({ defaultPageSize: 50 });
+  const documentRestoreIdRef = React.useRef<string | null | undefined>(undefined);
+  const prevEditorDocIdRef = React.useRef<string | null>(editorDocId);
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
+
+  useEffect(() => {
+    if (focusState.entity === "document" && focusState.recordId) {
+      setActiveDocumentId(focusState.recordId);
+    }
+  }, [focusState.entity, focusState.recordId]);
+
+  useEffect(() => {
+    const prevEditorDocId = prevEditorDocIdRef.current;
+    prevEditorDocIdRef.current = editorDocId;
+    if (prevEditorDocId === null || editorDocId !== null) return;
+    const restoreId = documentRestoreIdRef.current === undefined
+      ? activeDocumentId
+      : documentRestoreIdRef.current;
+    documentRestoreIdRef.current = undefined;
+    requestAnimationFrame(() => documentGridRef.current?.restoreFocus(restoreId ?? null));
+  }, [editorDocId, activeDocumentId]);
 
   // Fetch documents — paginated, filtered by tree selection
   const { data: documentData, isLoading: isDataLoading } = useQuery({
@@ -287,7 +350,11 @@ function DocumentsModule() {
       // Normalise: older cached format may have `groups` instead of `types`
       return (raw as any[]).map((s: any) => ({
         ...s,
-        types: s.types ?? [],
+        types: (s.types ?? s.groups ?? []).map((t: any) => ({
+          ...t,
+          mainGroup: t.mainGroup ?? (t.groups ?? []).find((g: any) => g.groupNumber === 0) ?? null,
+          groups: (t.groups ?? []).filter((g: any) => g.groupNumber > 0),
+        })),
       })) as TreeSection[];
     },
   });
@@ -336,32 +403,44 @@ function DocumentsModule() {
     () => new Map((warehouses as any[]).map((w) => [w.warehouseId, w])),
     [warehouses],
   );
-  const documentMap = useMemo(
-    () => new Map((documents as any[]).map((d) => [d.documentId, d])),
-    [documents],
-  );
+  const onTreeSelectionCommitted = useCallback(() => {
+    documentGridRef.current?.restoreFocus(activeDocumentId ?? null);
+  }, [activeDocumentId]);
 
   // Fetch document lines for selected document (server-side FK filter)
   const { data: lines = [] } = useQuery({
-    queryKey: ["data", "documentLine", focusState.recordId],
+    queryKey: ["data", "documentLine", activeDocumentId],
     queryFn: async () => {
-      const res = await fetch(`/api/data/documentLine?documentId=${focusState.recordId}`);
+      const res = await fetch(`/api/data/documentLine?documentId=${activeDocumentId}&orderBy=lineNo:asc`);
       if (!res.ok) throw new Error("Failed to fetch document lines");
       return res.json();
     },
-    enabled: !!focusState.recordId,
+    enabled: !!activeDocumentId,
+    placeholderData: keepPreviousData,
   });
 
-  const handleSelectType = (documentType: string, direction: string, label: string) => {
-    setSelection({ kind: "type", documentType, direction });
+  const handleSelectType = (documentType: string, direction: string, label: string, groupId: string | null) => {
+    setSelection({ kind: "type", documentType, direction, groupId });
     setSubCrumb(label);
     gridState.setPage(1);
+    setFocus({
+      area: "tree",
+      treeEntity: "documentType",
+      treePanel: "document-tree",
+      treeRecordId: documentType,
+    });
   };
 
   const handleSelectGroup = (groupId: string, documentType: string, direction: string, label: string) => {
     setSelection({ kind: "group", groupId, documentType, direction });
     setSubCrumb(label);
     gridState.setPage(1);
+    setFocus({
+      area: "tree",
+      treeEntity: "documentGroup",
+      treePanel: "document-tree",
+      treeRecordId: groupId,
+    });
   };
 
   const handleToggleDirection = (direction: string) => {
@@ -375,6 +454,8 @@ function DocumentsModule() {
 
   // Register context commands
   useEffect(() => {
+    if (editorDocId) return;
+
     const unregF3 = registerCommand({
       id: "create-record",
       scope: "context",
@@ -384,7 +465,8 @@ function DocumentsModule() {
       isEnabled: () => true,
       handler: () => {
         const sel = selectionRef.current;
-        setEditorGroupId(sel.kind === "group" ? sel.groupId : undefined);
+        documentRestoreIdRef.current = undefined;
+        setEditorGroupId(sel.kind === "group" ? sel.groupId : sel.kind === "type" ? sel.groupId ?? undefined : undefined);
         setEditorDocId("__new__");
       },
     });
@@ -396,7 +478,11 @@ function DocumentsModule() {
       shortcut: "F2",
       isEnabled: (s) => !!s.recordId && s.entity === "document",
       handler: (s) => {
-        if (s.recordId) { setEditorGroupId(undefined); setEditorDocId(s.recordId); }
+        if (s.recordId) {
+          documentRestoreIdRef.current = undefined;
+          setEditorGroupId(undefined);
+          setEditorDocId(s.recordId);
+        }
       },
     });
     const unregF9 = registerCommand({
@@ -407,7 +493,11 @@ function DocumentsModule() {
       shortcut: "F9",
       isEnabled: (s) => !!s.recordId && s.entity === "document",
       handler: (s) => {
-        if (s.recordId) { setEditorGroupId(undefined); setEditorDocId(s.recordId); }
+        if (s.recordId) {
+          documentRestoreIdRef.current = undefined;
+          setEditorGroupId(undefined);
+          setEditorDocId(s.recordId);
+        }
       },
     });
     const unregF7 = registerCommand({
@@ -439,23 +529,15 @@ function DocumentsModule() {
       group: "recordOps",
       label: { en: t("actions.delete"), de: "Löschen" },
       shortcut: "F4",
-      isEnabled: (s) => {
-        if (!s.recordId || s.entity !== "document") return false;
-        const doc = documentMap.get(s.recordId);
-        if (!doc) return false;
-        return !NO_DELETE_TYPES.has(doc.documentType);
-      },
+      isEnabled: (s) => !!s.recordId && s.entity === "document",
       handler: async (s) => {
         if (!s.recordId) return;
         const res = await fetch(`/api/documents/${s.recordId}/delete`, {
           method: "POST",
         });
-        if (res.status === 403) {
-          toast.error(t("form.deleteNotAllowed"));
-          return;
-        }
         if (!res.ok) {
-          toast.error(t("form.fkViolationError"));
+          const message = await res.text();
+          toast.error(message || t("form.fkViolationError"));
           return;
         }
         const result = await res.json();
@@ -476,15 +558,37 @@ function DocumentsModule() {
       isEnabled: (s) => !!s.recordId && s.entity === "document",
       handler: async (s) => {
         if (!s.recordId) return;
-        const srcRes = await fetch(`/api/data/document/${s.recordId}`);
-        if (!srcRes.ok) return;
-        const { documentId: _id, ...copy } = await srcRes.json();
-        await fetch("/api/data/document", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(copy),
+        const res = await fetch(`/api/documents/${s.recordId}/duplicate`, { method: "POST" });
+        if (!res.ok) {
+          const message = await res.text();
+          toast.error(message || t("document.duplicate.noTargets"));
+          return;
+        }
+        const data = await res.json() as { candidates?: DocumentTargetGroupCandidate[] };
+        const candidates = data.candidates ?? [];
+        if (candidates.length === 0) {
+          toast.error(t("document.duplicate.noTargets"));
+          return;
+        }
+        setDuplicateDialog({
+          open: true,
+          recordId: s.recordId,
+          candidates,
+          selectedGroupId: candidates[0]?.documentGroupId ?? null,
+          isPending: false,
         });
-        queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+      },
+    });
+    const unregPrint = registerCommand({
+      id: "print-document",
+      scope: "context",
+      group: "workflow",
+      label: { en: "Print Document", de: "Beleg drucken" },
+      shortcut: "F6",
+      isEnabled: (s) => !!s.recordId && s.entity === "document",
+      handler: (s) => {
+        if (!s.recordId) return;
+        window.open(`/api/documents/${s.recordId}/print`, "_blank", "noopener,noreferrer");
       },
     });
     const unregPost = registerCommand({
@@ -495,20 +599,24 @@ function DocumentsModule() {
       isEnabled: (s) => !!s.recordId && s.entity === "document",
       handler: async (s) => {
         if (!s.recordId) return;
-        await fetch(`/api/data/document/${s.recordId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "posted" }),
+        const res = await fetch(`/api/documents/${s.recordId}/post`, {
+          method: "POST",
         });
+        if (!res.ok) {
+          const message = await res.text();
+          toast.error(message || "Unable to post document");
+          return;
+        }
         queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+        queryClient.invalidateQueries({ queryKey: ["data", "documentLine"] });
       },
     });
-    return () => { unregF3(); unregEdit(); unregF9(); unregF7(); unregF4(); unregDup(); unregPost(); };
-  }, [registerCommand, t, queryClient, documentMap]);
+    return () => { unregF3(); unregEdit(); unregF9(); unregF7(); unregF4(); unregDup(); unregPrint(); unregPost(); };
+  }, [registerCommand, t, queryClient, editorDocId]);
 
   // Tree keyboard navigation
   useEffect(() => {
-    const flatNodes = buildFlatNodes(treeSections, expandedDirections);
+    const flatNodes = buildFlatNodes(treeSections, expandedDirections, getTypeLabel);
 
     const currentIdx = flatNodes.findIndex((n) => {
       if (selection.kind === "type") return n.kind === "type" && n.documentType === selection.documentType;
@@ -523,7 +631,7 @@ function DocumentsModule() {
       const node = flatNodes[idx];
       if (!node) return;
       if (node.kind === "type") {
-        setSelection({ kind: "type", documentType: node.documentType, direction: node.direction });
+        setSelection({ kind: "type", documentType: node.documentType, direction: node.direction, groupId: node.groupId });
         setSubCrumb(node.label);
       } else {
         setSelection({ kind: "group", groupId: (node as any).groupId, documentType: node.documentType, direction: node.direction });
@@ -541,6 +649,7 @@ function DocumentsModule() {
       label: { en: "Next Tree Item", de: "Nächster Eintrag" },
       shortcut: "Ctrl+ArrowDown",
       isEnabled: () => true,
+      isVisible: () => !editorDocId,
       handler: () => navigate(1),
     });
     const unregUp = registerCommand({
@@ -550,6 +659,7 @@ function DocumentsModule() {
       label: { en: "Previous Tree Item", de: "Vorheriger Eintrag" },
       shortcut: "Ctrl+ArrowUp",
       isEnabled: () => true,
+      isVisible: () => !editorDocId,
       handler: () => navigate(-1),
     });
     const unregRight = registerCommand({
@@ -559,6 +669,7 @@ function DocumentsModule() {
       label: { en: "Expand Direction", de: "Segment aufklappen" },
       shortcut: "Ctrl+ArrowRight",
       isEnabled: () => true,
+      isVisible: () => !editorDocId,
       handler: () => {
         const dir = getCurrentDirection();
         if (dir && !expandedDirections.has(dir)) handleToggleDirection(dir);
@@ -571,6 +682,7 @@ function DocumentsModule() {
       label: { en: "Collapse Direction", de: "Segment zuklappen" },
       shortcut: "Ctrl+ArrowLeft",
       isEnabled: () => true,
+      isVisible: () => !editorDocId,
       handler: () => {
         const dir = getCurrentDirection();
         if (dir && expandedDirections.has(dir)) handleToggleDirection(dir);
@@ -578,9 +690,9 @@ function DocumentsModule() {
     });
 
     return () => { unregDown(); unregUp(); unregRight(); unregLeft(); };
-  }, [registerCommand, treeSections, expandedDirections, selection, setSubCrumb]);
+  }, [registerCommand, treeSections, expandedDirections, selection, setSubCrumb, editorDocId, getTypeLabel]);
 
-  const selectedDocument = documents.find((d: any) => d.documentId === focusState.recordId);
+  const selectedDocument = documents.find((d: any) => d.documentId === activeDocumentId);
 
   const dependentTabs = [
     {
@@ -616,7 +728,7 @@ function DocumentsModule() {
       content: (
         <InspectorPanel
           title={selectedDocument?.documentNo ?? "Document"}
-          recordId={focusState.recordId ?? undefined}
+          recordId={activeDocumentId ?? undefined}
           sections={[
             {
               title: "Document",
@@ -660,18 +772,33 @@ function DocumentsModule() {
             onSelectGroup={handleSelectGroup}
             expandedDirections={expandedDirections}
             onToggleDirection={handleToggleDirection}
+            getTypeLabel={getTypeLabel}
+            getDirectionLabel={getDirectionLabel}
+            onSelectCommit={onTreeSelectionCommitted}
             header={t("tree.types")}
           />
         }
         primaryGrid={
           editorDocId ? (
-            <DocumentEditor
+          <DocumentEditor
               documentId={editorDocId}
               documentGroupId={editorGroupId}
-              onClose={() => { setEditorDocId(null); setEditorGroupId(undefined); }}
+              onCreateNewDocument={(groupId) => {
+                documentRestoreIdRef.current = undefined;
+                setEditorGroupId(groupId);
+                setEditorDocId("__new__");
+              }}
+              onSaved={(savedId) => {
+                documentRestoreIdRef.current = savedId;
+              }}
+              onClose={() => {
+                setEditorDocId(null);
+                setEditorGroupId(undefined);
+              }}
             />
           ) : (
             <DataGrid
+              ref={documentGridRef}
               entityName="document"
               panelId="document-grid"
               data={documents}
@@ -716,22 +843,64 @@ function DocumentsModule() {
                   queryClient.invalidateQueries({ queryKey: ["data", "document"] });
                 },
               }]}
-              onRowOpen={(row: any) => { setEditorGroupId(undefined); setEditorDocId(row.documentId); }}
+              onRowOpen={(row: any) => {
+                documentRestoreIdRef.current = undefined;
+                setEditorGroupId(undefined);
+                setEditorDocId(row.documentId);
+              }}
               emptyTitle="No documents yet."
               emptySubtitle="Create the first document."
               emptyAction={{
                 label: `${t("actions.new")} Document`,
                 kbd: "F3",
-                onClick: () => { setEditorGroupId(selectionRef.current.kind === "group" ? selectionRef.current.groupId : undefined); setEditorDocId("__new__"); },
+                onClick: () => {
+                  const sel = selectionRef.current;
+                  documentRestoreIdRef.current = undefined;
+                  setEditorGroupId(sel.kind === "group" ? sel.groupId : sel.kind === "type" ? sel.groupId ?? undefined : undefined);
+                  setEditorDocId("__new__");
+                },
               }}
               className="h-full border-none rounded-none"
             />
           )
         }
-        dependentContext={editorDocId ? <></> : <ContextTabs tabs={dependentTabs} />}
+        dependentContext={editorDocId ? null : <ContextTabs tabs={dependentTabs} />}
       />
 
-      {/* Wandlungs-Dialog: Case 3 — multiple conversion targets */}
+      <DocumentTargetGroupDialog
+        open={duplicateDialog.open}
+        onOpenChange={(open) => setDuplicateDialog((p) => ({ ...p, open }))}
+        title="Zielgruppe wählen"
+        description="Mehrere Zielgruppen verfügbar. Bitte eine Zielgruppe auswählen."
+        candidates={duplicateDialog.candidates}
+        selectedGroupId={duplicateDialog.selectedGroupId}
+        confirmLabel="Duplizieren"
+        confirmPendingLabel="Dupliziere..."
+        isPending={duplicateDialog.isPending}
+        onSelectGroupId={(groupId) => setDuplicateDialog((p) => ({ ...p, selectedGroupId: groupId }))}
+        onConfirm={async () => {
+          const targetGroupId = duplicateDialog.selectedGroupId ?? duplicateDialog.candidates[0]?.documentGroupId;
+          if (!duplicateDialog.recordId || !targetGroupId) return;
+          setDuplicateDialog((p) => ({ ...p, isPending: true }));
+          try {
+            const res = await fetch(`/api/documents/${duplicateDialog.recordId}/duplicate`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ targetGroupId }),
+            });
+            if (res.ok) {
+              setDuplicateDialog({ open: false, recordId: null, candidates: [], selectedGroupId: null, isPending: false });
+              queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+              toast.success("Document duplicated");
+            } else {
+              toast.error("Unable to duplicate document");
+            }
+          } finally {
+            setDuplicateDialog((p) => ({ ...p, isPending: false }));
+          }
+        }}
+      />
+
       <Dialog
         open={conversionDialog.open}
         onOpenChange={(open) => setConversionDialog((p) => ({ ...p, open }))}

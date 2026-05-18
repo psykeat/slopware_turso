@@ -35,7 +35,13 @@ async function seedCanonicalDocumentGroups(tenantId: string, companyId: string) 
       })
       .onConflictDoUpdate({
         target: [schema.documentGroup.tenantId, schema.documentGroup.documentType, schema.documentGroup.groupNumber],
-        set: { name: sql`excluded.name` },
+        set: {
+          companyId: sql`excluded.company_id`,
+          name: sql`excluded.name`,
+          requireSerialTracking: sql`excluded.require_serial_tracking`,
+          requireBatchTracking: sql`excluded.require_batch_tracking`,
+          archived: false,
+        },
       });
   }
 }

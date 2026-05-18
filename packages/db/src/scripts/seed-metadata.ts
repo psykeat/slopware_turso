@@ -81,6 +81,9 @@ async function main() {
     legalName: { en: "Legal Name", de: "Juristischer Name" },
     companyNo: { en: "Company No", de: "Firmennummer" },
     fiscalYearStartMonth: { en: "FY Start Month", de: "Geschäftsjahr Beginn (Monat)" },
+    nextGroupId: { en: "Next Group", de: "Nächste Gruppe" },
+    requireSerialTracking: { en: "Require Serial Tracking", de: "Seriennummernpflicht" },
+    requireBatchTracking: { en: "Require Batch Tracking", de: "Chargenpflicht" },
   };
 
   for (const { key, table } of tables) {
@@ -98,6 +101,8 @@ async function main() {
     // 1. Identify PK, Display, and Tenant Scope
     let pkColumn = "";
     let displayColumn = "";
+    let codeColumn = "";
+    let valueColumn = "";
     let sortColumn = "created_at";
     let isTenantScoped = false;
     let hasName = false;
@@ -113,6 +118,10 @@ async function main() {
 
     if (key === "currency") pkColumn = "code";
     if (key === "country") pkColumn = "iso2Code";
+    if (Object.keys(columns).includes("code")) codeColumn = "code";
+    if (Object.keys(columns).includes("iso2Code")) codeColumn = "iso2Code";
+    if (Object.keys(columns).includes("iso3Code") && !codeColumn) codeColumn = "iso3Code";
+    valueColumn = pkColumn || codeColumn;
 
     if (!displayColumn && pkColumn) displayColumn = pkColumn;
     if (key === "postalCode") displayColumn = "plz";
@@ -136,6 +145,8 @@ async function main() {
             label,
             pkColumn: pkColumn || "id",
             displayColumn: displayColumn || "name",
+            codeColumn: codeColumn || undefined,
+            valueColumn: valueColumn || undefined,
             sortColumn: sortColumn || "createdAt",
             isTenantScoped,
             displayIsI18n: columns.name && (columns.name as any).columnType === 'PgJsonb',
@@ -146,6 +157,8 @@ async function main() {
             set: {
                 pkColumn: pkColumn || "id",
                 displayColumn: displayColumn || "name",
+                codeColumn: codeColumn || undefined,
+                valueColumn: valueColumn || undefined,
                 sortColumn: sortColumn || "createdAt",
                 isTenantScoped,
                 group,
@@ -157,10 +170,18 @@ async function main() {
 
     // 3. Populate Global Tenant Fields
     for (const [colName, col] of Object.entries(columns)) {
-        const columnType = (col as any).columnType;
-        const fieldLabel = fieldLabelMap[colName] || { en: colName, de: colName };
-        const isPk = (col as any).primary || false;
-        const isUuid = columnType === "PgUUID" || (col as any).dataType === "uuid";
+      const columnType = (col as any).columnType;
+      const fieldLabel = fieldLabelMap[colName] || { en: colName, de: colName };
+      const isPk = (col as any).primary || false;
+      const isUuid = columnType === "PgUUID" || (col as any).dataType === "uuid";
+      const isTechnicalField = [
+        "tenantId",
+        "createdAt",
+        "updatedAt",
+        "archived",
+        "archivedAt",
+        "isActive",
+      ].includes(colName);
 
         // Auto-discover lookup target
         let lookupTable: string | undefined = undefined;
@@ -177,7 +198,7 @@ async function main() {
             lookupTable = "currency";
         }
 
-        const isVisible = (lookupTable !== undefined) || (!isPk && !isUuid && !colName.endsWith("Id") && colName !== "createdAt" && colName !== "updatedAt");
+        const isVisible = (lookupTable !== undefined) || (!isPk && !isUuid && !colName.endsWith("Id") && !isTechnicalField);
 
         await db.insert(tenantFields).values({
             entityName: key,

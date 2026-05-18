@@ -20,21 +20,18 @@ export const Route = createFileRoute("/api/documents/$documentId/delete")({
 
         try {
           const svc = new DocumentService();
-          const result = await svc.deleteDocument(
-            params.documentId,
-            context.tenantId,
-          );
-          if (result.notAllowed) {
-            return new Response(JSON.stringify({ error: "Deletion not allowed for this document type" }), {
-              status: 403,
-              headers: { "content-type": "application/json" },
+          const result = await svc.deletePostedDocument(params.documentId, context.tenantId);
+          if (result.fkViolation) {
+            return new Response("Document could not be deleted because it is still referenced.", {
+              status: 409,
             });
           }
           return new Response(JSON.stringify(result), {
             headers: { "content-type": "application/json" },
           });
         } catch (err: any) {
-          return new Response(err.message, { status: 400 });
+          const status = err?.code === "23514" || err?.code === "P0001" ? 409 : 400;
+          return new Response(err.message ?? "Internal error", { status });
         }
       },
     },

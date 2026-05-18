@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { useTranslation } from "react-i18next";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
 import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
-import { DataGrid } from "@repo/ui/components/data-grid";
+import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
 import { EntityMask } from "@repo/ui/components/entity-mask";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
@@ -35,15 +35,28 @@ function AddressesModule() {
   const { setSubCrumb } = useActionBar();
   const { t } = useTranslation("ui");
   const queryClient = useQueryClient();
+  const addressGridRef = useRef<DataGridHandle>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleteFkViolation, setDeleteFkViolation] = useState(false);
+  const [activeAddressId, setActiveAddressId] = useState<string | null>(
+    focusState.entity === "address" ? focusState.recordId : null,
+  );
   const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
+
+  useEffect(() => {
+    if (focusState.entity === "address" && focusState.recordId) {
+      setActiveAddressId(focusState.recordId);
+    }
+  }, [focusState.entity, focusState.recordId]);
+
+  const restoreAddressGrid = useCallback((recordId?: string | null) => {
+    addressGridRef.current?.restoreFocus(recordId ?? activeAddressId ?? null);
+  }, [activeAddressId]);
 
   // Fetch addresses — paginated
   const { data: addressData, isLoading: isDataLoading } = useQuery({
@@ -91,34 +104,37 @@ function AddressesModule() {
     }>;
     recentDocuments: unknown[];
   }>({
-    queryKey: ["stats", "address", focusState.recordId],
+    queryKey: ["stats", "address", activeAddressId],
     queryFn: async () => {
-      const res = await fetch(`/api/stats/address/${encodeURIComponent(focusState.recordId!)}`);
+      const res = await fetch(`/api/stats/address/${encodeURIComponent(activeAddressId!)}`);
       if (!res.ok) throw new Error("Failed to fetch address stats");
       return res.json();
     },
-    enabled: !!focusState.recordId,
+    enabled: !!activeAddressId,
+    placeholderData: keepPreviousData,
   });
 
 
   const { data: contacts = [] } = useQuery({
-    queryKey: ["data", "addressContact", focusState.recordId],
+    queryKey: ["data", "addressContact", activeAddressId],
     queryFn: async () => {
-      const res = await fetch(`/api/data/addressContact?addressId=${focusState.recordId}`);
+      const res = await fetch(`/api/data/addressContact?addressId=${activeAddressId}`);
       if (!res.ok) throw new Error("Failed to fetch contacts");
       return res.json();
     },
-    enabled: !!focusState.recordId,
+    enabled: !!activeAddressId,
+    placeholderData: keepPreviousData,
   });
 
   const { data: deliveryAddresses = [] } = useQuery({
-    queryKey: ["data", "deliveryAddress", focusState.recordId],
+    queryKey: ["data", "deliveryAddress", activeAddressId],
     queryFn: async () => {
-      const res = await fetch(`/api/data/deliveryAddress?addressId=${focusState.recordId}`);
+      const res = await fetch(`/api/data/deliveryAddress?addressId=${activeAddressId}`);
       if (!res.ok) throw new Error("Failed to fetch delivery addresses");
       return res.json();
     },
-    enabled: !!focusState.recordId,
+    enabled: !!activeAddressId,
+    placeholderData: keepPreviousData,
   });
 
   // Register context commands
@@ -177,7 +193,7 @@ function AddressesModule() {
     return () => { unregF3(); unregEdit(); unregF4(); unregDup(); };
   }, [registerCommand, t, queryClient]);
 
-  const selectedAddress = addresses.find((a: any) => a.addressId === focusState.recordId);
+  const selectedAddress = addresses.find((a: any) => a.addressId === activeAddressId);
 
   const dependentTabs = [
     {
@@ -186,7 +202,7 @@ function AddressesModule() {
       content: (
         <InspectorPanel
           title={selectedAddress?.companyName ?? "Address"}
-          recordId={focusState.recordId ?? undefined}
+          recordId={activeAddressId ?? undefined}
           sections={[
             {
               title: "Identification",
@@ -400,10 +416,12 @@ function AddressesModule() {
               setSelectedCategoryId(id);
               gridState.setPage(1);
             }}
+            onSelectCommit={() => restoreAddressGrid()}
           />
         }
         primaryGrid={
           <DataGrid
+            ref={addressGridRef}
             entityName="address"
             panelId="address-grid"
             virtualized
@@ -470,7 +488,11 @@ function AddressesModule() {
             mode="create"
             title="New Address"
             onCancel={() => setShowCreate(false)}
-            onSaved={() => setShowCreate(false)}
+            onSaved={(record) => {
+              setShowCreate(false);
+              queryClient.invalidateQueries({ queryKey: ["data", "address"] });
+              restoreAddressGrid((record as any)?.addressId ?? (record as any)?.id ?? null);
+            }}
             className="border-none shadow-none rounded-none"
             fieldOverrides={ADDRESS_FIELD_OVERRIDES}
           />
@@ -478,68 +500,39 @@ function AddressesModule() {
       </Dialog>
 
       {/* Delete confirm dialog */}
-      <Dialog open={deleteConfirm} onOpenChange={(open) => { setDeleteConfirm(open); if (!open) setDeleteFkViolation(false); }}>
+      <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
         <DialogContent className="max-w-sm">
           <div className="p-6 flex flex-col gap-5">
             <div>
               <h3 className="text-[15px] font-medium text-ink">{t("form.deleteConfirmTitle")}</h3>
               <p className="text-[13px] text-ink-mute mt-1">{t("form.deleteConfirmBody")}</p>
-              {deleteFkViolation && (
-                <p className="text-[13px] text-destructive mt-2">{t("form.fkViolationError")}</p>
-              )}
             </div>
             <div className="flex justify-end gap-2 flex-wrap">
               <button
                 type="button"
                 className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
-                onClick={() => { setDeleteConfirm(false); setDeleteFkViolation(false); }}
+                onClick={() => setDeleteConfirm(false)}
               >
                 {t("actions.cancel")}
               </button>
-              {deleteFkViolation && (
-                <button
-                  type="button"
-                  className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
-                  onClick={async () => {
-                    if (!deleteId) return;
-                    await fetch(`/api/data/address/${deleteId}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ archivedAt: new Date().toISOString() }),
-                    });
-                    setDeleteConfirm(false);
-                    setDeleteFkViolation(false);
-                    setDeleteId(null);
-                    queryClient.invalidateQueries({ queryKey: ["data", "address"] });
-                    toast.success(t("form.archiveSuccess"));
-                  }}
-                >
-                  {t("actions.archiveInstead")}
-                </button>
-              )}
-              {!deleteFkViolation && (
-                <button
-                  type="button"
-                  className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
-                  onClick={async () => {
-                    if (!deleteId) return;
-                    const res = await fetch(`/api/data/address/${deleteId}`, {
-                      method: "DELETE",
-                    });
-                    if (res.status === 409) {
-                      setDeleteFkViolation(true);
-                      return;
-                    }
-                    setDeleteConfirm(false);
-                    setDeleteFkViolation(false);
-                    setDeleteId(null);
-                    queryClient.invalidateQueries({ queryKey: ["data", "address"] });
-                    toast.success(t("form.deleteSuccess"));
-                  }}
-                >
-                  {t("actions.delete")}
-                </button>
-              )}
+              <button
+                type="button"
+                className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
+                onClick={async () => {
+                  if (!deleteId) return;
+                  await fetch(`/api/data/address/${deleteId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ archived: true }),
+                  });
+                  setDeleteConfirm(false);
+                  setDeleteId(null);
+                  queryClient.invalidateQueries({ queryKey: ["data", "address"] });
+                  toast.success(t("form.archiveSuccess"));
+                }}
+              >
+                {t("actions.archive")}
+              </button>
             </div>
           </div>
         </DialogContent>
@@ -552,11 +545,12 @@ function AddressesModule() {
             entityName="address"
             mode="edit"
             layout="single"
-            recordId={focusState.recordId ?? undefined}
+            recordId={activeAddressId ?? undefined}
             onCancel={() => setShowEdit(false)}
-            onSaved={() => {
+            onSaved={(record) => {
               setShowEdit(false);
               queryClient.invalidateQueries({ queryKey: ["data", "address"] });
+              restoreAddressGrid((record as any)?.addressId ?? (record as any)?.id ?? activeAddressId);
             }}
             fieldOverrides={ADDRESS_FIELD_OVERRIDES}
             embedded
@@ -592,6 +586,20 @@ function AddressesModule() {
                       { key: "city", header: "City", type: "text", required: true },
                       { key: "countryCode", header: "Country", type: "text", required: true, width: "70px" },
                       { key: "defaultForShipping", header: "Default", type: "boolean", width: "60px" },
+                    ]}
+                  />
+                </div>
+                <div>
+                  <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Bank Accounts</div>
+                  <InlineEditGrid
+                    entityName="bankAccount"
+                    parentKey={{ addressId: record.addressId as string }}
+                    keyColumn="bankAccountId"
+                    columns={[
+                      { key: "iban", header: "IBAN", type: "text", required: true },
+                      { key: "bic", header: "BIC", type: "text" },
+                      { key: "bankName", header: "Bank", type: "text" },
+                      { key: "isDefault", header: "Default", type: "boolean", width: "60px" },
                     ]}
                   />
                 </div>

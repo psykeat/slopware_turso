@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +15,17 @@ interface TrackingEditorProps {
   articleId: string;
   warehouseId?: string | null;
   isPosted: boolean;
+  autoFocusToken?: string | null;
+  onAdvance?: () => void;
+  onAutoFocusConsumed?: () => void;
+}
+
+interface TrackingRow {
+  trackingId: string;
+  serialNumberId: string | null;
+  serialNo: string | null;
+  batchNo: string | null;
+  qty: string;
 }
 
 // ─── TrackingEditor ───────────────────────────────────────────────────────────
@@ -28,13 +39,15 @@ export function TrackingEditor({
   articleId,
   warehouseId,
   isPosted,
+  autoFocusToken,
+  onAdvance,
+  onAutoFocusConsumed,
 }: TrackingEditorProps) {
   const queryClient = useQueryClient();
 
   // ── local input state ──
   const [inputVal, setInputVal] = useState("");
   const [inputQty, setInputQty] = useState("1");
-  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [suggestionIdx, setSuggestionIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
@@ -42,6 +55,7 @@ export function TrackingEditor({
   // ── derived ──
   const isOutbound = ["L", "R", "G", "E", "g", "e"].includes(documentType);
   const isNewLine = !documentLineId || documentLineId.startsWith("new-");
+  const trimmedInput = inputVal.trim();
 
   // ── fetch existing tracking rows ──
   const { data: existingRows = [] } = useQuery({
@@ -50,7 +64,7 @@ export function TrackingEditor({
       const r = await fetch(
         `/api/documents/${documentId}/lines/${documentLineId}/tracking`,
       );
-      return r.ok ? r.json() : [];
+      return r.ok ? (r.json() as Promise<TrackingRow[]>) : [];
     },
     enabled: !!documentLineId && !isNewLine,
   });
@@ -78,10 +92,58 @@ export function TrackingEditor({
     enabled: trackingMode === "batch" && isOutbound && !!articleId,
   });
 
+  const availableSerialRows = useMemo(
+    () => availableSerials as Array<{ serialNumberId: string; serialNo: string; status?: string }>,
+    [availableSerials],
+  );
+  const availableBatchRows = useMemo(
+    () => availableBatches as Array<{ batchNo: string; balance: string | number; warehouseId?: string | null }>,
+    [availableBatches],
+  );
+
+  const serialSuggestions = useMemo(
+    () => availableSerialRows.filter((row) => row.serialNo.toLowerCase().includes(trimmedInput.toLowerCase())).slice(0, 8),
+    [availableSerialRows, trimmedInput],
+  );
+
+  const batchSuggestions = useMemo(() => {
+    const grouped = new Map<string, { batchNo: string; balance: number }>();
+    for (const row of availableBatchRows) {
+      const balance = Number(row.balance ?? 0);
+      const current = grouped.get(row.batchNo);
+      grouped.set(row.batchNo, {
+        batchNo: row.batchNo,
+        balance: (current?.balance ?? 0) + balance,
+      });
+    }
+    return Array.from(grouped.values())
+      .filter((row) => row.batchNo.toLowerCase().includes(trimmedInput.toLowerCase()))
+      .slice(0, 8);
+  }, [availableBatchRows, trimmedInput]);
+
+  const serialLookup = useMemo(
+    () => new Map(availableSerialRows.map((row) => [row.serialNo, row] as const)),
+    [availableSerialRows],
+  );
+
+  const batchLookup = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of availableBatchRows) {
+      map.set(row.batchNo, (map.get(row.batchNo) ?? 0) + Number(row.balance ?? 0));
+    }
+    return map;
+  }, [availableBatchRows]);
+
+  const activeSuggestions = trackingMode === "serial" ? serialSuggestions : batchSuggestions;
+  const exactSerial = trimmedInput ? serialLookup.get(trimmedInput) ?? null : null;
+  const exactBatchBalance = trimmedInput ? batchLookup.get(trimmedInput) ?? null : null;
+  const hasInput = trimmedInput.length > 0;
+
   // ── mutations ──
   const addMutation = useMutation({
     mutationFn: async (row: {
       serialNumberId?: string;
+      serialNo?: string;
       batchNo?: string;
       qty: string;
     }) => {
@@ -122,63 +184,76 @@ export function TrackingEditor({
   const isComplete = trackingSum >= lineQty;
   const isOvershot = trackingSum > lineQty;
 
+  useEffect(() => {
+    if (!autoFocusToken || isPosted) return;
+    inputRef.current?.focus();
+    inputRef.current?.select();
+    onAutoFocusConsumed?.();
+  }, [autoFocusToken, isPosted, onAutoFocusConsumed]);
+
   // ── submit helpers ──
   function submitSerial() {
-    const sn = inputVal.trim();
+    const sn = trimmedInput;
     if (!sn) return;
-    const found = (availableSerials as any[]).find(
-      (s: any) => s.serialNo === sn,
-    );
+    const found = serialLookup.get(sn);
     if (isOutbound && !found) {
       toast.error(`Seriennummer "${sn}" nicht verfügbar`);
       return;
     }
-    addMutation.mutate({ serialNumberId: found?.serialNumberId, qty: "1" });
+    if (isOutbound) {
+      addMutation.mutate({ serialNumberId: found?.serialNumberId, qty: "1" });
+    } else {
+      addMutation.mutate({ serialNo: sn, qty: "1" });
+    }
     setInputVal("");
-    setSuggestions([]);
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
   function submitBatch() {
-    const charge = inputVal.trim();
+    const charge = trimmedInput;
     const qty = Number(inputQty);
     if (!charge || !qty || isNaN(qty)) return;
     addMutation.mutate({ batchNo: charge, qty: String(qty) });
     setInputVal("");
     setInputQty("1");
-    setSuggestions([]);
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
   function selectSuggestion(s: any) {
     if (trackingMode === "serial") {
       setInputVal(s.serialNo);
-      setSuggestions([]);
       addMutation.mutate({ serialNumberId: s.serialNumberId, qty: "1" });
       setInputVal("");
       setTimeout(() => inputRef.current?.focus(), 50);
     } else {
       setInputVal(s.batchNo);
-      setSuggestions([]);
       setTimeout(() => qtyRef.current?.focus(), 50);
     }
   }
 
   // ── keyboard handlers ──
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if ((e.key === "Enter" || e.key === "Tab") && isComplete) {
+      e.preventDefault();
+      onAdvance?.();
+      return;
+    }
+
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSuggestionIdx((i) => Math.min(i + 1, suggestions.length - 1));
+      if (activeSuggestions.length === 0) return;
+      setSuggestionIdx((i) => Math.min(i + 1, activeSuggestions.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      if (activeSuggestions.length === 0) return;
       setSuggestionIdx((i) => Math.max(i - 1, 0));
     } else if (
       (e.key === "Enter" || e.key === "Tab") &&
-      suggestions.length > 0 &&
-      suggestions[suggestionIdx]
+      activeSuggestions.length > 0 &&
+      activeSuggestions[suggestionIdx]
     ) {
       e.preventDefault();
-      selectSuggestion(suggestions[suggestionIdx]);
+      selectSuggestion(activeSuggestions[suggestionIdx]);
     } else if (e.key === "Enter" || e.key === "Tab") {
       if (trackingMode === "serial" && inputVal.trim()) {
         e.preventDefault();
@@ -277,33 +352,41 @@ export function TrackingEditor({
               value={inputVal}
               onChange={(e) => {
                 setInputVal(e.target.value);
-                const q = e.target.value.toLowerCase();
-                if (trackingMode === "serial" && isOutbound) {
-                  setSuggestions(
-                    (availableSerials as any[])
-                      .filter((s: any) =>
-                        s.serialNo.toLowerCase().includes(q),
-                      )
-                      .slice(0, 8),
-                  );
-                  setSuggestionIdx(0);
-                } else if (trackingMode === "batch" && isOutbound) {
-                  setSuggestions(
-                    (availableBatches as any[])
-                      .filter((b: any) =>
-                        b.batchNo.toLowerCase().includes(q),
-                      )
-                      .slice(0, 8),
-                  );
-                  setSuggestionIdx(0);
-                }
+                setSuggestionIdx(0);
               }}
               onKeyDown={handleKeyDown}
             />
+            {hasInput && isOutbound && (
+              <div className="mt-1 text-[11px] text-ink-mute">
+                {trackingMode === "serial" ? (
+                  exactSerial ? (
+                    <span className="text-emerald-600">
+                      Verfügbar: {exactSerial.serialNo}
+                    </span>
+                  ) : (
+                    <span className="text-destructive">
+                      Nicht verfügbar
+                    </span>
+                  )
+                ) : (
+                  <span>
+                    Verfügbar:{" "}
+                    <span className={exactBatchBalance != null ? "text-emerald-600" : "text-ink-secondary"}>
+                      {exactBatchBalance != null ? `${exactBatchBalance}` : "0"}
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
+            {hasInput && !isOutbound && (
+              <div className="mt-1 text-[11px] text-ink-mute">
+                Keine Verfügbarkeitsprüfung in diesem Belegtyp
+              </div>
+            )}
             {/* Dropdown */}
-            {suggestions.length > 0 && (
+            {activeSuggestions.length > 0 && (
               <div className="absolute z-50 mt-1 w-full rounded border border-hairline bg-canvas shadow-md">
-                {suggestions.map((s: any, i: number) => (
+                {activeSuggestions.map((s: any, i: number) => (
                   <button
                     type="button"
                     key={s.serialNumberId ?? s.batchNo}
@@ -314,9 +397,16 @@ export function TrackingEditor({
                     onMouseEnter={() => setSuggestionIdx(i)}
                     onClick={() => selectSuggestion(s)}
                   >
-                    {trackingMode === "serial"
-                      ? s.serialNo
-                      : `${s.batchNo} (${s.balance} verfügbar)`}
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="truncate">
+                        {trackingMode === "serial" ? s.serialNo : s.batchNo}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-ink-mute">
+                        {trackingMode === "serial"
+                          ? "available"
+                          : `${Number(s.balance ?? 0)} verfügbar`}
+                      </span>
+                    </span>
                   </button>
                 ))}
               </div>

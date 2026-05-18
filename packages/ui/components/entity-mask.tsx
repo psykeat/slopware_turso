@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import React, { useState, useEffect, useRef } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { Skeleton } from "./skeleton";
-import { SearchIcon, XIcon, AlertCircleIcon } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
-import { DataGrid } from "./data-grid";
+import { AlertCircleIcon } from "lucide-react";
 import { toast } from "sonner";
+import { LookupField, buildLookupConfigFromField, createRemoteLookupSource } from "./lookup-field";
 
 export interface FieldDef {
   key: string;
@@ -24,6 +23,9 @@ export interface FieldDef {
   lookupTable?: string;
   lookupFilter?: any;
   lookupDisplayColumn?: string;
+  lookupCodeColumn?: string;
+  lookupValueColumn?: string;
+  lookupSortColumn?: string;
   lookupIsI18n?: boolean;
   lookupPkColumn?: string;
   /** Renders a visual section divider above this field */
@@ -58,116 +60,6 @@ const inputBase =
 const inputError =
   "border-destructive focus-visible:ring-[color-mix(in_oklab,var(--destructive)_20%,transparent)] focus-visible:border-destructive";
 
-function LookupInput({
-  field,
-  value,
-  disabled,
-  onChange,
-}: {
-  field: FieldDef;
-  value: any;
-  disabled: boolean;
-  onChange: (val: any) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const { t, i18n } = useTranslation("ui");
-
-  // Fetch the display value for the current ID
-  const { data: lookupRecord } = useQuery({
-    queryKey: ["lookup", field.lookupTable, value],
-    queryFn: async () => {
-      if (!value || !field.lookupTable) return null;
-      const res = await fetch(`/api/data/${field.lookupTable}/${value}`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      return Array.isArray(data) ? data[0] : data;
-    },
-    enabled: !!value && !!field.lookupTable,
-  });
-
-  // Fetch list for the dialog
-  const { data: list = [], isLoading } = useQuery({
-    queryKey: ["data", field.lookupTable],
-    queryFn: async () => {
-      const res = await fetch(`/api/data/${field.lookupTable}`);
-      return res.ok ? res.json() : [];
-    },
-    enabled: open && !!field.lookupTable,
-  });
-
-  const displayLabel = lookupRecord
-    ? (field.lookupDisplayColumn ? lookupRecord[field.lookupDisplayColumn] : (lookupRecord.name || lookupRecord.code || lookupRecord.description || lookupRecord.companyName || value))
-    : value || "";
-
-  const finalDisplay = typeof displayLabel === "object"
-    ? (displayLabel[i18n.language] || displayLabel.en || displayLabel.de || value)
-    : displayLabel;
-
-  return (
-    <>
-      <div className="relative group">
-        <input
-          type="text"
-          value={finalDisplay}
-          readOnly
-          disabled={disabled}
-          onClick={() => !disabled && setOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === "F5") {
-              e.preventDefault();
-              setOpen(true);
-            }
-          }}
-          className={cn(inputBase, "pr-8 cursor-pointer")}
-          placeholder={t("lookup.placeholder") || "Select..."}
-        />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          {value && !disabled && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange(null);
-              }}
-              className="text-ink-mute hover:text-destructive transition-colors"
-            >
-              <XIcon size={14} />
-            </button>
-          )}
-          <SearchIcon size={14} className="text-ink-mute group-hover:text-primary transition-colors" />
-        </div>
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl h-[80vh] flex flex-col p-0 overflow-hidden">
-          <DialogHeader className="px-6 py-4 border-b border-hairline shrink-0">
-            <DialogTitle>
-              {t("lookup.select") || "Select"} {field.label}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-hidden">
-            {field.lookupTable && (
-              <DataGrid
-                entityName={field.lookupTable}
-                data={list}
-                isLoading={isLoading}
-                keyExtractor={(row: any) =>
-                  row[field.lookupPkColumn || ""] || row[`${field.lookupTable}Id`] || row.id || row.code
-                }
-                onRowClick={(row: any) => {
-                  const id = row[field.lookupPkColumn || ""] || row[`${field.lookupTable}Id`] || row.id || row.code;
-                  onChange(id);
-                  setOpen(false);
-                }}
-                toolbar={false}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
 function FieldInput({
   field,
   value,
@@ -187,7 +79,24 @@ function FieldInput({
       : value ?? "";
 
   if (field.type === "lookup") {
-    return <LookupInput field={field} value={value} disabled={disabled} onChange={onChange} />;
+    const sourceConfig = buildLookupConfigFromField(
+      field,
+      field.label,
+      undefined,
+      "No results",
+    );
+    if (!sourceConfig) {
+      return null;
+    }
+    const source = createRemoteLookupSource(sourceConfig);
+    return (
+      <LookupField
+        value={value ?? null}
+        source={source}
+        disabled={disabled}
+        onChange={(next) => onChange(next)}
+      />
+    );
   }
 
   if (field.type === "boolean") {
@@ -270,6 +179,8 @@ export function EntityMask({
 }: EntityMaskProps) {
   const { t, i18n } = useTranslation("ui");
   const queryClient = useQueryClient();
+  const formRef = useRef<HTMLDivElement>(null);
+  const didAutoFocusRef = useRef(false);
 
   const [metaFields, setMetaFields] = useState<FieldDef[]>([]);
   const [loading, setLoading] = useState(!propFields && !!entityName);
@@ -278,8 +189,7 @@ export function EntityMask({
 
   // Reset form and fetch data when record changes
   useEffect(() => {
-    setFormData({});
-    setGlobalError(null);
+    const resetTimer = setTimeout(() => setFormData({}), 0);
     if (recordId && (mode === "edit" || !mode)) {
       fetch(`${apiBase}/${entityName}/${recordId}`)
         .then((res) => res.json())
@@ -301,6 +211,7 @@ export function EntityMask({
         })
         .catch((err) => console.error("EntityMask: failed to fetch record", err));
     }
+    return () => clearTimeout(resetTimer);
   }, [recordId, entityName, mode, apiBase]);
 
   // Load metadata when no fields prop provided
@@ -309,7 +220,6 @@ export function EntityMask({
     if (!entityName) return;
 
     let isMounted = true;
-    setLoading(true);
 
     fetch(`/api/metadata/fields/${entityName}`)
       .then((res) => {
@@ -341,6 +251,9 @@ export function EntityMask({
             lookupFilter: f.lookupFilter,
             lookupPkColumn: f.lookupPkColumn,
             lookupDisplayColumn: f.lookupDisplayColumn,
+            lookupCodeColumn: f.lookupCodeColumn,
+            lookupValueColumn: f.lookupValueColumn,
+            lookupSortColumn: f.lookupSortColumn,
             lookupIsI18n: f.lookupIsI18n,
           }));
         setMetaFields(mappedFields);
@@ -364,7 +277,36 @@ export function EntityMask({
     return ov ? { ...f, ...ov } : f;
   });
 
-  const saveMutation = useMutation({
+  useEffect(() => {
+    didAutoFocusRef.current = false;
+  }, [entityName, recordId, mode]);
+
+  useEffect(() => {
+    if (loading || didAutoFocusRef.current) return;
+    const root = formRef.current;
+    if (!root) return;
+
+    const selector = [
+      'input:not([type="hidden"]):not([disabled])',
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+    ].join(", ");
+    const first = root.querySelector<HTMLElement>(selector);
+    if (!first) return;
+
+    didAutoFocusRef.current = true;
+    requestAnimationFrame(() => {
+      first.focus();
+      if (first instanceof HTMLInputElement && typeof first.select === "function") {
+        first.select();
+      }
+    });
+  }, [fields.length, loading]);
+
+  const {
+    mutate: saveRecord,
+    isPending: isSaving,
+  } = useMutation({
     mutationFn: async (data: Record<string, any>) => {
       setGlobalError(null);
       const isEdit = recordId && mode !== "create";
@@ -397,7 +339,7 @@ export function EntityMask({
       if (e.key === "F10") {
         e.preventDefault();
         e.stopPropagation();
-        saveMutation.mutate(formData);
+        saveRecord(formData);
       }
       if (e.key === "Escape") {
         e.preventDefault();
@@ -407,7 +349,7 @@ export function EntityMask({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [formData, recordId, onCancel, saveMutation]);
+  }, [formData, onCancel, saveRecord]);
 
   const handleChange = (key: string, val: any) => {
     setFormData((prev) => {
@@ -501,7 +443,7 @@ export function EntityMask({
                 <FieldInput
                   field={field}
                   value={formData[field.key] ?? field.value ?? ""}
-                  disabled={saveMutation.isPending}
+                  disabled={isSaving}
                   onChange={(val) => handleChange(field.key, val)}
                 />
               </div>
@@ -537,12 +479,12 @@ export function EntityMask({
         </button>
       )}
       <button
-        onClick={() => saveMutation.mutate(formData)}
-        disabled={saveMutation.isPending}
+        onClick={() => saveRecord(formData)}
+        disabled={isSaving}
         className="h-7 px-4 rounded-full text-[13px] disabled:opacity-50"
         style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
       >
-        {saveMutation.isPending
+        {isSaving
           ? t("form.saving")
           : recordId
             ? t("form.update")
@@ -560,7 +502,7 @@ export function EntityMask({
 
   if (inline) {
     return (
-      <div className={cn("p-4", className)}>
+      <div ref={formRef} className={cn("p-4", className)}>
         {title && <h2 className="text-[18px] font-light text-ink mb-1">{title}</h2>}
         <p className="text-[13px] text-ink-mute mb-6">{t("form.requiredHint")}</p>
         {fieldsGrid}
@@ -572,7 +514,7 @@ export function EntityMask({
 
   if (embedded && childLayout === "side" && hasChildContent) {
     return (
-      <div className={cn("flex flex-col overflow-hidden h-full", className)}>
+      <div ref={formRef} className={cn("flex flex-col overflow-hidden h-full", className)}>
         <div className="flex flex-1 overflow-hidden min-h-0 divide-x divide-hairline">
           <div className="w-[35%] shrink-0 overflow-y-auto p-6 bg-canvas-soft/30">
             {title && <h2 className="text-[18px] font-light text-ink mb-1">{title}</h2>}
@@ -598,7 +540,7 @@ export function EntityMask({
 
   if (embedded) {
     return (
-      <div className={cn("overflow-auto p-4", className)}>
+      <div ref={formRef} className={cn("overflow-auto p-4", className)}>
         {title && <h2 className="text-[18px] font-light text-ink mb-1">{title}</h2>}
         <p className="text-[13px] text-ink-mute mb-6">{t("form.requiredHint")}</p>
         {fieldsGrid}
@@ -610,6 +552,7 @@ export function EntityMask({
 
   return (
     <div
+      ref={formRef}
       className={cn(
         "bg-canvas rounded-xl border border-hairline shadow-lg p-6 max-w-2xl mx-auto my-8",
         className,

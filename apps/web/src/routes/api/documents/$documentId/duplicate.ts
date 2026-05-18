@@ -20,10 +20,24 @@ export const Route = createFileRoute("/api/documents/$documentId/duplicate")({
 
         try {
           const svc = new DocumentService();
+          const body = await request.json().catch(() => ({} as any));
+          const targetGroupId = body?.targetGroupId as string | undefined;
+
+          if (!targetGroupId) {
+            const candidates = await svc.getDuplicateCandidates(
+              params.documentId,
+              context.tenantId,
+            );
+            return new Response(JSON.stringify({ candidates }), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+
           const result = await svc.duplicateDocument(
             params.documentId,
             session.user.id,
             context.tenantId,
+            targetGroupId,
           );
           return new Response(JSON.stringify(result), {
             headers: { "content-type": "application/json" },

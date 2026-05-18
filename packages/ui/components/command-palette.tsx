@@ -48,20 +48,20 @@ export function CommandPalette() {
   }, [commands, query, focusState, lang]);
 
   useEffect(() => {
-    setSelectedIdx(0);
-  }, [query, open]);
-
-  useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 0);
-    } else {
-      setQuery("");
     }
   }, [open]);
 
+  const closePalette = () => {
+    setQuery("");
+    setSelectedIdx(0);
+    setOpen(false);
+  };
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Escape") {
-      setOpen(false);
+      closePalette();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setSelectedIdx((i) => Math.min(i + 1, filtered.length - 1));
@@ -72,7 +72,7 @@ export function CommandPalette() {
       e.preventDefault();
       const cmd = filtered[selectedIdx];
       if (cmd) {
-        setOpen(false);
+        closePalette();
         executeCommand(cmd.id);
       }
     }
@@ -84,7 +84,7 @@ export function CommandPalette() {
     <div
       role="presentation"
       className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/30"
-      onClick={() => setOpen(false)}
+      onClick={closePalette}
     >
       <div
         role="dialog"
@@ -100,7 +100,10 @@ export function CommandPalette() {
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelectedIdx(0);
+            }}
             placeholder="Search commands…"
             className="flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-mute outline-none"
           />
@@ -130,7 +133,7 @@ export function CommandPalette() {
                   }
                   onMouseEnter={() => setSelectedIdx(idx)}
                   onClick={() => {
-                    setOpen(false);
+                    closePalette();
                     executeCommand(cmd.id);
                   }}
                 >

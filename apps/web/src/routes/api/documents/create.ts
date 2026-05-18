@@ -33,6 +33,7 @@ export const Route = createFileRoute("/api/documents/create")({
             billingAddress: body.billingAddress ?? null,
             deliveryAddress: body.deliveryAddress ?? null,
             deliveryAddressId: body.deliveryAddressId ?? null,
+            customAttributes: body.customAttributes ?? null,
             currencyId: body.currencyId ?? null,
             warehouseId: body.warehouseId ?? null,
             paymentTermId: body.paymentTermId ?? null,

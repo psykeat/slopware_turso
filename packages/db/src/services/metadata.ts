@@ -28,6 +28,7 @@ export class MetadataResolver {
     // 1. Physical Schema Introspection
     const table = (schema as any)[entityName];
     const introspectedFields = new Map<string, any>();
+    const technicalFieldNames = new Set(["tenantId", "createdAt", "updatedAt", "archived", "archivedAt", "isActive"]);
 
     if (table) {
       const columns = getColumns(table);
@@ -35,13 +36,16 @@ export class MetadataResolver {
         const columnType = (col as any).columnType;
         const isPk = (col as any).primary || false;
         const isUuid = columnType === "PgUUID" || (col as any).dataType === "uuid";
+        const isDocumentGroupNextGroup = entityName === "documentGroup" && colName === "nextGroupId";
 
         // Auto-discover lookups by naming convention (e.g. addressCategoryId -> addressCategory)
         let lookupTable: string | undefined = undefined;
-        if (colName.endsWith("Id") && colName !== "tenantId") {
+        if (isDocumentGroupNextGroup) {
+          lookupTable = "documentGroup";
+        } else if (colName.endsWith("Id") && colName !== "tenantId") {
             const potentialEntity = colName.slice(0, -2);
             if ((schema as any)[potentialEntity] && potentialEntity !== entityName) {
-                lookupTable = potentialEntity;
+              lookupTable = potentialEntity;
             }
         }
 
@@ -53,7 +57,11 @@ export class MetadataResolver {
             columnType === "PgInteger" ? "integer" :
             columnType === "PgBoolean" ? "boolean" :
             columnType === "PgTimestamp" || columnType === "PgDate" ? "timestamp" : "text",
-          isVisible: !isPk && !isUuid && !colName.endsWith("Id") && colName !== "tenantId" && colName !== "createdAt" && colName !== "archived" && colName !== "isActive",
+          // document_group.next_group_id is a business field even though it ends with Id
+          // and needs to stay visible for conversion sequencing.
+          isVisible:
+            (!isPk && !isUuid && !colName.endsWith("Id") && !technicalFieldNames.has(colName)) ||
+            isDocumentGroupNextGroup,
           isRequired: (col as any).notNull || false,
           label: { en: colName, de: colName },
           scope: "introspection",
@@ -128,6 +136,34 @@ export class MetadataResolver {
       }
 
       const registry = registries.find(r => r.tableName === f.lookupTable);
+      const lookupSchemaTable = f.lookupTable ? (schema as any)[f.lookupTable] : undefined;
+      const lookupColumns = lookupSchemaTable ? getColumns(lookupSchemaTable) : undefined;
+      const tableColumns = lookupColumns ? Object.keys(lookupColumns) : [];
+      let inferredPkColumn =
+        registry?.pkColumn ??
+        tableColumns.find((columnName) => {
+          const col = (lookupColumns as any)[columnName];
+          return (col as any)?.primary || false;
+        }) ??
+        tableColumns.find((columnName) => columnName.toLowerCase().endsWith("id")) ??
+        tableColumns[0];
+      const inferredCodeColumn =
+        registry?.codeColumn ??
+        (tableColumns.includes("code")
+          ? "code"
+          : tableColumns.includes("iso2Code")
+            ? "iso2Code"
+            : tableColumns.includes("iso3Code")
+              ? "iso3Code"
+              : undefined);
+      const inferredDisplayColumn =
+        registry?.displayColumn ??
+        (tableColumns.includes("name")
+          ? "name"
+          : tableColumns.includes("code")
+            ? "code"
+            : tableColumns[0]);
+      const inferredValueColumn = registry?.valueColumn ?? inferredPkColumn ?? inferredCodeColumn;
       
       return {
         ...f,
@@ -136,12 +172,15 @@ export class MetadataResolver {
         helpTextEn,
         helpTextDe,
         // Enforce basic invariants
-        isVisible: f.isVisible !== false && f.fieldName !== "tenantId",
+        isVisible: f.isVisible !== false && !technicalFieldNames.has(f.fieldName),
         // Map lookup info
         lookupTable: f.lookupTable,
         lookupFilter: f.lookupFilter,
-        lookupPkColumn: registry?.pkColumn,
-        lookupDisplayColumn: registry?.displayColumn,
+        lookupPkColumn: inferredPkColumn,
+        lookupDisplayColumn: inferredDisplayColumn,
+        lookupCodeColumn: inferredCodeColumn,
+        lookupValueColumn: inferredValueColumn,
+        lookupSortColumn: registry?.sortColumn ?? inferredDisplayColumn,
         lookupIsI18n: registry?.displayIsI18n,
       };
     });

@@ -73,6 +73,45 @@
     "signOut": "Abmelden",
     "userConfig": "Benutzerkonfiguration"
   },
+  "account": {
+    "title": "Konto",
+    "selfService": "Selbstverwaltung",
+    "back": "Einstellungen",
+    "description": "Persönliches Profil, E-Mail und Passwort an einem Ort aktualisieren.",
+    "displayNameTitle": "Anzeigename",
+    "displayNameDescription": "Dieser Name wird in der Anwendung und bei der Mandantenanlage verwendet.",
+    "displayNameLabel": "Name",
+    "displayNamePlaceholder": "Jane Doe",
+    "saveName": "Name speichern",
+    "nameRequired": "Bitte einen Anzeigenamen eingeben.",
+    "nameSuccess": "Anzeigename aktualisiert.",
+    "nameError": "Anzeigename konnte nicht aktualisiert werden.",
+    "emailTitle": "E-Mail-Adresse",
+    "emailDescription": "Beim Ändern der E-Mail wird vor der Aktualisierung ein Bestätigungslink gesendet.",
+    "currentEmailLabel": "Aktuelle E-Mail",
+    "newEmailLabel": "Neue E-Mail",
+    "newEmailPlaceholder": "neu@example.com",
+    "changeEmail": "E-Mail ändern",
+    "emailRequired": "Bitte eine neue E-Mail-Adresse eingeben.",
+    "emailSuccess": "Bestätigungs-E-Mail gesendet.",
+    "emailError": "Der E-Mail-Änderungsprozess konnte nicht gestartet werden.",
+    "emailNote": "Die Änderung muss im Posteingang bestätigt werden.",
+    "passwordTitle": "Passwort",
+    "passwordDescription": "Neues Passwort setzen und andere Sitzungen aus Sicherheitsgründen abmelden.",
+    "currentPasswordLabel": "Aktuelles Passwort",
+    "currentPasswordPlaceholder": "Aktuelles Passwort eingeben",
+    "newPasswordLabel": "Neues Passwort",
+    "newPasswordPlaceholder": "Neues Passwort eingeben",
+    "confirmPasswordLabel": "Passwort bestätigen",
+    "confirmPasswordPlaceholder": "Neues Passwort wiederholen",
+    "changePassword": "Passwort ändern",
+    "currentPasswordRequired": "Bitte das aktuelle Passwort eingeben.",
+    "newPasswordRequired": "Bitte ein neues Passwort eingeben.",
+    "passwordMismatch": "Die Passwörter stimmen nicht überein.",
+    "passwordSuccess": "Passwort aktualisiert.",
+    "passwordError": "Das Passwort konnte nicht aktualisiert werden.",
+    "passwordNote": "Andere aktive Sitzungen werden abgemeldet."
+  },
   "form": {
     "requiredHint": "Pflichtfelder mit * markiert. F10 zum Speichern, Esc zum Abbrechen.",
     "saving": "Wird gespeichert…",
@@ -185,7 +224,25 @@
     "OUTBOUND": "Warenausgang",
     "INBOUND": "Wareneingang",
     "ADJUSTMENT": "Lagerbuchungen",
+    "PRODUCTION": "Produktion",
     "other": "Sonstiges"
+  },
+  "documentTypes": {
+    "N": "Angebote",
+    "A": "Aufträge",
+    "L": "Lieferscheine",
+    "R": "Rechnungen",
+    "G": "Gutschriften",
+    "b": "Bestellungen",
+    "l": "Wareneingänge",
+    "r": "Eingangsrechnungen",
+    "g": "Eingangsgutschriften",
+    "V": "Inventur",
+    "U": "Umbuchungen",
+    "Z": "Zugänge",
+    "E": "Entnahmen",
+    "q": "Produktionsaufträge",
+    "p": "Fertigmeldungen"
   },
   "document": {
     "breadcrumb": "Belege",
@@ -232,6 +289,8 @@
       "convert": "Wandeln",
       "storno": "Stornieren",
       "duplicate": "Duplizieren",
+      "lock": "Sperren",
+      "unlock": "Freigeben",
       "save": "Speichern",
       "post": "Buchen",
       "saving": "Wird gespeichert…",
@@ -240,10 +299,20 @@
       "cancelling": "Wird storniert…",
       "duplicating": "Wird dupliziert…"
     },
+    "closePrompt": {
+      "title": "Änderungen verwerfen?",
+      "description": "Dieses Dokument hat ungespeicherte Änderungen. Du kannst sie verwerfen, den Entwurf speichern oder abbrechen.",
+      "closeWithoutSaving": "Ohne Speichern schließen",
+      "saveDraftAndClose": "Als Entwurf speichern und schließen",
+      "cancel": "Abbrechen"
+    },
     "convert": {
       "title": "Beleg wandeln",
       "selectTarget": "Zielgruppe auswählen",
       "confirm": "Wandeln bestätigen"
+    },
+    "duplicate": {
+      "noTargets": "Keine passenden Zielgruppen zum Duplizieren"
     }
   },
   "devCycles": {

@@ -43,6 +43,7 @@ export function BomEditor({ articleId }: BomEditorProps) {
   });
   const searchRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const quantityInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery<{ components: BomComponent[] }>({
     queryKey: ["bom", articleId],
@@ -119,6 +120,11 @@ export function BomEditor({ articleId }: BomEditorProps) {
     });
   }
 
+  useEffect(() => {
+    if (!editingId) return;
+    quantityInputRef.current?.focus();
+  }, [editingId]);
+
   async function commitEdit(bomId: string) {
     await fetch(`/api/articles/${articleId}/bom/${bomId}`, {
       method: "PATCH",
@@ -180,12 +186,12 @@ export function BomEditor({ articleId }: BomEditorProps) {
                 <>
                   <td className="px-1">
                     <Input
+                      ref={quantityInputRef}
                       value={editValues.quantity}
                       onChange={(e) => setEditValues((v) => ({ ...v, quantity: e.target.value }))}
                       onBlur={() => commitEdit(c.bomId)}
                       onKeyDown={(e) => { if (e.key === "Enter") commitEdit(c.bomId); if (e.key === "Escape") setEditingId(null); }}
                       className="h-6 text-[13px] text-right"
-                      autoFocus
                     />
                   </td>
                   <td className="px-1">

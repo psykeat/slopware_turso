@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DataService } from "@repo/db/services/data";
+import { DocumentService } from "@repo/db/services/document-service";
 import { auth } from "@repo/auth/auth";
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
@@ -102,6 +103,14 @@ export const Route = createFileRoute("/api/data/$")({
 
         try {
           const body = await request.json();
+          if (entityName === "documentLine") {
+            const documentService = new DocumentService();
+            const result = await documentService.createDocumentLine(context?.tenantId ?? "", body);
+            return new Response(JSON.stringify(result), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+
           const result = await service.create(entityName, body);
           return new Response(JSON.stringify(result), {
             headers: { "content-type": "application/json" },

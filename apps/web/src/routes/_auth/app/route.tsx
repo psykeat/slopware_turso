@@ -290,9 +290,13 @@ function AvatarMenu({ userName, userEmail }: { userName: string; userEmail: stri
           </div>
 
           {/* User Config */}
-          <button className="w-full text-left flex items-center gap-2 px-2.5 py-2 mx-auto text-[13px] text-ink-secondary hover:bg-canvas-soft hover:text-ink rounded-sm">
+          <Link
+            to="/app/settings/account"
+            onClick={() => setOpen(false)}
+            className="w-full text-left flex items-center gap-2 px-2.5 py-2 mx-auto text-[13px] text-ink-secondary hover:bg-canvas-soft hover:text-ink rounded-sm"
+          >
             {t("avatar.userConfig")}
-          </button>
+          </Link>
 
           {/* Language */}
           <div className="flex items-center justify-between px-2.5 py-2 text-[13px] text-ink-secondary">

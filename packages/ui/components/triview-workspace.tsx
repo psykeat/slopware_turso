@@ -23,6 +23,8 @@ export function TriViewWorkspace({
   defaultLayout = ["20%", "80%"],
   defaultRightLayout = ["60%", "40%"],
 }: TriViewWorkspaceProps) {
+  const hasDependentContext = dependentContext != null;
+
   return (
     <div className={cn("h-full w-full flex bg-canvas", className)}>
       <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
@@ -33,19 +35,25 @@ export function TriViewWorkspace({
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={defaultLayout[1]}>
-          <ResizablePanelGroup orientation="vertical">
-            <ResizablePanel defaultSize={defaultRightLayout[0]} minSize="25%">
-              <div className="h-full w-full overflow-hidden">
-                {primaryGrid}
-              </div>
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={defaultRightLayout[1]} minSize="20%">
-              <div className="h-full w-full overflow-hidden">
-                {dependentContext}
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
+          {hasDependentContext ? (
+            <ResizablePanelGroup orientation="vertical">
+              <ResizablePanel defaultSize={defaultRightLayout[0]} minSize="25%">
+                <div className="h-full w-full overflow-hidden">
+                  {primaryGrid}
+                </div>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={defaultRightLayout[1]} minSize="20%">
+                <div className="h-full w-full overflow-hidden">
+                  {dependentContext}
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            <div className="h-full w-full overflow-hidden">
+              {primaryGrid}
+            </div>
+          )}
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

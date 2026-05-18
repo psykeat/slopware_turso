@@ -28,7 +28,7 @@ vite.config.ts     Oxlint + Oxfmt config (root, affects all)
 
 ```
 __root.tsx                     Shell: ThemeProvider, I18nextProvider, CommandProvider, FocusProvider
-index.tsx                      → redirect to /app/addresses
+index.tsx                      → redirect to /app
 _auth/route.tsx                Guard: ensureQueryData(authQueryOptions()), returns { user } to context
 _auth/app/route.tsx            AppBar + ActionBar + StatusBar shell; AppLayout component
 _auth/app/index.tsx            → redirect to /app/addresses
@@ -36,6 +36,7 @@ _auth/app/addresses.tsx        Addresses module (TriView)
 _auth/app/articles.tsx         Articles module (TriView)
 _auth/app/documents.tsx        Documents module (TriView)
 _auth/app/settings/index.tsx   Settings (helper tables sidebar + DataGrid)
+_auth/app/settings/account.tsx Account self-service page
 _auth/app/admin/route.tsx      Admin tab shell (Tenants / Users / Organizations)
 _auth/app/admin/index.tsx      beforeLoad: isSystemAdmin check → redirect
 _auth/app/admin/tenants.tsx    Admin: tenant list grid
@@ -170,4 +171,3 @@ packages/db/src/services/tenant.ts            getTenantContext(), getUserTenantI
 ## Commands
 
 `pnpm dev`, `pnpm lint`, `pnpm db generate/migrate`, `pnpm ui add <name>`
-

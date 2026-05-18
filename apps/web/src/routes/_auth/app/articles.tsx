@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { useTranslation } from "react-i18next";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
 import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
-import { DataGrid } from "@repo/ui/components/data-grid";
+import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
 import { EntityMask } from "@repo/ui/components/entity-mask";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
@@ -53,15 +53,28 @@ function ArticlesModule() {
   const { setSubCrumb } = useActionBar();
   const { t } = useTranslation("ui");
   const queryClient = useQueryClient();
+  const articleGridRef = useRef<DataGridHandle>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleteFkViolation, setDeleteFkViolation] = useState(false);
+  const [activeArticleId, setActiveArticleId] = useState<string | null>(
+    focusState.entity === "article" ? focusState.recordId : null,
+  );
   const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
+
+  useEffect(() => {
+    if (focusState.entity === "article" && focusState.recordId) {
+      setActiveArticleId(focusState.recordId);
+    }
+  }, [focusState.entity, focusState.recordId]);
+
+  const restoreArticleGrid = useCallback((recordId?: string | null) => {
+    articleGridRef.current?.restoreFocus(recordId ?? activeArticleId ?? null);
+  }, [activeArticleId]);
 
   // Fetch articles — paginated
   const { data: articleData, isLoading: isDataLoading } = useQuery({
@@ -98,17 +111,18 @@ function ArticlesModule() {
     },
   });
 
-  const groupMap = useMemo(() => new Map(groups.map((g: TreeNode) => [g.id, g.label])), [groups]);
+  const groupMap = useMemo(() => new Map<string, string>(groups.map((g: TreeNode) => [g.id, g.label])), [groups]);
 
   // Fetch inventory movements for selected article (server-side FK filter)
   const { data: movements = [] } = useQuery({
-    queryKey: ["data", "inventoryMovement", focusState.recordId],
+    queryKey: ["data", "inventoryMovement", activeArticleId],
     queryFn: async () => {
-      const res = await fetch(`/api/data/inventoryMovement?articleId=${focusState.recordId}`);
+      const res = await fetch(`/api/data/inventoryMovement?articleId=${activeArticleId}`);
       if (!res.ok) throw new Error("Failed to fetch inventory movements");
       return res.json();
     },
-    enabled: !!focusState.recordId,
+    enabled: !!activeArticleId,
+    placeholderData: keepPreviousData,
   });
 
   // Fetch article stats when statistics tab is active
@@ -121,13 +135,14 @@ function ArticlesModule() {
     }>;
     stockLedger: unknown[];
   }>({
-    queryKey: ["stats", "article", focusState.recordId],
+    queryKey: ["stats", "article", activeArticleId],
     queryFn: async () => {
-      const res = await fetch(`/api/stats/article/${encodeURIComponent(focusState.recordId!)}`);
+      const res = await fetch(`/api/stats/article/${encodeURIComponent(activeArticleId!)}`);
       if (!res.ok) throw new Error("Failed to fetch article stats");
       return res.json();
     },
-    enabled: !!focusState.recordId,
+    enabled: !!activeArticleId,
+    placeholderData: keepPreviousData,
   });
 
   // Register context commands
@@ -186,7 +201,7 @@ function ArticlesModule() {
     return () => { unregF3(); unregEdit(); unregF4(); unregDup(); };
   }, [registerCommand, t, queryClient]);
 
-  const selectedArticle = articles.find((a: any) => a.articleId === focusState.recordId);
+  const selectedArticle = articles.find((a: any) => a.articleId === activeArticleId);
 
   const dependentTabs = [
     {
@@ -195,7 +210,7 @@ function ArticlesModule() {
       content: (
         <InspectorPanel
           title={selectedArticle?.name ?? "Article"}
-          recordId={focusState.recordId ?? undefined}
+          recordId={activeArticleId ?? undefined}
           sections={[
             {
               title: "Identification",
@@ -291,8 +306,8 @@ function ArticlesModule() {
     {
       id: "stock-ledger",
       label: t("stats.stockLedger"),
-      content: focusState.recordId ? (
-        <StockLedgerTable articleId={focusState.recordId} />
+      content: activeArticleId ? (
+        <StockLedgerTable articleId={activeArticleId} />
       ) : (
         <div className="flex items-center justify-center h-24 text-[13px] text-ink-mute">
           {t("empty.title")}
@@ -317,10 +332,12 @@ function ArticlesModule() {
               setSelectedGroupId(id);
               gridState.setPage(1);
             }}
+            onSelectCommit={() => restoreArticleGrid()}
           />
         }
         primaryGrid={
           <DataGrid
+            ref={articleGridRef}
             entityName="article"
             panelId="article-grid"
             data={articles}
@@ -331,7 +348,7 @@ function ArticlesModule() {
               { key: "articleNo", header: "No.", sortable: true, render: (r: any) => <span className="font-mono tabular-nums text-ink-mute">{r.articleNo}</span> },
               { key: "name", header: "Name", sortable: true },
               { key: "baseUnit", header: "Unit" },
-              { key: "articleGroupId", header: "Group", render: (r: any) => <span>{String(groupMap.get(r.articleGroupId) ?? "—")}</span> },
+              { key: "articleGroupId", header: "Group", render: (r: any) => <span>{groupMap.get(r.articleGroupId) ?? "—"}</span> },
               { key: "trackingMode", header: "Tracking", render: (r: any) => <span className="font-mono text-[11px] text-ink-mute">{r.trackingMode ?? "—"}</span> },
               { key: "bomType", header: "BOM", render: (r: any) => <span className="font-mono text-[11px] text-ink-mute">{r.bomType ?? "—"}</span> },
             ]}
@@ -376,68 +393,39 @@ function ArticlesModule() {
       />
 
       {/* Delete confirm dialog */}
-      <Dialog open={deleteConfirm} onOpenChange={(open) => { setDeleteConfirm(open); if (!open) setDeleteFkViolation(false); }}>
+      <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
         <DialogContent className="max-w-sm">
           <div className="p-6 flex flex-col gap-5">
             <div>
               <h3 className="text-[15px] font-medium text-ink">{t("form.deleteConfirmTitle")}</h3>
               <p className="text-[13px] text-ink-mute mt-1">{t("form.deleteConfirmBody")}</p>
-              {deleteFkViolation && (
-                <p className="text-[13px] text-destructive mt-2">{t("form.fkViolationError")}</p>
-              )}
             </div>
             <div className="flex justify-end gap-2 flex-wrap">
               <button
                 type="button"
                 className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
-                onClick={() => { setDeleteConfirm(false); setDeleteFkViolation(false); }}
+                onClick={() => setDeleteConfirm(false)}
               >
                 {t("actions.cancel")}
               </button>
-              {deleteFkViolation && (
-                <button
-                  type="button"
-                  className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
-                  onClick={async () => {
-                    if (!deleteId) return;
-                    await fetch(`/api/data/article/${deleteId}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ archivedAt: new Date().toISOString() }),
-                    });
-                    setDeleteConfirm(false);
-                    setDeleteFkViolation(false);
-                    setDeleteId(null);
-                    queryClient.invalidateQueries({ queryKey: ["data", "article"] });
-                    toast.success(t("form.archiveSuccess"));
-                  }}
-                >
-                  {t("actions.archiveInstead")}
-                </button>
-              )}
-              {!deleteFkViolation && (
-                <button
-                  type="button"
-                  className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
-                  onClick={async () => {
-                    if (!deleteId) return;
-                    const res = await fetch(`/api/data/article/${deleteId}`, {
-                      method: "DELETE",
-                    });
-                    if (res.status === 409) {
-                      setDeleteFkViolation(true);
-                      return;
-                    }
-                    setDeleteConfirm(false);
-                    setDeleteFkViolation(false);
-                    setDeleteId(null);
-                    queryClient.invalidateQueries({ queryKey: ["data", "article"] });
-                    toast.success(t("form.deleteSuccess"));
-                  }}
-                >
-                  {t("actions.delete")}
-                </button>
-              )}
+              <button
+                type="button"
+                className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
+                onClick={async () => {
+                  if (!deleteId) return;
+                  await fetch(`/api/data/article/${deleteId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ archived: true }),
+                  });
+                  setDeleteConfirm(false);
+                  setDeleteId(null);
+                  queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+                  toast.success(t("form.archiveSuccess"));
+                }}
+              >
+                {t("actions.archive")}
+              </button>
             </div>
           </div>
         </DialogContent>
@@ -451,7 +439,11 @@ function ArticlesModule() {
             title="New Article"
             fieldOverrides={ARTICLE_FIELD_OVERRIDES}
             onCancel={() => setShowCreate(false)}
-            onSaved={() => setShowCreate(false)}
+            onSaved={(record) => {
+              setShowCreate(false);
+              queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+              restoreArticleGrid((record as any)?.articleId ?? (record as any)?.id ?? null);
+            }}
             className="border-none shadow-none rounded-none"
           />
         </DialogContent>
@@ -464,12 +456,13 @@ function ArticlesModule() {
             entityName="article"
             mode="edit"
             layout="single"
-            recordId={focusState.recordId ?? undefined}
+            recordId={activeArticleId ?? undefined}
             fieldOverrides={ARTICLE_FIELD_OVERRIDES}
             onCancel={() => setShowEdit(false)}
-            onSaved={() => {
+            onSaved={(record) => {
               setShowEdit(false);
               queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+              restoreArticleGrid((record as any)?.articleId ?? (record as any)?.id ?? activeArticleId);
             }}
             embedded
             childLayout="side"

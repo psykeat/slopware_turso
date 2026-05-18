@@ -6,8 +6,9 @@ Codex repo instructions. Keep startup context lean: read the project map first, 
 
 1. Read [`map.md`](map.md) first. It is the fast project map for routes, APIs, components, aliases, services, and commands.
 2. Use `.agents/` as the canonical project documentation folder. Load only the docs needed for the task.
-3. Do not load `.agents/*` wholesale. Some docs are large references or historical checklists.
-4. When docs and code disagree, verify with live code using `rg`. Architecture docs define product invariants; live code defines current implementation shape.
+3. Treat `.agents/archive/` as historical context only. Do not read archived docs unless you are investigating prior decisions.
+4. Do not load `.agents/*` wholesale. Some docs are large references or historical checklists.
+5. When docs and code disagree, verify with live code using `rg`. Architecture docs define product invariants; live code defines current implementation shape.
 
 ## Stack
 
@@ -34,6 +35,8 @@ pnpm ui add <component>                  # add shadcn primitive
 pnpm tanstack search-docs "<q>" --library <lib> --json
 ```
 
+- In Codex sessions, prefer the local `vp` binary from `node_modules/.bin/vp` for lint/check runs when `pnpm`/`corepack` is slow or unavailable.
+
 ## Environment Constants
 
 | Key               | Value                                  |
@@ -49,17 +52,18 @@ For private local credentials, use the private project memory.
 
 Use this table to choose context. Prefer live code for implementation details; open docs for product intent, invariants, and feature-specific decisions.
 
-| Task Area | Read |
-|---|---|
-| Fast orientation | [`map.md`](map.md) |
-| Architecture invariants | [`.agents/00_core_architecture.md`](.agents/00_core_architecture.md), [`.agents/01_project_foundation.md`](.agents/01_project_foundation.md), [`.agents/02_entity_introspection_and_generic_ui.md`](.agents/02_entity_introspection_and_generic_ui.md) |
-| Frontend shell, shared UI, design | [`.agents/design.md`](.agents/design.md), [`.agents/03_frontend_basedesign.md`](.agents/03_frontend_basedesign.md); use [`.agents/04_redesign.md`](.agents/04_redesign.md) only for active checklist work |
-| TanStack, auth, TypeScript, workflow | [`.agents/tanstack-patterns.md`](.agents/tanstack-patterns.md), [`.agents/auth.md`](.agents/auth.md), [`.agents/typescript.md`](.agents/typescript.md), [`.agents/workflow.md`](.agents/workflow.md) |
-| Database, migrations, tenancy | [`.agents/postgres.md`](.agents/postgres.md), live Drizzle schema, and targeted sections of [`.agents/schema.md`](.agents/schema.md) |
-| Feature slices | Open the matching numbered `.agents/*.md` file for the slice being changed, then verify against live code |
+| Task Area                            | Read                                                                                                                                                                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fast orientation                     | [`map.md`](map.md)                                                                                                                                                                                                                                     |
+| Architecture invariants              | [`.agents/00_core_architecture.md`](.agents/00_core_architecture.md), [`.agents/01_project_foundation.md`](.agents/01_project_foundation.md), [`.agents/02_entity_introspection_and_generic_ui.md`](.agents/02_entity_introspection_and_generic_ui.md) |
+| Frontend shell, shared UI, design    | [`.agents/design.md`](.agents/design.md), [`.agents/03_frontend_basedesign.md`](.agents/03_frontend_basedesign.md)                                                                                                                                     |
+| TanStack, auth, TypeScript, workflow | [`.agents/tanstack-patterns.md`](.agents/tanstack-patterns.md), [`.agents/auth.md`](.agents/auth.md), [`.agents/typescript.md`](.agents/typescript.md), [`.agents/workflow.md`](.agents/workflow.md)                                                   |
+| Database, migrations, tenancy        | [`.agents/postgres.md`](.agents/postgres.md), live Drizzle schema, and targeted sections of [`.agents/schema.md`](.agents/schema.md)                                                                                                                   |
+| Feature slices                       | Open the matching active `.agents/*.md` file for the slice being changed, then verify against live code; archived slice docs live under [`.agents/archive/`](.agents/archive/)                                                                         |
 
 ## Known Documentation Hygiene
 
 - Treat [`.agents/schema.md`](.agents/schema.md) as a generated reference. Read targeted table sections only.
-- Treat [`.agents/status.md`](.agents/status.md) as historical transcript unless the user explicitly asks for conversation history.
+- Treat [`.agents/archive/status.md`](.agents/archive/status.md) as historical transcript unless the user explicitly asks for conversation history.
+- Treat [`.agents/archive/`](.agents/archive/) as historical-only documentation and keep it out of the default reading path.
 - If a doc still references `.gemini/*`, resolve it to the equivalent `.agents/*` path.

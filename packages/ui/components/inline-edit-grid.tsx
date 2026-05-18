@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, CheckIcon, XIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -32,6 +32,7 @@ export function InlineEditGrid({
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Record<string, any>>({});
+  const firstEditInputRef = useRef<HTMLInputElement>(null);
 
   const { data: rows = [] } = useQuery({
     queryKey: ["data", entityName, JSON.stringify(parentKey)],
@@ -96,6 +97,11 @@ export function InlineEditGrid({
     setEditingId(null);
     setEditData({});
   };
+
+  useEffect(() => {
+    if (!editingId) return;
+    firstEditInputRef.current?.focus();
+  }, [editingId]);
 
   const allRows =
     editingId === NEW_ROW_ID ? [...rows, { [keyColumn]: NEW_ROW_ID }] : rows;
@@ -174,7 +180,7 @@ export function InlineEditGrid({
                           <input
                             type={col.type === "number" ? "number" : "text"}
                             value={editData[col.key] ?? ""}
-                            autoFocus={i === 0}
+                            ref={i === 0 ? firstEditInputRef : undefined}
                             onChange={(e) =>
                               setEditData((d) => ({ ...d, [col.key]: e.target.value }))
                             }

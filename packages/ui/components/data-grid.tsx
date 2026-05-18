@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { forwardRef, useState, useEffect, useRef, useMemo, useCallback, useImperativeHandle } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -87,6 +87,11 @@ export interface DataGridProps<T> {
   virtualized?: boolean;
 }
 
+export interface DataGridHandle {
+  restoreFocus: (recordId?: string | null) => void;
+  focusContainer: () => void;
+}
+
 function colFlexStyle(width?: string): React.CSSProperties {
   if (width) return { flex: `0 0 ${width}`, width, overflow: "hidden" };
   return { flex: 1, minWidth: 0, overflow: "hidden" };
@@ -134,7 +139,7 @@ function getColType(col: ColumnDef<any> | undefined): string {
 let _ruleIdCounter = 0;
 function newRuleId() { return `r${++_ruleIdCounter}`; }
 
-export function DataGrid<T>({
+function DataGridInner<T>({
   entityName,
   data,
   columns: initialColumns,
@@ -165,7 +170,8 @@ export function DataGrid<T>({
   onSelectionChange,
   bulkActions,
   virtualized = false,
-}: DataGridProps<T>) {
+}: DataGridProps<T>, ref: React.ForwardedRef<DataGridHandle>) {
+  "use no memo";
   const { t, i18n } = useTranslation("ui");
   const { state: focusState, setFocus } = useFocus();
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -180,6 +186,12 @@ export function DataGrid<T>({
   const [showColPicker, setShowColPicker] = useState(false);
   const [internalSorting, setInternalSorting] = useState<SortingState>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [restoreRequest, setRestoreRequest] = useState<{
+    token: number;
+    recordId: string | null;
+    fromIndex: number;
+    dataSignature: string;
+  } | null>(null);
 
   // Local debounced search state
   const [localSearch, setLocalSearch] = useState(searchProp ?? "");
@@ -302,6 +314,7 @@ export function DataGrid<T>({
     }
   };
 
+  // eslint-disable-next-line react-hooks-js/incompatible-library
   const table = useReactTable({
     data,
     columns: tanstackColumns,
@@ -324,32 +337,103 @@ export function DataGrid<T>({
     overscan: 10,
   });
 
-  // Sync focus state when selection or data changes.
-  // Uses a ref to track what we last set so we don't loop on stale focusState.
-  useEffect(() => {
-    if (data.length > 0) {
-      const row = data[selectedIndex] ?? data[0];
-      const id = keyExtractor(row);
-      const last = lastFocusRef.current;
-      if (!last || last.id !== id || last.entity !== entityName) {
-        lastFocusRef.current = { id, entity: entityName };
-        setFocus({ entity: entityName, recordId: id, panel: panelId, area: "grid", row: selectedIndex });
-      }
-    }
-  // keyExtractor is intentionally omitted — inline prop, always functionally stable
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, selectedIndex, entityName, panelId]);
+  const dataSignature = useMemo(
+    () => rows.map((row) => keyExtractor(row.original)).join("\u0001"),
+    [keyExtractor, rows],
+  );
 
-  const scrollRowIntoView = (index: number) => {
+  const scrollRowIntoView = useCallback((index: number) => {
     if (virtualized) {
       virtualizer.scrollToIndex(index, { behavior: "auto" });
     } else {
       scrollRef.current?.querySelector(`[data-row-idx="${index}"]`)?.scrollIntoView({ block: "nearest" });
     }
-  };
+  }, [virtualized, virtualizer]);
+
+  const focusRow = useCallback((index: number) => {
+    if (rows.length === 0) {
+      scrollRef.current?.focus();
+      return;
+    }
+    const nextIndex = Math.max(0, Math.min(index, rows.length - 1));
+    setSelectedIndex(nextIndex);
+    scrollRowIntoView(nextIndex);
+    requestAnimationFrame(() => {
+      scrollRef.current?.focus();
+    });
+  }, [rows.length, scrollRowIntoView]);
+
+  const restoreFocus = useCallback((recordId?: string | null) => {
+    setRestoreRequest({
+      token: Date.now() + Math.random(),
+      recordId: recordId ?? null,
+      fromIndex: selectedIndex,
+      dataSignature,
+    });
+  }, [dataSignature, selectedIndex]);
+
+  useImperativeHandle(ref, () => ({
+    restoreFocus,
+    focusContainer: () => {
+      scrollRef.current?.focus();
+    },
+  }), [restoreFocus]);
+
+  useEffect(() => {
+    if (!restoreRequest) return;
+    if (rows.length === 0) {
+      if (!loading) {
+        scrollRef.current?.focus();
+        setRestoreRequest(null);
+      }
+      return;
+    }
+
+    if (restoreRequest.recordId === null) {
+      focusRow(restoreRequest.fromIndex);
+      setRestoreRequest(null);
+      return;
+    }
+
+    const targetIndex = restoreRequest.recordId
+      ? rows.findIndex((row) => keyExtractor(row.original) === restoreRequest.recordId)
+      : -1;
+
+    if (targetIndex >= 0) {
+      focusRow(targetIndex);
+      setRestoreRequest(null);
+      return;
+    }
+
+    if (restoreRequest.dataSignature !== dataSignature) {
+      focusRow(restoreRequest.fromIndex);
+      setRestoreRequest(null);
+    }
+  }, [dataSignature, focusRow, keyExtractor, loading, restoreRequest, rows]);
+
+  useEffect(() => {
+    if (data.length > 0) {
+      const clampedIndex = Math.max(0, Math.min(selectedIndex, rows.length - 1));
+      if (clampedIndex !== selectedIndex) {
+        setSelectedIndex(clampedIndex);
+      }
+      const row = data[clampedIndex] ?? data[0];
+      const id = keyExtractor(row);
+      const last = lastFocusRef.current;
+      if (!last || last.id !== id || last.entity !== entityName) {
+        lastFocusRef.current = { id, entity: entityName };
+        setFocus({ entity: entityName, recordId: id, panel: panelId, area: "grid", row: clampedIndex });
+      }
+    }
+  // keyExtractor is intentionally omitted — inline prop, always functionally stable
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, selectedIndex, entityName, panelId, rows.length]);
 
   // Scoped keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      return;
+    }
     if (e.key === "ArrowDown") {
       e.preventDefault();
       const next = Math.min(selectedIndex + 1, rows.length - 1);
@@ -442,6 +526,21 @@ export function DataGrid<T>({
 
   const allPageKeys = data.map(r => keyExtractor(r));
   const allPageSelected = allPageKeys.length > 0 && allPageKeys.every(k => selectedKeys.has(k));
+  const toggleRowSelection = (id: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const activateRow = (dataRow: T, rowIndex: number, id: string) => {
+    scrollRef.current?.focus();
+    setSelectedIndex(rowIndex);
+    setFocus({ entity: entityName, recordId: id, panel: panelId, area: "grid", row: rowIndex });
+    onRowClick?.(dataRow);
+  };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -756,6 +855,7 @@ export function DataGrid<T>({
           {/* Scroll container — scoped keyboard nav */}
           <div
             ref={scrollRef}
+            role="grid"
             className="flex-1 overflow-auto outline-none"
             tabIndex={0}
             onKeyDown={handleKeyDown}
@@ -788,21 +888,32 @@ export function DataGrid<T>({
                       isSortable && "cursor-pointer hover:text-ink transition-colors",
                     )}
                     style={colFlexStyle(col?.width)}
-                    onClick={isSortable ? () => header.column.toggleSorting() : undefined}
                   >
-                    <span className="truncate">{col?.header ?? header.id}</span>
-                    {isSortable && (
-                      <ChevronUpIcon
-                        size={11}
+                    {isSortable ? (
+                      <button
+                        type="button"
                         className={cn(
-                          "shrink-0 transition-[opacity,transform] duration-100",
-                          sortEntry === undefined
-                            ? "opacity-20"
-                            : sortEntry.desc
-                              ? "opacity-100 rotate-180"
-                              : "opacity-100 rotate-0",
+                          "flex w-full items-center gap-1 text-inherit",
+                          (col?.isNumeric || col?.align === "right") && "justify-end",
+                          col?.align === "center" && "justify-center",
                         )}
-                      />
+                        onClick={() => header.column.toggleSorting()}
+                      >
+                        <span className="truncate">{col?.header ?? header.id}</span>
+                        <ChevronUpIcon
+                          size={11}
+                          className={cn(
+                            "shrink-0 transition-[opacity,transform] duration-100",
+                            sortEntry === undefined
+                              ? "opacity-20"
+                              : sortEntry.desc
+                                ? "opacity-100 rotate-180"
+                                : "opacity-100 rotate-0",
+                          )}
+                        />
+                      </button>
+                    ) : (
+                      <span className="truncate">{col?.header ?? header.id}</span>
                     )}
                   </div>
                 );
@@ -820,6 +931,7 @@ export function DataGrid<T>({
                   const isSelected = selectedIndex === vItem.index && focusState.panel === panelId;
                   const isChecked = selectable && selectedKeys.has(id);
                   return (
+                    // eslint-disable-next-line
                     <div
                       key={row.id}
                       style={{
@@ -835,15 +947,37 @@ export function DataGrid<T>({
                             ? { backgroundColor: "color-mix(in oklab, var(--primary) 5%, transparent)" }
                             : undefined),
                       }}
-                      className={cn("flex border-b border-hairline cursor-pointer transition-colors", !isSelected && !isChecked && "hover:bg-canvas-soft")}
-                      onClick={() => { scrollRef.current?.focus(); setSelectedIndex(vItem.index); setFocus({ entity: entityName, recordId: id, panel: panelId, area: "grid", row: vItem.index }); onRowClick?.(dataRow); }}
-                      onDoubleClick={() => onRowOpen?.(dataRow)}
+                      className={cn("relative flex border-b border-hairline cursor-pointer transition-colors", !isSelected && !isChecked && "hover:bg-canvas-soft")}
                     >
                       {selectable && (
-                        <div className="w-10 shrink-0 flex items-center justify-center" onClick={e => { e.stopPropagation(); setSelectedKeys(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }}>
+                        <button
+                          type="button"
+                          className="w-10 shrink-0 flex items-center justify-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRowSelection(id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleRowSelection(id);
+                            }
+                          }}
+                          aria-pressed={isChecked}
+                          aria-label={`Select row ${id}`}
+                        >
                           <input type="checkbox" checked={isChecked} onChange={() => {}} className="w-3.5 h-3.5 pointer-events-none" />
-                        </div>
+                        </button>
                       )}
+                      <button
+                        type="button"
+                        aria-label={`Open row ${id}`}
+                        className="absolute inset-y-0 z-10 bg-transparent"
+                        style={{ left: selectable ? 40 : 0, right: 0 }}
+                        onClick={() => activateRow(dataRow, vItem.index, id)}
+                        onDoubleClick={() => onRowOpen?.(dataRow)}
+                      />
                       {row.getVisibleCells().map(cell => {
                         const col = resolvedColumns.find(c => c.key === cell.column.id);
                         if (!col) return null;
@@ -867,6 +1001,7 @@ export function DataGrid<T>({
                   const isSelected = selectedIndex === index && focusState.panel === panelId;
                   const isChecked = selectable && selectedKeys.has(id);
                   return (
+                    // eslint-disable-next-line
                     <div
                       key={row.id}
                       data-row-idx={index}
@@ -878,15 +1013,37 @@ export function DataGrid<T>({
                             ? { backgroundColor: "color-mix(in oklab, var(--primary) 5%, transparent)" }
                             : undefined),
                       }}
-                      className={cn("flex border-b border-hairline cursor-pointer transition-colors", !isSelected && !isChecked && "hover:bg-canvas-soft")}
-                      onClick={() => { scrollRef.current?.focus(); setSelectedIndex(index); setFocus({ entity: entityName, recordId: id, panel: panelId, area: "grid", row: index }); onRowClick?.(dataRow); }}
-                      onDoubleClick={() => onRowOpen?.(dataRow)}
+                      className={cn("relative flex border-b border-hairline cursor-pointer transition-colors", !isSelected && !isChecked && "hover:bg-canvas-soft")}
                     >
                       {selectable && (
-                        <div className="w-10 shrink-0 flex items-center justify-center" onClick={e => { e.stopPropagation(); setSelectedKeys(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }}>
+                        <button
+                          type="button"
+                          className="w-10 shrink-0 flex items-center justify-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRowSelection(id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleRowSelection(id);
+                            }
+                          }}
+                          aria-pressed={isChecked}
+                          aria-label={`Select row ${id}`}
+                        >
                           <input type="checkbox" checked={isChecked} onChange={() => {}} className="w-3.5 h-3.5 pointer-events-none" />
-                        </div>
+                        </button>
                       )}
+                      <button
+                        type="button"
+                        aria-label={`Open row ${id}`}
+                        className="absolute inset-y-0 z-10 bg-transparent"
+                        style={{ left: selectable ? 40 : 0, right: 0 }}
+                        onClick={() => activateRow(dataRow, index, id)}
+                        onDoubleClick={() => onRowOpen?.(dataRow)}
+                      />
                       {row.getVisibleCells().map(cell => {
                         const col = resolvedColumns.find(c => c.key === cell.column.id);
                         if (!col) return null;
@@ -982,3 +1139,7 @@ export function DataGrid<T>({
     </div>
   );
 }
+
+export const DataGrid = forwardRef(DataGridInner) as <T>(
+  props: DataGridProps<T> & React.RefAttributes<DataGridHandle>
+) => React.ReactElement;

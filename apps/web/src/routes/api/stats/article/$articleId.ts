@@ -21,15 +21,33 @@ export const Route = createFileRoute("/api/stats/article/$articleId")({
         );
 
         const stockLedgerResult = await db.execute(
-          sql`SELECT im.inventory_movement_id, im.movement_type, im.qty_delta, im.movement_date, im.created_at, im.warehouse_id, im.reference_text,
-            d.document_no,
-            w.name AS warehouse_name,
-            SUM(im.qty_delta) OVER (PARTITION BY im.warehouse_id ORDER BY im.created_at) AS running_balance
-          FROM inventory_movement im
-          LEFT JOIN document d ON im.source_document_id = d.document_id
-          LEFT JOIN warehouse w ON im.warehouse_id = w.warehouse_id
-          WHERE im.tenant_id = ${tenantId}::uuid AND im.article_id = ${articleId}::uuid AND im.movement_type <> 'V'
-          ORDER BY im.created_at DESC LIMIT 50`,
+          sql`
+            SELECT *
+            FROM (
+              SELECT
+                im.inventory_movement_id,
+                im.movement_type,
+                im.qty_delta,
+                im.movement_date,
+                im.created_at,
+                im.warehouse_id,
+                im.reference_text,
+                d.document_no,
+                w.name AS warehouse_name,
+                SUM(COALESCE(im.qty_delta, 0)) OVER (
+                  PARTITION BY im.warehouse_id
+                  ORDER BY im.created_at, im.inventory_movement_id
+                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                ) AS running_balance
+              FROM inventory_movement im
+              LEFT JOIN document d ON im.source_document_id = d.document_id
+              LEFT JOIN warehouse w ON im.warehouse_id = w.warehouse_id
+              WHERE im.tenant_id = ${tenantId}::uuid
+                AND im.article_id = ${articleId}::uuid
+            ) ledger
+            ORDER BY ledger.created_at DESC, ledger.inventory_movement_id DESC
+            LIMIT 50
+          `,
         );
 
         return new Response(

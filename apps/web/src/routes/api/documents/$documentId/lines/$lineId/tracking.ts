@@ -44,6 +44,7 @@ export const Route = createFileRoute(
           .select({
             trackingId: documentLineTracking.trackingId,
             serialNumberId: documentLineTracking.serialNumberId,
+            serialNo: documentLineTracking.serialNo,
             batchNo: documentLineTracking.batchNo,
             qty: documentLineTracking.qty,
             createdAt: documentLineTracking.createdAt,
@@ -76,7 +77,7 @@ export const Route = createFileRoute(
         );
         if (!line) return new Response("Document line not found", { status: 404 });
 
-        let body: { serialNumberId?: string; batchNo?: string; qty: string };
+        let body: { serialNumberId?: string; serialNo?: string; batchNo?: string; qty: string };
         try {
           body = await request.json();
         } catch {
@@ -88,11 +89,12 @@ export const Route = createFileRoute(
         }
 
         const hasSerial = Boolean(body.serialNumberId);
+        const hasSerialNo = Boolean(body.serialNo?.trim());
         const hasBatch = Boolean(body.batchNo);
 
-        if (hasSerial === hasBatch) {
+        if (Number(hasSerial) + Number(hasSerialNo) + Number(hasBatch) !== 1) {
           return new Response(
-            "Exactly one of serialNumberId or batchNo must be provided",
+            "Exactly one of serialNumberId, serialNo or batchNo must be provided",
             { status: 400 },
           );
         }
@@ -103,6 +105,7 @@ export const Route = createFileRoute(
             tenantId: context.tenantId,
             documentLineId: params.lineId,
             serialNumberId: body.serialNumberId ?? null,
+            serialNo: body.serialNo?.trim() ?? null,
             batchNo: body.batchNo ?? null,
             qty: body.qty,
           })

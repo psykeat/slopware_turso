@@ -18,7 +18,7 @@ const GROUPS = [
   {
     key: "workflow",
     labelKey: "shortcuts.workflow" as const,
-    ids: ["open-document", "post-document", "transform-record", "open-statistics"],
+    ids: ["open-document", "post-document", "transform-record", "print-document", "open-statistics"],
   },
 ] as const;
 

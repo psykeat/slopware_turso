@@ -1,18 +1,26 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon, SlidersHorizontalIcon, Trash2Icon } from "lucide-react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDownIcon, ChevronRightIcon, CornerDownRightIcon, PlusIcon, SlidersHorizontalIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { AddressPickerField } from "./address-picker-field";
 import type { AddressSnapshot } from "./address-picker-field";
-import { formatMoney, StatusDot } from "../lib/formatters";
+import { DeliveryAddressPickerField } from "./delivery-address-picker-field";
+import { TrackingEditor } from "./tracking-editor";
+import { formatDate, formatMoney, StatusDot } from "../lib/formatters";
 import { cn } from "../lib/utils";
 import { useCommands } from "../platform/command-registry";
+import { useFocus } from "../platform/focus-manager";
+import { DocumentTargetGroupDialog, type DocumentTargetGroupCandidate } from "./document-target-group-dialog";
+import { Dialog, DialogContent } from "./dialog";
+import { LookupField, createStaticLookupSource, type LookupSource } from "./lookup-field";
 
 export interface DocumentEditorProps {
   documentId: string;
   documentGroupId?: string;
   onClose: () => void;
+  onCreateNewDocument: (groupId?: string) => void;
+  onSaved?: (savedId: string) => void;
 }
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -27,6 +35,7 @@ interface DocHeader {
   billingAddress?: AddressSnapshot | null;
   deliveryAddressId?: string | null;
   deliveryAddress?: AddressSnapshot | null;
+  customAttributes?: Record<string, unknown> | null;
   warehouseId?: string | null;
   paymentTermId?: string | null;
   shippingMethodId?: string | null;
@@ -52,7 +61,10 @@ interface LineRow {
   documentLineId?: string;
   lineNo: number;
   articleId: string | null;
+  articleNo?: string | null;
   articleTextSnapshot: string | null;
+  lineType?: string | null;
+  bomGroupId?: string | null;
   quantity: number;
   unit: string | null;
   netPrice: number;
@@ -69,11 +81,37 @@ interface ArticleResult {
   name: string;
   baseUnit: string | null;
   taxClassId: string | null;
+  bomType?: string | null;
+  trackingMode?: string | null;
 }
 
 interface TaxCodeRow {
   taxCodeId: string;
   taxRate: string;
+}
+
+interface ArticleMetaRow {
+  articleId: string;
+  articleNo: string;
+  name: string;
+  bomType?: string | null;
+  trackingMode?: string | null;
+}
+
+interface TrackingFocusRequest {
+  lineId: string;
+  token: string;
+}
+
+interface BomComponentRow {
+  bomId: string;
+  componentArticleId: string;
+  articleNo: string;
+  name: string;
+  quantity: string;
+  scrapPercentage: string;
+  sortOrder: number;
+  unit: string | null;
 }
 
 interface ConvertCandidate {
@@ -83,15 +121,87 @@ interface ConvertCandidate {
   groupNumber: number;
 }
 
+interface DuplicateDialogState {
+  open: boolean;
+  recordId: string | null;
+  candidates: DocumentTargetGroupCandidate[];
+  selectedGroupId: string | null;
+  isPending: boolean;
+}
+
+interface DocumentAuditNode {
+  documentId: string;
+  documentNo: string;
+  documentType: string;
+  documentDirection: string;
+  status: string;
+  documentGroupId: string | null;
+  transactionId: string;
+  parentDocumentId: string | null;
+  stornoDocumentId: string | null;
+  documentDate: string;
+  postedAt: string | null;
+  cancelledAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  isCurrent: boolean;
+  isOrigin: boolean;
+  isDerived: boolean;
+  isStornoSource: boolean;
+  isStornoTarget: boolean;
+  isArchived: boolean;
+  relationTags: string[];
+}
+
+interface DocumentAuditLink {
+  fromDocumentId: string;
+  toDocumentId: string;
+  relationType: "conversion" | "storno";
+}
+
+interface ProductionFactTraceRow {
+  documentLineId: string;
+  sourceDocumentLineId: string;
+  lineNo: number;
+  lineType: string;
+  articleId: string | null;
+  articleTextSnapshot: string | null;
+  warehouseId: string | null;
+  side: "output" | "input";
+  expectedQty: string;
+  movementQty: string;
+  varianceQty: string;
+  inventoryMovementId: string | null;
+  referenceText: string | null;
+}
+
+interface DocumentAuditTrail {
+  currentDocumentId: string;
+  transactionId: string;
+  nodes: DocumentAuditNode[];
+  links: DocumentAuditLink[];
+  productionFacts: ProductionFactTraceRow[];
+}
+
 // Stable empty arrays — inline `= []` in useQuery creates a new ref every render,
 // which makes useMemo deps change every render and causes an infinite setState loop.
 const EMPTY_TAX_CODES: TaxCodeRow[] = [];
 const EMPTY_DOC_LINES: any[] = [];
+const BOM_SALES_DOC_TYPES = new Set(["N", "A", "L", "R", "G"]);
+const BOM_PRODUCTION_DOC_TYPES = new Set(["q", "p"]);
 
 // ─── small helpers ────────────────────────────────────────────────────────────
 
 const inputBase =
   "h-7 w-full border bg-canvas rounded px-2 text-[13px] text-ink outline-none transition-colors border-hairline-input focus-visible:ring-[2px] focus-visible:ring-[color-mix(in_oklab,var(--primary)_20%,transparent)] focus-visible:border-primary disabled:opacity-40";
+
+const MOVEMENT_DOCUMENT_TYPES = new Set(["V", "Z", "E", "U", "q", "p"]);
+
+interface AddressLockState {
+  billingAddress?: boolean;
+  deliveryAddress?: boolean;
+}
 
 function lineNet(qty: number, price: number, disc: number | null): number {
   return qty * price * (1 - (disc ?? 0) / 100);
@@ -115,6 +225,7 @@ function emptyLine(parentId: string, lineNo: number): LineRow {
     _id: `new-${Date.now()}-${Math.random()}`,
     lineNo,
     articleId: null,
+    articleNo: null,
     articleTextSnapshot: null,
     quantity: 1,
     unit: null,
@@ -126,124 +237,192 @@ function emptyLine(parentId: string, lineNo: number): LineRow {
   };
 }
 
-// ─── DocLookupField ───────────────────────────────────────────────────────────
+function isBlankDraftLine(line: LineRow): boolean {
+  return !!line.isNew
+    && !line.articleId
+    && !line.articleTextSnapshot
+    && (line.lineType == null || line.lineType === "article")
+    && Number(line.quantity ?? 1) === 1
+    && Number(line.netPrice ?? 0) === 0
+    && (line.discountPercentage == null || Number(line.discountPercentage) === 0)
+    && !line.taxCodeId
+    && !line.unit;
+}
 
-interface LookupItem { id: string; label: string }
+function normalizeLineForSave(line: LineRow) {
+  return {
+    lineNo: line.lineNo,
+    articleId: line.articleId,
+    articleNo: line.articleNo,
+    articleTextSnapshot: line.articleTextSnapshot,
+    lineType: line.lineType ?? "article",
+    quantity: String(line.quantity),
+    unit: line.unit,
+    netPrice: String(line.netPrice),
+    discountPercentage: line.discountPercentage != null ? String(line.discountPercentage) : null,
+    taxCodeId: line.taxCodeId,
+  };
+}
+
+function serializeLines(lines: LineRow[]) {
+  return JSON.stringify(lines.filter((line) => !line.isDeleted && !isBlankDraftLine(line)).map(normalizeLineForSave));
+}
+
+function getPersistableLines(lines: LineRow[]) {
+  return lines.filter((line) => !line.isDeleted && !isBlankDraftLine(line));
+}
+
+function normalizeHeaderForSave(header: DocHeader, hidePartyFields: boolean) {
+  return {
+    documentGroupId: header.documentGroupId ?? null,
+    documentType: header.documentType ?? null,
+    documentDate: header.documentDate ?? null,
+    customerId: hidePartyFields ? null : (header.customerId ?? null),
+    billingAddress: hidePartyFields ? null : (header.billingAddress ?? null),
+    deliveryAddress: hidePartyFields ? null : (header.deliveryAddress ?? null),
+    deliveryAddressId: hidePartyFields ? null : (header.deliveryAddressId ?? null),
+    customAttributes: header.customAttributes ?? null,
+    currencyId: header.currencyId ?? null,
+    warehouseId: header.warehouseId ?? null,
+    paymentTermId: header.paymentTermId ?? null,
+    shippingMethodId: header.shippingMethodId ?? null,
+  };
+}
+
+function getAddressLocks(customAttributes: DocHeader["customAttributes"]): AddressLockState {
+  const addressLocks = (customAttributes as { addressLocks?: AddressLockState } | null | undefined)?.addressLocks;
+  return addressLocks ?? {};
+}
+
+function setAddressLock(
+  customAttributes: DocHeader["customAttributes"],
+  field: keyof AddressLockState,
+  locked: boolean,
+): Record<string, unknown> {
+  const next = {
+    ...(customAttributes ?? {}),
+    addressLocks: {
+      ...getAddressLocks(customAttributes),
+      [field]: locked,
+    },
+  };
+
+  return next;
+}
+
+function normalizeCurrencyId(
+  value: string | null | undefined,
+  currencies: Array<{ currencyId?: string; code?: string }>,
+) {
+  if (!value) return null;
+  const matched = currencies.find((c) => c.code === value || c.currencyId === value);
+  return matched?.code ?? value;
+}
+
+function resolveArticleLabel(line: LineRow, articleMeta?: ArticleMetaRow | null) {
+  return line.articleNo
+    ?? articleMeta?.articleNo
+    ?? line.articleTextSnapshot
+    ?? line.articleId?.slice(0, 8)
+    ?? "—";
+}
+
+function isBomHeaderLineType(lineType?: string | null) {
+  return lineType === "sales_bom_header" || lineType === "production_output";
+}
+
+function shouldExpandBom(articleMeta: ArticleMetaRow | null | undefined, documentType?: string | null) {
+  if (!articleMeta?.articleId || !documentType) return false;
+  if (articleMeta.bomType === "sales") return BOM_SALES_DOC_TYPES.has(documentType);
+  if (articleMeta.bomType === "production") return BOM_PRODUCTION_DOC_TYPES.has(documentType);
+  return false;
+}
+
+function resolveBomHeaderLineType(articleMeta: ArticleMetaRow | null | undefined, documentType?: string | null) {
+  if (!articleMeta || !documentType) return "article";
+  if (articleMeta.bomType === "sales" && BOM_SALES_DOC_TYPES.has(documentType)) return "sales_bom_header";
+  if (articleMeta.bomType === "production" && BOM_PRODUCTION_DOC_TYPES.has(documentType)) return "production_output";
+  return "article";
+}
+
+function resolveTrackingMode(articleMeta?: ArticleMetaRow | null): "serial" | "batch" | null {
+  const trackingMode = articleMeta?.trackingMode ?? null;
+  if (trackingMode === "serial" || trackingMode === "batch") return trackingMode;
+  return null;
+}
+
+function lineFromPersistedRow(row: any): LineRow {
+  return {
+    _id: row.documentLineId ?? row._id ?? `saved-${row.lineNo ?? Date.now()}`,
+    documentLineId: row.documentLineId ?? null,
+    lineNo: Number(row.lineNo ?? 0),
+    articleId: row.articleId ?? null,
+    articleNo: row.articleNo ?? null,
+    articleTextSnapshot: row.articleTextSnapshot ?? null,
+    lineType: row.lineType ?? "article",
+    bomGroupId: row.bomGroupId ?? null,
+    quantity: Number(row.quantity ?? 1),
+    unit: row.unit ?? null,
+    netPrice: Number(row.netPrice ?? 0),
+    discountPercentage: row.discountPercentage != null ? Number(row.discountPercentage) : null,
+    taxCodeId: row.taxCodeId ?? null,
+    taxRate: row.taxRate ?? null,
+    isNew: false,
+    isDeleted: false,
+  };
+}
+
+// ─── DocLookupField ───────────────────────────────────────────────────────────
 
 function DocLookupField({
   label,
+  focusField,
   value,
   onChange,
   items,
   placeholder = "—",
   tabIndex,
+  onTabForward,
 }: {
   label: string;
+  focusField: string;
   value: string | null;
   onChange: (id: string | null) => void;
-  items: LookupItem[];
+  items: Array<{ id: string; label: string }>;
   placeholder?: string;
   tabIndex?: number;
+  onTabForward?: () => void;
 }) {
-  const { t } = useTranslation('ui');
-  const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [idx, setIdx] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setSearch("");
-      setIdx(0);
-      setTimeout(() => searchRef.current?.focus(), 30);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node))
-        setIsOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  const filtered = useMemo(
+  const { setFocus } = useFocus();
+  const source = useMemo(
     () =>
-      search
-        ? items.filter((i) => i.label.toLowerCase().includes(search.toLowerCase()))
-        : items,
-    [items, search],
+      createStaticLookupSource(
+        items.map((item) => ({ value: item.id, label: item.label, raw: item })),
+        {
+          title: label,
+          valueColumn: "value",
+          labelColumns: ["label"],
+          placeholder,
+          emptyLabel: "No results",
+        },
+      ),
+    [items, label, placeholder],
   );
 
-  const selected = items.find((i) => i.id === value);
-
-  const pick = (item: LookupItem) => {
-    onChange(item.id);
-    setIsOpen(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setIdx((i) => Math.min(i + 1, filtered.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setIdx((i) => Math.max(i - 1, 0)); }
-    else if (e.key === "Enter" && filtered[idx]) { e.preventDefault(); pick(filtered[idx]); }
-    else if (e.key === "Escape") setIsOpen(false);
-    else if (e.key === "F5") { e.preventDefault(); setIsOpen((o) => !o); }
-  };
-
   return (
-    <div className="flex flex-col gap-1" ref={containerRef}>
-      {label && <label className="text-[11px] font-medium uppercase tracking-wider text-ink-mute">{label}</label>}
-      <div className="relative">
-        <div
-          tabIndex={tabIndex}
-          className="h-8 flex items-center justify-between gap-1 cursor-pointer rounded border border-hairline-input bg-canvas px-2.5 text-[13px] text-ink outline-none focus-visible:ring-[2px] focus-visible:ring-[color-mix(in_oklab,var(--primary)_20%,transparent)] focus-visible:border-primary"
-          onClick={() => setIsOpen((o) => !o)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " " || e.key === "F5") { e.preventDefault(); setIsOpen((o) => !o); }
-            else handleKeyDown(e);
-          }}
-        >
-          <span className={selected ? "text-ink" : "text-ink-mute"}>{selected?.label ?? placeholder}</span>
-          <ChevronDownIcon className="size-3.5 shrink-0 text-ink-mute" />
-        </div>
-
-        {isOpen && (
-          <div className="absolute z-50 mt-1 w-full rounded-md border border-hairline bg-canvas shadow-lg" style={{ maxHeight: 220 }}>
-            <div className="border-b border-hairline px-2 py-1.5">
-              <input
-                ref={searchRef}
-                className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-mute"
-                placeholder={t('document.lookup.search')}
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setIdx(0); }}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
-            <div className="overflow-auto" style={{ maxHeight: 168 }}>
-              {filtered.length === 0 && (
-                <div className="px-3 py-2 text-[12px] text-ink-mute">{t('document.lookup.noEntries')}</div>
-              )}
-              {filtered.map((item, i) => (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "cursor-pointer px-3 py-1.5 text-[13px] transition-colors hover:bg-canvas-soft",
-                    i === idx && "bg-canvas-soft",
-                    item.id === value && "font-medium text-primary",
-                  )}
-                  onMouseEnter={() => setIdx(i)}
-                  onClick={() => pick(item)}
-                >
-                  {item.label}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    <LookupField
+      value={value}
+      source={source}
+      tabIndex={tabIndex}
+      placeholder={placeholder}
+      onTabForward={onTabForward}
+      onFocusChange={(focused) => {
+        if (focused) {
+          setFocus({ area: "lookup", field: focusField, row: null });
+        }
+      }}
+      onChange={(next) => onChange(next)}
+    />
   );
 }
 
@@ -254,77 +433,92 @@ function ArticleSearchCell({
   textSnapshot,
   onSelect,
   inputRef,
+  rowIndex,
+  onFocus,
 }: {
   value: string | null;
   textSnapshot: string | null;
-  onSelect: (article: ArticleResult) => void;
+  onSelect: (article: ArticleResult, rowIndex: number) => void;
   inputRef?: React.Ref<HTMLInputElement>;
+  rowIndex: number;
+  onFocus?: () => void;
 }) {
-  const { t } = useTranslation('ui');
-  const [query, setQuery] = useState(value ? (textSnapshot ?? "") : "");
-  const [isOpen, setIsOpen] = useState(false);
-  const [idx, setIdx] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node))
-        setIsOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  const { data: results = [] } = useQuery<ArticleResult[]>({
-    queryKey: ["article-search", query],
-    queryFn: async () => {
-      const res = await fetch(`/api/articles/search?q=${encodeURIComponent(query)}&limit=20`);
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: isOpen && query.length >= 1,
-  });
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setIdx((i) => Math.min(i + 1, results.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setIdx((i) => Math.max(i - 1, 0)); }
-    else if (e.key === "Enter" && isOpen && results[idx]) { e.preventDefault(); onSelect(results[idx]); setIsOpen(false); }
-    else if (e.key === "Escape") setIsOpen(false);
-  };
+  const { setFocus } = useFocus();
+  const source = useMemo<LookupSource<ArticleResult>>(
+    () => ({
+      title: "Articles",
+      placeholder: "Search articles",
+      emptyLabel: "No articles found",
+      search: async (query, options) => {
+        const params = new URLSearchParams({ q: query, limit: String(options?.limit ?? 20) });
+        const res = await fetch(`/api/articles/search?${params.toString()}`);
+        if (!res.ok) return [];
+        const rows = (await res.json()) as ArticleResult[];
+        return rows.map((row) => ({
+          value: row.articleId,
+          label: `${row.articleNo} — ${row.name}`,
+          description: row.baseUnit ?? undefined,
+          raw: row,
+        }));
+      },
+      resolve: async (articleId) => {
+        if (!articleId || !textSnapshot) return null;
+        return {
+          value: articleId,
+          label: textSnapshot,
+          raw: {
+            articleId,
+            articleNo: textSnapshot,
+            name: textSnapshot,
+            baseUnit: null,
+            taxClassId: null,
+            bomType: null,
+            trackingMode: null,
+          },
+        };
+      },
+    }),
+    [textSnapshot],
+  );
 
   return (
-    <div className="relative" ref={containerRef}>
-      <input
-        ref={inputRef}
-        className={cn(inputBase, "text-[12px]")}
-        value={query}
-        placeholder={t('document.lines.articleSearch')}
-        onChange={(e) => { setQuery(e.target.value); setIsOpen(true); setIdx(0); }}
-        onFocus={() => setIsOpen(true)}
-        onKeyDown={handleKeyDown}
-      />
-      {isOpen && results.length > 0 && (
-        <div className="absolute z-50 mt-0.5 w-80 rounded-md border border-hairline bg-canvas shadow-lg" style={{ maxHeight: 240 }}>
-          {results.map((r, i) => (
-            <div
-              key={r.articleId}
-              className={cn(
-                "flex cursor-pointer items-center justify-between gap-2 border-b border-hairline px-3 py-1.5 last:border-0 hover:bg-canvas-soft transition-colors",
-                i === idx && "bg-canvas-soft",
-              )}
-              onMouseEnter={() => setIdx(i)}
-              onClick={() => { onSelect(r); setIsOpen(false); }}
-            >
-              <div className="flex flex-col min-w-0">
-                <span className="text-[13px] font-medium text-ink truncate">{r.name}</span>
-                <span className="font-mono text-[11px] text-ink-mute">{r.articleNo}</span>
-              </div>
-              {r.baseUnit && <span className="shrink-0 text-[11px] text-ink-mute">{r.baseUnit}</span>}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <LookupField
+      value={value}
+      source={source}
+      tabIndex={undefined}
+      placeholder="Search articles"
+      ref={inputRef}
+      className="min-w-0"
+      onFocusChange={(focused) => {
+        if (!focused) return;
+        setFocus({
+          workspace: "documents",
+          panel: "document-editor",
+          entity: "document",
+          area: "grid",
+          field: "articleId",
+          row: rowIndex,
+        });
+        onFocus?.();
+      }}
+      onChange={(next, item) => {
+        if (item?.raw) {
+          onSelect(item.raw as ArticleResult, rowIndex);
+          return;
+        }
+        if (!next) return;
+        const articleNo = item?.label?.split(" — ")[0] ?? next;
+        onSelect({
+          articleId: next,
+          articleNo,
+          name: item?.label ?? next,
+          baseUnit: null,
+          taxClassId: null,
+          bomType: null,
+          trackingMode: null,
+        }, rowIndex);
+      }}
+    />
   );
 }
 
@@ -332,23 +526,72 @@ function ArticleSearchCell({
 
 interface DocumentLinesEditorHandle {
   focusFirstLine: () => void;
+  addLine: () => void;
+  commitCurrentEdit: () => Promise<LineRow | null>;
+  deleteCurrentLine: () => void;
+  duplicateCurrentLine: () => void;
+  getLines: () => LineRow[];
+  isDirty: () => boolean;
+  getPersistableLines: () => LineRow[];
 }
 
 const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
   documentId: string | null;
+  documentType?: string | null;
+  warehouseId?: string | null;
   customerId: string | null;
   documentDate: string | null;
   status?: string;
   onLinesChange?: (lines: LineRow[]) => void;
-}>(function DocumentLinesEditor({ documentId, customerId, documentDate, status, onLinesChange }, ref) {
+  onDirtyChange?: (dirty: boolean) => void;
+}>(function DocumentLinesEditor({ documentId, documentType, warehouseId, customerId, documentDate, status, onLinesChange, onDirtyChange }, ref) {
   const { t } = useTranslation('ui');
+  const { setFocus } = useFocus();
   const isPosted = status === "posted";
   const queryClient = useQueryClient();
   const [lines, setLines] = useState<LineRow[]>([]);
+  const linesRef = useRef<LineRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVals, setEditVals] = useState<Partial<LineRow>>({});
+  const [editingArticleMeta, setEditingArticleMeta] = useState<ArticleMetaRow | null>(null);
   const [korrLineId, setKorrLineId] = useState<string | null>(null);
   const [korrDelta, setKorrDelta] = useState<string>("");
+  const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
+  const bomCacheRef = useRef<Record<string, BomComponentRow[]>>({});
+  const [trackingFocus, setTrackingFocus] = useState<TrackingFocusRequest | null>(null);
+
+  const effectiveLines = useMemo(() => {
+    if (!editingId) return lines;
+    return lines.map((line) => (line._id === editingId ? { ...line, ...editVals } : line));
+  }, [editVals, editingId, lines]);
+
+  const currentSnapshot = useMemo(() => serializeLines(effectiveLines), [effectiveLines]);
+  const isDirty = baselineSnapshot != null && currentSnapshot !== baselineSnapshot;
+
+  const replaceLines = useCallback((next: LineRow[]) => {
+    linesRef.current = next;
+    setLines(next);
+  }, []);
+
+  useEffect(() => {
+    setBaselineSnapshot(null);
+    onDirtyChange?.(false);
+    setEditingArticleMeta(null);
+    setTrackingFocus(null);
+  }, [documentId, onDirtyChange]);
+
+  const pushGridFocus = useCallback((field: string | null, row: number | null) => {
+    setFocus({
+      workspace: "documents",
+      panel: "document-editor",
+      entity: "document",
+      recordId: documentId,
+      area: "grid",
+      field,
+      row,
+      mode: isPosted ? "view" : "edit",
+    });
+  }, [documentId, isPosted, setFocus]);
 
   const korrMutation = useMutation({
     mutationFn: async ({ lineId, qtyDelta }: { lineId: string; qtyDelta: number }) => {
@@ -373,12 +616,13 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
   const qtyRef = useRef<HTMLInputElement>(null);
   const priceRef = useRef<HTMLInputElement>(null);
   const discRef = useRef<HTMLInputElement>(null);
+  const korrInputRef = useRef<HTMLInputElement>(null);
 
   const { data: existingLines = EMPTY_DOC_LINES, isLoading } = useQuery({
     queryKey: ["data", "documentLine", documentId],
     queryFn: async () => {
       if (!documentId) return EMPTY_DOC_LINES;
-      const res = await fetch(`/api/data/documentLine?documentId=${documentId}`);
+      const res = await fetch(`/api/data/documentLine?documentId=${documentId}&orderBy=lineNo:asc`);
       if (!res.ok) return EMPTY_DOC_LINES;
       return res.json();
     },
@@ -403,34 +647,136 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     return m;
   }, [taxCodes]);
 
+  const articleIds = useMemo(
+    () => Array.from(new Set(lines.map((line) => line.articleId).filter((articleId): articleId is string => !!articleId))),
+    [lines],
+  );
+  const articleQueries = useQueries({
+    queries: articleIds.map((articleId) => ({
+      queryKey: ["data", "article", articleId],
+      queryFn: async () => {
+        const res = await fetch(`/api/data/article/${articleId}`);
+        if (!res.ok) return null;
+        return res.json() as Promise<ArticleMetaRow>;
+      },
+      enabled: !!articleId,
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  const articleQueryRows = articleQueries.map((query) => query.data);
+  const articleMetaById = useMemo(() => {
+    const map = new Map<string, ArticleMetaRow>();
+    for (let i = 0; i < articleIds.length; i++) {
+      const row = articleQueryRows[i] ?? null;
+      if (row?.articleId) map.set(articleIds[i], row);
+    }
+    return map;
+  }, [articleIds, articleQueryRows]);
+
+  function assignBomGroups(inputLines: LineRow[]) {
+    const grouped: LineRow[] = [];
+    let currentGroupId: string | null = null;
+    let currentHeaderId: string | null = null;
+
+    for (const line of inputLines) {
+      if (isBomHeaderLineType(line.lineType)) {
+        currentGroupId = line.bomGroupId ?? line.documentLineId ?? line._id;
+        currentHeaderId = line._id;
+        grouped.push({ ...line, bomGroupId: currentGroupId });
+        continue;
+      }
+
+      if (line.lineType === "bom_component" && currentGroupId && currentHeaderId) {
+        grouped.push({ ...line, bomGroupId: currentGroupId });
+        continue;
+      }
+
+      currentGroupId = null;
+      currentHeaderId = null;
+      grouped.push({ ...line, bomGroupId: line.bomGroupId ?? null });
+    }
+
+    return grouped;
+  }
+
+  function mergePersistedDocumentLines(source: LineRow[], persisted: any[]) {
+    const next = [...source];
+    for (const row of persisted.map(lineFromPersistedRow)) {
+      const matchIndex = next.findIndex((line) => {
+        if (line.documentLineId && row.documentLineId && line.documentLineId === row.documentLineId) return true;
+        return line.lineNo === row.lineNo
+          && line.lineType === row.lineType
+          && line.articleId === row.articleId;
+      });
+
+      if (matchIndex >= 0) {
+        const current = next[matchIndex];
+        next[matchIndex] = {
+          ...current,
+          ...row,
+          bomGroupId: current.bomGroupId ?? row.bomGroupId ?? null,
+          isNew: false,
+          isDeleted: false,
+        };
+        continue;
+      }
+
+      const insertAt = next.findIndex((line) => line.lineNo > row.lineNo);
+      next.splice(insertAt >= 0 ? insertAt : next.length, 0, row);
+    }
+
+    return assignBomGroups(next);
+  }
+
   useEffect(() => {
-    const mapped: LineRow[] = ((existingLines as any[]) ?? []).map((l: any) => ({
+    const mapped: LineRow[] = assignBomGroups(((existingLines as any[]) ?? []).map((l: any) => ({
       _id: l.documentLineId,
       documentLineId: l.documentLineId,
       lineNo: l.lineNo,
       articleId: l.articleId ?? null,
+      articleNo: l.articleNo ?? null,
       articleTextSnapshot: l.articleTextSnapshot ?? null,
+      lineType: l.lineType ?? "article",
       quantity: Number(l.quantity ?? 1),
       unit: l.unit ?? null,
       netPrice: Number(l.netPrice ?? 0),
       discountPercentage: l.discountPercentage != null ? Number(l.discountPercentage) : null,
       taxCodeId: l.taxCodeId ?? null,
       taxRate: l.taxCodeId ? (taxRateMap[l.taxCodeId] ?? null) : null,
-    }));
-    setLines(mapped);
-  }, [existingLines, taxRateMap]);
+    })));
+    // Hydrate the editable line draft from async query data.
+    // eslint-disable-next-line react-hooks-js/set-state-in-effect
+    replaceLines(mapped);
+    if (baselineSnapshot == null && !isLoading) {
+      setBaselineSnapshot(serializeLines(mapped));
+      onDirtyChange?.(false);
+    }
+  }, [baselineSnapshot, existingLines, isLoading, taxRateMap, replaceLines, onDirtyChange]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [currentSnapshot, isDirty, onDirtyChange]);
 
   // Auto-add first empty line
+  const addLine = useCallback(() => {
+    const current = linesRef.current;
+    const newLine = emptyLine(documentId ?? "", nextLineNo(current));
+    replaceLines([...current, newLine]);
+    setEditingId(newLine._id);
+    setEditVals({ ...newLine });
+    pushGridFocus("articleId", current.length);
+  }, [documentId, pushGridFocus, replaceLines]);
+
   useEffect(() => {
-    if (!isLoading && documentId && lines.length === 0 && editingId === null) {
+    if (!isLoading && documentId && (existingLines as any[]).length === 0 && linesRef.current.length === 0 && editingId === null) {
       addLine();
     }
-  }, [isLoading, documentId, lines.length]);
+  }, [addLine, editingId, existingLines, documentId, isLoading]);
 
   // Sync to parent for save
   useEffect(() => {
-    onLinesChange?.(lines.filter((l) => !l.isDeleted));
-  }, [lines]);
+    onLinesChange?.(effectiveLines.filter((l) => !l.isDeleted));
+  }, [effectiveLines, onLinesChange]);
 
   // Focus article input on new edit
   useEffect(() => {
@@ -442,63 +788,345 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     }
   }, [editingId]);
 
+  useEffect(() => {
+    if (!editingId) return;
+    const draft = getEditableLineDraft();
+    if (!draft?.articleId) return;
+    const draftArticleId = draft.articleId;
+    if (!draftArticleId) return;
+    const articleMeta = editingArticleMeta ?? articleMetaById.get(draftArticleId) ?? null;
+    if (!shouldExpandBom(articleMeta, documentType)) return;
+
+    let cancelled = false;
+    void (async () => {
+      const next = await syncBomExplosion(draft, editingArticleMeta ?? articleMetaById.get(draftArticleId) ?? null);
+      if (cancelled) return;
+      replaceLines(assignBomGroups(next));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [articleMetaById, documentType, editVals.articleId, editVals.quantity, editingArticleMeta, editingId]);
+
+  useEffect(() => {
+    if (korrLineId) {
+      setTimeout(() => {
+        korrInputRef.current?.focus();
+        korrInputRef.current?.select();
+      }, 30);
+    }
+  }, [korrLineId]);
+
   useImperativeHandle(ref, () => ({
     focusFirstLine: () => {
-      const firstVisible = lines.find((l) => !l.isDeleted);
+      const firstVisible = lines.find((l) => !l.isDeleted && l.lineType !== "bom_component");
       if (firstVisible) {
-        startEdit(firstVisible);
+        startEdit(firstVisible, lines.findIndex((l) => l._id === firstVisible._id));
       } else {
         addLine();
       }
       setTimeout(() => articleInputRef.current?.focus(), 50);
     },
+    addLine: () => {
+      addLine();
+    },
+    commitCurrentEdit: () => {
+      return commitEdit();
+    },
+    deleteCurrentLine: () => {
+      if (editingId) deleteLine(editingId);
+    },
+    duplicateCurrentLine: () => {
+      duplicateLine();
+    },
+    getLines: () => linesRef.current,
+    isDirty: () => isDirty,
+    getPersistableLines: () => getPersistableLines(effectiveLines),
   }));
 
-  function addLine() {
-    const newLine = emptyLine(documentId ?? "", nextLineNo(lines));
-    setLines((prev) => [...prev, newLine]);
-    setEditingId(newLine._id);
-    setEditVals({ ...newLine });
-  }
-
-  function startEdit(line: LineRow) {
+  function startEdit(line: LineRow, rowIndex?: number) {
+    if (line.lineType === "bom_component") return;
     setEditingId(line._id);
     setEditVals({ ...line });
+    setEditingArticleMeta(
+      line.articleId ? articleMetaById.get(line.articleId) ?? null : null,
+    );
+    pushGridFocus("articleId", rowIndex ?? linesRef.current.findIndex((l) => l._id === line._id));
   }
 
-  function commitEdit() {
-    if (!editingId) return;
-    setLines((prev) =>
-      prev.map((l) =>
-        l._id === editingId
-          ? { ...l, ...editVals, taxRate: editVals.taxCodeId ? (taxRateMap[editVals.taxCodeId as string] ?? null) : null }
-          : l,
-      ),
+  function getEditableLineDraft() {
+    if (!editingId) return null;
+    const current = linesRef.current.find((line) => line._id === editingId);
+    if (!current) return null;
+    return {
+      ...current,
+      ...editVals,
+      articleNo: editVals.articleNo ?? current.articleNo ?? null,
+      taxRate: editVals.taxCodeId ? (taxRateMap[editVals.taxCodeId as string] ?? null) : null,
+    } as LineRow;
+  }
+
+  async function fetchBomComponents(articleId: string) {
+    const cached = bomCacheRef.current[articleId];
+    if (cached) return cached;
+
+    const res = await fetch(`/api/articles/${articleId}/bom`);
+    if (!res.ok) {
+      return [] as BomComponentRow[];
+    }
+
+    const data = await res.json() as { components?: BomComponentRow[] };
+    const components = data.components ?? [];
+    bomCacheRef.current[articleId] = components;
+    return components;
+  }
+
+  function buildBomComponentRows(
+    header: LineRow,
+    components: BomComponentRow[],
+    groupId: string,
+    existingChildren: LineRow[] = [],
+  ): LineRow[] {
+    const baseQty = Number(header.quantity ?? 0);
+    return components.map((component, index) => {
+      const existing = existingChildren[index];
+      const componentQty = Number(component.quantity ?? 0);
+      const scrapFactor = 1 + Number(component.scrapPercentage ?? 0) / 100;
+      return {
+        _id: existing?._id ?? `new-${Date.now()}-${Math.random()}-${index}`,
+        documentLineId: existing?.documentLineId,
+        lineNo: header.lineNo + index + 1,
+        articleId: component.componentArticleId,
+        articleNo: component.articleNo,
+        articleTextSnapshot: component.name,
+        lineType: "bom_component",
+        bomGroupId: groupId,
+        quantity: Number((baseQty * componentQty * scrapFactor).toFixed(6)),
+        unit: component.unit,
+        netPrice: 0,
+        discountPercentage: null,
+        taxCodeId: null,
+        taxRate: null,
+        isNew: existing ? existing.isNew : !header.documentLineId,
+        isDeleted: false,
+      } satisfies LineRow;
+    });
+  }
+
+  function replaceGroupChildren(next: LineRow[], headerIndex: number, headerLine: LineRow, children: LineRow[]) {
+    const currentGroupId = headerLine.bomGroupId ?? headerLine.documentLineId ?? headerLine._id;
+    let oldCount = 0;
+    for (let i = headerIndex + 1; i < next.length; i++) {
+      const line = next[i];
+      if (line.lineType !== "bom_component") break;
+      if (line.bomGroupId && line.bomGroupId !== currentGroupId) break;
+      oldCount += 1;
+    }
+
+    next.splice(headerIndex + 1, oldCount, ...children);
+
+    const delta = children.length - oldCount;
+    if (delta !== 0) {
+      for (let i = headerIndex + 1 + children.length; i < next.length; i++) {
+        next[i] = {
+          ...next[i],
+          lineNo: next[i].lineNo + delta,
+        };
+      }
+    }
+  }
+
+  async function syncBomExplosion(nextHeader: LineRow, articleMetaOverride?: ArticleMetaRow | null) {
+    const articleMeta = articleMetaOverride ?? (nextHeader.articleId ? articleMetaById.get(nextHeader.articleId) ?? null : null);
+    const shouldExplode = shouldExpandBom(articleMeta, documentType);
+    const next = [...linesRef.current];
+    const headerIndex = next.findIndex((line) => line._id === nextHeader._id);
+    if (headerIndex < 0) return next;
+    const currentGroupId = nextHeader.bomGroupId ?? nextHeader.documentLineId ?? nextHeader._id;
+    const existingChildren: LineRow[] = [];
+    for (let i = headerIndex + 1; i < next.length; i++) {
+      const line = next[i];
+      if (line.lineType !== "bom_component") break;
+      if (line.bomGroupId && line.bomGroupId !== currentGroupId) break;
+      existingChildren.push(line);
+    }
+
+    if (!shouldExplode) {
+      const normalizedHeader = { ...nextHeader, lineType: "article", bomGroupId: null };
+      next[headerIndex] = normalizedHeader;
+      for (let i = headerIndex + 1; i < next.length; i++) {
+        const line = next[i];
+        if (line.lineType !== "bom_component") break;
+        if (line.bomGroupId && line.bomGroupId !== currentGroupId) break;
+        next[i] = { ...line, isDeleted: true };
+      }
+      return next;
+    }
+
+    const groupId = currentGroupId;
+    const components = await fetchBomComponents(nextHeader.articleId!);
+    const children = buildBomComponentRows(
+      { ...nextHeader, lineType: resolveBomHeaderLineType(articleMeta, documentType), bomGroupId: groupId },
+      components,
+      groupId,
+      existingChildren,
     );
+    const normalizedHeader = {
+      ...nextHeader,
+      lineType: resolveBomHeaderLineType(articleMeta, documentType),
+      bomGroupId: groupId,
+    };
+
+    next[headerIndex] = normalizedHeader;
+    replaceGroupChildren(next, headerIndex, normalizedHeader, children);
+    return next;
+  }
+
+  async function commitEdit(): Promise<LineRow | null> {
+    if (!editingId) return null;
+
+    const nextHeader = getEditableLineDraft();
+    if (!nextHeader) {
+      setEditingId(null);
+      setEditVals({});
+      setEditingArticleMeta(null);
+      return null;
+    }
+
+    const next = linesRef.current.map((line) =>
+      line._id === editingId
+        ? {
+            ...line,
+            ...nextHeader,
+            bomGroupId: line.bomGroupId ?? nextHeader.bomGroupId ?? null,
+          }
+        : line,
+    );
+
+    replaceLines(next);
     setEditingId(null);
     setEditVals({});
+
+    const normalizedHeader = next.find((line) => line._id === nextHeader._id) ?? null;
+    if (!normalizedHeader) return null;
+    const articleMeta = editingArticleMeta ?? (normalizedHeader.articleId ? articleMetaById.get(normalizedHeader.articleId) ?? null : null);
+    setEditingArticleMeta(null);
+    const resolvedNext = await syncBomExplosion(normalizedHeader, articleMeta);
+    replaceLines(assignBomGroups(resolvedNext));
+    return normalizedHeader;
   }
+
+  async function persistLineForTracking(line: LineRow): Promise<LineRow | null> {
+    if (!documentId || line.documentLineId) return line;
+
+    const res = await fetch("/api/data/documentLine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        documentId,
+        ...normalizeLineForSave(line),
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+
+    const persisted = await res.json() as unknown[];
+    const merged = mergePersistedDocumentLines(linesRef.current, persisted);
+    replaceLines(merged);
+
+    return merged.find((row) =>
+      row.documentLineId != null
+      && row.lineNo === line.lineNo
+      && row.lineType === line.lineType
+      && row.articleId === line.articleId,
+    ) ?? null;
+  }
+
+  function advanceToNextLine(currentLineId: string, currentRowIndex: number) {
+    const activeLines = linesRef.current.filter((l) => !l.isDeleted);
+    const currentIdx = activeLines.findIndex((l) => l._id === currentLineId);
+    const rowIndex = currentIdx >= 0 ? currentIdx : currentRowIndex;
+    if (rowIndex >= 0) {
+      let nextIdx = rowIndex + 1;
+      while (nextIdx < activeLines.length && activeLines[nextIdx].lineType === "bom_component") {
+        nextIdx += 1;
+      }
+      if (nextIdx < activeLines.length) {
+        const next = activeLines[nextIdx];
+        setTimeout(() => startEdit(next, nextIdx), 30);
+        return;
+      }
+    }
+    setTimeout(() => addLine(), 30);
+  }
+
+  const clearTrackingFocus = useCallback(() => {
+    setTrackingFocus(null);
+  }, [setTrackingFocus]);
 
   function cancelEdit() {
     // remove if new and unchanged
-    const current = lines.find((l) => l._id === editingId);
+    const current = linesRef.current.find((l) => l._id === editingId);
     if (current?.isNew && !current.articleId) {
-      setLines((prev) => prev.filter((l) => l._id !== editingId));
+      replaceLines(linesRef.current.filter((l) => l._id !== editingId));
     }
     setEditingId(null);
     setEditVals({});
+    setEditingArticleMeta(null);
+  }
+
+  function duplicateLine() {
+    if (!editingId) return;
+    const currentLines = linesRef.current;
+    const sourceIndex = currentLines.findIndex((l) => l._id === editingId);
+    if (sourceIndex < 0) return;
+    const source = currentLines[sourceIndex];
+    const sourceDraft = editingId === source._id ? { ...source, ...editVals } : source;
+    const copy: LineRow = {
+      ...sourceDraft,
+      _id: `new-${Date.now()}-${Math.random()}`,
+      documentLineId: undefined,
+      isNew: true,
+      isDeleted: false,
+      lineNo: sourceDraft.lineNo + 1,
+    };
+    const next = [...currentLines];
+    next.splice(sourceIndex + 1, 0, copy);
+    replaceLines(next);
+    setEditingId(copy._id);
+    setEditVals({ ...copy });
+    setEditingArticleMeta(copy.articleId ? articleMetaById.get(copy.articleId) ?? null : null);
+    pushGridFocus("articleId", sourceIndex + 1);
+    setTimeout(() => articleInputRef.current?.focus(), 30);
   }
 
   function deleteLine(id: string) {
-    setLines((prev) =>
-      prev
-        .map((l) => (l._id === id ? { ...l, isDeleted: true } : l))
-        .filter((l) => !(l.isDeleted && l.isNew)),
-    );
-    if (editingId === id) { setEditingId(null); setEditVals({}); }
+    const source = linesRef.current;
+    const index = source.findIndex((l) => l._id === id);
+    if (index < 0) return;
+    const current = source[index];
+    const next = [...source];
+    const groupId = current.bomGroupId ?? current.documentLineId ?? current._id;
+    next[index] = { ...current, isDeleted: true };
+
+    if (isBomHeaderLineType(current.lineType)) {
+      for (let i = index + 1; i < next.length; i++) {
+        const line = next[i];
+        if (line.lineType !== "bom_component") break;
+        if (line.bomGroupId && line.bomGroupId !== groupId) break;
+        next[i] = { ...line, isDeleted: true };
+      }
+    }
+
+    replaceLines(next.filter((l) => !(l.isDeleted && l.isNew)));
+    if (editingId === id) { setEditingId(null); setEditVals({}); setEditingArticleMeta(null); }
   }
 
-  async function handleArticleSelect(article: ArticleResult) {
+  async function handleArticleSelect(article: ArticleResult, rowIndex: number) {
     // Fetch pricing
     let price = 0;
     let taxCodeId: string | null = null;
@@ -514,14 +1142,35 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
       }
     } catch { /* pricing optional */ }
 
+    const articleMeta = article.articleId ? articleMetaById.get(article.articleId) ?? {
+      articleId: article.articleId,
+      articleNo: article.articleNo,
+      name: article.name,
+      bomType: article.bomType ?? null,
+      trackingMode: article.trackingMode ?? null,
+    } : null;
+    const resolvedLineType = resolveBomHeaderLineType(articleMeta, documentType);
+    setEditingArticleMeta(articleMeta);
+
     setEditVals((prev) => ({
       ...prev,
       articleId: article.articleId,
+      articleNo: article.articleNo,
       articleTextSnapshot: article.name,
       unit: article.baseUnit ?? null,
       netPrice: price,
       taxCodeId,
+      lineType: resolvedLineType,
+      bomGroupId: shouldExpandBom(articleMeta, documentType)
+        ? (prev.bomGroupId ?? prev.documentLineId ?? prev._id ?? null)
+        : null,
     }));
+
+    if (shouldExpandBom(articleMeta, documentType)) {
+      void fetchBomComponents(article.articleId);
+    }
+
+    pushGridFocus("qty", rowIndex);
 
     // Advance focus to qty
     setTimeout(() => {
@@ -530,24 +1179,46 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     }, 30);
   }
 
-  function handleLineCellKeyDown(e: React.KeyboardEvent, field: "qty" | "price" | "disc") {
+  function handleLineCellKeyDown(
+    e: React.KeyboardEvent,
+    field: "qty" | "price" | "disc",
+    currentLineTrackingMode: "serial" | "batch" | null,
+    currentRowIndex: number,
+  ) {
     if (e.key === "Tab") {
       e.preventDefault();
       if (field === "qty") { priceRef.current?.focus(); priceRef.current?.select(); }
       else if (field === "price") { discRef.current?.focus(); discRef.current?.select(); }
       else if (field === "disc") {
-        // commit + move to next line
-        commitEdit();
-        const activeLines = lines.filter((l) => !l.isDeleted);
-        const currentIdx = activeLines.findIndex((l) => l._id === editingId);
-        if (currentIdx >= 0 && currentIdx < activeLines.length - 1) {
-          const next = activeLines[currentIdx + 1];
-          setTimeout(() => startEdit(next), 30);
-        } else {
-          setTimeout(() => addLine(), 30);
+        const currentId = editingId;
+        if (currentLineTrackingMode && documentId) {
+          void (async () => {
+            try {
+              const committed = await commitEdit();
+              if (!committed || committed._id !== currentId) return;
+              const persisted = committed.documentLineId
+                ? committed
+                : await persistLineForTracking(committed);
+              if (persisted?.documentLineId) {
+                setTrackingFocus({
+                  lineId: persisted._id,
+                  token: `${persisted._id}:${Date.now()}`,
+                });
+              }
+            } catch (err: any) {
+              toast.error(err?.message ?? "Failed to save tracked line");
+            }
+          })();
+          return;
         }
+
+        void commitEdit().then(() => {
+          advanceToNextLine(currentId ?? "", currentRowIndex);
+        });
       }
     } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
       cancelEdit();
     } else if (e.key === "Delete" && e.ctrlKey) {
       e.preventDefault();
@@ -556,16 +1227,17 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
   }
 
   const visibleLines = lines.filter((l) => !l.isDeleted);
+  const visibleDraftLines = effectiveLines.filter((l) => !l.isDeleted);
 
   const totals = useMemo(() => {
     let net = 0, tax = 0;
-    for (const l of visibleLines) {
+    for (const l of visibleDraftLines) {
       const n = lineNet(l.quantity, l.netPrice, l.discountPercentage);
       net += n;
       tax += lineTax(n, l.taxRate);
     }
     return { net, tax, gross: net + tax };
-  }, [visibleLines]);
+  }, [visibleDraftLines]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -585,45 +1257,72 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
             {t('document.lines.empty')}
           </div>
         ) : (
-          visibleLines.map((line) => {
+          visibleLines.map((line, rowIndex) => {
             const isEditing = editingId === line._id;
             const isKorr = korrLineId === line._id;
-            const net = lineNet(line.quantity, line.netPrice, line.discountPercentage);
+            const isBomComponent = line.lineType === "bom_component";
+            const canEditRow = !isPosted && !isBomComponent;
+            const row = isEditing ? { ...line, ...editVals } : line;
+            const net = lineNet(row.quantity, row.netPrice, row.discountPercentage);
+            const articleMeta = isEditing
+              ? (editingArticleMeta ?? (row.articleId ? articleMetaById.get(row.articleId) ?? null : null))
+              : (line.articleId ? articleMetaById.get(line.articleId) ?? null : null);
+            const lineTrackingMode = resolveTrackingMode(articleMeta);
             const ev = editVals;
 
             return (
-              <div key={line._id} className="border-b border-hairline">
-                <div
-                  className={cn(
-                    "grid text-[13px] transition-colors",
-                    isPosted ? "cursor-default" : "cursor-pointer",
-                    isEditing ? "bg-[color-mix(in_oklab,var(--primary)_4%,var(--canvas))]" : "hover:bg-canvas-soft",
-                    isKorr && "bg-[color-mix(in_oklab,var(--primary)_4%,var(--canvas))]",
-                  )}
-                  style={{ gridTemplateColumns: "48px 180px 1fr 72px 56px 96px 64px 60px 96px 32px" }}
-                  onClick={() => !isEditing && !isPosted && startEdit(line)}
-                >
+                  <div key={line._id} className="border-b border-hairline">
+                      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- row is a keyboard-focusable command surface */}
+                      <div
+                        className={cn(
+                          "grid text-[13px] transition-colors",
+                          canEditRow ? "cursor-pointer" : "cursor-default",
+                          isBomComponent && "bg-canvas-soft/40",
+                          isEditing ? "bg-[color-mix(in_oklab,var(--primary)_4%,var(--canvas))]" : "hover:bg-canvas-soft",
+                          isKorr && "bg-[color-mix(in_oklab,var(--primary)_4%,var(--canvas))]",
+                        )}
+                      role={canEditRow ? "button" : undefined}
+                      tabIndex={canEditRow ? 0 : undefined}
+                      style={{ gridTemplateColumns: "48px 180px 1fr 72px 56px 96px 64px 60px 96px 32px" }}
+                      onClick={() => !isEditing && canEditRow && startEdit(line, rowIndex)}
+                      onKeyDown={(e) => {
+                        if (canEditRow && !isEditing && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          startEdit(line, rowIndex);
+                        }
+                      }}
+                      onBlurCapture={(e) => {
+                        if (!isEditing || isBomComponent) return;
+                        const nextTarget = e.relatedTarget as Node | null;
+                        if (nextTarget && e.currentTarget.contains(nextTarget)) return;
+                        window.setTimeout(() => { void commitEdit(); }, 0);
+                      }}
+                    >
                   {/* Pos */}
-                  <div className="px-2 py-1.5 font-mono text-[12px] text-ink-mute tabular-nums self-center">
-                    {String(line.lineNo).padStart(3, "0")}
+                  <div className={cn("px-2 py-1.5 font-mono text-[12px] tabular-nums self-center", isBomComponent ? "text-ink-secondary" : "text-ink-mute")}>
+                    <span className="inline-flex items-center gap-1">
+                      {isBomComponent && <CornerDownRightIcon className="size-3.5 shrink-0 text-ink-mute" />}
+                      {String(line.lineNo).padStart(3, "0")}
+                    </span>
                   </div>
 
                   {/* Article */}
-                  <div className="px-1.5 py-1 self-center">
+                  <div className={cn("px-1.5 py-1 self-center", isBomComponent && "pl-5")}>
                     {isEditing ? (
                       <ArticleSearchCell
                         value={ev.articleId ?? null}
                         textSnapshot={ev.articleTextSnapshot ?? null}
                         onSelect={handleArticleSelect}
                         inputRef={articleInputRef}
+                        rowIndex={rowIndex}
                       />
                     ) : (
-                      <span className="font-mono text-[12px] text-ink-mute">{line.articleTextSnapshot ?? line.articleId?.slice(0, 8) ?? "—"}</span>
+                      <span className="font-mono text-[12px] text-ink-mute">{resolveArticleLabel(line, articleMeta)}</span>
                     )}
                   </div>
 
                   {/* Description */}
-                  <div className="px-1.5 py-1 self-center min-w-0">
+                  <div className={cn("px-1.5 py-1 self-center min-w-0", isBomComponent && "pl-5")}>
                     {isEditing ? (
                       <input
                         tabIndex={-1}
@@ -646,7 +1345,8 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                         type="number"
                         value={(ev.quantity ?? 1) as number}
                         onChange={(e) => setEditVals((v) => ({ ...v, quantity: Number(e.target.value) }))}
-                        onKeyDown={(e) => handleLineCellKeyDown(e, "qty")}
+                        onFocus={() => pushGridFocus("qty", rowIndex)}
+                        onKeyDown={(e) => handleLineCellKeyDown(e, "qty", lineTrackingMode, rowIndex)}
                       />
                     ) : (
                       <span className="tabular-nums text-right block">{line.quantity}</span>
@@ -668,7 +1368,8 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                         step="0.01"
                         value={(ev.netPrice ?? 0) as number}
                         onChange={(e) => setEditVals((v) => ({ ...v, netPrice: Number(e.target.value) }))}
-                        onKeyDown={(e) => handleLineCellKeyDown(e, "price")}
+                        onFocus={() => pushGridFocus("price", rowIndex)}
+                        onKeyDown={(e) => handleLineCellKeyDown(e, "price", lineTrackingMode, rowIndex)}
                       />
                     ) : (
                       <span className="tabular-nums text-right block">{formatMoney(line.netPrice)}</span>
@@ -688,7 +1389,8 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                         value={(ev.discountPercentage ?? "") as number | string}
                         placeholder="0"
                         onChange={(e) => setEditVals((v) => ({ ...v, discountPercentage: e.target.value ? Number(e.target.value) : null }))}
-                        onKeyDown={(e) => handleLineCellKeyDown(e, "disc")}
+                        onFocus={() => pushGridFocus("disc", rowIndex)}
+                        onKeyDown={(e) => handleLineCellKeyDown(e, "disc", lineTrackingMode, rowIndex)}
                       />
                     ) : (
                       <span className="tabular-nums text-right block">{line.discountPercentage ? `${line.discountPercentage}%` : ""}</span>
@@ -709,7 +1411,9 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
 
                   {/* Action button: Korrektur (posted) or Delete (draft) */}
                   <div className="flex items-center justify-center py-1">
-                    {isPosted ? (
+                    {isBomComponent ? (
+                      <span className="text-[11px] text-ink-mute">—</span>
+                    ) : isPosted ? (
                       <button
                         tabIndex={-1}
                         title="Korrektur"
@@ -742,14 +1446,38 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                   </div>
                 </div>
 
+                {lineTrackingMode && !isBomComponent && (
+                  line.documentLineId ? (
+                    <div className="border-t border-hairline">
+                      <TrackingEditor
+                        documentId={documentId ?? ""}
+                        documentLineId={line.documentLineId}
+                        trackingMode={lineTrackingMode}
+                        lineQty={line.quantity}
+                        documentType={documentType ?? ""}
+                        articleId={line.articleId ?? ""}
+                        warehouseId={warehouseId ?? undefined}
+                        isPosted={isPosted}
+                        autoFocusToken={trackingFocus?.lineId === line._id ? trackingFocus.token : null}
+                        onAdvance={() => advanceToNextLine(line._id, rowIndex)}
+                        onAutoFocusConsumed={clearTrackingFocus}
+                      />
+                    </div>
+                  ) : (
+                    <div className="border-t border-hairline bg-canvas-soft/40 px-4 py-2 ml-6 text-[12px] text-ink-mute">
+                      Serien- oder Chargenerfassung wird nach dem Speichern der Position hier sichtbar.
+                    </div>
+                  )
+                )}
+
                 {/* Inline Korrektur panel */}
                 {isKorr && line.documentLineId && (
                   <div className="flex items-center gap-3 px-3 py-2 bg-[color-mix(in_oklab,var(--primary)_6%,var(--canvas))] border-t border-[color-mix(in_oklab,var(--primary)_20%,transparent)]">
                     <span className="text-[12px] font-medium text-ink-mute shrink-0">{t('document.lines.qtyDelta')}</span>
                     <input
+                      ref={korrInputRef}
                       type="number"
                       step="1"
-                      autoFocus
                       className={cn(inputBase, "w-24 tabular-nums text-right text-[12px]")}
                       value={korrDelta}
                       placeholder="z.B. -2"
@@ -762,6 +1490,8 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                             korrMutation.mutate({ lineId: line.documentLineId, qtyDelta: delta });
                           }
                         } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          e.stopPropagation();
                           setKorrLineId(null);
                           setKorrDelta("");
                         }
@@ -816,19 +1546,52 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
 
 // ─── Main DocumentEditor ──────────────────────────────────────────────────────
 
-export function DocumentEditor({ documentId, documentGroupId, onClose }: DocumentEditorProps) {
+export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateNewDocument, onSaved }: DocumentEditorProps) {
   const { t } = useTranslation('ui');
   const queryClient = useQueryClient();
   const { registerCommand } = useCommands();
+  const { setFocus, resetFocus } = useFocus();
   const isNew = documentId === "__new__";
 
   const [header, setHeader] = useState<DocHeader>({});
-  const [isHeaderDirty, setIsHeaderDirty] = useState(false);
+  const [headerBaselineSnapshot, setHeaderBaselineSnapshot] = useState<string | null>(null);
+  const [isLinesDirty, setIsLinesDirty] = useState(false);
   const [pendingLines, setPendingLines] = useState<LineRow[]>([]);
   const [showTechnical, setShowTechnical] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [convertCandidates, setConvertCandidates] = useState<ConvertCandidate[] | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [duplicateDialog, setDuplicateDialog] = useState<DuplicateDialogState>({
+    open: false,
+    recordId: null,
+    candidates: [],
+    selectedGroupId: null,
+    isPending: false,
+  });
   const linesEditorRef = useRef<DocumentLinesEditorHandle>(null);
+  const editorRootRef = useRef<HTMLDivElement>(null);
+  const didAutoFocusRef = useRef(false);
+
+  useEffect(() => {
+    setFocus({
+      workspace: "documents",
+      panel: "document-editor",
+      entity: "document",
+      recordId: isNew ? null : documentId,
+      area: "form",
+      mode: isNew ? "create" : "edit",
+    });
+    return () => resetFocus();
+  }, [documentId, isNew, resetFocus, setFocus]);
+
+  useEffect(() => {
+    didAutoFocusRef.current = false;
+    setHeader({});
+    setHeaderBaselineSnapshot(null);
+    setIsLinesDirty(false);
+    setPendingLines([]);
+    setCloseDialogOpen(false);
+  }, [documentId, documentGroupId, isNew]);
 
   // ── fetch existing document ──
   const { data: docData, isLoading: isDocLoading } = useQuery({
@@ -893,14 +1656,38 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
     queryFn: async () => { const r = await fetch("/api/data/currency?limit=200"); return r.ok ? r.json() : []; },
     staleTime: 5 * 60 * 1000,
   });
+  const { data: auditTrail, isLoading: isAuditLoading } = useQuery<DocumentAuditTrail>({
+    queryKey: ["documents", "audit", documentId],
+    queryFn: async () => {
+      const res = await fetch(`/api/documents/${documentId}/audit`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json() as Promise<DocumentAuditTrail>;
+    },
+    enabled: !isNew,
+    staleTime: 0,
+  });
+
+  const activeDocumentType = header.documentType ?? groupData?.documentType ?? (docData as any)?.documentType ?? null;
+  const hidePartyFields = !!activeDocumentType && MOVEMENT_DOCUMENT_TYPES.has(activeDocumentType);
+  const addressLocks = getAddressLocks(header.customAttributes);
+  const billingAddressLocked = !!addressLocks.billingAddress;
+  const deliveryAddressLocked = !!addressLocks.deliveryAddress;
+  const headerSnapshot = useMemo(() => JSON.stringify(normalizeHeaderForSave(header, hidePartyFields)), [header, hidePartyFields]);
+  const isHeaderDirty = headerBaselineSnapshot != null && headerSnapshot !== headerBaselineSnapshot;
 
   // ── initialize header from doc or group defaults ──
   useEffect(() => {
     if (!isNew && docData) {
-      setHeader(docData as DocHeader);
-      setIsHeaderDirty(false);
+      // Hydrate the editable header draft from async query data.
+      // eslint-disable-next-line react-hooks-js/set-state-in-effect
+      const hydrated = {
+        ...(docData as DocHeader),
+        currencyId: normalizeCurrencyId((docData as DocHeader).currencyId ?? null, currencies as any[]),
+      };
+      setHeader(hydrated);
+      setHeaderBaselineSnapshot(JSON.stringify(normalizeHeaderForSave(hydrated, !!(docData as any)?.documentType && MOVEMENT_DOCUMENT_TYPES.has((docData as any).documentType))));
     }
-  }, [isNew, docData]);
+  }, [isNew, docData, currencies]);
 
   // Merge group defaults into the new-document draft when they load.
   // Guard via ref so we apply defaults exactly once per group.
@@ -909,42 +1696,66 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
     if (!isNew || !groupData) return;
     if (appliedGroupRef.current === groupData.documentGroupId) return;
     appliedGroupRef.current = groupData.documentGroupId;
-    setHeader((prev) => ({
-      documentGroupId: groupData.documentGroupId,
-      documentType: groupData.documentType,
-      documentDate: prev.documentDate ?? today(),
-      warehouseId: prev.warehouseId ?? groupData.defaultWarehouseId ?? null,
-      paymentTermId: prev.paymentTermId ?? groupData.defaultPaymentTermId ?? null,
-      shippingMethodId: prev.shippingMethodId ?? groupData.defaultShippingMethodId ?? null,
-      currencyId: prev.currencyId ?? groupData.defaultCurrencyId ?? "EUR",
-      ...prev,
-    }));
+    setHeader((prev) => {
+      const nextHeader = {
+        documentGroupId: groupData.documentGroupId,
+        documentType: groupData.documentType,
+        documentDate: prev.documentDate ?? today(),
+        warehouseId: prev.warehouseId ?? groupData.defaultWarehouseId ?? null,
+        paymentTermId: prev.paymentTermId ?? groupData.defaultPaymentTermId ?? null,
+        shippingMethodId: prev.shippingMethodId ?? groupData.defaultShippingMethodId ?? null,
+        currencyId: normalizeCurrencyId(prev.currencyId ?? groupData.defaultCurrencyId ?? "EUR", currencies as any[]),
+        ...prev,
+      };
+      setHeaderBaselineSnapshot((current) => (
+        current == null
+          ? JSON.stringify(normalizeHeaderForSave(nextHeader, MOVEMENT_DOCUMENT_TYPES.has(nextHeader.documentType ?? "")))
+          : current
+      ));
+      return nextHeader;
+    });
   // eslint-disable-next-line react-hooks-js/set-state-in-effect
-  }, [isNew, groupData]);
+  }, [isNew, groupData, currencies]);
 
   const patchHeader = (fields: Partial<DocHeader>) => {
     setHeader((prev) => ({ ...prev, ...fields }));
-    setIsHeaderDirty(true);
+  };
+
+  const setAddressFieldLock = (field: keyof AddressLockState, locked: boolean) => {
+    setHeader((prev) => ({
+      ...prev,
+      customAttributes: setAddressLock(prev.customAttributes, field, locked),
+    }));
   };
 
   // ── mutations ──
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const editorLines = linesEditorRef.current;
+      await Promise.resolve(editorLines?.commitCurrentEdit());
+      const linesToSave = editorLines?.getPersistableLines() ?? getPersistableLines(pendingLines);
+
       if (isNew) {
+        const resolvedDocumentGroupId = header.documentGroupId ?? documentGroupId ?? groupData?.documentGroupId ?? null;
+        const resolvedDocumentType = header.documentType ?? groupData?.documentType ?? null;
+        if (!resolvedDocumentGroupId || !resolvedDocumentType) {
+          throw new Error("Document group and type are required");
+        }
         // 1. create header via dedicated endpoint (handles companyId, documentNo, transactionId)
         const res = await fetch("/api/documents/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            documentGroupId: header.documentGroupId,
-            documentType: header.documentType,
+            documentGroupId: resolvedDocumentGroupId,
+            documentType: resolvedDocumentType,
             documentDate: header.documentDate ?? today(),
             status: "draft",
-            customerId: header.customerId ?? null,
-            billingAddress: header.billingAddress ?? null,
-            deliveryAddress: header.deliveryAddress ?? null,
-            deliveryAddressId: header.deliveryAddressId ?? null,
-            currencyId: header.currencyId ?? null,
+            customerId: hidePartyFields ? null : (header.customerId ?? null),
+            billingAddress: hidePartyFields ? null : (header.billingAddress ?? null),
+            deliveryAddress: hidePartyFields ? null : (header.deliveryAddress ?? null),
+            deliveryAddressId: hidePartyFields ? null : (header.deliveryAddressId ?? null),
+            customAttributes: header.customAttributes ?? null,
+            currencyId: normalizeCurrencyId(header.currencyId ?? groupData?.defaultCurrencyId ?? null, currencies as any[]),
             warehouseId: header.warehouseId ?? null,
             paymentTermId: header.paymentTermId ?? null,
             shippingMethodId: header.shippingMethodId ?? null,
@@ -955,8 +1766,8 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
         const newId = doc.documentId;
 
         // 2. save lines
-        for (let i = 0; i < pendingLines.length; i++) {
-          const l = pendingLines[i];
+        for (let i = 0; i < linesToSave.length; i++) {
+          const l = linesToSave[i];
           await fetch("/api/data/documentLine", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -965,6 +1776,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
               lineNo: l.lineNo,
               articleId: l.articleId,
               articleTextSnapshot: l.articleTextSnapshot,
+              lineType: l.lineType ?? "article",
               quantity: String(l.quantity),
               unit: l.unit,
               netPrice: String(l.netPrice),
@@ -981,13 +1793,16 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
           const res = await fetch(`/api/data/document/${documentId}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(header),
+            body: JSON.stringify({
+              ...header,
+              currencyId: normalizeCurrencyId(header.currencyId ?? null, currencies as any[]),
+            }),
           });
           if (!res.ok) throw new Error(await res.text());
         }
 
         // batch save lines
-        for (const l of pendingLines) {
+        for (const l of linesToSave) {
           if (l.isDeleted && l.documentLineId) {
             await fetch(`/api/data/documentLine/${l.documentLineId}`, {
               method: "PATCH",
@@ -1003,6 +1818,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
                 lineNo: l.lineNo,
                 articleId: l.articleId,
                 articleTextSnapshot: l.articleTextSnapshot,
+                lineType: l.lineType ?? "article",
                 quantity: String(l.quantity),
                 unit: l.unit,
                 netPrice: String(l.netPrice),
@@ -1018,6 +1834,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
                 lineNo: l.lineNo,
                 articleId: l.articleId,
                 articleTextSnapshot: l.articleTextSnapshot,
+                lineType: l.lineType ?? "article",
                 quantity: String(l.quantity),
                 unit: l.unit,
                 netPrice: String(l.netPrice),
@@ -1033,12 +1850,11 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
     onSuccess: (savedId) => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
       queryClient.invalidateQueries({ queryKey: ["data", "documentLine"] });
-      setIsHeaderDirty(false);
+      setIsLinesDirty(false);
+      setCloseDialogOpen(false);
       toast.success(t('document.actions.save'));
-      if (isNew && savedId !== documentId) {
-        // Close and let parent re-open with real ID
-        onClose();
-      }
+      onSaved?.(savedId);
+      onClose();
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -1051,6 +1867,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+      queryClient.invalidateQueries({ queryKey: ["documents", "audit", documentId] });
       toast.success(t('document.actions.post'));
     },
     onError: (err: any) => toast.error(err.message),
@@ -1074,6 +1891,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
         setConvertCandidates(null);
         setSelectedCandidateId(null);
         queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+        queryClient.invalidateQueries({ queryKey: ["documents", "audit", documentId] });
         toast.success(t('document.actions.convert'));
         onClose();
       }
@@ -1081,15 +1899,41 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
     onError: (err: any) => toast.error(err.message),
   });
 
-  const duplicateMutation = useMutation({
+  const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/documents/${documentId}/duplicate`, { method: "POST" });
+      const res = await fetch(`/api/documents/${documentId}/delete`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      return res.json() as Promise<{ archived?: boolean; deleted?: boolean }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
-      toast.success(t('document.actions.duplicate'));
+      queryClient.invalidateQueries({ queryKey: ["documents", "audit", documentId] });
+      toast.success(t("form.archiveSuccess"));
+      onClose();
+    },
+    onError: (err: any) => toast.error(err.message ?? t("form.fkViolationError")),
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (targetGroupId: string) => {
+      const res = await fetch(`/api/documents/${documentId}/duplicate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetGroupId }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json() as Promise<{ documentId: string; documentNo: string }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+      toast.success(t("document.actions.duplicate"));
+      setDuplicateDialog({
+        open: false,
+        recordId: null,
+        candidates: [],
+        selectedGroupId: null,
+        isPending: false,
+      });
       onClose();
     },
     onError: (err: any) => toast.error(err.message),
@@ -1103,6 +1947,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+      queryClient.invalidateQueries({ queryKey: ["documents", "audit", documentId] });
       toast.success(t('document.actions.storno'));
       onClose();
     },
@@ -1112,76 +1957,304 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
   // ── commands ──
   const { mutate: saveDocMutate } = saveMutation;
   const { mutate: postDocMutate } = postMutation;
+  const { mutate: deleteDocMutate } = deleteMutation;
+  const { mutate: stornoDocMutate } = stornoMutation;
   const handleSave = useCallback(() => saveDocMutate(), [saveDocMutate]);
   const handlePost = useCallback(() => postDocMutate(), [postDocMutate]);
-
-  useEffect(() => {
-    return registerCommand({
-      id: "doc-save",
-      label: { en: "Save Document", de: "Beleg speichern" },
-      shortcut: "F10",
-      group: "document",
-      scope: "context",
-      handler: handleSave,
+  const handleDelete = useCallback(() => deleteDocMutate(), [deleteDocMutate]);
+  const handleStorno = useCallback(() => stornoDocMutate(), [stornoDocMutate]);
+  const handlePrint = useCallback(() => {
+    window.open(`/api/documents/${documentId}/print`, "_blank", "noopener,noreferrer");
+  }, [documentId]);
+  const handleOpenDuplicateDialog = useCallback(async () => {
+    const res = await fetch(`/api/documents/${documentId}/duplicate`, { method: "POST" });
+    if (!res.ok) {
+      const message = await res.text();
+      toast.error(message || t("document.duplicate.noTargets"));
+      return;
+    }
+    const data = await res.json() as { candidates?: DocumentTargetGroupCandidate[] };
+    const candidates = data.candidates ?? [];
+    if (candidates.length === 0) {
+      toast.error(t("document.duplicate.noTargets"));
+      return;
+    }
+    setDuplicateDialog({
+      open: true,
+      recordId: documentId,
+      candidates,
+      selectedGroupId: candidates[0]?.documentGroupId ?? null,
+      isPending: false,
     });
-  }, [registerCommand, handleSave]);
-
-  useEffect(() => {
-    const status = (header as any).status ?? "draft";
-    return registerCommand({
-      id: "doc-post",
-      label: { en: "Post Document", de: "Beleg buchen" },
-      shortcut: "F9",
-      group: "document",
-      scope: "context",
-      isEnabled: () => status === "draft" && !isNew,
-      handler: handlePost,
-    });
-  }, [registerCommand, handlePost, header, isNew]);
-
-  const { mutate: convertDocMutate } = convertMutation;
-  const handleConvert = useCallback(() => convertDocMutate(undefined), [convertDocMutate]);
-
-  useEffect(() => {
-    const type = (header as any).documentType ?? "";
-    const archived = (header as any).archivedAt ?? null;
-    const status = (header as any).status ?? "draft";
-    return registerCommand({
-      id: "doc-convert",
-      label: { en: "Convert Document", de: "Beleg wandeln" },
-      shortcut: "F7",
-      group: "document",
-      scope: "context",
-      isEnabled: () => !isNew && status !== "cancelled" && !archived && !["G", "g", "R", "r"].includes(type),
-      handler: handleConvert,
-    });
-  }, [registerCommand, handleConvert, header, isNew]);
-
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); onClose(); }
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
-
-  // ── lookup items ──
-  const warehouseItems: LookupItem[] = (warehouses as any[]).map((w: any) => ({ id: w.warehouseId, label: w.name ?? w.code }));
-  const paymentTermItems: LookupItem[] = (paymentTerms as any[]).map((p: any) => ({ id: p.paymentTermId, label: typeof p.name === "object" ? (p.name?.de ?? p.name?.en ?? "") : String(p.name ?? "") }));
-  const shippingItems: LookupItem[] = (shippingMethods as any[]).map((s: any) => ({ id: s.shippingMethodId, label: typeof s.name === "object" ? (s.name?.de ?? s.name?.en ?? "") : String(s.name ?? "") }));
-  const currencyItems: LookupItem[] = (currencies as any[]).map((c: any) => ({ id: c.currencyId ?? c.code, label: `${c.code} – ${typeof c.name === "object" ? (c.name?.de ?? c.name?.en ?? "") : String(c.name ?? "")}` }));
+  }, [documentId, t]);
 
   const docStatus = (header as any).status ?? (isNew ? "draft" : "—");
   const docNo = isNew ? "wird vergeben" : ((header.documentNo ?? documentId));
   const groupLabel = groupData ? `${groupData.documentType}${String(groupData.documentGroupId).slice(-2)} · ${groupData.name}` : (documentGroupId ?? "");
   const docType = (header as any).documentType ?? "";
-  const archivedAt = (header as any).archivedAt ?? null;
   const stornoDocumentId = (header as any).stornoDocumentId ?? null;
-  const canPost = !isNew && docStatus === "draft";
-  const canConvert = !isNew && docStatus !== "cancelled" && !archivedAt && !["G", "g", "R", "r"].includes(docType);
-  const canStorno = !isNew && docStatus === "posted" && ["R", "r"].includes(docType) && !stornoDocumentId;
-  const canDuplicate = !isNew && docStatus !== "cancelled";
+  const activeConvertCandidates = convertCandidates ?? [];
+  const isDocumentDirty = isHeaderDirty || isLinesDirty;
+  const handleClose = useCallback(() => {
+    if (saveMutation.isPending) return;
+    if (isDocumentDirty) {
+      setCloseDialogOpen(true);
+      return;
+    }
+    onClose();
+  }, [isDocumentDirty, onClose, saveMutation.isPending]);
+  const handleCloseWithoutSaving = useCallback(() => {
+    setCloseDialogOpen(false);
+    onClose();
+  }, [onClose]);
+  const handleSaveDraftAndClose = useCallback(() => {
+    setCloseDialogOpen(false);
+    saveDocMutate();
+  }, [saveDocMutate]);
 
+  useEffect(() => {
+    if (didAutoFocusRef.current || (!isNew && isDocLoading)) return;
+    const root = editorRootRef.current;
+    if (!root) return;
+
+    const selector = [
+      'input:not([type="hidden"]):not([disabled])',
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+    ].join(", ");
+    const first = root.querySelector<HTMLElement>(selector);
+    didAutoFocusRef.current = true;
+
+    requestAnimationFrame(() => {
+      if (first) {
+        first.focus();
+        if (first instanceof HTMLInputElement && typeof first.select === "function") {
+          first.select();
+        }
+      } else {
+        linesEditorRef.current?.focusFirstLine();
+      }
+    });
+  }, [documentId, documentGroupId, isDocLoading, isNew, groupData, header.documentId]);
+
+  const { mutate: convertDocMutate } = convertMutation;
+  const handleConvert = useCallback(() => convertDocMutate(undefined), [convertDocMutate]);
+  const handleCreateNewDocument = useCallback(() => {
+    onCreateNewDocument(documentGroupId ?? groupData?.documentGroupId ?? header.documentGroupId ?? undefined);
+  }, [documentGroupId, groupData?.documentGroupId, header.documentGroupId, onCreateNewDocument]);
+
+  const commandRefs = useRef({
+    handleSave: () => {},
+    handlePost: () => {},
+    handleDelete: () => {},
+    handleStorno: () => {},
+    handleClose: () => {},
+    handleConvert: () => {},
+    handlePrint: () => {},
+    handleOpenDuplicateDialog: async () => {},
+    handleCreateNewDocument: () => {},
+    docStatus: "draft",
+    docType: "",
+    stornoDocumentId: null as string | null,
+    isNew,
+    isDocumentDirty: false,
+    isCloseDialogOpen: false,
+    isSavePending: false,
+    isConvertDialogOpen: false,
+    isDuplicateDialogOpen: false,
+    archived: null as string | null,
+    status: "draft",
+    type: "",
+  });
+
+  useEffect(() => {
+    commandRefs.current.handleSave = handleSave;
+    commandRefs.current.handlePost = handlePost;
+    commandRefs.current.handleDelete = handleDelete;
+    commandRefs.current.handleStorno = handleStorno;
+    commandRefs.current.handleClose = handleClose;
+    commandRefs.current.handleConvert = handleConvert;
+    commandRefs.current.handlePrint = handlePrint;
+    commandRefs.current.handleOpenDuplicateDialog = handleOpenDuplicateDialog;
+    commandRefs.current.handleCreateNewDocument = handleCreateNewDocument;
+    commandRefs.current.docStatus = docStatus;
+    commandRefs.current.docType = docType;
+    commandRefs.current.stornoDocumentId = stornoDocumentId;
+    commandRefs.current.isNew = isNew;
+    commandRefs.current.isDocumentDirty = isDocumentDirty;
+    commandRefs.current.isCloseDialogOpen = closeDialogOpen;
+    commandRefs.current.isSavePending = saveMutation.isPending;
+    commandRefs.current.isConvertDialogOpen = activeConvertCandidates.length > 0;
+    commandRefs.current.isDuplicateDialogOpen = duplicateDialog.open;
+    commandRefs.current.archived = (header as any).archivedAt ?? null;
+    commandRefs.current.status = (header as any).status ?? "draft";
+    commandRefs.current.type = (header as any).documentType ?? "";
+  }, [
+    handleSave,
+    handlePost,
+    handleDelete,
+    handleStorno,
+    handleClose,
+    handleConvert,
+    handlePrint,
+    handleOpenDuplicateDialog,
+    handleCreateNewDocument,
+    docStatus,
+    docType,
+    stornoDocumentId,
+    isNew,
+    isDocumentDirty,
+    closeDialogOpen,
+    saveMutation.isPending,
+    activeConvertCandidates.length,
+    duplicateDialog.open,
+    header,
+  ]);
+
+  useEffect(() => {
+    const unregSave = registerCommand({
+      id: "doc-save",
+      label: { en: "Save Document", de: "Beleg speichern" },
+      shortcut: "F10",
+      group: "document",
+      scope: "local",
+      handler: () => commandRefs.current.handleSave(),
+    });
+
+    const unregCreate = registerCommand({
+      id: "create-record",
+      label: { en: "New Document", de: "Neuer Beleg" },
+      shortcut: "F3",
+      group: "document",
+      scope: "local",
+      isEnabled: () => true,
+      handler: (state) => {
+        if (state.area === "grid") {
+          linesEditorRef.current?.addLine();
+          return;
+        }
+        commandRefs.current.handleCreateNewDocument();
+      },
+    });
+
+    const unregDelete = registerCommand({
+      id: "delete-record",
+      label: { en: "Delete Document", de: "Beleg löschen" },
+      shortcut: "F4",
+      group: "document",
+      scope: "local",
+      isEnabled: () => !commandRefs.current.isNew,
+      handler: (state) => {
+        if (state.area === "grid") {
+          linesEditorRef.current?.deleteCurrentLine();
+          return;
+        }
+        commandRefs.current.handleDelete();
+      },
+    });
+
+    const unregDuplicate = registerCommand({
+      id: "duplicate-record",
+      label: { en: "Duplicate Document", de: "Beleg duplizieren" },
+      shortcut: "F8",
+      group: "document",
+      scope: "local",
+      isEnabled: () => !commandRefs.current.isNew && commandRefs.current.status !== "cancelled",
+      handler: (state) => {
+        if (state.area === "grid") {
+          linesEditorRef.current?.duplicateCurrentLine();
+          return;
+        }
+        commandRefs.current.handleOpenDuplicateDialog();
+      },
+    });
+
+    const unregConvert = registerCommand({
+      id: "transform-record",
+      label: { en: "Convert Document", de: "Beleg wandeln" },
+      shortcut: "F7",
+      group: "document",
+      scope: "local",
+      isEnabled: () => !commandRefs.current.isNew && commandRefs.current.status !== "cancelled" && !commandRefs.current.archived && !["G", "g", "R", "r"].includes(commandRefs.current.type),
+      handler: () => commandRefs.current.handleConvert(),
+    });
+
+    const unregPrint = registerCommand({
+      id: "print-document",
+      label: { en: "Print Document", de: "Beleg drucken" },
+      shortcut: "F6",
+      group: "document",
+      scope: "local",
+      isEnabled: () => !commandRefs.current.isNew,
+      handler: () => commandRefs.current.handlePrint(),
+    });
+
+    const unregPost = registerCommand({
+      id: "doc-post",
+      label: { en: "Post Document", de: "Beleg buchen" },
+      shortcut: "F9",
+      group: "document",
+      scope: "local",
+      isEnabled: () => commandRefs.current.status === "draft" && !commandRefs.current.isNew,
+      handler: () => commandRefs.current.handlePost(),
+    });
+
+    const unregStorno = registerCommand({
+      id: "doc-storno",
+      label: { en: "Cancel Document", de: "Beleg stornieren" },
+      group: "document",
+      scope: "local",
+      isEnabled: () => !commandRefs.current.isNew && commandRefs.current.docStatus === "posted" && ["R", "r"].includes(commandRefs.current.docType) && !commandRefs.current.stornoDocumentId,
+      handler: () => commandRefs.current.handleStorno(),
+    });
+
+    const unregClose = registerCommand({
+      id: "doc-close",
+      label: { en: "Close Document", de: "Beleg schließen" },
+      shortcut: "Escape",
+      group: "document",
+      scope: "context",
+      isEnabled: () =>
+        !commandRefs.current.isSavePending &&
+        !commandRefs.current.isCloseDialogOpen &&
+        !commandRefs.current.isConvertDialogOpen &&
+        !commandRefs.current.isDuplicateDialogOpen,
+      handler: () => commandRefs.current.handleClose(),
+    });
+
+    return () => {
+      unregSave();
+      unregCreate();
+      unregDelete();
+      unregDuplicate();
+      unregConvert();
+      unregPrint();
+      unregPost();
+      unregStorno();
+      unregClose();
+    };
+  }, [
+    registerCommand,
+    commandRefs,
+  ]);
+
+  // ── lookup items ──
+  const warehouseItems = useMemo(
+    () => (warehouses as any[]).map((w: any) => ({ id: w.warehouseId, label: w.name ?? w.code })),
+    [warehouses],
+  );
+  const paymentTermItems = useMemo(
+    () => (paymentTerms as any[]).map((p: any) => ({ id: p.paymentTermId, label: typeof p.name === "object" ? (p.name?.de ?? p.name?.en ?? "") : String(p.name ?? "") })),
+    [paymentTerms],
+  );
+  const shippingItems = useMemo(
+    () => (shippingMethods as any[]).map((s: any) => ({ id: s.shippingMethodId, label: typeof s.name === "object" ? (s.name?.de ?? s.name?.en ?? "") : String(s.name ?? "") })),
+    [shippingMethods],
+  );
+  const currencyItems = useMemo(
+    () => (currencies as any[]).map((c: any) => ({ id: c.code, label: `${c.code} – ${typeof c.name === "object" ? (c.name?.de ?? c.name?.en ?? "") : String(c.name ?? "")}` })),
+    [currencies],
+  );
   if (!isNew && isDocLoading) {
     return (
       <div className="h-full w-full flex items-center justify-center bg-canvas">
@@ -1191,7 +2264,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
   }
 
   return (
-    <div className="h-full w-full flex flex-col bg-canvas overflow-hidden">
+    <div ref={editorRootRef} className="h-full w-full flex flex-col bg-canvas overflow-hidden">
       {/* Breadcrumb bar */}
       <div className="h-9 shrink-0 flex items-center gap-2 px-3 bg-canvas-soft border-b border-hairline">
         <span className="text-[13px] text-ink-mute">{t('document.breadcrumb')}</span>
@@ -1204,16 +2277,19 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
         <ChevronRightIcon className="size-3 text-hairline-input" />
         <span className={cn("text-[13px] font-medium", isNew && "text-ink-mute italic")}>{docNo}</span>
         <StatusDot status={docStatus} />
-        {isHeaderDirty && <span className="text-[11px] text-primary ml-1">●</span>}
+        {isDocumentDirty && <span className="text-[11px] text-primary ml-1">●</span>}
       </div>
 
-      {/* Header form */}
-      <div className="shrink-0 border-b border-hairline bg-canvas">
+      <div className="flex flex-1 min-h-0 overflow-hidden flex-col xl:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Header form */}
+          <div className="shrink-0 border-b border-hairline bg-canvas">
         {/* DocType + DocGroup selectors — only for new documents without a pre-set group */}
         {isNew && !documentGroupId && (
           <div className="grid gap-x-6 px-4 pt-4 pb-2" style={{ gridTemplateColumns: "1fr 1fr 200px 160px" }}>
             <DocLookupField
               label={t('document.fields.documentType')}
+              focusField="documentType"
               tabIndex={0}
               value={header.documentType ?? null}
               onChange={(id) => patchHeader({ documentType: id ?? undefined, documentGroupId: undefined })}
@@ -1225,6 +2301,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
             />
             <DocLookupField
               label={t('document.fields.documentGroup')}
+              focusField="documentGroupId"
               tabIndex={0}
               value={header.documentGroupId ?? null}
               onChange={(id) => {
@@ -1250,43 +2327,64 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
             <div /><div />
           </div>
         )}
-        <div className="grid gap-x-6 px-4 py-4" style={{ gridTemplateColumns: "1fr 1fr 200px 160px" }}>
-          {/* Col 1: Invoice address */}
-          <AddressPickerField
-            label={t('document.fields.billingAddress')}
-            tabIndex={1}
-            value={header.customerId ?? null}
-            addressData={header.billingAddress ?? null}
-            onChange={(id, json, raw) => {
-              const update: Partial<DocHeader> = {
-                customerId: id,
-                billingAddress: json,
-              };
-              // Auto-fill currency and payment term from address if present
-              if (raw?.currencyId && !header.currencyId) update.currencyId = raw.currencyId;
-              if (raw?.paymentTermId && !header.paymentTermId) update.paymentTermId = raw.paymentTermId;
-              // Auto-fill delivery address from address default
-              if (raw?.defaultDeliveryAddressId && !header.deliveryAddressId) {
-                update.deliveryAddressId = raw.defaultDeliveryAddressId;
-              }
-              patchHeader(update);
-            }}
-          />
+        <div
+          className="grid gap-x-6 px-4 py-4"
+          style={{ gridTemplateColumns: hidePartyFields ? "minmax(0,1fr) 160px" : "1fr 1fr 200px 160px" }}
+        >
+          {!hidePartyFields && (
+            <>
+              {/* Col 1: Invoice address */}
+            <AddressPickerField
+              label={t('document.fields.billingAddress')}
+              tabIndex={0}
+              value={header.customerId ?? null}
+              addressData={header.billingAddress ?? null}
+              locked={billingAddressLocked}
+              lockLabel={t("document.actions.lock")}
+              unlockLabel={t("document.actions.unlock")}
+              onToggleLock={() => setAddressFieldLock("billingAddress", !billingAddressLocked)}
+              onChange={(id, json, raw) => {
+                if (billingAddressLocked) return;
+                const update: Partial<DocHeader> = {
+                  customerId: id,
+                  billingAddress: json,
+                };
+                // Auto-fill currency and payment term from address if present
+                if (raw?.currencyId && !header.currencyId) update.currencyId = raw.currencyId;
+                if (raw?.paymentTermId && !header.paymentTermId) update.paymentTermId = raw.paymentTermId;
+                // Auto-fill delivery address from address default
+                if (raw?.defaultDeliveryAddressId && !header.deliveryAddressId && !deliveryAddressLocked) {
+                  update.deliveryAddressId = raw.defaultDeliveryAddressId;
+                }
+                patchHeader(update);
+              }}
+            />
 
-          {/* Col 2: Delivery address */}
-          <AddressPickerField
-            label={t('document.fields.deliveryAddress')}
-            tabIndex={2}
-            value={header.deliveryAddressId ?? null}
-            addressData={header.deliveryAddress ?? null}
-            onChange={(id, json) => patchHeader({ deliveryAddressId: id, deliveryAddress: json })}
-          />
+              {/* Col 2: Delivery address */}
+            <DeliveryAddressPickerField
+              label={t('document.fields.deliveryAddress')}
+              tabIndex={0}
+              value={header.deliveryAddressId ?? null}
+              addressId={header.customerId ?? null}
+              addressData={header.deliveryAddress ?? null}
+              locked={deliveryAddressLocked}
+              lockLabel={t("document.actions.lock")}
+              unlockLabel={t("document.actions.unlock")}
+              onToggleLock={() => setAddressFieldLock("deliveryAddress", !deliveryAddressLocked)}
+              onChange={(id, json) => {
+                if (deliveryAddressLocked) return;
+                patchHeader({ deliveryAddressId: id, deliveryAddress: json });
+              }}
+            />
+            </>
+          )}
 
           {/* Col 3: Logistics */}
           <div className="flex flex-col gap-3">
             <DocLookupField
               label={t('document.fields.warehouse')}
-              tabIndex={3}
+              focusField="warehouseId"
+              tabIndex={0}
               value={header.warehouseId ?? null}
               onChange={(id) => patchHeader({ warehouseId: id })}
               items={warehouseItems}
@@ -1294,7 +2392,8 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
             />
             <DocLookupField
               label={t('document.fields.paymentTerm')}
-              tabIndex={5}
+              focusField="paymentTermId"
+              tabIndex={0}
               value={header.paymentTermId ?? null}
               onChange={(id) => patchHeader({ paymentTermId: id })}
               items={paymentTermItems}
@@ -1302,7 +2401,8 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
             />
             <DocLookupField
               label={t('document.fields.shippingMethod')}
-              tabIndex={6}
+              focusField="shippingMethodId"
+              tabIndex={0}
               value={header.shippingMethodId ?? null}
               onChange={(id) => patchHeader({ shippingMethodId: id })}
               items={shippingItems}
@@ -1315,28 +2415,32 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium uppercase tracking-wider text-ink-mute">{t('document.fields.date')}</label>
               <input
-                tabIndex={4}
+                tabIndex={0}
                 type="date"
                 className={cn(inputBase, "h-8")}
                 value={header.documentDate ?? ""}
+                onFocus={() => setFocus({
+                  workspace: "documents",
+                  panel: "document-editor",
+                  entity: "document",
+                  recordId: isNew ? null : documentId,
+                  area: "form",
+                  field: "documentDate",
+                  mode: isNew ? "create" : "edit",
+                })}
                 onChange={(e) => patchHeader({ documentDate: e.target.value })}
               />
             </div>
-            <div onKeyDown={(e) => {
-              if (e.key === "Tab" && !e.shiftKey) {
-                e.preventDefault();
-                linesEditorRef.current?.focusFirstLine();
-              }
-            }}>
-              <DocLookupField
-                label={t('document.fields.currency')}
-                tabIndex={7}
-                value={header.currencyId ?? null}
-                onChange={(id) => patchHeader({ currencyId: id })}
-                items={currencyItems}
-                placeholder="EUR"
-              />
-            </div>
+            <DocLookupField
+              label={t('document.fields.currency')}
+              focusField="currencyId"
+              tabIndex={0}
+              value={header.currencyId ?? null}
+              onChange={(id) => patchHeader({ currencyId: id })}
+              items={currencyItems}
+              placeholder="EUR"
+              onTabForward={() => linesEditorRef.current?.focusFirstLine()}
+            />
           </div>
         </div>
 
@@ -1364,138 +2468,286 @@ export function DocumentEditor({ documentId, documentGroupId, onClose }: Documen
         )}
       </div>
 
-      {/* Lines */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <DocumentLinesEditor
-          ref={linesEditorRef}
-          documentId={isNew ? null : documentId}
-          customerId={header.customerId ?? null}
-          documentDate={header.documentDate ?? null}
-          status={docStatus}
-          onLinesChange={setPendingLines}
-        />
-      </div>
-
-      {/* Convert dialog */}
-      {convertCandidates && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setConvertCandidates(null); setSelectedCandidateId(null); }}>
-          <div className="w-96 rounded-lg border border-hairline bg-canvas shadow-xl p-5 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
-            <div>
-              <div className="text-[14px] font-semibold text-ink">{t('document.convert.title')}</div>
-              <div className="text-[12px] text-ink-mute mt-0.5">
-                {docType} {header.documentNo} → {t('document.convert.selectTarget')}
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {convertCandidates.map((c) => (
-                <button
-                  key={c.documentGroupId}
-                  className={cn(
-                    "text-left px-3 py-2 rounded border text-[13px] transition-colors",
-                    (selectedCandidateId === c.documentGroupId || convertCandidates.length === 1)
-                      ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] text-ink"
-                      : "border-hairline hover:border-primary text-ink-secondary hover:text-ink",
-                  )}
-                  onClick={() => setSelectedCandidateId(c.documentGroupId)}
-                >
-                  <span className="font-mono text-[11px] text-ink-mute mr-2">{c.documentType}{String(c.groupNumber).padStart(2, "0")}</span>
-                  {c.name}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink transition-colors"
-                onClick={() => { setConvertCandidates(null); setSelectedCandidateId(null); }}
-              >
-                {t('document.actions.close')}
-              </button>
-              <button
-                className="h-7 px-4 rounded-full text-[13px] disabled:opacity-40 transition-colors"
-                style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
-                disabled={convertMutation.isPending || (convertCandidates.length > 1 && !selectedCandidateId)}
-                onClick={() => {
-                  const target = convertCandidates.length === 1
-                    ? convertCandidates[0].documentGroupId
-                    : selectedCandidateId;
-                  if (target) convertMutation.mutate(target);
-                }}
-              >
-                {convertMutation.isPending ? t('document.actions.converting') : t('document.convert.confirm')}
-              </button>
-            </div>
+          {/* Lines */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <DocumentLinesEditor
+              ref={linesEditorRef}
+              documentId={isNew ? null : documentId}
+              documentType={activeDocumentType}
+              warehouseId={header.warehouseId ?? null}
+              customerId={header.customerId ?? null}
+              documentDate={header.documentDate ?? null}
+              status={docStatus}
+              onLinesChange={setPendingLines}
+              onDirtyChange={setIsLinesDirty}
+            />
           </div>
         </div>
-      )}
 
-      {/* Footer */}
-      <div className="h-11 shrink-0 border-t border-hairline flex items-center px-4 gap-2 bg-canvas">
-        <button
-          onClick={onClose}
-          className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink hover:border-hairline-input transition-colors"
-        >
-          {t('document.actions.close')}
-        </button>
-        <div className="flex-1" />
+        <aside className="shrink-0 border-t border-hairline bg-canvas-soft/60 xl:border-t-0 xl:border-l xl:w-80 max-h-72 xl:max-h-none overflow-hidden">
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="shrink-0 border-b border-hairline px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-mute">
+                {t("document.audit.title", { defaultValue: "Audit-Verlauf" })}
+              </div>
+              <div className="mt-1 text-[12px] text-ink-mute">
+                {t("document.audit.transaction", { defaultValue: "Transaction" })}:{" "}
+                <span className="font-mono text-[11px] text-ink">{auditTrail?.transactionId ?? "—"}</span>
+              </div>
+            </div>
 
-        {canDuplicate && (
-          <button
-            onClick={() => duplicateMutation.mutate()}
-            disabled={duplicateMutation.isPending}
-            className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink hover:border-hairline-input transition-colors disabled:opacity-40"
-          >
-            {duplicateMutation.isPending ? t('document.actions.duplicating') : t('document.actions.duplicate')}
-          </button>
-        )}
-        {canConvert && (
-          <button
-            onClick={() => convertMutation.mutate(undefined)}
-            disabled={convertMutation.isPending}
-            className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink hover:border-hairline-input transition-colors disabled:opacity-40"
-          >
-            {convertMutation.isPending && !convertCandidates ? t('document.actions.converting') : `${t('document.actions.convert')} (F7)`}
-          </button>
-        )}
-        {canStorno && (
-          <button
-            onClick={() => stornoMutation.mutate()}
-            disabled={stornoMutation.isPending}
-            className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink hover:border-hairline-input transition-colors disabled:opacity-40"
-          >
-            {stornoMutation.isPending ? t('document.actions.cancelling') : t('document.actions.storno')}
-          </button>
-        )}
-        <button
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
-          className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink hover:border-hairline-input transition-colors disabled:opacity-40"
-        >
-          {saveMutation.isPending ? t('document.actions.saving') : t('document.actions.save')}
-        </button>
-        {canPost && (
-          <button
-            onClick={() => postMutation.mutate()}
-            disabled={postMutation.isPending}
-            className="h-7 px-4 rounded-full text-[13px] disabled:opacity-40"
-            style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
-          >
-            {postMutation.isPending ? t('document.actions.posting') : t('document.actions.post')}
-          </button>
-        )}
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
+              {isNew ? (
+                <div className="rounded border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
+                  {t("document.audit.noDraft", { defaultValue: "Audit is available after the document is created." })}
+                </div>
+              ) : isAuditLoading ? (
+                <div className="space-y-2">
+                  <div className="h-16 rounded border border-hairline bg-canvas animate-pulse" />
+                  <div className="h-16 rounded border border-hairline bg-canvas animate-pulse" />
+                </div>
+              ) : (
+                <>
+                  {(auditTrail?.nodes ?? []).map((node) => {
+                    const tagLabelMap: Record<string, string> = {
+                      current: t("document.audit.tags.current", { defaultValue: "Current" }),
+                      origin: t("document.audit.tags.origin", { defaultValue: "Origin" }),
+                      derived: t("document.audit.tags.derived", { defaultValue: "Derived" }),
+                      reversal: t("document.audit.tags.reversal", { defaultValue: "Reversal" }),
+                      predecessor: t("document.audit.tags.predecessor", { defaultValue: "Predecessor" }),
+                      "storno-source": t("document.audit.tags.stornoSource", { defaultValue: "Storno source" }),
+                      posted: t("document.audit.tags.posted", { defaultValue: "Posted" }),
+                      archived: t("document.audit.tags.archived", { defaultValue: "Archived" }),
+                    };
+
+                    return (
+                      <div
+                        key={node.documentId}
+                        className={cn(
+                          "rounded border px-3 py-3 text-[12px] shadow-sm",
+                          node.isCurrent ? "border-primary bg-[color-mix(in_oklab,var(--primary)_6%,var(--canvas))]" : "border-hairline bg-canvas",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[12px] text-ink">{node.documentNo}</span>
+                              <StatusDot status={node.status} />
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-ink-mute">
+                              {node.documentType} · {formatDate(node.documentDate)}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap justify-end gap-1">
+                            {node.relationTags.map((tag) => (
+                              <span
+                                key={tag}
+                                className={cn(
+                                  "rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide",
+                                  tag === "current"
+                                    ? "border-primary text-primary"
+                                    : "border-hairline text-ink-mute",
+                                )}
+                              >
+                                {tagLabelMap[tag] ?? tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-ink-mute">
+                          <div className="min-w-0">
+                            <div className="uppercase tracking-wide text-[9px]">parent</div>
+                            <div className="truncate font-mono text-ink">{node.parentDocumentId ?? "—"}</div>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="uppercase tracking-wide text-[9px]">storno</div>
+                            <div className="truncate font-mono text-ink">{node.stornoDocumentId ?? "—"}</div>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="uppercase tracking-wide text-[9px]">status</div>
+                            <div className="truncate text-ink">{node.status}</div>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="uppercase tracking-wide text-[9px]">archived</div>
+                            <div className="truncate text-ink">{node.isArchived ? formatDate(node.archivedAt ?? node.updatedAt ?? node.createdAt) : "—"}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {(!auditTrail?.nodes || auditTrail.nodes.length === 0) && (
+                    <div className="rounded border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
+                      {t("document.audit.empty", { defaultValue: "No related documents found." })}
+                    </div>
+                  )}
+
+                  {auditTrail?.productionFacts?.length ? (
+                    <div className="pt-2">
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-mute">
+                        {t("document.audit.production", { defaultValue: "Production Trace" })}
+                      </div>
+                      <div className="space-y-2">
+                        {auditTrail.productionFacts.map((fact) => (
+                          <div key={fact.documentLineId} className="rounded border border-hairline bg-canvas px-3 py-2 text-[12px]">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="font-mono text-[11px] text-ink">{fact.lineNo.toString().padStart(3, "0")} · {fact.articleTextSnapshot ?? fact.articleId ?? "—"}</div>
+                                <div className="text-[11px] text-ink-mute">{fact.side === "output" ? t("document.audit.sideOutput", { defaultValue: "Output" }) : t("document.audit.sideInput", { defaultValue: "Input" })}</div>
+                              </div>
+                              <span className={cn(
+                                "rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide border",
+                                fact.side === "output" ? "border-emerald-300 text-emerald-700" : "border-amber-300 text-amber-700",
+                              )}>
+                                {fact.side}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-ink-mute">
+                              <div>
+                                <div className="uppercase tracking-wide text-[9px]">Soll</div>
+                                <div className="font-mono text-ink">{fact.expectedQty}</div>
+                              </div>
+                              <div>
+                                <div className="uppercase tracking-wide text-[9px]">Ist</div>
+                                <div className="font-mono text-ink">{fact.movementQty}</div>
+                              </div>
+                              <div>
+                                <div className="uppercase tracking-wide text-[9px]">Var.</div>
+                                <div className="font-mono text-ink">{fact.varianceQty}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        </aside>
       </div>
+
+      <Dialog
+        open={closeDialogOpen}
+        onOpenChange={(open) => setCloseDialogOpen(open)}
+      >
+        <DialogContent className="max-w-md p-0 overflow-hidden" showCloseButton={false}>
+          <div className="px-5 py-4 border-b border-hairline">
+            <div className="text-[14px] font-semibold text-ink">{t("document.closePrompt.title")}</div>
+            <div className="text-[12px] text-ink-mute mt-0.5">
+              {t("document.closePrompt.description")}
+            </div>
+          </div>
+          <div className="px-5 py-4 flex flex-wrap gap-2 justify-end">
+            <button
+              type="button"
+              className="h-8 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink transition-colors disabled:opacity-40"
+              onClick={handleCloseWithoutSaving}
+              disabled={saveMutation.isPending}
+            >
+              {t("document.closePrompt.closeWithoutSaving")}
+            </button>
+            <button
+              type="button"
+              className="h-8 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink transition-colors disabled:opacity-40"
+              onClick={() => setCloseDialogOpen(false)}
+              disabled={saveMutation.isPending}
+            >
+              {t("document.closePrompt.cancel")}
+            </button>
+            <button
+              type="button"
+              className="h-8 px-4 rounded-full text-[13px] disabled:opacity-40 transition-colors"
+              style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
+              onClick={handleSaveDraftAndClose}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? t("document.actions.saving") : t("document.closePrompt.saveDraftAndClose")}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert dialog */}
+      <Dialog
+        open={activeConvertCandidates.length > 0}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConvertCandidates(null);
+            setSelectedCandidateId(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm p-0 overflow-hidden">
+          <div className="px-5 py-4 border-b border-hairline">
+            <div className="text-[14px] font-semibold text-ink">{t('document.convert.title')}</div>
+            <div className="text-[12px] text-ink-mute mt-0.5">
+              {docType} {header.documentNo} → {t('document.convert.selectTarget')}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5 p-5">
+            {activeConvertCandidates.map((c) => (
+              <button
+                key={c.documentGroupId}
+                type="button"
+                className={cn(
+                  "w-full text-left px-3 py-2 rounded border text-[13px] transition-colors",
+                  (selectedCandidateId === c.documentGroupId || activeConvertCandidates.length === 1)
+                    ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] text-ink"
+                    : "border-hairline hover:border-primary text-ink-secondary hover:text-ink",
+                )}
+                onClick={() => setSelectedCandidateId(c.documentGroupId)}
+              >
+                <span className="font-mono text-[11px] text-ink-mute mr-2">{c.documentType}{String(c.groupNumber).padStart(2, "0")}</span>
+                {c.name}
+              </button>
+            ))}
+          </div>
+          <div className="px-5 pb-5 flex gap-2 justify-end">
+            <button
+              className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink transition-colors"
+              onClick={() => { setConvertCandidates(null); setSelectedCandidateId(null); }}
+            >
+              {t('document.actions.close')}
+            </button>
+            <button
+              className="h-7 px-4 rounded-full text-[13px] disabled:opacity-40 transition-colors"
+              style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
+              disabled={convertMutation.isPending || (activeConvertCandidates.length > 1 && !selectedCandidateId)}
+              onClick={() => {
+                const target = activeConvertCandidates.length === 1
+                  ? activeConvertCandidates[0].documentGroupId
+                  : selectedCandidateId;
+                if (target) convertMutation.mutate(target);
+              }}
+            >
+              {convertMutation.isPending ? t('document.actions.converting') : t('document.convert.confirm')}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <DocumentTargetGroupDialog
+        open={duplicateDialog.open}
+        onOpenChange={(open) => setDuplicateDialog((p) => ({ ...p, open }))}
+        title={t("document.actions.duplicate")}
+        description={t("document.convert.selectTarget")}
+        candidates={duplicateDialog.candidates}
+        selectedGroupId={duplicateDialog.selectedGroupId}
+        confirmLabel={t("document.actions.duplicate")}
+        confirmPendingLabel={t("document.actions.duplicating")}
+        isPending={duplicateMutation.isPending}
+        onSelectGroupId={(groupId) => setDuplicateDialog((p) => ({ ...p, selectedGroupId: groupId }))}
+        onConfirm={() => {
+          const target = duplicateDialog.selectedGroupId ?? duplicateDialog.candidates[0]?.documentGroupId;
+          if (target) duplicateMutation.mutate(target);
+        }}
+      />
+
     </div>
   );
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-const DIRECTION_FROM_TYPE: Record<string, string> = {
-  N: "OUTBOUND", A: "OUTBOUND", L: "OUTBOUND", R: "OUTBOUND", G: "OUTBOUND",
-  b: "INBOUND", l: "INBOUND", r: "INBOUND", g: "INBOUND",
-  V: "ADJUSTMENT", Z: "ADJUSTMENT", E: "ADJUSTMENT", U: "ADJUSTMENT",
-  q: "PRODUCTION", p: "PRODUCTION",
-};
-
-function deriveDirection(type: string): string {
-  return DIRECTION_FROM_TYPE[type] ?? "OUTBOUND";
-}

@@ -722,6 +722,7 @@ export const documentLine = pgTable(
     transactionId: uuid("transaction_id"),
     movementType: char("movement_type", { length: 1 }),
     lineType: varchar("line_type", { length: 20 }).notNull().default("article"),
+    bomGroupId: uuid("bom_group_id"),
   },
   (table) => [
     unique("document_line_tenant_id_document_id_line_no_unique").on(
@@ -744,8 +745,36 @@ export const documentLine = pgTable(
     ),
     check(
       "document_line_line_type_check",
-      sql`line_type IN ('article', 'comment', 'production_output', 'production_input', 'bom_component')`,
+      sql`line_type IN ('article', 'comment', 'production_output', 'sales_bom_header', 'bom_component')`,
     ),
+  ],
+);
+
+export const documentLineAllocation = pgTable(
+  "document_line_allocation",
+  {
+    allocationId: uuid("allocation_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    sourceDocumentLineId: uuid("source_document_line_id")
+      .notNull()
+      .references(() => documentLine.documentLineId),
+    targetDocumentLineId: uuid("target_document_line_id")
+      .notNull()
+      .references(() => documentLine.documentLineId),
+    allocatedQty: numeric("allocated_qty").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("document_line_allocation_source_target_unique").on(
+      table.sourceDocumentLineId,
+      table.targetDocumentLineId,
+    ),
+    index("idx_dla_source").on(table.tenantId, table.sourceDocumentLineId),
+    index("idx_dla_target").on(table.tenantId, table.targetDocumentLineId),
   ],
 );
 
@@ -762,6 +791,7 @@ export const documentLineTracking = pgTable(
       .notNull()
       .references(() => documentLine.documentLineId),
     serialNumberId: uuid("serial_number_id"),
+    serialNo: text("serial_no"),
     batchNo: text("batch_no"),
     qty: numeric("qty").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -769,7 +799,23 @@ export const documentLineTracking = pgTable(
   (_table) => [
     check(
       "document_line_tracking_check",
-      sql`(serial_number_id IS NOT NULL AND batch_no IS NULL) OR (serial_number_id IS NULL AND batch_no IS NOT NULL)`,
+      sql`
+        (
+          serial_number_id IS NOT NULL
+          AND serial_no IS NULL
+          AND batch_no IS NULL
+        )
+        OR (
+          serial_number_id IS NULL
+          AND serial_no IS NOT NULL
+          AND batch_no IS NULL
+        )
+        OR (
+          serial_number_id IS NULL
+          AND serial_no IS NULL
+          AND batch_no IS NOT NULL
+        )
+      `,
     ),
   ],
 );

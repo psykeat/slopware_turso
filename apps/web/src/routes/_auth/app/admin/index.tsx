@@ -246,8 +246,8 @@ function AdminView() {
         <DialogContent className="max-w-sm sw-root">
           <div className="p-6 flex flex-col gap-5">
             <div>
-              <h3 className="text-[15px] font-medium text-ink">Eintrag deaktivieren?</h3>
-              <p className="text-[13px] text-ink-mute mt-1">Der Eintrag wird deaktiviert und ist für Benutzer nicht mehr sichtbar.</p>
+              <h3 className="text-[15px] font-medium text-ink">Eintrag hart löschen?</h3>
+              <p className="text-[13px] text-ink-mute mt-1">Diese Aktion ist dauerhaft und nur für Administration bzw. Tests gedacht.</p>
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -263,9 +263,7 @@ function AdminView() {
                 onClick={async () => {
                   if (!deleteId) return;
                   await fetch(`/api/admin/data/${selectedKey}/${deleteId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ archived: true }),
+                    method: "DELETE",
                   });
                   setDeleteConfirm(false);
                   setDeleteId(null);
@@ -273,7 +271,7 @@ function AdminView() {
                   queryClient.invalidateQueries({ queryKey: ["admin", "data", selectedKey] });
                 }}
               >
-                Deaktivieren
+                Löschen
               </button>
             </div>
           </div>

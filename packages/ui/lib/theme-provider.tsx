@@ -61,59 +61,72 @@ function applyAccent(accent: AccentTheme) {
   document.documentElement.setAttribute("data-theme", accent);
 }
 
+const VALID_ACCENTS: AccentTheme[] = [
+  "indigo",
+  "ocean",
+  "cyan",
+  "teal",
+  "emerald",
+  "forest",
+  "amber",
+  "rose",
+  "violet",
+  "slate",
+];
+
+function readStoredMode(defaultMode: Mode) {
+  if (typeof window === "undefined") return defaultMode;
+  const storedMode = window.localStorage.getItem("theme");
+  return storedMode === "light" || storedMode === "dark" || storedMode === "system"
+    ? storedMode
+    : defaultMode;
+}
+
+function readStoredAccent(defaultAccentTheme: AccentTheme) {
+  if (typeof window === "undefined") return defaultAccentTheme;
+  const storedAccent = window.localStorage.getItem("accent-theme");
+  return VALID_ACCENTS.includes(storedAccent as AccentTheme)
+    ? (storedAccent as AccentTheme)
+    : defaultAccentTheme;
+}
+
 export function ThemeProvider({
   children,
   defaultMode = "system",
   defaultAccentTheme = "indigo",
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Mode>(defaultMode);
-  const [accentTheme, setAccentThemeState] = useState<AccentTheme>(defaultAccentTheme);
-  const [mounted, setMounted] = useState(false);
+  const [theme, setThemeState] = useState<Mode>(() => readStoredMode(defaultMode));
+  const [accentTheme, setAccentThemeState] = useState<AccentTheme>(() =>
+    readStoredAccent(defaultAccentTheme),
+  );
 
   useEffect(() => {
-    const storedMode = localStorage.getItem("theme");
-    const storedAccent = localStorage.getItem("accent-theme");
-    setThemeState(
-      storedMode === "light" || storedMode === "dark" || storedMode === "system"
-        ? storedMode
-        : defaultMode,
-    );
-    const validAccents: AccentTheme[] = [
-      "indigo","ocean","cyan","teal","emerald","forest","amber","rose","violet","slate",
-    ];
-    setAccentThemeState(
-      validAccents.includes(storedAccent as AccentTheme)
-        ? (storedAccent as AccentTheme)
-        : defaultAccentTheme,
-    );
-    setMounted(true);
-  }, [defaultMode, defaultAccentTheme]);
-
-  useEffect(() => {
-    if (!mounted) return;
     applyMode(theme);
-  }, [theme, mounted]);
+  }, [theme]);
 
   useEffect(() => {
-    if (!mounted) return;
     applyAccent(accentTheme);
-  }, [accentTheme, mounted]);
+  }, [accentTheme]);
 
   useEffect(() => {
-    if (!mounted || theme !== "system") return;
+    if (theme !== "system") return;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => applyMode("system");
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
-  }, [theme, mounted]);
+  }, [theme]);
 
   const setTheme = (next: Mode) => {
-    localStorage.setItem("theme", next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("theme", next);
+    }
     setThemeState(next);
   };
 
   const setAccentTheme = (next: AccentTheme) => {
-    localStorage.setItem("accent-theme", next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("accent-theme", next);
+    }
     setAccentThemeState(next);
   };
 

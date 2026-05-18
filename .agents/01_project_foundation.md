@@ -20,6 +20,20 @@ A module is not simply a raw database table. A module is a business-facing entit
 
 Every approved business-facing entity should be interpretable as a list view through common components, but not every entity should automatically receive unrestricted CRUD behavior. Master data usually supports generic CRUD flows, transaction drafts support state-aware CRUD plus commands, posted transactions support controlled commands but not free editing, and derived data stays read-only except for controlled rebuild or maintenance paths.[cite:2][cite:1]
 
+## Generic entity contract
+
+The platform should treat new business-facing work as a generic entity first, not as a custom screen by default.
+
+The default contract is:
+
+- `DataGrid` for list and grid interpretation.
+- `EntityMask` for generic create, detail, patch, and archive flows.
+- `Dropdown` and lookup behavior for foreign-key selection, backed by the effective lookup metadata and helper registries.
+- `TriViewWorkspace` for hierarchy + list + dependent context modules.
+- `DocumentEditor` for document entry and line-oriented transactional editing.
+
+Custom views are allowed only when the generic contract cannot cover a documented business or ergonomic requirement.
+
 ## Module categories
 
 | Category | Examples | Generic List View | Generic CRUD | Commands | Posting / Derived Behavior |
@@ -54,6 +68,8 @@ Each of these components must consume effective metadata, participate in the sha
 ### EntityPage
 
 EntityPage is the standard list-detail-create-patch shell for generic business-facing entities. It is suitable for master data and for draft-oriented entities where unrestricted editing is allowed by the domain model.[cite:2][cite:1]
+
+Use EntityPage for simple CRUD cases; prefer TriViewWorkspace or DocumentEditor when hierarchy, dependent context, or line editing is required.
 
 ### TriViewWorkspace
 

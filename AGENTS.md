@@ -54,7 +54,7 @@ Use this table to choose context. Prefer live code for implementation details; o
 
 | Task Area                            | Read                                                                                                                                                                                                                                                   |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Fast orientation                     | [`map.md`](map.md)                                                                                                                                                                                                                                     |
+| Fast orientation                     | [`map.md`](map.md), [`.agents/decision-index.md`](.agents/decision-index.md)                                                                                                                                                                          |
 | Architecture invariants              | [`.agents/00_core_architecture.md`](.agents/00_core_architecture.md), [`.agents/01_project_foundation.md`](.agents/01_project_foundation.md), [`.agents/02_entity_introspection_and_generic_ui.md`](.agents/02_entity_introspection_and_generic_ui.md) |
 | Frontend shell, shared UI, design    | [`.agents/design.md`](.agents/design.md), [`.agents/03_frontend_basedesign.md`](.agents/03_frontend_basedesign.md)                                                                                                                                     |
 | TanStack, auth, TypeScript, workflow | [`.agents/tanstack-patterns.md`](.agents/tanstack-patterns.md), [`.agents/auth.md`](.agents/auth.md), [`.agents/typescript.md`](.agents/typescript.md), [`.agents/workflow.md`](.agents/workflow.md)                                                   |
@@ -64,6 +64,7 @@ Use this table to choose context. Prefer live code for implementation details; o
 ## Known Documentation Hygiene
 
 - Treat [`.agents/schema.md`](.agents/schema.md) as a generated reference. Read targeted table sections only.
+- Treat [`.agents/decision-index.md`](.agents/decision-index.md) as the current short-form decision summary.
 - Treat [`.agents/archive/status.md`](.agents/archive/status.md) as historical transcript unless the user explicitly asks for conversation history.
 - Treat [`.agents/archive/`](.agents/archive/) as historical-only documentation and keep it out of the default reading path.
 - If a doc still references `.gemini/*`, resolve it to the equivalent `.agents/*` path.

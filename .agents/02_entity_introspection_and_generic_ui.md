@@ -37,6 +37,18 @@ Each effective entity definition should be able to provide:
 - Layout grouping, tabs, sections, and panel composition hints.[cite:1][cite:2]
 - Command availability and contextual action metadata.[cite:1][cite:2]
 
+## Generic entity mapping
+
+The effective entity definition should drive the standard UI interpretation without handwritten per-screen wiring.
+
+- Grid interpretation maps to `DataGrid` and its derived columns, sorting, filtering, and row navigation.
+- CRUD interpretation maps to `EntityMask` and its field order, validation, lookup, and lifecycle state.
+- Foreign-key interpretation maps to the `Dropdown` / lookup contract, which may render inline selection or a lookup dialog/table depending on result size and complexity.
+- Hierarchical interpretation maps to `NavigationTree`.
+- Dependent context maps to `ContextTabs`, `InspectorPanel`, or subordinate embedded grids.
+
+When a table can be represented by the generic contract, a new bespoke screen should not be created unless the architecture has a documented exception.
+
 ## Foreign-key and lookup behavior
 
 Foreign-key fields should default to a lookup-capable component rather than plain text entry. The runtime should inspect the foreign key target and helper table registry to determine display value, code value, sorting, filtering, and tenant scoping behavior.[cite:1][cite:2]
@@ -73,6 +85,8 @@ EntityMask must not contain handwritten per-entity validation rules as a default
 Dropdown and LookupTable together form the standard foreign-key selection pattern. Their behavior should derive from foreign keys, helper table registries, display columns, filters, tenant scoping, and effective lookup metadata.[cite:1][cite:2]
 
 LookupTable must support keyboard-first navigation, selection, filtering, and Escape handling under the platform-wide focus system.[cite:1]
+
+The current implementation may realize this contract through lookup fields, inline dropdowns, and lookup dialogs, but the architectural contract stays generic: users select referenced entities through the lookup model, not through ad hoc per-screen widgets.
 
 ### NavigationTree
 
@@ -140,6 +154,15 @@ All standard components that allow editing must consume the normalized validatio
 
 The UI should be able to focus the first blocking issue, visually mark invalid controls, and preserve consistent error semantics across forms, imports, and command execution responses.[cite:2]
 
+## Localization and labels
+
+Effective entity definitions should include locale-aware labels, help text, and display names for fields, groups, commands, and helper records.
+
+- Static shell and chrome labels may come from locale resource files.
+- Entity-facing labels should come from effective metadata whenever possible.
+- Command labels, empty states, and lookup text should resolve through the same locale-aware runtime contract.
+- Generic entity names should stay stable across languages; only their display labels change.
+
 ## Designer and extensibility boundaries
 
 The Inline Designer may customize layout, labels, ordering, visibility, tabs, grouping, and other allowed presentation concerns, but it may not redefine security, tenant isolation, posting rules, or derived-data semantics.[cite:2][cite:1]
@@ -151,4 +174,3 @@ Tenant-defined extensibility should therefore change interpretation and presenta
 The implementation should provide a runtime entity introspection pipeline that produces effective entity definitions from schema, annotations, helper registries, command metadata, and effective tenant metadata. Standard components then consume these definitions consistently rather than duplicating entity-specific wiring.[cite:1][cite:2]
 
 This keeps the product generic-first, keyboard-first, metadata-driven, and aligned with the database-centered architecture.[cite:2][cite:1]
-riven, and aligned with the database-centered architecture.[cite:2][cite:1]

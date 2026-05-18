@@ -48,9 +48,7 @@ Tenant-defined extensions are allowed only inside the controlled extensibility m
 
 ## Generic-first UI
 
-The platform is generic-first. New business-facing surfaces must use standard panels and adapters before introducing custom views, because the architecture explicitly prefers list panels, detail panels, line panels, grids, and metadata-driven views over bespoke UI systems.[cite:2][cite:1]
-
-Specialized panels are allowed only when they provide real ergonomic or business value beyond the generic path. The existence of a special module must never create a parallel UI architecture.[cite:2]
+The platform is generic-first. Standard panels and metadata-driven views are preferred over bespoke screens; specialized panels are allowed only when they solve a documented ergonomic or business need. The canonical generic entity contract is defined in the foundation and introspection specifications.[cite:2][cite:1]
 
 ## Platform-wide command and focus system
 
@@ -111,25 +109,13 @@ Consistency must be enforced structurally:
 
 ## Platform standard components
 
-The platform must standardize a small, reusable component family that covers most business-facing work without introducing parallel UI paradigms.[cite:1][cite:2]
-
-### Required standard components
-
-- DataGrid for list-oriented entity interpretation and large datasets.[cite:1][cite:2]
-- EntityMask for generic create, detail, patch, archive, and validation-driven form handling.[cite:1]
-- Dropdown and LookupTable for foreign-key and helper-table selection.[cite:1][cite:2]
-- NavigationTree for hierarchical filtering and navigation contexts such as address categories, article groups, document types, and document groups.[cite:1][cite:2]
-- TriViewWorkspace for the standard three-region business layout.[cite:2][cite:1]
-- StatisticsModule for context-sensitive read-only insights invoked from the active context.[cite:1][cite:2]
-- DocumentEditor for document-centric editing with a focused header and a line editor.[cite:1][cite:2]
-- ActionBar for visible command execution paired with the keyboard system.[cite:1]
-- InspectorPanel for compact dependent, read-mostly, or mixed detail contexts.[cite:1]
-- ContextTabs for switching between dependent subcontexts inside a panel or inspector area.[cite:1]
-- StatusBar for current tenant, company, module, record, state, and context hints.[cite:1]
+The platform standardizes a small reusable component family for lists, forms, lookups, hierarchies, workspaces, commands, and status display. The canonical component contract is defined in the foundation and introspection specifications.[cite:1][cite:2]
 
 ### Component governance
 
 All standard components must participate in the same command system, focus system, i18n model, effective metadata model, and validation model. A component that does not integrate with these platform contracts is not a standard component.[cite:1][cite:2]
+
+Localized labels, helper texts, and command names are part of the effective UI contract. Static shell chrome may use locale resources, while entity-facing labels should primarily resolve from effective metadata.
 
 ## TriView workspace pattern
 

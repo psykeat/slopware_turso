@@ -22,6 +22,12 @@ vite.config.ts     Oxlint + Oxfmt config (root, affects all)
 - `@repo/db/*` → `packages/db/src/*`
 - `#/` → `apps/web/src/`
 
+## Quick Docs
+
+- [`AGENTS.md`](AGENTS.md) — startup rules and doc routing
+- [`.agents/decision-index.md`](.agents/decision-index.md) — short current decision summary
+- [`.agents/archive/`](.agents/archive/) — historical docs only
+
 ---
 
 ## Route Hierarchy (`apps/web/src/routes/`)

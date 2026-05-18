@@ -12,6 +12,8 @@ The UI must rely on the standard platform component family: **TriViewWorkspace**
 
 For the three core modules, the default workspace pattern is TriView: a left navigation tree, a primary grid in the upper-right region, and a dependent context area in the lower-right region.[cite:1][cite:3] For transactional document editing, the frontend must use a separate DocumentEditor because document browsing and document editing are intentionally distinct modes.[cite:1][cite:3]
 
+For simple master-data work, the shell should prefer the generic `EntityPage` / entity-mask flow rather than adding a new custom screen. Only hierarchy, dependent context, or line-oriented workflows justify a richer workspace.
+
 The interface must be keyboard-first and must route actions through the shared command and focus system rather than ad hoc handlers.[cite:1][cite:4] Representative global shortcuts include `Alt+1` for Addresses, `Alt+2` for Articles, `Alt+3` for Documents, and `Alt+0` for Company Master Data and Settings.[cite:1][cite:4]
 
 ## App Shell
@@ -175,6 +177,8 @@ The visual system should be translated as follows:
 - Text colors: avoid pure black; use `ink` and `ink-mute` for hierarchy.[cite:2]
 
 The UI should feel calm, dense, professional, and operational. Its priority is readability, fast orientation, and stable data work, not decorative expression.[cite:2][cite:1]
+
+Shell-level localization covers navigation, top-bar chrome, global commands, module names, user menu labels, and language switching. Entity labels, helper table names, and field-level display text should resolve from effective metadata and the generic entity contract defined in the foundation and introspection documents.
 
 ## Recommended Sidebar Structure
 

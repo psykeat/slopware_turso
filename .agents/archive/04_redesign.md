@@ -1,11 +1,13 @@
 # 04 — Frontend Redesign Checklist
 
 ## Source of Truth
+
 - **Visual spec**: `/tmp/design2/slopware-v2/project/` (triview.jsx, forms.jsx, appbar.jsx, bars.jsx, tokens.css)
 - **Architecture spec**: `.gemini/00_core_architecture.md` + `.gemini/01_project_foundation.md` + `.gemini/02_entity_introspection_and_generic_ui.md` + `.gemini/03_frontend_basedesign.md`
 - **Design language**: `.gemini/design.md`
 
 ## What Is Already Done (do not touch)
+
 - [x] `packages/ui/styles/base.css` — design tokens, dark mode, 10 accent themes, JetBrains Mono import
 - [x] `packages/ui/lib/theme-provider.tsx` — AccentTheme + Mode, localStorage, ScriptOnce anti-flash
 - [x] `packages/ui/platform/command-registry.tsx` — CommandProvider + global keyboard listener
@@ -271,7 +273,9 @@ Current problem: ActionBar is rendered in `app/route.tsx` layout but modules nee
   const saveMutation = useMutation({
     mutationFn: async (data: Record<string, any>) => {
       const res = await fetch(`/api/data/document/${documentId}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Save failed");
       return res.json();
@@ -392,6 +396,7 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 ## Updated Recommended Execution Order
 
 **Quick wins (< 10 min each):**
+
 1. **7.E1** — ShortcutHelp i18n key fix
 2. **7.A1** — ActionBar remove null guard
 3. **7.A2** — ActionBar command label i18n
@@ -399,33 +404,18 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 5. **7.K1** — save-close global F10 registration
 6. **8.C1** — `formatters.ts` + `StatusDot` (foundation for 8.C2-8.E)
 
-**Medium (15–45 min):**
-7. **7.B1–7.B6** — SubCrumb context architecture
-8. **7.C1–7.C3** — F8 duplicate in all 3 modules
-9. **7.D1–7.D2** — Documents queryClient + post-document
-10. **7.J1–7.J2** — Command group field
-11. **8.A1–8.A3** — Details tabs → InspectorPanel
-12. **8.B1–8.B2** — Address: Delivery + Related Documents tabs
-13. **8.C2–8.C4** — DataGrid explicit column props (uses formatters from 8.C1)
-14. **8.E1–8.E2** — Document Lines columns
-15. **8.D1–8.D3** — useDismiss shared hook
+**Medium (15–45 min):** 7. **7.B1–7.B6** — SubCrumb context architecture 8. **7.C1–7.C3** — F8 duplicate in all 3 modules 9. **7.D1–7.D2** — Documents queryClient + post-document 10. **7.J1–7.J2** — Command group field 11. **8.A1–8.A3** — Details tabs → InspectorPanel 12. **8.B1–8.B2** — Address: Delivery + Related Documents tabs 13. **8.C2–8.C4** — DataGrid explicit column props (uses formatters from 8.C1) 14. **8.E1–8.E2** — Document Lines columns 15. **8.D1–8.D3** — useDismiss shared hook
 
-**Medium continued:**
-16. **8.G1–8.G4** — F2 Edit command + dialog in all 3 modules
-17. **8.H1–8.H5** — Non-negotiables audit pass
+**Medium continued:** 16. **8.G1–8.G4** — F2 Edit command + dialog in all 3 modules 17. **8.H1–8.H5** — Non-negotiables audit pass
 
-**Larger (30–60 min):**
-18. **7.F1–7.F2** — DocumentEditor real save + post status
-19. **7.G1–7.G2** — StatisticsModule real KPIs
-20. **7.I1–7.I4** — API FK filtering (backend + frontend)
-21. **8.F1** — DocumentEditor add line
-22. **7.L1–7.L3** — Lint + verification
+**Larger (30–60 min):** 18. **7.F1–7.F2** — DocumentEditor real save + post status 19. **7.G1–7.G2** — StatisticsModule real KPIs 20. **7.I1–7.I4** — API FK filtering (backend + frontend) 21. **8.F1** — DocumentEditor add line 22. **7.L1–7.L3** — Lint + verification
 
 ---
 
 ## Verification Checklist
 
 ### Shell
+
 - [ ] AppBar: 48px, brand mark, tenant pill, 3 module tabs with ⌥1/2/3 kbd badges, ⋯ overflow, search bar with ⌘K badge, help icon, avatar initials
 - [ ] Active module tab: primary fill background, white text, visible kbd badge
 - [ ] ActionBar: **always** visible 36px bar — never collapses/hides
@@ -434,6 +424,7 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 - [ ] StatusBar: 32px, tenant · module · record ID (mono) left; v0.1.0 · online dot · "System Online" right
 
 ### Components
+
 - [ ] DataGrid: toolbar with title + record count + 4 icon buttons; 40px rows; selected row primary tint + 2px left accent
 - [ ] DataGrid empty: icon ring + subtitle + action pill with F3 kbd badge
 - [ ] DataGrid loading: table-shaped skeletons matching column widths (not generic blocks)
@@ -451,6 +442,7 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 - [ ] Dark mode: canvas inverts, AppBar + NavigationTree stay dark-surfaced
 
 ### Module: Addresses
+
 - [ ] NavigationTree shows address categories with header "Categories"
 - [ ] DataGrid columns: No. (mono), Company, City, Country, Phone (mono), Segment
 - [ ] Details tab: InspectorPanel with sections Identification / Postal Address / Commercial (NOT EntityMask edit form)
@@ -461,6 +453,7 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 - [ ] Edit dialog (F2): EntityMask mode="edit" with recordId pre-filled
 
 ### Module: Articles
+
 - [ ] NavigationTree shows article groups with header "Groups"
 - [ ] DataGrid columns: No. (mono), Name, Unit, Price (money + tnum), Stock (tnum), Location (mono)
 - [ ] Details tab: InspectorPanel with sections Identification / Pricing & Stock
@@ -468,6 +461,7 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 - [ ] Create dialog (F3) + Edit dialog (F2)
 
 ### Module: Documents
+
 - [ ] Document Triview Navigation: Implemented according to the [Beleggruppen-Redesign PRD](_toimplement/document_group_redesign.md)
 - [ ] DataGrid columns: No. (mono), Date (tnum), Customer, Lines (tnum), Total (money), Status (dot only — no colored badge)
 - [ ] Lines tab: DataGrid toolbar=false with columns: Pos (zero-padded mono), Article (mono), Description, Qty (tnum), Unit Price (tnum), Disc (%), Line Total (tnum)
@@ -476,16 +470,19 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 - [ ] DocumentEditor: Add Line button in footer works
 
 ### Module: Admin
+
 - [ ] ActionBar shows "Administration" breadcrumb
 - [ ] Tab bar: Tenants / Users / Organizations
 - [ ] Each tab loads from `/api/admin/data/{entity}`
 - [ ] Only visible to `isSystemAdmin`
 
 ### Module: Settings
+
 - [ ] Left sidebar: Payment Terms / Tax Codes / Shipping Methods / Warehouses / Cost Centers
 - [ ] Main area: DataGrid for selected helper table from `/api/data/{entity}`
 
 ### Keyboard
+
 - [ ] `Alt+1/2/3/0` → correct module navigation
 - [ ] `Alt+I` → StatisticsModule drawer
 - [ ] `Ctrl+K` → Command palette
@@ -501,6 +498,7 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 - [ ] Shortcuts do NOT fire when focus is inside `<input>`, `<textarea>`, or `contenteditable`
 
 ### Data Wiring
+
 - [ ] Addresses contacts filtered by addressId (not all contacts)
 - [ ] Articles inventory movements filtered by articleId
 - [ ] Documents lines filtered by documentId
@@ -509,12 +507,14 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 - [ ] Settings: real data from `/api/data/` helper table endpoints
 
 ### i18n
+
 - [ ] EN → DE toggle: all nav labels, module titles, action button labels, section headings switch
 - [ ] Metadata field labels use `labelDe` when DE active
 - [ ] Language persists across reload (localStorage)
 - [ ] No missing-key `i18next` warnings in console
 
 ### Non-Negotiables (04.1 §8)
+
 - [ ] One accent color only — no secondary accent on interactive elements
 - [ ] No pure black — all text uses `--ink`, `--ink-secondary`, or `--ink-mute`
 - [ ] No colored status badges — status conveyed by dot color + ink-mute label text only
@@ -524,6 +524,7 @@ Spec: DocumentEditor lines DataGrid needs ability to add lines (not just view th
 - [ ] No hardcoded hex/rgb color strings in component files — all via CSS tokens or `color-mix()`
 
 ### Quality
+
 - [ ] `pnpm lint` zero errors
 - [ ] No `console.error` in browser during normal usage
 - [ ] No i18n missing-key warnings in console

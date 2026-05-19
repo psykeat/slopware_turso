@@ -1,10 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { documentGroup } from "@repo/db/schema";
-import { eq, and } from "drizzle-orm";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
 import { DIRECTION_FROM_TYPE } from "@repo/db/services/document-service";
+import { createFileRoute } from "@tanstack/react-router";
+import { eq, and } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/admin/document-groups/$id")({
   server: {

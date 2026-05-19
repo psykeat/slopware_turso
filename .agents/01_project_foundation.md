@@ -36,12 +36,12 @@ Custom views are allowed only when the generic contract cannot cover a documente
 
 ## Module categories
 
-| Category | Examples | Generic List View | Generic CRUD | Commands | Posting / Derived Behavior |
-|---|---|---|---|---|---|
-| Master Data | address, article, company [cite:1] | Yes [cite:2] | Yes, metadata-driven [cite:2] | Optional [cite:2] | No posting [cite:2] |
-| Transaction Drafts | document, documentline before posting [cite:1] | Yes [cite:2] | Yes, state-aware [cite:2] | Yes [cite:2] | Not yet posted [cite:2] |
-| Posted Transactions | posted documents [cite:1] | Yes [cite:2] | No unrestricted CRUD [cite:2] | Yes, only allowed lifecycle actions [cite:2] | Controlled lifecycle [cite:2] |
-| Derived Data | inventory balances, inventory movements, facts, ledger projections [cite:1] | Yes, read-oriented [cite:2] | No [cite:2] | Internal rebuild only [cite:2] | Strictly derived [cite:2] |
+| Category            | Examples                                                                    | Generic List View           | Generic CRUD                  | Commands                                     | Posting / Derived Behavior    |
+| ------------------- | --------------------------------------------------------------------------- | --------------------------- | ----------------------------- | -------------------------------------------- | ----------------------------- |
+| Master Data         | address, article, company [cite:1]                                          | Yes [cite:2]                | Yes, metadata-driven [cite:2] | Optional [cite:2]                            | No posting [cite:2]           |
+| Transaction Drafts  | document, documentline before posting [cite:1]                              | Yes [cite:2]                | Yes, state-aware [cite:2]     | Yes [cite:2]                                 | Not yet posted [cite:2]       |
+| Posted Transactions | posted documents [cite:1]                                                   | Yes [cite:2]                | No unrestricted CRUD [cite:2] | Yes, only allowed lifecycle actions [cite:2] | Controlled lifecycle [cite:2] |
+| Derived Data        | inventory balances, inventory movements, facts, ledger projections [cite:1] | Yes, read-oriented [cite:2] | No [cite:2]                   | Internal rebuild only [cite:2]               | Strictly derived [cite:2]     |
 
 ## UI foundation
 

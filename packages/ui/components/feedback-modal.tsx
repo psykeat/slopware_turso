@@ -1,6 +1,6 @@
+import { XIcon } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { XIcon } from "lucide-react";
 
 interface FeedbackSnapshot {
   url: string;
@@ -82,15 +82,13 @@ export function FeedbackModal({ open, onClose, snapshot }: FeedbackModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-canvas rounded-xl shadow-xl w-full max-w-lg p-6 flex flex-col gap-4">
+      <div className="flex w-full max-w-lg flex-col gap-4 rounded-xl bg-canvas p-6 shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-medium text-ink">
-            {t("feedback.title")}
-          </h2>
+          <h2 className="text-[15px] font-medium text-ink">{t("feedback.title")}</h2>
           <button
             onClick={handleClose}
-            className="size-7 grid place-items-center rounded-md text-ink-secondary hover:bg-canvas-soft hover:text-ink transition-colors"
+            className="grid size-7 place-items-center rounded-md text-ink-secondary transition-colors hover:bg-canvas-soft hover:text-ink"
             aria-label="Close"
           >
             <XIcon className="size-4" />
@@ -106,14 +104,14 @@ export function FeedbackModal({ open, onClose, snapshot }: FeedbackModalProps) {
                 href={issueUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[13px] text-primary underline break-all"
+                className="text-[13px] break-all text-primary underline"
               >
                 {issueUrl}
               </a>
             )}
             <button
               onClick={handleClose}
-              className="self-end h-8 px-4 rounded-md bg-canvas-soft text-[13px] text-ink hover:bg-hairline transition-colors"
+              className="h-8 self-end rounded-md bg-canvas-soft px-4 text-[13px] text-ink transition-colors hover:bg-hairline"
             >
               {t("actions.close")}
             </button>
@@ -122,16 +120,16 @@ export function FeedbackModal({ open, onClose, snapshot }: FeedbackModalProps) {
           /* Error state */
           <div className="flex flex-col gap-3">
             <p className="text-[13px] text-destructive">{t("feedback.error")}</p>
-            <div className="flex gap-2 justify-end">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={handleClose}
-                className="h-8 px-4 rounded-md bg-canvas-soft text-[13px] text-ink hover:bg-hairline transition-colors"
+                className="h-8 rounded-md bg-canvas-soft px-4 text-[13px] text-ink transition-colors hover:bg-hairline"
               >
                 {t("actions.close")}
               </button>
               <button
                 onClick={handleRetry}
-                className="h-8 px-4 rounded-md text-[13px] text-primary-fg transition-colors"
+                className="h-8 rounded-md px-4 text-[13px] text-primary-fg transition-colors"
                 style={{ background: "var(--primary)" }}
               >
                 {t("feedback.retry")}
@@ -142,7 +140,7 @@ export function FeedbackModal({ open, onClose, snapshot }: FeedbackModalProps) {
           /* Idle / Loading state */
           <>
             <textarea
-              className="h-32 resize-none rounded-md border border-hairline-input bg-canvas-soft px-3 py-2 text-[13px] text-ink placeholder:text-ink-mute focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-32 resize-none rounded-md border border-hairline-input bg-canvas-soft px-3 py-2 text-[13px] text-ink placeholder:text-ink-mute focus:ring-1 focus:ring-primary focus:outline-none"
               placeholder={t("feedback.placeholder")}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -153,32 +151,30 @@ export function FeedbackModal({ open, onClose, snapshot }: FeedbackModalProps) {
 
             {/* Collapsible context */}
             <details className="text-[12px]">
-              <summary className="cursor-pointer text-ink-secondary hover:text-ink select-none">
+              <summary className="cursor-pointer text-ink-secondary select-none hover:text-ink">
                 {t("feedback.contextLabel")}
               </summary>
-              <pre className="text-xs overflow-auto max-h-40 bg-canvas-soft p-2 rounded mt-2 text-ink-mute">
+              <pre className="mt-2 max-h-40 overflow-auto rounded bg-canvas-soft p-2 text-xs text-ink-mute">
                 {JSON.stringify(snapshot, null, 2)}
               </pre>
             </details>
 
             {/* Actions */}
-            <div className="flex gap-2 justify-end">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={handleClose}
                 disabled={status === "loading"}
-                className="h-8 px-4 rounded-md bg-canvas-soft text-[13px] text-ink hover:bg-hairline transition-colors disabled:opacity-50"
+                className="h-8 rounded-md bg-canvas-soft px-4 text-[13px] text-ink transition-colors hover:bg-hairline disabled:opacity-50"
               >
                 {t("actions.cancel")}
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={description.length < 10 || status === "loading"}
-                className="h-8 px-4 rounded-md text-[13px] text-primary-fg transition-colors disabled:opacity-40"
+                className="h-8 rounded-md px-4 text-[13px] text-primary-fg transition-colors disabled:opacity-40"
                 style={{ background: "var(--primary)" }}
               >
-                {status === "loading"
-                  ? t("feedback.submitting")
-                  : t("feedback.submit")}
+                {status === "loading" ? t("feedback.submitting") : t("feedback.submit")}
               </button>
             </div>
           </>

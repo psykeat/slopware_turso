@@ -1,13 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCommands } from "@repo/ui/platform/command-registry";
-import { useActionBar } from "@repo/ui/platform/action-bar-context";
-import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { Button } from "@repo/ui/components/button";
+import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { Label } from "@repo/ui/components/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/components/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/components/select";
 import { cn } from "@repo/ui/lib/utils";
+import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { useCommands } from "@repo/ui/platform/command-registry";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   UploadCloudIcon,
   CheckCircleIcon,
@@ -19,6 +24,7 @@ import {
   SendIcon,
   FileTextIcon,
 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_auth/app/import")({
@@ -71,19 +77,48 @@ const STATUS_CONFIG: Record<
   BatchStatus,
   { label: string; className: string; icon: React.ComponentType<{ className?: string }> }
 > = {
-  pending:    { label: "Pending",    className: "bg-amber-100 text-amber-700 border-amber-200",   icon: ClockIcon },
-  validating: { label: "Validating", className: "bg-blue-100 text-blue-700 border-blue-200",      icon: ShieldCheckIcon },
-  approved:   { label: "Approved",   className: "bg-indigo-100 text-indigo-700 border-indigo-200", icon: CheckCircleIcon },
-  posted:     { label: "Posted",     className: "bg-emerald-100 text-emerald-700 border-emerald-200", icon: CheckCircleIcon },
-  failed:     { label: "Failed",     className: "bg-red-100 text-red-700 border-red-200",          icon: XCircleIcon },
-  rejected:   { label: "Rejected",   className: "bg-gray-100 text-gray-600 border-gray-200",       icon: MinusCircleIcon },
+  pending: {
+    label: "Pending",
+    className: "bg-amber-100 text-amber-700 border-amber-200",
+    icon: ClockIcon,
+  },
+  validating: {
+    label: "Validating",
+    className: "bg-blue-100 text-blue-700 border-blue-200",
+    icon: ShieldCheckIcon,
+  },
+  approved: {
+    label: "Approved",
+    className: "bg-indigo-100 text-indigo-700 border-indigo-200",
+    icon: CheckCircleIcon,
+  },
+  posted: {
+    label: "Posted",
+    className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    icon: CheckCircleIcon,
+  },
+  failed: {
+    label: "Failed",
+    className: "bg-red-100 text-red-700 border-red-200",
+    icon: XCircleIcon,
+  },
+  rejected: {
+    label: "Rejected",
+    className: "bg-gray-100 text-gray-600 border-gray-200",
+    icon: MinusCircleIcon,
+  },
 };
 
 function StatusBadge({ status }: { status: BatchStatus }) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.failed;
   const Icon = cfg.icon;
   return (
-    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border", cfg.className)}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+        cfg.className,
+      )}
+    >
       <Icon className="size-3" />
       {cfg.label}
     </span>
@@ -105,7 +140,7 @@ function relativeTime(iso: string) {
 function PayloadPreview({ payload }: { payload: Record<string, unknown> }) {
   const entries = Object.entries(payload).slice(0, 3);
   return (
-    <span className="font-mono text-[11px] text-ink-secondary truncate max-w-xs">
+    <span className="max-w-xs truncate font-mono text-[11px] text-ink-secondary">
       {entries.map(([k, v]) => `${k}: ${String(v)}`).join(" · ")}
     </span>
   );
@@ -179,11 +214,13 @@ function UploadModal({
                 <SelectValue placeholder="Select profile…" />
               </SelectTrigger>
               <SelectContent>
-                {profiles.filter((p) => !p.archived).map((p) => (
-                  <SelectItem key={p.profileId} value={p.profileId}>
-                    {p.label}
-                  </SelectItem>
-                ))}
+                {profiles
+                  .filter((p) => !p.archived)
+                  .map((p) => (
+                    <SelectItem key={p.profileId} value={p.profileId}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -211,20 +248,27 @@ function UploadModal({
             <button
               type="button"
               className={cn(
-                "flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-8 w-full cursor-pointer transition-colors",
-                isDragging ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,transparent)]" : "border-hairline hover:border-hairline-input",
+                "flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 transition-colors",
+                isDragging
+                  ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,transparent)]"
+                  : "border-hairline hover:border-hairline-input",
               )}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
             >
               <UploadCloudIcon className="size-8 text-ink-mute" />
               {file ? (
-                <span className="text-[13px] text-ink font-medium">{file.name}</span>
+                <span className="text-[13px] font-medium text-ink">{file.name}</span>
               ) : (
                 <>
-                  <span className="text-[13px] text-ink-secondary">Drag & drop a CSV file here</span>
+                  <span className="text-[13px] text-ink-secondary">
+                    Drag & drop a CSV file here
+                  </span>
                   <span className="text-[11px] text-ink-mute">or click to browse</span>
                 </>
               )}
@@ -249,7 +293,7 @@ function UploadModal({
               value={delimiter}
               onChange={(e) => setDelimiter(e.target.value)}
               maxLength={3}
-              className="h-8 w-24 rounded border border-hairline px-2 text-[13px] bg-canvas focus:outline-none focus:border-primary"
+              className="h-8 w-24 rounded border border-hairline bg-canvas px-2 text-[13px] focus:border-primary focus:outline-none"
               placeholder=","
             />
           </div>
@@ -309,10 +353,12 @@ function BatchDetailPanel({ batchId, profiles }: { batchId: string; profiles: Im
     try {
       const res = await fetch(`/api/import/batches/${batchId}/post`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
-      const result = await res.json() as { posted: number; failed: number };
+      const result = (await res.json()) as { posted: number; failed: number };
       queryClient.invalidateQueries({ queryKey: ["import", "batch", batchId] });
       queryClient.invalidateQueries({ queryKey: ["import", "batches"] });
-      toast.success(`Posted ${result.posted} rows${result.failed ? `, ${result.failed} failed` : ""}`);
+      toast.success(
+        `Posted ${result.posted} rows${result.failed ? `, ${result.failed} failed` : ""}`,
+      );
     } catch (e: unknown) {
       toast.error((e as Error).message);
     } finally {
@@ -322,7 +368,7 @@ function BatchDetailPanel({ batchId, profiles }: { batchId: string; profiles: Im
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[13px] text-ink-mute">
+      <div className="flex flex-1 items-center justify-center text-[13px] text-ink-mute">
         Loading…
       </div>
     );
@@ -335,31 +381,29 @@ function BatchDetailPanel({ batchId, profiles }: { batchId: string; profiles: Im
   const showPost = batch.status === "approved";
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
+    <div className="flex flex-1 flex-col overflow-hidden bg-canvas">
       {/* Header */}
-      <div className="shrink-0 px-4 py-3 border-b border-hairline flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+      <div className="flex shrink-0 items-start gap-3 border-b border-hairline px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-2">
             <StatusBadge status={batch.status} />
             <span className="text-[11px] text-ink-mute">{relativeTime(batch.createdAt)}</span>
           </div>
-          <div className="text-[13px] text-ink font-medium truncate">
+          <div className="truncate text-[13px] font-medium text-ink">
             {profile?.label ?? batch.targetEntity}
           </div>
-          <div className="text-[12px] text-ink-mute">
-            {batch.rowCount} rows
-          </div>
+          <div className="text-[12px] text-ink-mute">{batch.rowCount} rows</div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           {showApprove && (
             <Button size="sm" variant="outline" onClick={handleApprove} disabled={isBusy}>
-              <ThumbsUpIcon className="size-3.5 mr-1" />
+              <ThumbsUpIcon className="mr-1 size-3.5" />
               Approve
             </Button>
           )}
           {showPost && (
             <Button size="sm" onClick={handlePost} disabled={isBusy}>
-              <SendIcon className="size-3.5 mr-1" />
+              <SendIcon className="mr-1 size-3.5" />
               Post
             </Button>
           )}
@@ -369,37 +413,62 @@ function BatchDetailPanel({ batchId, profiles }: { batchId: string; profiles: Im
       {/* Row table */}
       <div className="flex-1 overflow-auto">
         <table className="w-full text-[12px]">
-          <thead className="sticky top-0 bg-canvas-soft border-b border-hairline">
+          <thead className="sticky top-0 border-b border-hairline bg-canvas-soft">
             <tr>
-              <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute w-10">#</th>
-              <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute w-24">Status</th>
-              <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute">Payload</th>
-              <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute">Error</th>
-              <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute w-28">Posted At</th>
+              <th className="w-10 px-3 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                #
+              </th>
+              <th className="w-24 px-3 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                Status
+              </th>
+              <th className="px-3 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                Payload
+              </th>
+              <th className="px-3 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                Error
+              </th>
+              <th className="w-28 px-3 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                Posted At
+              </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, idx) => (
-              <tr key={row.rowId} className={cn("border-b border-hairline", idx % 2 === 0 ? "bg-canvas" : "bg-canvas-soft/40")}>
-                <td className="px-3 py-2 tabular-nums text-ink-mute">{idx + 1}</td>
+              <tr
+                key={row.rowId}
+                className={cn(
+                  "border-b border-hairline",
+                  idx % 2 === 0 ? "bg-canvas" : "bg-canvas-soft/40",
+                )}
+              >
+                <td className="px-3 py-2 text-ink-mute tabular-nums">{idx + 1}</td>
                 <td className="px-3 py-2">
-                  <span className={cn(
-                    "text-[11px] font-medium",
-                    row.status === "posted" ? "text-emerald-600" :
-                    row.status === "failed" ? "text-red-600" :
-                    row.status === "pending" ? "text-amber-600" :
-                    "text-ink-secondary"
-                  )}>
+                  <span
+                    className={cn(
+                      "text-[11px] font-medium",
+                      row.status === "posted"
+                        ? "text-emerald-600"
+                        : row.status === "failed"
+                          ? "text-red-600"
+                          : row.status === "pending"
+                            ? "text-amber-600"
+                            : "text-ink-secondary",
+                    )}
+                  >
                     {row.status}
                   </span>
                 </td>
-                <td className="px-3 py-2 max-w-xs">
+                <td className="max-w-xs px-3 py-2">
                   <PayloadPreview payload={row.payload} />
                 </td>
-                <td className="px-3 py-2 max-w-xs">
+                <td className="max-w-xs px-3 py-2">
                   {row.errorDetail?.message ? (
-                    <span className="text-red-600 text-[11px] truncate block max-w-[200px]" title={row.errorDetail.message}>
-                      {row.errorDetail.message.slice(0, 80)}{row.errorDetail.message.length > 80 ? "…" : ""}
+                    <span
+                      className="block max-w-[200px] truncate text-[11px] text-red-600"
+                      title={row.errorDetail.message}
+                    >
+                      {row.errorDetail.message.slice(0, 80)}
+                      {row.errorDetail.message.length > 80 ? "…" : ""}
                     </span>
                   ) : (
                     <span className="text-ink-mute">—</span>
@@ -477,13 +546,13 @@ function ImportModule() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Left panel ── */}
-      <div className="w-80 shrink-0 flex flex-col border-r border-hairline overflow-hidden bg-canvas-soft">
+      <div className="flex w-80 shrink-0 flex-col overflow-hidden border-r border-hairline bg-canvas-soft">
         {/* Panel header */}
-        <div className="shrink-0 px-3 py-2 border-b border-hairline flex items-center justify-between">
+        <div className="flex shrink-0 items-center justify-between border-b border-hairline px-3 py-2">
           <span className="text-[13px] font-medium text-ink">Import</span>
           <button
             onClick={() => setUploadOpen(true)}
-            className="h-7 px-2.5 rounded-md text-[12px] flex items-center gap-1.5 font-medium transition-colors"
+            className="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium transition-colors"
             style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
           >
             <UploadCloudIcon className="size-3.5" />
@@ -492,22 +561,24 @@ function ImportModule() {
         </div>
 
         {/* Filters */}
-        <div className="shrink-0 px-3 py-2 flex gap-2 border-b border-hairline">
+        <div className="flex shrink-0 gap-2 border-b border-hairline px-3 py-2">
           <select
             value={filterProfileId}
             onChange={(e) => setFilterProfileId(e.target.value)}
-            className="flex-1 h-7 rounded border border-hairline px-2 text-[12px] bg-canvas text-ink focus:outline-none focus:border-primary"
+            className="h-7 flex-1 rounded border border-hairline bg-canvas px-2 text-[12px] text-ink focus:border-primary focus:outline-none"
           >
             <option value="all">All profiles</option>
             {profiles.map((p) => (
-              <option key={p.profileId} value={p.profileId}>{p.label}</option>
+              <option key={p.profileId} value={p.profileId}>
+                {p.label}
+              </option>
             ))}
           </select>
 
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value as "all" | BatchStatus)}
-            className="w-28 h-7 rounded border border-hairline px-2 text-[12px] bg-canvas text-ink focus:outline-none focus:border-primary"
+            className="h-7 w-28 rounded border border-hairline bg-canvas px-2 text-[12px] text-ink focus:border-primary focus:outline-none"
           >
             <option value="all">All</option>
             <option value="pending">Pending</option>
@@ -522,9 +593,11 @@ function ImportModule() {
         {/* Batch list */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
-            <div className="flex items-center justify-center h-24 text-[13px] text-ink-mute">Loading…</div>
+            <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
+              Loading…
+            </div>
           ) : batches.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 gap-2 text-ink-mute">
+            <div className="flex h-32 flex-col items-center justify-center gap-2 text-ink-mute">
               <FileTextIcon className="size-8 opacity-30" />
               <span className="text-[13px]">No batches found</span>
             </div>
@@ -540,14 +613,14 @@ function ImportModule() {
                     setSubCrumb(profile?.label ?? batch.targetEntity);
                   }}
                   className={cn(
-                    "w-full text-left px-3 py-2.5 border-b border-hairline transition-colors",
+                    "w-full border-b border-hairline px-3 py-2.5 text-left transition-colors",
                     isSelected
-                      ? "bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] border-l-2 border-l-primary"
+                      ? "border-l-2 border-l-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))]"
                       : "hover:bg-canvas",
                   )}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[13px] font-medium text-ink truncate max-w-[140px]">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="max-w-[140px] truncate text-[13px] font-medium text-ink">
                       {profile?.label ?? batch.targetEntity}
                     </span>
                     <StatusBadge status={batch.status} />
@@ -565,11 +638,11 @@ function ImportModule() {
       </div>
 
       {/* ── Right panel ── */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
+      <div className="flex flex-1 flex-col overflow-hidden bg-canvas">
         {selectedBatchId ? (
           <BatchDetailPanel batchId={selectedBatchId} profiles={profiles} />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-ink-mute">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-ink-mute">
             <FileTextIcon className="size-12 opacity-20" />
             <span className="text-[14px]">Select a batch to view details</span>
           </div>

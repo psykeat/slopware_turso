@@ -17,6 +17,7 @@ vite.config.ts     Oxlint + Oxfmt config (root, affects all)
 ```
 
 **Import aliases:**
+
 - `@repo/ui/*` → `packages/ui/*`
 - `@repo/auth/*` → `packages/auth/src/*`
 - `@repo/db/*` → `packages/db/src/*`
@@ -69,17 +70,18 @@ api/me.ts                      GET /api/me → { tenantName, orgName }
 
 ## API Quick Reference
 
-| Endpoint | Auth | Returns |
-|---|---|---|
-| `GET /api/data/{entity}` | session | `T[]` — tenant-scoped list |
-| `POST /api/data/{entity}` | session | created record |
-| `PATCH /api/data/{entity}/{id}` | session | patched record |
-| `GET /api/metadata/fields/{entity}` | session | `FieldDef[]` |
-| `GET /api/admin/data/{entity}` | isSystemAdmin | `T[]` — cross-tenant |
-| `GET /api/stats/dashboard` | session | Global KPIs |
-| `GET /api/me` | session | `{ tenantId, tenantName, orgName }` |
+| Endpoint                            | Auth          | Returns                             |
+| ----------------------------------- | ------------- | ----------------------------------- |
+| `GET /api/data/{entity}`            | session       | `T[]` — tenant-scoped list          |
+| `POST /api/data/{entity}`           | session       | created record                      |
+| `PATCH /api/data/{entity}/{id}`     | session       | patched record                      |
+| `GET /api/metadata/fields/{entity}` | session       | `FieldDef[]`                        |
+| `GET /api/admin/data/{entity}`      | isSystemAdmin | `T[]` — cross-tenant                |
+| `GET /api/stats/dashboard`          | session       | Global KPIs                         |
+| `GET /api/me`                       | session       | `{ tenantId, tenantName, orgName }` |
 
 **Fetch pattern used in module routes:**
+
 ```ts
 const { data = [], isLoading } = useQuery({
   queryKey: ["data", "address"],
@@ -94,11 +96,11 @@ const { data = [], isLoading } = useQuery({
 
 ## Auth
 
-| File | Purpose |
-|---|---|
-| `packages/auth/src/auth.ts` | betterAuth server config |
-| `packages/auth/src/auth-client.ts` | authClient (browser) |
-| `packages/auth/src/tanstack/queries.ts` | `authQueryOptions()` |
+| File                                    | Purpose                  |
+| --------------------------------------- | ------------------------ |
+| `packages/auth/src/auth.ts`             | betterAuth server config |
+| `packages/auth/src/auth-client.ts`      | authClient (browser)     |
+| `packages/auth/src/tanstack/queries.ts` | `authQueryOptions()`     |
 
 ---
 
@@ -107,6 +109,7 @@ const { data = [], isLoading } = useQuery({
 **Schema files:** `packages/db/src/schema/app.schema.ts` + `auth.schema.ts`
 
 **Services:**
+
 ```
 packages/db/src/services/data.ts              DataService — tenant-scoped CRUD
 packages/db/src/services/document-service.ts  DocumentService — line items, totals, status
@@ -116,14 +119,14 @@ packages/db/src/services/tenant.ts            getTenantContext(), getUserTenantI
 
 **Key entities (tenant-scoped):**
 
-| Domain | Entities |
-|---|---|
-| Addresses | `address`, `addressContact`, `addressCategory` |
-| Articles | `article`, `articleGroup`, `articleBom` |
-| Documents | `document`, `documentLine`, `documentType`, `documentGroup` |
-| Inventory | `inventoryMovement`, `inventoryBalance` |
-| Finance | `glAccount`, `journalEntry`, `journalLine`, `paymentTerm`, `taxCode` |
-| Infra | `organization`, `tenant`, `company`, `userTenant` |
+| Domain    | Entities                                                             |
+| --------- | -------------------------------------------------------------------- |
+| Addresses | `address`, `addressContact`, `addressCategory`                       |
+| Articles  | `article`, `articleGroup`, `articleBom`                              |
+| Documents | `document`, `documentLine`, `documentType`, `documentGroup`          |
+| Inventory | `inventoryMovement`, `inventoryBalance`                              |
+| Finance   | `glAccount`, `journalEntry`, `journalLine`, `paymentTerm`, `taxCode` |
+| Infra     | `organization`, `tenant`, `company`, `userTenant`                    |
 
 ---
 
@@ -131,28 +134,28 @@ packages/db/src/services/tenant.ts            getTenantContext(), getUserTenantI
 
 ### Platform (import from `@repo/ui/platform/*`)
 
-| File | Export | Purpose |
-|---|---|---|
-| `command-registry.tsx` | `CommandProvider`, `useCommands`, `Command` | Keyboard commands |
-| `focus-manager.tsx` | `FocusProvider`, `useFocus` | Focus tracking |
-| `global-commands.tsx` | `GlobalCommands` | Global Hotkeys (Alt+1..9, Ctrl+K) |
+| File                   | Export                                      | Purpose                           |
+| ---------------------- | ------------------------------------------- | --------------------------------- |
+| `command-registry.tsx` | `CommandProvider`, `useCommands`, `Command` | Keyboard commands                 |
+| `focus-manager.tsx`    | `FocusProvider`, `useFocus`                 | Focus tracking                    |
+| `global-commands.tsx`  | `GlobalCommands`                            | Global Hotkeys (Alt+1..9, Ctrl+K) |
 
 ### Components (import from `@repo/ui/components/*`)
 
-| Component | Purpose |
-|---|---|
-| `DataGrid` | Entity list with auto-columns, filters, sorting |
-| `NavigationTree` | Hierarchical sidebar (groups, categories) |
-| `EntityMask` | Create/Edit form with F10/Esc handlers |
-| `InspectorPanel` | Right-side detail view |
-| `DocumentEditor` | Full-screen header/lines editor |
-| `StatisticsModule` | Alt+I drawer with KPI cards |
-| `InventoryBalanceTable` | Aggregated stock levels |
-| `StockLedgerTable` | Detailed movement history |
-| `CustomerStatsSection` | Sales history + top articles |
-| `TriViewWorkspace` | 3-panel layout (Tree | Grid | Tabs) |
-| `ActionBar` | Breadcrumbs + Command pills |
-| `FeedbackModal` | Report bugs/improvements |
+| Component               | Purpose                                         |
+| ----------------------- | ----------------------------------------------- | ---- | ----- |
+| `DataGrid`              | Entity list with auto-columns, filters, sorting |
+| `NavigationTree`        | Hierarchical sidebar (groups, categories)       |
+| `EntityMask`            | Create/Edit form with F10/Esc handlers          |
+| `InspectorPanel`        | Right-side detail view                          |
+| `DocumentEditor`        | Full-screen header/lines editor                 |
+| `StatisticsModule`      | Alt+I drawer with KPI cards                     |
+| `InventoryBalanceTable` | Aggregated stock levels                         |
+| `StockLedgerTable`      | Detailed movement history                       |
+| `CustomerStatsSection`  | Sales history + top articles                    |
+| `TriViewWorkspace`      | 3-panel layout (Tree                            | Grid | Tabs) |
+| `ActionBar`             | Breadcrumbs + Command pills                     |
+| `FeedbackModal`         | Report bugs/improvements                        |
 
 ---
 

@@ -1,7 +1,8 @@
-import { db } from "../index";
-import { fiscalPeriod, company } from "../schema/app.schema";
 import { eq, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+
+import { db } from "../index";
+import { fiscalPeriod, company } from "../schema/app.schema";
 
 export async function generateFiscalPeriods(
   companyId: string,

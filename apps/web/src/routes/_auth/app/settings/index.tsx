@@ -1,16 +1,17 @@
+import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
+import { Dialog, DialogContent } from "@repo/ui/components/dialog";
+import { EntityMask } from "@repo/ui/components/entity-mask";
+import { Skeleton } from "@repo/ui/components/skeleton";
+import { cn } from "@repo/ui/lib/utils";
+import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { useCommands } from "@repo/ui/platform/command-registry";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { useTranslation } from "react-i18next";
-import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
-import { EntityMask } from "@repo/ui/components/entity-mask";
-import { Dialog, DialogContent } from "@repo/ui/components/dialog";
-import { useCommands } from "@repo/ui/platform/command-registry";
-import { useActionBar } from "@repo/ui/platform/action-bar-context";
-import { cn } from "@repo/ui/lib/utils";
-import { Skeleton } from "@repo/ui/components/skeleton";
 import { toast } from "sonner";
+
+import { useGridUrlState } from "#/hooks/use-grid-url-state";
 
 export const Route = createFileRoute("/_auth/app/settings/")({
   component: SettingsPage,
@@ -30,7 +31,22 @@ function resolveSettingsLabel(label: SettingsRegistryEntry["label"], language: s
   return label[language] || label.en || label.de || "";
 }
 
-function resolveGroupLabel(groupId: string, t: (key: string, options?: { defaultValue?: string }) => string) {
+function resolveLocalizedLabel(value: unknown, language: string) {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  return (
+    (language === "de" ? record.de : record.en) ??
+    record.en ??
+    record.de ??
+    ""
+  ) as string;
+}
+
+function resolveGroupLabel(
+  groupId: string,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+) {
   if (groupId === "master") {
     return t("settings.groups.master", { defaultValue: "Master" });
   }
@@ -41,6 +57,10 @@ function resolveGroupLabel(groupId: string, t: (key: string, options?: { default
 }
 
 function getSettingsRowId(selectedKey: string, row: Record<string, any>) {
+  if (selectedKey === "addressCategory") {
+    return row.categoryId ?? row.addressCategoryId ?? row.id ?? row.code ?? row.rowId;
+  }
+
   return (
     row[`${selectedKey}Id`] ??
     row.id ??
@@ -67,7 +87,18 @@ function SettingsView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const gridState = useGridUrlState({ defaultPageSize: 50 });
-  const { page, pageSize, sort, search, filters, setPageSize, setSort, setSearch, setFilters, queryParams } = gridState;
+  const {
+    page,
+    pageSize,
+    sort,
+    search,
+    filters,
+    setPageSize,
+    setSort,
+    setSearch,
+    setFilters,
+    queryParams,
+  } = gridState;
   const setPageRef = useRef(gridState.setPage);
 
   useEffect(() => {
@@ -84,6 +115,71 @@ function SettingsView() {
     },
   });
 
+  const { data: units = [] } = useQuery({
+    queryKey: ["data", "unit"],
+    queryFn: async () => {
+      const res = await fetch("/api/data/unit");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const { data: taxClasses = [] } = useQuery({
+    queryKey: ["data", "taxClass"],
+    queryFn: async () => {
+      const res = await fetch("/api/data/taxClass");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const { data: paymentTerms = [] } = useQuery({
+    queryKey: ["data", "paymentTerm"],
+    queryFn: async () => {
+      const res = await fetch("/api/data/paymentTerm");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const { data: currencies = [] } = useQuery({
+    queryKey: ["data", "currency"],
+    queryFn: async () => {
+      const res = await fetch("/api/data/currency");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const unitLabelMap = useMemo(
+    () => new Map<string, string>(units.map((row: any) => [row.unitId, row.code ?? row.unitId])),
+    [units],
+  );
+  const taxClassLabelMap = useMemo(
+    () =>
+      new Map<string, string>(
+        taxClasses.map((row: any) => [row.taxClassId, row.code ?? resolveLocalizedLabel(row.name, i18n.language)]),
+      ),
+    [taxClasses, i18n.language],
+  );
+  const paymentTermLabelMap = useMemo(
+    () =>
+      new Map<string, string>(
+        paymentTerms.map((row: any) => [
+          row.paymentTermId,
+          resolveLocalizedLabel(row.name, i18n.language) || row.paymentTermId,
+        ]),
+      ),
+    [paymentTerms, i18n.language],
+  );
+  const currencyLabelMap = useMemo(
+    () =>
+      new Map<string, string>(
+        currencies.map((row: any) => [row.currencyId, row.code ?? row.currencyId]),
+      ),
+    [currencies],
+  );
+
   const orderedEntries = useMemo(() => {
     const localized = registry.map((entry) => ({
       tableName: entry.tableName,
@@ -94,7 +190,9 @@ function SettingsView() {
     return localized.sort((a, b) => {
       const aGroup = GROUP_ORDER.indexOf(a.group);
       const bGroup = GROUP_ORDER.indexOf(b.group);
-      const groupDelta = (aGroup === -1 ? GROUP_ORDER.length : aGroup) - (bGroup === -1 ? GROUP_ORDER.length : bGroup);
+      const groupDelta =
+        (aGroup === -1 ? GROUP_ORDER.length : aGroup) -
+        (bGroup === -1 ? GROUP_ORDER.length : bGroup);
       if (groupDelta !== 0) return groupDelta;
       const labelDelta = a.label.localeCompare(b.label, i18n.language);
       if (labelDelta !== 0) return labelDelta;
@@ -120,6 +218,109 @@ function SettingsView() {
     return idx >= 0 ? idx : 0;
   }, [orderedEntries, selectedKey]);
 
+  const selectedColumns = useMemo(() => {
+    if (selectedKey === "articleGroup") {
+      return [
+        { key: "code", header: "Code", sortable: true },
+        {
+          key: "name",
+          header: "Name",
+          sortable: true,
+          render: (row: any) => resolveLocalizedLabel(row.name, i18n.language) || "—",
+        },
+        {
+          key: "taxClassId",
+          header: "Tax Class",
+          render: (row: any) =>
+            row.taxClassId ? taxClassLabelMap.get(row.taxClassId) ?? row.taxClassId : "—",
+        },
+        {
+          key: "baseUnitId",
+          header: "Base Unit",
+          render: (row: any) =>
+            row.baseUnitId ? unitLabelMap.get(row.baseUnitId) ?? row.baseUnitId : "—",
+        },
+        {
+          key: "salesUnitId",
+          header: "Sales Unit",
+          render: (row: any) =>
+            row.salesUnitId ? unitLabelMap.get(row.salesUnitId) ?? row.salesUnitId : "—",
+        },
+        {
+          key: "purchaseUnitId",
+          header: "Purchase Unit",
+          render: (row: any) =>
+            row.purchaseUnitId ? unitLabelMap.get(row.purchaseUnitId) ?? row.purchaseUnitId : "—",
+        },
+        { key: "trackingMode", header: "Tracking" },
+        { key: "bomType", header: "BOM" },
+      ];
+    }
+
+    if (selectedKey === "addressCategory") {
+      return [
+        {
+          key: "name",
+          header: "Name",
+          sortable: true,
+          render: (row: any) => resolveLocalizedLabel(row.name, i18n.language) || "—",
+        },
+        {
+          key: "taxClassId",
+          header: "Tax Class",
+          render: (row: any) =>
+            row.taxClassId ? taxClassLabelMap.get(row.taxClassId) ?? row.taxClassId : "—",
+        },
+        {
+          key: "paymentTermId",
+          header: "Payment Terms",
+          render: (row: any) =>
+            row.paymentTermId
+              ? paymentTermLabelMap.get(row.paymentTermId) ?? row.paymentTermId
+              : "—",
+        },
+        {
+          key: "currencyId",
+          header: "Currency",
+          render: (row: any) =>
+            row.currencyId ? currencyLabelMap.get(row.currencyId) ?? row.currencyId : "—",
+        },
+      ];
+    }
+
+    return undefined;
+  }, [
+    currencyLabelMap,
+    i18n.language,
+    paymentTermLabelMap,
+    selectedKey,
+    taxClassLabelMap,
+    unitLabelMap,
+  ]);
+
+  const selectedFieldOverrides = useMemo(() => {
+    if (selectedKey !== "articleGroup") return undefined;
+    return [
+      {
+        key: "trackingMode",
+        type: "select" as const,
+        options: [
+          { value: "serial", label: "Serial" },
+          { value: "batch", label: "Batch" },
+        ],
+      },
+      {
+        key: "bomType",
+        type: "select" as const,
+        options: [
+          { value: "none", label: "None" },
+          { value: "sales", label: "Sales (H)" },
+          { value: "production", label: "Production (P)" },
+        ],
+      },
+    ];
+  }, [selectedKey]);
+
   useEffect(() => {
     setSubCrumb(tableLabel);
   }, [tableLabel, setSubCrumb]);
@@ -138,25 +339,39 @@ function SettingsView() {
     setDeleteId(null);
   }, []);
 
-  const selectEntityByIndex = useCallback((index: number) => {
-    const entry = orderedEntries[index];
-    if (!entry) return;
-    resetEntityDialogs();
-    setSelectedKey(entry.tableName);
-    setPageRef.current(1);
-    requestAnimationFrame(() => settingsGridRef.current?.restoreFocus(null));
-  }, [orderedEntries, resetEntityDialogs]);
+  const selectEntityByIndex = useCallback(
+    (index: number) => {
+      const entry = orderedEntries[index];
+      if (!entry) return;
+      resetEntityDialogs();
+      setSelectedKey(entry.tableName);
+      setPageRef.current(1);
+      requestAnimationFrame(() => settingsGridRef.current?.restoreFocus(null));
+    },
+    [orderedEntries, resetEntityDialogs],
+  );
 
-  const selectEntity = useCallback((entityName: string) => {
-    resetEntityDialogs();
-    setSelectedKey(entityName);
-    setPageRef.current(1);
-    requestAnimationFrame(() => settingsGridRef.current?.restoreFocus(null));
-  }, [resetEntityDialogs]);
+  const selectEntity = useCallback(
+    (entityName: string) => {
+      resetEntityDialogs();
+      setSelectedKey(entityName);
+      setPageRef.current(1);
+      requestAnimationFrame(() => settingsGridRef.current?.restoreFocus(null));
+    },
+    [resetEntityDialogs],
+  );
 
   // Fetch data for the selected entity — paginated
   const { data: entityData, isLoading: isDataLoading } = useQuery({
-    queryKey: ["data", selectedKey, queryParams.page, queryParams.limit, queryParams.orderBy, queryParams.search, queryParams.filters],
+    queryKey: [
+      "data",
+      selectedKey,
+      queryParams.page,
+      queryParams.limit,
+      queryParams.orderBy,
+      queryParams.search,
+      queryParams.filters,
+    ],
     queryFn: async () => {
       const p = new URLSearchParams({
         paginated: "true",
@@ -177,10 +392,12 @@ function SettingsView() {
 
   useEffect(() => {
     const modalOpen = showCreate || showEdit || deleteConfirm;
-    const isFocusedRow = (state: { panel: string | null; entity: string | null; recordId: string | null }) =>
-      state.panel === SETTINGS_GRID_PANEL_ID &&
-      state.entity === selectedKey &&
-      !!state.recordId;
+    const isFocusedRow = (state: {
+      panel: string | null;
+      entity: string | null;
+      recordId: string | null;
+    }) =>
+      state.panel === SETTINGS_GRID_PANEL_ID && state.entity === selectedKey && !!state.recordId;
 
     const unregDown = registerCommand({
       id: "settings-nav-down",
@@ -242,58 +459,75 @@ function SettingsView() {
       unregEdit();
       unregDelete();
     };
-  }, [registerCommand, selectedKey, orderedEntries, selectedIndex, showCreate, showEdit, deleteConfirm, selectEntityByIndex, t]);
+  }, [
+    registerCommand,
+    selectedKey,
+    orderedEntries,
+    selectedIndex,
+    showCreate,
+    showEdit,
+    deleteConfirm,
+    selectEntityByIndex,
+    t,
+  ]);
 
   return (
-    <div className="flex h-full w-full overflow-hidden sw-root">
+    <div className="sw-root flex h-full w-full overflow-hidden">
       {/* Left sidebar */}
-      <div className="w-60 shrink-0 bg-canvas-soft border-r border-hairline flex flex-col overflow-hidden">
-        <div className="h-8 flex items-center px-3 shrink-0 border-b border-hairline text-[11px] uppercase tracking-wider font-medium text-ink-mute">
+      <div className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-hairline bg-canvas-soft">
+        <div className="flex h-8 shrink-0 items-center border-b border-hairline px-3 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
           {t("nav.settings")}
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           {isRegistryLoading ? (
-             <div className="px-3 space-y-4">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="space-y-2">
-                    <Skeleton className="h-2 w-16 opacity-50" />
-                    <Skeleton className="h-5 w-full" />
-                    <Skeleton className="h-5 w-full" />
-                  </div>
-                ))}
-             </div>
-          ) : groupedEntries.map((group) => (
-            <div key={group.id} className="mb-4">
-              <div className="px-3 mb-1 text-[10px] uppercase tracking-widest font-bold text-ink-mute/60">
-                {resolveGroupLabel(group.id, t)}
-              </div>
-              {group.entities.map((entity) => {
-                const isActive = selectedKey === entity.tableName;
-                return (
-                  <button
-                    key={entity.tableName}
-                    ref={(node) => { sidebarItemRefs.current[entity.tableName] = node; }}
-                    onClick={() => selectEntity(entity.tableName)}
-                    className={cn(
-                      "w-full flex items-center h-7 px-3 text-left text-[13px] cursor-pointer transition-colors group",
-                      isActive ? "bg-primary text-primary-fg" : "text-ink-secondary hover:bg-canvas-soft hover:text-ink"
-                    )}
-                  >
-                    <span>{entity.label}</span>
-                  </button>
-                );
-              })}
+            <div className="space-y-4 px-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-2 w-16 opacity-50" />
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="h-5 w-full" />
+                </div>
+              ))}
             </div>
-          ))}
+          ) : (
+            groupedEntries.map((group) => (
+              <div key={group.id} className="mb-4">
+                <div className="mb-1 px-3 text-[10px] font-bold tracking-widest text-ink-mute/60 uppercase">
+                  {resolveGroupLabel(group.id, t)}
+                </div>
+                {group.entities.map((entity) => {
+                  const isActive = selectedKey === entity.tableName;
+                  return (
+                    <button
+                      key={entity.tableName}
+                      ref={(node) => {
+                        sidebarItemRefs.current[entity.tableName] = node;
+                      }}
+                      onClick={() => selectEntity(entity.tableName)}
+                      className={cn(
+                        "group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-fg"
+                          : "text-ink-secondary hover:bg-canvas-soft hover:text-ink",
+                      )}
+                    >
+                      <span>{entity.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </div>
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 min-w-0 overflow-hidden bg-canvas flex flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas">
         <DataGrid
           ref={settingsGridRef}
           entityName={selectedKey}
           data={data}
+          columns={selectedColumns}
           keyExtractor={(row: any) => getSettingsRowId(selectedKey, row)}
           isLoading={isDataLoading}
           title={tableLabel}
@@ -331,60 +565,66 @@ function SettingsView() {
 
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden sw-root">
-        <EntityMask
-          entityName={selectedKey}
-          mode="create"
-          title={`${t("actions.new")} ${tableLabel}`}
-          onCancel={() => setShowCreate(false)}
-          onSaved={(record) => {
-            setShowCreate(false);
-            queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
-            settingsGridRef.current?.restoreFocus((record as any)?.[`${selectedKey}Id`] ?? (record as any)?.id ?? null);
-          }}
-          className="border-none shadow-none rounded-none m-0"
-        />
+        <DialogContent className="sw-root max-w-2xl overflow-hidden p-0" variant="form">
+          <EntityMask
+            entityName={selectedKey}
+            mode="create"
+            title={`${t("actions.new")} ${tableLabel}`}
+            onCancel={() => setShowCreate(false)}
+            fieldOverrides={selectedFieldOverrides}
+            onSaved={(record) => {
+              setShowCreate(false);
+              queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
+              settingsGridRef.current?.restoreFocus(
+                (record as any)?.[`${selectedKey}Id`] ?? (record as any)?.id ?? null,
+              );
+            }}
+            className="m-0 rounded-none border-none shadow-none"
+          />
         </DialogContent>
       </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden sw-root">
-        <EntityMask
-          entityName={selectedKey}
-          recordId={editId}
-          mode="edit"
-          title={`${t("actions.edit")} ${tableLabel}`}
-          onCancel={() => setShowEdit(false)}
-          onSaved={(record) => {
-            setShowEdit(false);
-            queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
-            settingsGridRef.current?.restoreFocus((record as any)?.[`${selectedKey}Id`] ?? editId ?? null);
-          }}
-          className="border-none shadow-none rounded-none m-0"
-        />
+        <DialogContent className="sw-root max-w-2xl overflow-hidden p-0">
+          <EntityMask
+            entityName={selectedKey}
+            recordId={editId}
+            mode="edit"
+            title={`${t("actions.edit")} ${tableLabel}`}
+            onCancel={() => setShowEdit(false)}
+            fieldOverrides={selectedFieldOverrides}
+            onSaved={(record) => {
+              setShowEdit(false);
+              queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
+              settingsGridRef.current?.restoreFocus(
+                (record as any)?.[`${selectedKey}Id`] ?? editId ?? null,
+              );
+            }}
+            className="m-0 rounded-none border-none shadow-none"
+          />
         </DialogContent>
       </Dialog>
 
       {/* Delete confirm */}
       <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
-        <DialogContent className="max-w-sm sw-root">
-          <div className="p-6 flex flex-col gap-5">
+        <DialogContent className="sw-root max-w-sm">
+          <div className="flex flex-col gap-5 p-6">
             <div>
               <h3 className="text-[15px] font-medium text-ink">{t("form.deleteConfirmTitle")}</h3>
-              <p className="text-[13px] text-ink-mute mt-1">{t("form.deleteConfirmBody")}</p>
+              <p className="mt-1 text-[13px] text-ink-mute">{t("form.deleteConfirmBody")}</p>
             </div>
-            <div className="flex justify-end gap-2 flex-wrap">
+            <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
+                className="h-8 rounded border border-hairline px-4 text-[13px] hover:bg-canvas-soft"
                 onClick={() => setDeleteConfirm(false)}
               >
                 {t("actions.cancel")}
               </button>
               <button
                 type="button"
-                className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
+                className="h-8 rounded bg-destructive px-4 text-[13px] text-white hover:opacity-90"
                 onClick={async () => {
                   if (!deleteId) return;
                   await fetch(`/api/data/${selectedKey}/${deleteId}`, {

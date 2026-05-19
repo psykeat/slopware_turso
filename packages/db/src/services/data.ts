@@ -1,6 +1,26 @@
+import {
+  eq,
+  and,
+  asc,
+  desc,
+  getColumns,
+  count as drizzleCount,
+  ilike,
+  ne,
+  isNull,
+  isNotNull,
+  gt,
+  gte,
+  lt,
+  lte,
+  inArray,
+  or,
+  not,
+  sql,
+} from "drizzle-orm";
+
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
-import { eq, and, asc, desc, getColumns, count as drizzleCount, ilike, ne, isNull, isNotNull, gt, gte, lt, lte, inArray, or, not, sql } from "drizzle-orm";
 
 export class DataService {
   private tenantId: string;
@@ -24,7 +44,7 @@ export class DataService {
     }
     // Fallbacks
     if ("id" in columns) return "id";
-    const entityId = Object.keys(columns).find(k => k.toLowerCase().endsWith("id"));
+    const entityId = Object.keys(columns).find((k) => k.toLowerCase().endsWith("id"));
     return entityId || Object.keys(columns)[0];
   }
 
@@ -102,20 +122,47 @@ export class DataService {
       const col = (table as any)[rule.col];
       if (!col) continue;
       switch (rule.op) {
-        case "contains":      conditions.push(ilike(col, `%${rule.val}%`)); break;
-        case "not_contains":  conditions.push(not(ilike(col, `%${rule.val}%`))); break;
-        case "eq":            conditions.push(eq(col, rule.val)); break;
-        case "neq":           conditions.push(ne(col, rule.val)); break;
-        case "starts_with":   conditions.push(ilike(col, `${rule.val}%`)); break;
-        case "ends_with":     conditions.push(ilike(col, `%${rule.val}`)); break;
-        case "gt":            conditions.push(gt(col, rule.val)); break;
-        case "gte":           conditions.push(gte(col, rule.val)); break;
-        case "lt":            conditions.push(lt(col, rule.val)); break;
-        case "lte":           conditions.push(lte(col, rule.val)); break;
-        case "is_empty":      conditions.push(isNull(col)); break;
-        case "is_not_empty":  conditions.push(isNotNull(col)); break;
+        case "contains":
+          conditions.push(ilike(col, `%${rule.val}%`));
+          break;
+        case "not_contains":
+          conditions.push(not(ilike(col, `%${rule.val}%`)));
+          break;
+        case "eq":
+          conditions.push(eq(col, rule.val));
+          break;
+        case "neq":
+          conditions.push(ne(col, rule.val));
+          break;
+        case "starts_with":
+          conditions.push(ilike(col, `${rule.val}%`));
+          break;
+        case "ends_with":
+          conditions.push(ilike(col, `%${rule.val}`));
+          break;
+        case "gt":
+          conditions.push(gt(col, rule.val));
+          break;
+        case "gte":
+          conditions.push(gte(col, rule.val));
+          break;
+        case "lt":
+          conditions.push(lt(col, rule.val));
+          break;
+        case "lte":
+          conditions.push(lte(col, rule.val));
+          break;
+        case "is_empty":
+          conditions.push(isNull(col));
+          break;
+        case "is_not_empty":
+          conditions.push(isNotNull(col));
+          break;
         case "in": {
-          const vals = rule.val.split(",").map((x) => x.trim()).filter(Boolean);
+          const vals = rule.val
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
           if (vals.length) conditions.push(inArray(col, vals));
           break;
         }
@@ -141,7 +188,11 @@ export class DataService {
     };
 
     const whereClause =
-      conditions.length === 0 ? undefined : conditions.length === 1 ? conditions[0] : and(...conditions);
+      conditions.length === 0
+        ? undefined
+        : conditions.length === 1
+          ? conditions[0]
+          : and(...conditions);
 
     const dataQ = db.select().from(table);
     if (whereClause) dataQ.where(whereClause);
@@ -211,7 +262,10 @@ export class DataService {
       .returning();
   }
 
-  async delete(entityName: string, id: string): Promise<{ deleted: boolean; fkViolation: boolean }> {
+  async delete(
+    entityName: string,
+    id: string,
+  ): Promise<{ deleted: boolean; fkViolation: boolean }> {
     const table = this.getTable(entityName);
     const pkName = this.getPrimaryKey(table);
     const pkColumn = (table as any)[pkName];

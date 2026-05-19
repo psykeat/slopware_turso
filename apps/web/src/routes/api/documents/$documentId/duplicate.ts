@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { DocumentService } from "@repo/db/services/document-service";
 import { auth } from "@repo/auth/auth";
+import { DocumentService } from "@repo/db/services/document-service";
+import { createFileRoute } from "@tanstack/react-router";
+
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/documents/$documentId/duplicate")({
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/api/documents/$documentId/duplicate")({
 
         try {
           const svc = new DocumentService();
-          const body = await request.json().catch(() => ({} as any));
+          const body = await request.json().catch(() => ({}) as any);
           const targetGroupId = body?.targetGroupId as string | undefined;
 
           if (!targetGroupId) {

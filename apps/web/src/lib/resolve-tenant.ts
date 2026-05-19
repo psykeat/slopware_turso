@@ -17,8 +17,8 @@ export async function resolveTenantContext(
   if (isSystemAdmin) {
     const activeTenantId = parseCookie(request.headers.get("cookie"), COOKIE);
     if (activeTenantId) {
-       const ctx = await getTenantContextById(activeTenantId);
-       if (ctx && (ctx as any).isActive) return ctx;
+      const ctx = await getTenantContextById(activeTenantId);
+      if (ctx && (ctx as any).isActive) return ctx;
     }
   }
   return getTenantContext(userId);

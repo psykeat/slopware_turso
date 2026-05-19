@@ -3,8 +3,16 @@ import { createContext, use, useEffect, useState } from "react";
 
 type Mode = "dark" | "light" | "system";
 export type AccentTheme =
-  | "indigo" | "ocean" | "cyan" | "teal" | "emerald"
-  | "forest" | "amber" | "rose" | "violet" | "slate";
+  | "indigo"
+  | "ocean"
+  | "cyan"
+  | "teal"
+  | "emerald"
+  | "forest"
+  | "amber"
+  | "rose"
+  | "violet"
+  | "slate";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -47,7 +55,9 @@ function applyMode(mode: Mode) {
   const root = document.documentElement;
   const resolved =
     mode === "system"
-      ? window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
       : mode;
   if (resolved === "dark") {
     root.classList.add("dark");

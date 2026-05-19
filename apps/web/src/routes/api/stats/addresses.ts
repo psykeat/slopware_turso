@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
 import { db } from "@repo/db";
+import { createFileRoute } from "@tanstack/react-router";
 import { sql } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/stats/addresses")({
   server: {
@@ -15,7 +16,7 @@ export const Route = createFileRoute("/api/stats/addresses")({
         if (!context) return new Response("Forbidden", { status: 403 });
         const { tenantId } = context;
 
-        const [totals] = await db.execute(
+        const [totals] = (await db.execute(
           sql`SELECT
             COUNT(*)                                                      AS total,
             COUNT(*) FILTER (WHERE is_customer = true)                    AS customer_count,
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/api/stats/addresses")({
             COUNT(*) FILTER (WHERE is_customer = true AND payment_term_id IS NULL) AS missing_payment_term
           FROM address
           WHERE tenant_id = ${tenantId}::uuid AND archived_at IS NULL`,
-        ) as any[];
+        )) as any[];
 
         const topCountries = await db.execute(
           sql`SELECT country_code, COUNT(*) AS cnt

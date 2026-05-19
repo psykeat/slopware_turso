@@ -25,7 +25,7 @@ interface GetUserServerQuery {
  *
  * For server app logic, consider using authMiddleware instead.
  */
-export const _getUser = createServerOnlyFn(async (query?: GetUserServerQuery) => {
+const _getUser = createServerOnlyFn(async (query?: GetUserServerQuery) => {
   const session = await auth.api.getSession({
     headers: getRequest().headers,
     query,

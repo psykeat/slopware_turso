@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { DocumentService, DIRECTION_FROM_TYPE } from "@repo/db/services/document-service";
 import { auth } from "@repo/auth/auth";
+import { DocumentService, DIRECTION_FROM_TYPE } from "@repo/db/services/document-service";
+import { createFileRoute } from "@tanstack/react-router";
+
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/documents/create")({
@@ -26,7 +27,8 @@ export const Route = createFileRoute("/api/documents/create")({
           const result = await svc.createDocument(context.tenantId, {
             documentGroupId: body.documentGroupId,
             documentType,
-            documentDirection: body.documentDirection ?? DIRECTION_FROM_TYPE[documentType] ?? "OUTBOUND",
+            documentDirection:
+              body.documentDirection ?? DIRECTION_FROM_TYPE[documentType] ?? "OUTBOUND",
             documentDate: body.documentDate,
             status: "draft",
             customerId: body.customerId ?? null,

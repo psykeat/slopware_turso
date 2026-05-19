@@ -139,23 +139,23 @@ Posting logic, status transitions, inventory effects, ledger generation, and fac
 
 The `document_type` / movement-type vocabulary is part of the core schema, not a UI convenience. These types are the canonical business grammar for the document module, posting engine, inventory derivation, financial facts, and audit chain. They must remain explicitly documented here and in the schema because they define the behavior of the entire document lifecycle.[cite:1][cite:2]
 
-| Type | Label | Direction | Inventory effect | Reservation effect | Finance effect |
-|---|---|---|---|---|---|
-| `N` | Angebot | Outbound | None | None | None |
-| `A` | Auftrag | Outbound | None | `reserved +` | None |
-| `L` | Lieferschein | Outbound | `on_hand -` | `reserved -` from `A` | Sales fact |
-| `R` | Rechnung | Outbound | None if `L` exists, otherwise `on_hand -` | None | Revenue, AR, tax, COGS |
-| `G` | Gutschrift | Outbound | `on_hand +` | None | Revenue -, AR - |
-| `b` | Bestellung | Inbound | None | None | None |
-| `l` | Wareneingang | Inbound | `on_hand +` | `expected -` from `b` | Purchase fact |
-| `r` | Eingangsrechnung | Inbound | None if `l` exists, otherwise `on_hand +` | None | Cost, AP, AVCO |
-| `g` | Eingangsgutschrift | Inbound | `on_hand -` | None | Cost -, AP - |
-| `V` | Inventur | Adjustment | Absolute set | None | Stock correction fact |
-| `U` | Umbuchung | Adjustment | `wh_a -`, `wh_b +` | None | None |
-| `Z` | Zugang | Inbound | `on_hand +` | None | Valuation fact |
-| `E` | Entnahme | Outbound | `on_hand -` | None | Valuation fact |
-| `p` | Fertigungsauftrag | Outbound | None | Component reservation + | None |
-| `q` | Fertigmeldung | Inbound | Product `+`, components `-` | Component reservation - | Production fact |
+| Type | Label              | Direction  | Inventory effect                          | Reservation effect      | Finance effect         |
+| ---- | ------------------ | ---------- | ----------------------------------------- | ----------------------- | ---------------------- |
+| `N`  | Angebot            | Outbound   | None                                      | None                    | None                   |
+| `A`  | Auftrag            | Outbound   | None                                      | `reserved +`            | None                   |
+| `L`  | Lieferschein       | Outbound   | `on_hand -`                               | `reserved -` from `A`   | Sales fact             |
+| `R`  | Rechnung           | Outbound   | None if `L` exists, otherwise `on_hand -` | None                    | Revenue, AR, tax, COGS |
+| `G`  | Gutschrift         | Outbound   | `on_hand +`                               | None                    | Revenue -, AR -        |
+| `b`  | Bestellung         | Inbound    | None                                      | None                    | None                   |
+| `l`  | Wareneingang       | Inbound    | `on_hand +`                               | `expected -` from `b`   | Purchase fact          |
+| `r`  | Eingangsrechnung   | Inbound    | None if `l` exists, otherwise `on_hand +` | None                    | Cost, AP, AVCO         |
+| `g`  | Eingangsgutschrift | Inbound    | `on_hand -`                               | None                    | Cost -, AP -           |
+| `V`  | Inventur           | Adjustment | Absolute set                              | None                    | Stock correction fact  |
+| `U`  | Umbuchung          | Adjustment | `wh_a -`, `wh_b +`                        | None                    | None                   |
+| `Z`  | Zugang             | Inbound    | `on_hand +`                               | None                    | Valuation fact         |
+| `E`  | Entnahme           | Outbound   | `on_hand -`                               | None                    | Valuation fact         |
+| `p`  | Fertigungsauftrag  | Outbound   | None                                      | Component reservation + | None                   |
+| `q`  | Fertigmeldung      | Inbound    | Product `+`, components `-`               | Component reservation - | Production fact        |
 
 ### Audit and chain rules
 

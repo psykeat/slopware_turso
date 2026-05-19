@@ -1,8 +1,9 @@
 import "dotenv/config";
+import { eq, and, sql } from "drizzle-orm";
+
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
 import { user } from "../schema/auth.schema";
-import { eq, and, sql } from "drizzle-orm";
 
 const CANONICAL_DOC_TYPES: Array<{ movementType: string; name: string }> = [
   { movementType: "N", name: "Angebot" },
@@ -34,7 +35,11 @@ async function seedCanonicalDocumentGroups(tenantId: string, companyId: string) 
         requireBatchTracking: false,
       })
       .onConflictDoUpdate({
-        target: [schema.documentGroup.tenantId, schema.documentGroup.documentType, schema.documentGroup.groupNumber],
+        target: [
+          schema.documentGroup.tenantId,
+          schema.documentGroup.documentType,
+          schema.documentGroup.groupNumber,
+        ],
         set: {
           companyId: sql`excluded.company_id`,
           name: sql`excluded.name`,
@@ -46,16 +51,31 @@ async function seedCanonicalDocumentGroups(tenantId: string, companyId: string) 
   }
 }
 
+async function ensureUnit(tenantId: string, code: string, name: { en: string; de: string }) {
+  await db
+    .insert(schema.unit)
+    .values({
+      tenantId,
+      code,
+      name,
+    })
+    .onConflictDoUpdate({
+      target: [schema.unit.tenantId, schema.unit.code],
+      set: {
+        name,
+        archived: false,
+      },
+    });
+}
+
 async function seed() {
   // ── 1. Admin user ──────────────────────────────────────────────────────
-  const [adminUser] = await db
-    .select()
-    .from(user)
-    .where(eq(user.isSystemAdmin, true))
-    .limit(1);
+  const [adminUser] = await db.select().from(user).where(eq(user.isSystemAdmin, true)).limit(1);
 
   if (!adminUser) {
-    console.error("No system admin user found. Register a user first and set is_system_admin=true.");
+    console.error(
+      "No system admin user found. Register a user first and set is_system_admin=true.",
+    );
     process.exit(1);
   }
   console.log(`Admin: ${adminUser.email} (${adminUser.id})`);
@@ -137,7 +157,9 @@ async function seed() {
   const [existingWh] = await db
     .select()
     .from(schema.warehouse)
-    .where(and(eq(schema.warehouse.tenantId, baseTenant.tenantId), eq(schema.warehouse.code, "MAIN")))
+    .where(
+      and(eq(schema.warehouse.tenantId, baseTenant.tenantId), eq(schema.warehouse.code, "MAIN")),
+    )
     .limit(1);
 
   if (existingWh) {
@@ -213,19 +235,19 @@ async function seed() {
 
   // ── 8. Document types ──────────────────────────────────────────────────
   const docTypes = [
-    { code: "N", name: "Angebot",         movementType: "N", sortOrder: 10  },
-    { code: "A", name: "Auftrag",          movementType: "A", sortOrder: 20  },
-    { code: "L", name: "Lieferschein",     movementType: "L", sortOrder: 30  },
-    { code: "R", name: "Rechnung",         movementType: "R", sortOrder: 40  },
-    { code: "G", name: "Gutschrift",       movementType: "G", sortOrder: 50  },
-    { code: "b", name: "Bestellung",       movementType: "b", sortOrder: 60  },
-    { code: "l", name: "WE-Lieferschein",  movementType: "l", sortOrder: 70  },
-    { code: "r", name: "WE-Rechnung",      movementType: "r", sortOrder: 80  },
-    { code: "g", name: "WE-Gutschrift",    movementType: "g", sortOrder: 90  },
-    { code: "V", name: "Inventurbuchung",  movementType: "V", sortOrder: 100 },
-    { code: "Z", name: "Zubuchung",        movementType: "Z", sortOrder: 110 },
-    { code: "E", name: "Entnahme",         movementType: "E", sortOrder: 120 },
-    { code: "U", name: "Umlagerung",       movementType: "U", sortOrder: 130 },
+    { code: "N", name: "Angebot", movementType: "N", sortOrder: 10 },
+    { code: "A", name: "Auftrag", movementType: "A", sortOrder: 20 },
+    { code: "L", name: "Lieferschein", movementType: "L", sortOrder: 30 },
+    { code: "R", name: "Rechnung", movementType: "R", sortOrder: 40 },
+    { code: "G", name: "Gutschrift", movementType: "G", sortOrder: 50 },
+    { code: "b", name: "Bestellung", movementType: "b", sortOrder: 60 },
+    { code: "l", name: "WE-Lieferschein", movementType: "l", sortOrder: 70 },
+    { code: "r", name: "WE-Rechnung", movementType: "r", sortOrder: 80 },
+    { code: "g", name: "WE-Gutschrift", movementType: "g", sortOrder: 90 },
+    { code: "V", name: "Inventurbuchung", movementType: "V", sortOrder: 100 },
+    { code: "Z", name: "Zubuchung", movementType: "Z", sortOrder: 110 },
+    { code: "E", name: "Entnahme", movementType: "E", sortOrder: 120 },
+    { code: "U", name: "Umlagerung", movementType: "U", sortOrder: 130 },
   ];
   const insertedDocTypes: Array<typeof schema.documentType.$inferSelect> = [];
   for (const dt of docTypes) {
@@ -234,7 +256,11 @@ async function seed() {
       .values({ tenantId: baseTenant.tenantId, ...dt })
       .onConflictDoUpdate({
         target: [schema.documentType.tenantId, schema.documentType.code],
-        set: { name: sql`excluded.name`, movementType: sql`excluded.movement_type`, sortOrder: sql`excluded.sort_order` },
+        set: {
+          name: sql`excluded.name`,
+          movementType: sql`excluded.movement_type`,
+          sortOrder: sql`excluded.sort_order`,
+        },
       })
       .returning();
     if (inserted) insertedDocTypes.push(inserted);
@@ -250,8 +276,8 @@ async function seed() {
     { movementType: "N", prefix: "ANG-" },
     { movementType: "A", prefix: "AUF-" },
     { movementType: "L", prefix: "LIS-" },
-    { movementType: "R", prefix: "RE-"  },
-    { movementType: "G", prefix: "GU-"  },
+    { movementType: "R", prefix: "RE-" },
+    { movementType: "G", prefix: "GU-" },
     { movementType: "b", prefix: "BES-" },
     { movementType: "l", prefix: "WEL-" },
     { movementType: "r", prefix: "WER-" },
@@ -301,16 +327,13 @@ async function seed() {
   const [customerCat] = await db
     .select()
     .from(schema.addressCategory)
-    .where(
-      sql`tenant_id = ${baseTenant.tenantId} AND name->>'en' = 'Customers'`
-    )
+    .where(sql`tenant_id = ${baseTenant.tenantId} AND name->>'en' = 'Customers'`)
     .limit(1);
 
   const sampleAddresses = [
     {
       tenantId: baseTenant.tenantId,
       addressNo: "10000",
-      addressType: "company",
       isCustomer: true,
       companyName: "Acme GmbH",
       addressLine1: "Hauptstraße 1",
@@ -322,7 +345,6 @@ async function seed() {
     {
       tenantId: baseTenant.tenantId,
       addressNo: "10001",
-      addressType: "company",
       isCustomer: true,
       companyName: "TechCorp AG",
       addressLine1: "Innovationspark 5",
@@ -334,7 +356,6 @@ async function seed() {
     {
       tenantId: baseTenant.tenantId,
       addressNo: "20000",
-      addressType: "company",
       isSupplier: true,
       companyName: "Global Supplies GmbH",
       addressLine1: "Industrieweg 22",
@@ -356,14 +377,24 @@ async function seed() {
     .where(eq(schema.articleGroup.tenantId, baseTenant.tenantId))
     .limit(1);
 
+  await ensureUnit(baseTenant.tenantId, "license", { en: "License", de: "Lizenz" });
+  await ensureUnit(baseTenant.tenantId, "day", { en: "Day", de: "Tag" });
+  await ensureUnit(baseTenant.tenantId, "pcs", { en: "Pieces", de: "Stück" });
+
+  const unitRows = await db
+    .select({ unitId: schema.unit.unitId, code: schema.unit.code })
+    .from(schema.unit)
+    .where(eq(schema.unit.tenantId, baseTenant.tenantId));
+  const unitMap = new Map(unitRows.map((u) => [u.code, u.unitId]));
+
   const sampleArticles = [
     {
       tenantId: baseTenant.tenantId,
       articleNo: "ART-001",
       name: "Enterprise Software License",
       description: "Annual license for enterprise software suite",
-      baseUnit: "license",
-      salesUnit: "license",
+      baseUnitId: unitMap.get("license") ?? null,
+      salesUnitId: unitMap.get("license") ?? null,
       articleGroupId: prdGroup?.articleGroupId,
     },
     {
@@ -371,8 +402,8 @@ async function seed() {
       articleNo: "ART-002",
       name: "Professional Services Day",
       description: "One day of professional consulting services",
-      baseUnit: "day",
-      salesUnit: "day",
+      baseUnitId: unitMap.get("day") ?? null,
+      salesUnitId: unitMap.get("day") ?? null,
       articleGroupId: prdGroup?.articleGroupId,
     },
     {
@@ -380,8 +411,8 @@ async function seed() {
       articleNo: "ART-003",
       name: "Hardware Module",
       description: "Industrial hardware expansion module",
-      baseUnit: "pcs",
-      salesUnit: "pcs",
+      baseUnitId: unitMap.get("pcs") ?? null,
+      salesUnitId: unitMap.get("pcs") ?? null,
       articleGroupId: prdGroup?.articleGroupId,
     },
   ];
@@ -454,7 +485,13 @@ async function seed() {
 
     await db
       .insert(schema.documentType)
-      .values({ tenantId: demoTenant.tenantId, code: "R", name: "Rechnung", movementType: "R", sortOrder: 40 })
+      .values({
+        tenantId: demoTenant.tenantId,
+        code: "R",
+        name: "Rechnung",
+        movementType: "R",
+        sortOrder: 40,
+      })
       .onConflictDoNothing();
 
     await db

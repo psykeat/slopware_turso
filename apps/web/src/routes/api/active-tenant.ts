@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
+import { createFileRoute } from "@tanstack/react-router";
 
 const COOKIE = "x-active-tenant";
 
@@ -20,7 +20,10 @@ export const Route = createFileRoute("/api/active-tenant")({
           if (!tenant || !(tenant as any).isActive) {
             return new Response("Tenant is inactive or does not exist", { status: 403 });
           }
-          headers.set("Set-Cookie", `${COOKIE}=${encodeURIComponent(tenantId)}; Path=/; HttpOnly; SameSite=Lax`);
+          headers.set(
+            "Set-Cookie",
+            `${COOKIE}=${encodeURIComponent(tenantId)}; Path=/; HttpOnly; SameSite=Lax`,
+          );
         } else {
           headers.set("Set-Cookie", `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
         }

@@ -1,4 +1,4 @@
-import { MetadataResolver } from "./packages/db/src/services/metadata";
+import { MetadataResolver } from "../services/metadata";
 
 async function test() {
   const resolver = new MetadataResolver({ tenantId: "" });

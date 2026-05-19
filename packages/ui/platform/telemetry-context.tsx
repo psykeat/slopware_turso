@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "@tanstack/react-router";
+import React, { createContext, useContext, useEffect, useRef, useCallback } from "react";
+
 import { useCommands } from "./command-registry";
 
 export interface ApiCallEntry {
@@ -129,18 +130,17 @@ export function TelemetryProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, [subscribeToExecutions]);
 
-  const getSnapshot = useCallback((): TelemetrySnapshot => ({
-    errors: [...errorsRef.current],
-    apiCalls: [...apiCallsRef.current],
-    navigation: [...navigationRef.current],
-    commands: [...commandsRef.current],
-  }), []);
-
-  return (
-    <TelemetryContext.Provider value={{ getSnapshot }}>
-      {children}
-    </TelemetryContext.Provider>
+  const getSnapshot = useCallback(
+    (): TelemetrySnapshot => ({
+      errors: [...errorsRef.current],
+      apiCalls: [...apiCallsRef.current],
+      navigation: [...navigationRef.current],
+      commands: [...commandsRef.current],
+    }),
+    [],
   );
+
+  return <TelemetryContext.Provider value={{ getSnapshot }}>{children}</TelemetryContext.Provider>;
 }
 
 export function useTelemetry(): TelemetryContextValue {

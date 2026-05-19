@@ -1,9 +1,10 @@
-import React from "react";
 import { ChevronRightIcon } from "lucide-react";
+import React from "react";
 import { useTranslation } from "react-i18next";
-import { useFocus } from "../platform/focus-manager";
-import { useCommands } from "../platform/command-registry";
+
 import { cn } from "../lib/utils";
+import { useCommands } from "../platform/command-registry";
+import { useFocus } from "../platform/focus-manager";
 
 export interface ActionBarProps {
   className?: string;
@@ -30,24 +31,18 @@ export function ActionBar({ className, scope, crumbs, subCrumb }: ActionBarProps
   return (
     <div
       className={cn(
-        "h-9 flex items-center gap-2 px-3 bg-canvas-soft border-b border-hairline shrink-0 overflow-x-auto",
+        "flex h-9 shrink-0 items-center gap-2 overflow-x-auto border-b border-hairline bg-canvas-soft px-3",
         className,
       )}
       style={{ scrollbarWidth: "none" }}
     >
       {/* Breadcrumbs */}
       {allCrumbs.length > 0 && (
-        <div className="flex items-center gap-1.5 text-[13px] shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5 text-[13px]">
           {allCrumbs.map((crumb, i) => (
             <span key={i} className="flex items-center gap-1.5">
-              {i > 0 && (
-                <ChevronRightIcon className="size-3 text-hairline-input shrink-0" />
-              )}
-              <span
-                className={
-                  i === allCrumbs.length - 1 ? "text-ink" : "text-ink-mute"
-                }
-              >
+              {i > 0 && <ChevronRightIcon className="size-3 shrink-0 text-hairline-input" />}
+              <span className={i === allCrumbs.length - 1 ? "text-ink" : "text-ink-mute"}>
                 {crumb}
               </span>
             </span>
@@ -55,7 +50,7 @@ export function ActionBar({ className, scope, crumbs, subCrumb }: ActionBarProps
         </div>
       )}
 
-      <div className="flex-1 min-w-0" />
+      <div className="min-w-0 flex-1" />
 
       {/* Command pills */}
       {visibleCommands.map((cmd) => (
@@ -67,11 +62,11 @@ export function ActionBar({ className, scope, crumbs, subCrumb }: ActionBarProps
             defaultValue: cmd.label.en,
             command: cmd.label.en,
           })}
-          className="h-6 px-3 rounded-full text-[13px] border border-hairline bg-canvas text-ink-secondary hover:border-primary hover:text-primary transition-colors flex-shrink-0 flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none"
+          className="flex h-6 flex-shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-canvas px-3 text-[13px] text-ink-secondary transition-colors hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40"
         >
           {i18n.language === "de" ? cmd.label.de : cmd.label.en}
           {cmd.shortcut && (
-            <span className="font-mono text-[10px] text-ink-mute border border-hairline rounded-[3px] px-1 bg-canvas-soft">
+            <span className="rounded-[3px] border border-hairline bg-canvas-soft px-1 font-mono text-[10px] text-ink-mute">
               {cmd.shortcut}
             </span>
           )}

@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+
 import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { systemSettings } from "@repo/db/schema";
+import { createFileRoute } from "@tanstack/react-router";
 import { eq, and } from "drizzle-orm";
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 // ---------------------------------------------------------------------------
 // Encryption helpers (AES-256-GCM)
@@ -13,9 +14,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 const ENCRYPTION_KEY_HEX = process.env.ENCRYPTION_SECRET ?? "";
 const ENCRYPTION_KEY =
-  ENCRYPTION_KEY_HEX.length === 64
-    ? Buffer.from(ENCRYPTION_KEY_HEX, "hex")
-    : null;
+  ENCRYPTION_KEY_HEX.length === 64 ? Buffer.from(ENCRYPTION_KEY_HEX, "hex") : null;
 
 if (!ENCRYPTION_KEY) {
   console.warn(
@@ -72,12 +71,7 @@ export const Route = createFileRoute("/api/admin/llm-config")({
         const existing = await db
           .select()
           .from(systemSettings)
-          .where(
-            and(
-              eq(systemSettings.scope, "global"),
-              eq(systemSettings.key, "llm_config"),
-            ),
-          )
+          .where(and(eq(systemSettings.scope, "global"), eq(systemSettings.key, "llm_config")))
           .limit(1);
 
         if (!existing[0]) {
@@ -134,12 +128,7 @@ export const Route = createFileRoute("/api/admin/llm-config")({
         const existing = await db
           .select()
           .from(systemSettings)
-          .where(
-            and(
-              eq(systemSettings.scope, "global"),
-              eq(systemSettings.key, "llm_config"),
-            ),
-          )
+          .where(and(eq(systemSettings.scope, "global"), eq(systemSettings.key, "llm_config")))
           .limit(1);
 
         const existingValue = (existing[0]?.value ?? {}) as {
@@ -150,9 +139,7 @@ export const Route = createFileRoute("/api/admin/llm-config")({
         // Resolve encrypted values: if the incoming value is the sentinel,
         // keep the already-stored (encrypted) value unchanged.
         const resolvedApiKey =
-          body.apiKey === SENTINEL
-            ? (existingValue.apiKey ?? "")
-            : encrypt(body.apiKey);
+          body.apiKey === SENTINEL ? (existingValue.apiKey ?? "") : encrypt(body.apiKey);
 
         const resolvedGithubToken =
           body.githubToken === SENTINEL

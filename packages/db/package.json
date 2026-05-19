@@ -21,7 +21,6 @@
   "dependencies": {
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
-    "nanoid": "catalog:",
     "postgres": "catalog:"
   },
   "devDependencies": {

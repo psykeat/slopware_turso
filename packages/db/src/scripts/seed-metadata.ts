@@ -1,9 +1,259 @@
 import "dotenv/config";
-import { db } from "../index";
-import * as schema from "../schema/index";
-import { tenantFields, helperTableRegistry } from "../schema/app.schema";
+import { getColumns as getColumnsBase } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
-import { sql, getColumns as getColumnsBase } from "drizzle-orm";
+
+import { db } from "../index";
+import { tenantFields, helperTableRegistry } from "../schema/app.schema";
+import * as schema from "../schema/index";
+
+type FieldLabel = { en: string; de: string };
+type EntityLabelMap = Record<string, FieldLabel>;
+
+const entityLabelMap: EntityLabelMap = {
+  company: { en: "Company Master", de: "Firmenstamm" },
+  bankAccount: { en: "Bank Accounts", de: "Bankverbindungen" },
+  numberSequence: { en: "Number Sequences", de: "Nummernkreise" },
+  paymentTerm: { en: "Payment Terms", de: "Zahlungsbedingungen" },
+  shippingMethod: { en: "Shipping Methods", de: "Versandarten" },
+  priceList: { en: "Price Lists", de: "Preislisten" },
+  discountGroup: { en: "Discount Groups", de: "Rabattgruppen" },
+  addressCategory: { en: "Address Categories", de: "Adresskategorien" },
+  documentGroup: { en: "Document Groups", de: "Beleggruppen" },
+  industry: { en: "Industries", de: "Branchen" },
+  unit: { en: "Units", de: "Einheiten" },
+  articleGroup: { en: "Article Groups", de: "Artikelgruppen" },
+  warehouse: { en: "Warehouses", de: "Lagerorte" },
+  taxClass: { en: "Tax Classes", de: "Steuerklassen" },
+  taxCode: { en: "Tax Codes", de: "Steuerschlüssel" },
+  costCenter: { en: "Cost Centers", de: "Kostenstellen" },
+  glAccount: { en: "GL Accounts", de: "Sachkonten" },
+  currency: { en: "Currencies", de: "Währungen" },
+  country: { en: "Countries", de: "Länder" },
+  postalCode: { en: "Postal Codes", de: "PLZ-Verzeichnis" },
+  address: { en: "Addresses", de: "Adressen" },
+  article: { en: "Articles", de: "Artikel" },
+  document: { en: "Documents", de: "Belege" },
+};
+
+const fieldLabelMap: EntityLabelMap = {
+  name: { en: "Name", de: "Name" },
+  code: { en: "Code", de: "Code" },
+  isActive: { en: "Active", de: "Aktiv" },
+  description: { en: "Description", de: "Beschreibung" },
+  addressLine1: { en: "Address 1", de: "Adresszeile 1" },
+  addressLine2: { en: "Address 2", de: "Adresszeile 2" },
+  city: { en: "City", de: "Ort" },
+  postalCode: { en: "Postal Code", de: "PLZ" },
+  countryCode: { en: "Country", de: "Land" },
+  phoneLandline: { en: "Phone", de: "Telefon" },
+  phoneMobile: { en: "Mobile", de: "Mobil" },
+  email: { en: "Email", de: "E-Mail" },
+  homepage: { en: "Homepage", de: "Homepage" },
+  vatId: { en: "VAT ID", de: "USt-ID" },
+  taxNumber: { en: "Tax No", de: "Steuernummer" },
+  iban: { en: "IBAN", de: "IBAN" },
+  bic: { en: "BIC", de: "BIC" },
+  bankName: { en: "Bank", de: "Bankname" },
+  prefix: { en: "Prefix", de: "Präfix" },
+  nextValue: { en: "Next Value", de: "Nächster Wert" },
+  netDays: { en: "Net Days", de: "Tage netto" },
+  percentage: { en: "Percentage", de: "Prozent" },
+  accountNo: { en: "Account No", de: "Kontonummer" },
+  iso2Code: { en: "ISO 2", de: "ISO 2" },
+  taxRate: { en: "Tax Rate %", de: "Steuersatz %" },
+  legalName: { en: "Legal Name", de: "Juristischer Name" },
+  companyNo: { en: "Company No", de: "Firmennummer" },
+  fiscalYearStartMonth: { en: "FY Start Month", de: "Geschäftsjahr Beginn (Monat)" },
+  nextGroupId: { en: "Next Group", de: "Nächste Gruppe" },
+  requireSerialTracking: { en: "Require Serial Tracking", de: "Seriennummernpflicht" },
+  requireBatchTracking: { en: "Require Batch Tracking", de: "Chargenpflicht" },
+};
+
+const technicalFieldNames = new Set([
+  "tenantId",
+  "createdAt",
+  "updatedAt",
+  "archived",
+  "archivedAt",
+  "isActive",
+]);
+
+const groupedEntitySets = {
+  organisation: new Set(["bankAccount", "numberSequence"]),
+  vertrieb: new Set([
+    "paymentTerm",
+    "shippingMethod",
+    "priceList",
+    "discountGroup",
+    "addressCategory",
+    "documentGroup",
+    "industry",
+  ]),
+  lager_artikel: new Set(["unit", "articleGroup", "warehouse"]),
+  finanzen: new Set(["taxClass", "taxCode", "costCenter", "glAccount", "currency"]),
+  geodaten: new Set(["country", "postalCode"]),
+} as const;
+
+const lookupSuffix = "Id";
+
+function discoverTables() {
+  return Object.entries(schema)
+    .filter(([_, value]) => {
+      try {
+        if (value && typeof value === "object") {
+          getTableConfig(value as any);
+          return true;
+        }
+      } catch {
+        return false;
+      }
+      return false;
+    })
+    .map(([key, table]) => ({ key, table: table as any }));
+}
+
+function getEntityLabel(key: string): FieldLabel {
+  return entityLabelMap[key] || { en: key, de: key };
+}
+
+function getFieldLabel(fieldName: string): FieldLabel {
+  return fieldLabelMap[fieldName] || { en: fieldName, de: fieldName };
+}
+
+function getEntityGroup(key: string): string | undefined {
+  if (key === "company") return "master";
+  if (groupedEntitySets.organisation.has(key)) return "organisation";
+  if (groupedEntitySets.vertrieb.has(key)) return "vertrieb";
+  if (groupedEntitySets.lager_artikel.has(key)) return "lager_artikel";
+  if (groupedEntitySets.finanzen.has(key)) return "finanzen";
+  if (groupedEntitySets.geodaten.has(key)) return "geodaten";
+  return undefined;
+}
+
+function getColumnTypeLabel(columnType: string | undefined): string {
+  if (columnType === "PgNumeric") return "numeric";
+  if (columnType === "PgInteger") return "integer";
+  if (columnType === "PgBoolean") return "boolean";
+  if (columnType === "PgTimestamp" || columnType === "PgDate") return "timestamp";
+  return "text";
+}
+
+function getLookupTableName(colName: string, key: string, schemaRef: typeof schema): string | undefined {
+  if (colName.endsWith(lookupSuffix)) {
+    const potentialEntity = colName.slice(0, -lookupSuffix.length);
+    if ((schemaRef as any)[potentialEntity] && potentialEntity !== key) {
+      return potentialEntity;
+    }
+
+    // This is a handwritten exception to the generic suffix rule above.
+    if (colName === "addressCategoryId") {
+      return "addressCategory";
+    }
+  }
+
+  if (colName === "countryCode") {
+    return "country";
+  }
+
+  if (colName === "currencyId") {
+    return "currency";
+  }
+
+  return undefined;
+}
+
+function getHelperTablePayload(key: string, columns: Record<string, unknown>) {
+  const columnNames = Object.keys(columns);
+  let pkColumn = "";
+  let displayColumn = "";
+  let codeColumn = "";
+  let valueColumn = "";
+  let sortColumn = "created_at";
+  let isTenantScoped = false;
+  let hasName = false;
+  let hasCode = false;
+
+  for (const [colName] of Object.entries(columns)) {
+    const col = columns[colName] as any;
+    if (col.primary) pkColumn = colName;
+    if (colName === "tenantId") isTenantScoped = true;
+    if (colName === "name") {
+      displayColumn = "name";
+      hasName = true;
+    }
+    if (colName === "code" && !displayColumn) {
+      displayColumn = "code";
+      hasCode = true;
+    }
+    if (colName === "createdAt") sortColumn = "createdAt";
+  }
+
+  if (key === "currency") pkColumn = "code";
+  if (key === "country") pkColumn = "iso2Code";
+  if (columnNames.includes("code")) codeColumn = "code";
+  if (columnNames.includes("iso2Code")) codeColumn = "iso2Code";
+  if (columnNames.includes("iso3Code") && !codeColumn) codeColumn = "iso3Code";
+  valueColumn = pkColumn || codeColumn;
+
+  if (!displayColumn && pkColumn) displayColumn = pkColumn;
+  if (key === "postalCode") displayColumn = "plz";
+  if (!displayColumn) displayColumn = columnNames[0];
+
+  const group = getEntityGroup(key);
+  const shouldRegister =
+    Boolean(group) || hasName || hasCode || ["country", "currency", "postalCode"].includes(key);
+
+  return {
+    shouldRegister,
+    payload: {
+      tableName: key,
+      label: getEntityLabel(key),
+      pkColumn: pkColumn || "id",
+      displayColumn: displayColumn || "name",
+      codeColumn: codeColumn || undefined,
+      valueColumn: valueColumn || undefined,
+      sortColumn: sortColumn || "createdAt",
+      isTenantScoped,
+      displayIsI18n: Boolean(columns.name && (columns.name as any).columnType === "PgJsonb"),
+      group,
+      category: group ? "settings" : undefined,
+    },
+    conflictSet: {
+      pkColumn: pkColumn || "id",
+      displayColumn: displayColumn || "name",
+      codeColumn: codeColumn || undefined,
+      valueColumn: valueColumn || undefined,
+      sortColumn: sortColumn || "createdAt",
+      isTenantScoped,
+      group,
+      category: group ? "settings" : undefined,
+      label: getEntityLabel(key),
+    },
+  };
+}
+
+function getTenantFieldPayload(
+  key: string,
+  colName: string,
+  col: any,
+  schemaRef: typeof schema,
+) {
+  const columnType = col.columnType;
+  const lookupTable = getLookupTableName(colName, key, schemaRef);
+  const isPk = col.primary || false;
+  const isUuid = columnType === "PgUUID" || col.dataType === "uuid";
+  const isVisible =
+    lookupTable !== undefined ||
+    (!isPk && !isUuid && !colName.endsWith(lookupSuffix) && !technicalFieldNames.has(colName));
+
+  return {
+    fieldType: getColumnTypeLabel(columnType),
+    label: getFieldLabel(colName),
+    isVisible,
+    isRequired: col.notNull || false,
+    lookupTable,
+  };
+}
 
 /**
  * Automatically discovers metadata from Drizzle schema and populates
@@ -12,220 +262,55 @@ import { sql, getColumns as getColumnsBase } from "drizzle-orm";
 async function main() {
   console.log("Starting improved dynamic metadata discovery...");
 
-  const tables = Object.entries(schema)
-    .filter(([_, value]) => {
-      try {
-        if (value && typeof value === "object") {
-          getTableConfig(value as any);
-          return true;
-        }
-      } catch (e) {
-        return false;
-      }
-      return false;
-    })
-    .map(([key, value]) => ({ key, table: value as any }));
-
-  const entityLabelMap: Record<string, any> = {
-    company: { en: "Company Master", de: "Firmenstamm" },
-    bankAccount: { en: "Bank Accounts", de: "Bankverbindungen" },
-    numberSequence: { en: "Number Sequences", de: "Nummernkreise" },
-    paymentTerm: { en: "Payment Terms", de: "Zahlungsbedingungen" },
-    shippingMethod: { en: "Shipping Methods", de: "Versandarten" },
-    priceList: { en: "Price Lists", de: "Preislisten" },
-    discountGroup: { en: "Discount Groups", de: "Rabattgruppen" },
-    addressCategory: { en: "Address Categories", de: "Adresskategorien" },
-    documentGroup: { en: "Document Groups", de: "Beleggruppen" },
-    industry: { en: "Industries", de: "Branchen" },
-    unit: { en: "Units", de: "Einheiten" },
-    articleGroup: { en: "Article Groups", de: "Artikelgruppen" },
-    warehouse: { en: "Warehouses", de: "Lagerorte" },
-    taxClass: { en: "Tax Classes", de: "Steuerklassen" },
-    taxCode: { en: "Tax Codes", de: "Steuerschlüssel" },
-    costCenter: { en: "Cost Centers", de: "Kostenstellen" },
-    glAccount: { en: "GL Accounts", de: "Sachkonten" },
-    currency: { en: "Currencies", de: "Währungen" },
-    country: { en: "Countries", de: "Länder" },
-    postalCode: { en: "Postal Codes", de: "PLZ-Verzeichnis" },
-    address: { en: "Addresses", de: "Adressen" },
-    article: { en: "Articles", de: "Artikel" },
-    document: { en: "Documents", de: "Belege" },
-  };
-
-  const fieldLabelMap: Record<string, any> = {
-    name: { en: "Name", de: "Name" },
-    code: { en: "Code", de: "Code" },
-    isActive: { en: "Active", de: "Aktiv" },
-    description: { en: "Description", de: "Beschreibung" },
-    addressLine1: { en: "Address 1", de: "Adresszeile 1" },
-    addressLine2: { en: "Address 2", de: "Adresszeile 2" },
-    city: { en: "City", de: "Ort" },
-    postalCode: { en: "Postal Code", de: "PLZ" },
-    countryCode: { en: "Country", de: "Land" },
-    phoneLandline: { en: "Phone", de: "Telefon" },
-    phoneMobile: { en: "Mobile", de: "Mobil" },
-    email: { en: "Email", de: "E-Mail" },
-    homepage: { en: "Homepage", de: "Homepage" },
-    vatId: { en: "VAT ID", de: "USt-ID" },
-    taxNumber: { en: "Tax No", de: "Steuernummer" },
-    iban: { en: "IBAN", de: "IBAN" },
-    bic: { en: "BIC", de: "BIC" },
-    bankName: { en: "Bank", de: "Bankname" },
-    prefix: { en: "Prefix", de: "Präfix" },
-    nextValue: { en: "Next Value", de: "Nächster Wert" },
-    netDays: { en: "Net Days", de: "Tage netto" },
-    percentage: { en: "Percentage", de: "Prozent" },
-    accountNo: { en: "Account No", de: "Kontonummer" },
-    iso2Code: { en: "ISO 2", de: "ISO 2" },
-    taxRate: { en: "Tax Rate %", de: "Steuersatz %" },
-    legalName: { en: "Legal Name", de: "Juristischer Name" },
-    companyNo: { en: "Company No", de: "Firmennummer" },
-    fiscalYearStartMonth: { en: "FY Start Month", de: "Geschäftsjahr Beginn (Monat)" },
-    nextGroupId: { en: "Next Group", de: "Nächste Gruppe" },
-    requireSerialTracking: { en: "Require Serial Tracking", de: "Seriennummernpflicht" },
-    requireBatchTracking: { en: "Require Batch Tracking", de: "Chargenpflicht" },
-  };
+  const tables = discoverTables();
 
   for (const { key, table } of tables) {
     let config;
     try {
-        config = getTableConfig(table);
+      config = getTableConfig(table);
     } catch (e) {
-        continue;
+      continue;
     }
     const columns = getColumnsBase(table);
     const tableName = config.name;
-    
+
     console.log(`Processing table: ${tableName} (Entity: ${key})`);
 
-    // 1. Identify PK, Display, and Tenant Scope
-    let pkColumn = "";
-    let displayColumn = "";
-    let codeColumn = "";
-    let valueColumn = "";
-    let sortColumn = "created_at";
-    let isTenantScoped = false;
-    let hasName = false;
-    let hasCode = false;
-
-    for (const [colName, col] of Object.entries(columns)) {
-      if ((col as any).primary) pkColumn = colName;
-      if (colName === "tenantId") isTenantScoped = true;
-      if (colName === "name") { displayColumn = "name"; hasName = true; }
-      if (colName === "code" && !displayColumn) { displayColumn = "code"; hasCode = true; }
-      if (colName === "createdAt") sortColumn = "createdAt";
-    }
-
-    if (key === "currency") pkColumn = "code";
-    if (key === "country") pkColumn = "iso2Code";
-    if (Object.keys(columns).includes("code")) codeColumn = "code";
-    if (Object.keys(columns).includes("iso2Code")) codeColumn = "iso2Code";
-    if (Object.keys(columns).includes("iso3Code") && !codeColumn) codeColumn = "iso3Code";
-    valueColumn = pkColumn || codeColumn;
-
-    if (!displayColumn && pkColumn) displayColumn = pkColumn;
-    if (key === "postalCode") displayColumn = "plz";
-    if (!displayColumn) displayColumn = Object.keys(columns)[0];
-
-    // 2. Register in Helper Registry
-    const label = entityLabelMap[key] || { en: key, de: key };
-    
-    // Grouping logic based on PRD
-    let group: string | undefined = undefined;
-    if (key === "company") group = "master";
-    else if (["bankAccount", "numberSequence"].includes(key)) group = "organisation";
-    else if (["paymentTerm", "shippingMethod", "priceList", "discountGroup", "addressCategory", "documentGroup", "industry"].includes(key)) group = "vertrieb";
-    else if (["unit", "articleGroup", "warehouse"].includes(key)) group = "lager_artikel";
-    else if (["taxClass", "taxCode", "costCenter", "glAccount", "currency"].includes(key)) group = "finanzen";
-    else if (["country", "postalCode"].includes(key)) group = "geodaten";
-
-    if (group || hasName || hasCode || ["country", "currency", "postalCode"].includes(key)) {
-        await db.insert(helperTableRegistry).values({
-            tableName: key,
-            label,
-            pkColumn: pkColumn || "id",
-            displayColumn: displayColumn || "name",
-            codeColumn: codeColumn || undefined,
-            valueColumn: valueColumn || undefined,
-            sortColumn: sortColumn || "createdAt",
-            isTenantScoped,
-            displayIsI18n: columns.name && (columns.name as any).columnType === 'PgJsonb',
-            group,
-            category: group ? "settings" : undefined,
-        }).onConflictDoUpdate({
-            target: [helperTableRegistry.tableName],
-            set: {
-                pkColumn: pkColumn || "id",
-                displayColumn: displayColumn || "name",
-                codeColumn: codeColumn || undefined,
-                valueColumn: valueColumn || undefined,
-                sortColumn: sortColumn || "createdAt",
-                isTenantScoped,
-                group,
-                category: group ? "settings" : undefined,
-                label,
-            }
+    const helperTable = getHelperTablePayload(key, columns as Record<string, unknown>);
+    if (helperTable.shouldRegister) {
+      await db
+        .insert(helperTableRegistry)
+        .values(helperTable.payload)
+        .onConflictDoUpdate({
+          target: [helperTableRegistry.tableName],
+          set: helperTable.conflictSet,
         });
     }
 
-    // 3. Populate Global Tenant Fields
     for (const [colName, col] of Object.entries(columns)) {
-      const columnType = (col as any).columnType;
-      const fieldLabel = fieldLabelMap[colName] || { en: colName, de: colName };
-      const isPk = (col as any).primary || false;
-      const isUuid = columnType === "PgUUID" || (col as any).dataType === "uuid";
-      const isTechnicalField = [
-        "tenantId",
-        "createdAt",
-        "updatedAt",
-        "archived",
-        "archivedAt",
-        "isActive",
-      ].includes(colName);
+      const field = getTenantFieldPayload(key, colName, col, schema);
 
-        // Auto-discover lookup target
-        let lookupTable: string | undefined = undefined;
-        if (colName.endsWith("Id")) {
-            const potentialEntity = colName.slice(0, -2);
-            if ((schema as any)[potentialEntity] && potentialEntity !== key) {
-                lookupTable = potentialEntity;
-            } else if (colName === "addressCategoryId") {
-                lookupTable = "addressCategory";
-            }
-        } else if (colName === "countryCode") {
-            lookupTable = "country";
-        } else if (colName === "currencyId") {
-            lookupTable = "currency";
-        }
-
-        const isVisible = (lookupTable !== undefined) || (!isPk && !isUuid && !colName.endsWith("Id") && !isTechnicalField);
-
-        await db.insert(tenantFields).values({
-            entityName: key,
-            fieldName: colName,
-            fieldType: 
-                columnType === "PgNumeric" ? "numeric" :
-                columnType === "PgInteger" ? "integer" :
-                columnType === "PgBoolean" ? "boolean" :
-                columnType === "PgTimestamp" || columnType === "PgDate" ? "timestamp" : "text",
-            label: fieldLabel,
-            scope: "global",
-            isVisible,
-            isRequired: (col as any).notNull || false,
-            lookupTable,
-        }).onConflictDoUpdate({
-            target: [tenantFields.entityName, tenantFields.fieldName],
-            set: {
-                fieldType: 
-                    columnType === "PgNumeric" ? "numeric" :
-                    columnType === "PgInteger" ? "integer" :
-                    columnType === "PgBoolean" ? "boolean" :
-                    columnType === "PgTimestamp" || columnType === "PgDate" ? "timestamp" : "text",
-                isRequired: (col as any).notNull || false,
-                lookupTable: lookupTable || undefined,
-                label: fieldLabel,
-                isVisible,
-            }
+      await db
+        .insert(tenantFields)
+        .values({
+          entityName: key,
+          fieldName: colName,
+          fieldType: field.fieldType,
+          label: field.label,
+          scope: "global",
+          isVisible: field.isVisible,
+          isRequired: field.isRequired,
+          lookupTable: field.lookupTable,
+        })
+        .onConflictDoUpdate({
+          target: [tenantFields.entityName, tenantFields.fieldName],
+          set: {
+            fieldType: field.fieldType,
+            isRequired: field.isRequired,
+            lookupTable: field.lookupTable || undefined,
+            label: field.label,
+            isVisible: field.isVisible,
+          },
         });
     }
   }

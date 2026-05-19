@@ -1,14 +1,14 @@
-import { useState } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 import { EntityMask } from "@repo/ui/components/entity-mask";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { PlusIcon, Trash2Icon, Loader2Icon, ShieldCheckIcon, GlobeIcon } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface UserAssignmentToolProps {
   userId: string;
 }
 
-export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
+function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [newTenantId, setNewTenantId] = useState("");
@@ -66,15 +66,15 @@ export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
   });
 
   return (
-    <div className="flex flex-col h-full bg-canvas-soft overflow-hidden">
-      <div className="h-12 flex items-center px-4 shrink-0 border-b border-hairline bg-canvas">
-        <ShieldCheckIcon className="size-4 text-primary mr-2" />
-        <span className="text-[12px] font-bold text-ink uppercase tracking-widest">
+    <div className="flex h-full flex-col overflow-hidden bg-canvas-soft">
+      <div className="flex h-12 shrink-0 items-center border-b border-hairline bg-canvas px-4">
+        <ShieldCheckIcon className="mr-2 size-4 text-primary" />
+        <span className="text-[12px] font-bold tracking-widest text-ink uppercase">
           Tenant Assignments
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {isAssignmentsLoading ? (
           <div className="flex justify-center py-12">
             <Loader2Icon className="size-6 animate-spin text-ink-mute" />
@@ -84,17 +84,17 @@ export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
             {assignments.map((as: any) => (
               <div
                 key={as.id}
-                className="group flex items-center justify-between p-3 rounded-lg bg-canvas border border-hairline shadow-sm hover:border-primary/20 transition-all"
+                className="group flex items-center justify-between rounded-lg border border-hairline bg-canvas p-3 shadow-sm transition-all hover:border-primary/20"
               >
                 <div className="flex items-center gap-3">
-                  <div className="size-8 rounded-full bg-canvas-soft border border-hairline grid place-items-center shrink-0">
+                  <div className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-canvas-soft">
                     <GlobeIcon className="size-4 text-ink-mute" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[13px] font-semibold text-ink leading-none mb-1">
+                    <span className="mb-1 text-[13px] leading-none font-semibold text-ink">
                       {as.tenantName || as.tenantId}
                     </span>
-                    <span className="text-[11px] text-ink-mute uppercase tracking-tighter font-medium">
+                    <span className="text-[11px] font-medium tracking-tighter text-ink-mute uppercase">
                       {as.role}
                     </span>
                   </div>
@@ -102,7 +102,7 @@ export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
                 <button
                   onClick={() => deleteMutation.mutate(as.id)}
                   disabled={deleteMutation.isPending}
-                  className="size-8 rounded-md grid place-items-center text-ink-mute hover:bg-destructive/10 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                  className="grid size-8 place-items-center rounded-md text-ink-mute opacity-0 transition-colors group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
                   title="Remove Access"
                 >
                   <Trash2Icon size={14} />
@@ -110,20 +110,22 @@ export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
               </div>
             ))}
             {assignments.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-hairline rounded-xl bg-canvas/50">
-                <GlobeIcon className="size-8 text-ink-mute/30 mb-2" />
-                <p className="text-[12px] text-ink-mute font-medium uppercase tracking-wider">No active assignments</p>
+              <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-hairline bg-canvas/50 py-12">
+                <GlobeIcon className="mb-2 size-8 text-ink-mute/30" />
+                <p className="text-[12px] font-medium tracking-wider text-ink-mute uppercase">
+                  No active assignments
+                </p>
               </div>
             )}
           </div>
         )}
 
         {adding ? (
-          <div className="p-4 rounded-xl bg-canvas border border-primary/20 space-y-4 shadow-md animate-in fade-in zoom-in-95 duration-200">
+          <div className="animate-in space-y-4 rounded-xl border border-primary/20 bg-canvas p-4 shadow-md duration-200 zoom-in-95 fade-in">
             <div className="space-y-1.5">
-              <label 
+              <label
                 htmlFor="assign-tenant-select"
-                className="text-[10px] uppercase font-bold text-ink-mute tracking-widest pl-0.5"
+                className="pl-0.5 text-[10px] font-bold tracking-widest text-ink-mute uppercase"
               >
                 Select Tenant
               </label>
@@ -131,7 +133,7 @@ export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
                 id="assign-tenant-select"
                 value={newTenantId}
                 onChange={(e) => setNewTenantId(e.target.value)}
-                className="w-full h-9 bg-canvas-soft border border-hairline-input rounded-md px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer"
+                className="h-9 w-full cursor-pointer appearance-none rounded-md border border-hairline-input bg-canvas-soft px-3 text-[13px] focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
               >
                 <option value="">Choose...</option>
                 {allTenants.map((t: any) => (
@@ -142,9 +144,9 @@ export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
               </select>
             </div>
             <div className="space-y-1.5">
-              <label 
+              <label
                 htmlFor="assign-role-select"
-                className="text-[10px] uppercase font-bold text-ink-mute tracking-widest pl-0.5"
+                className="pl-0.5 text-[10px] font-bold tracking-widest text-ink-mute uppercase"
               >
                 Assign Role
               </label>
@@ -152,7 +154,7 @@ export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
                 id="assign-role-select"
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
-                className="w-full h-9 bg-canvas-soft border border-hairline-input rounded-md px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer"
+                className="h-9 w-full cursor-pointer appearance-none rounded-md border border-hairline-input bg-canvas-soft px-3 text-[13px] focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
               >
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
@@ -163,13 +165,13 @@ export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
               <button
                 onClick={() => addMutation.mutate()}
                 disabled={!newTenantId || addMutation.isPending}
-                className="flex-1 h-9 bg-primary text-primary-fg rounded-md text-[13px] font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95"
+                className="h-9 flex-1 rounded-md bg-primary text-[13px] font-semibold text-primary-fg transition-all hover:shadow-lg hover:shadow-primary/20 active:scale-95 disabled:opacity-50"
               >
                 {addMutation.isPending ? "Assigning..." : "Assign Access"}
               </button>
               <button
                 onClick={() => setAdding(false)}
-                className="px-4 h-9 border border-hairline rounded-md text-[13px] font-medium hover:bg-canvas-soft transition-colors"
+                className="h-9 rounded-md border border-hairline px-4 text-[13px] font-medium transition-colors hover:bg-canvas-soft"
               >
                 Cancel
               </button>
@@ -178,16 +180,16 @@ export function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
         ) : (
           <button
             onClick={() => setAdding(true)}
-            className="w-full flex items-center justify-center gap-2 h-11 border-2 border-dashed border-hairline rounded-xl text-ink-mute hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all group"
+            className="group flex h-11 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-hairline text-ink-mute transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
           >
-            <PlusIcon size={16} className="group-hover:scale-110 transition-transform" />
-            <span className="text-[13px] font-bold uppercase tracking-wider">Assign to Tenant</span>
+            <PlusIcon size={16} className="transition-transform group-hover:scale-110" />
+            <span className="text-[13px] font-bold tracking-wider uppercase">Assign to Tenant</span>
           </button>
         )}
       </div>
-      
-      <div className="p-4 border-t border-hairline bg-canvas">
-        <p className="text-[11px] text-ink-mute leading-relaxed italic">
+
+      <div className="border-t border-hairline bg-canvas p-4">
+        <p className="text-[11px] leading-relaxed text-ink-mute italic">
           User must be assigned to at least one active tenant to access the application.
         </p>
       </div>
@@ -205,9 +207,9 @@ export function UserManagementView({ userId, onCancel, onSaved }: UserManagement
   const { t } = useTranslation("ui");
 
   return (
-    <div className="flex h-[850px] w-full overflow-hidden bg-canvas rounded-lg shadow-2xl">
+    <div className="flex h-[850px] w-full overflow-hidden rounded-lg bg-canvas shadow-2xl">
       {/* Left Column: User Data */}
-      <div className="flex-1 overflow-y-auto min-w-0 bg-canvas border-r border-hairline">
+      <div className="min-w-0 flex-1 overflow-y-auto border-r border-hairline bg-canvas">
         <EntityMask
           entityName="user"
           recordId={userId}
@@ -217,7 +219,7 @@ export function UserManagementView({ userId, onCancel, onSaved }: UserManagement
           onCancel={onCancel}
           onSaved={onSaved}
           apiBase="/api/admin/data"
-          className="border-none shadow-none rounded-none m-0 p-8"
+          className="m-0 rounded-none border-none p-8 shadow-none"
         />
       </div>
 

@@ -1,7 +1,8 @@
-import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Skeleton } from "./skeleton";
+import React from "react";
+
 import { formatDate } from "../lib/formatters";
+import { Skeleton } from "./skeleton";
 
 interface SerialNumber {
   serialNumberId: string;
@@ -21,7 +22,8 @@ export function SerialInventoryTable({ articleId }: { articleId: string }) {
     enabled: !!articleId,
   });
 
-  const colHeaderClass = "text-[11px] uppercase tracking-wider font-medium text-ink-mute text-left px-3 py-0";
+  const colHeaderClass =
+    "text-[11px] uppercase tracking-wider font-medium text-ink-mute text-left px-3 py-0";
   const rowClass = "h-9 border-b border-hairline last:border-b-0";
   const cellClass = "px-3 text-[13px] font-mono";
 
@@ -36,7 +38,7 @@ export function SerialInventoryTable({ articleId }: { articleId: string }) {
 
   if (rows.length === 0) {
     return (
-      <div className="flex items-center justify-center h-24 text-[13px] text-ink-mute italic">
+      <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute italic">
         Keine Seriennummern am Lager.
       </div>
     );
@@ -46,16 +48,22 @@ export function SerialInventoryTable({ articleId }: { articleId: string }) {
     <table className="w-full table-fixed border-collapse">
       <thead>
         <tr className="h-8 border-b border-hairline">
-          <th className={colHeaderClass} style={{ width: "50%" }}>Seriennummer</th>
-          <th className={colHeaderClass} style={{ width: "25%" }}>Status</th>
-          <th className={colHeaderClass} style={{ width: "25%" }}>Erfasst am</th>
+          <th className={colHeaderClass} style={{ width: "50%" }}>
+            Seriennummer
+          </th>
+          <th className={colHeaderClass} style={{ width: "25%" }}>
+            Status
+          </th>
+          <th className={colHeaderClass} style={{ width: "25%" }}>
+            Erfasst am
+          </th>
         </tr>
       </thead>
       <tbody>
         {rows.map((row) => (
           <tr key={row.serialNumberId} className={rowClass}>
             <td className={cellClass}>{row.serialNo}</td>
-            <td className="px-3 text-[12px] uppercase text-ink-mute font-medium">{row.status}</td>
+            <td className="px-3 text-[12px] font-medium text-ink-mute uppercase">{row.status}</td>
             <td className="px-3 text-[12px] text-ink-mute">{formatDate(row.createdAt)}</td>
           </tr>
         ))}

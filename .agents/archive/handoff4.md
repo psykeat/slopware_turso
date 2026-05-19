@@ -25,53 +25,53 @@ The biggest remaining gaps are:
 
 ### Conversion and Document Chain
 
-| Area | Status | Gap |
-|---|---|---|
-| `document_line_allocation` | Partial | Exists in migration, but is not wired into the live schema/service layer. |
-| Partial conversion | Missing | `convertDocument()` still copies lines and archives the source document; it does not allocate remaining quantities or support repeated partial conversion. |
-| Belegverlauf chain | Missing | `transactionId` is regenerated in conversion/storno instead of being propagated through the chain. |
-| Conversion guards | Missing | Conversion does not yet block cancelled or archived source documents the way the wandlung spec requires. |
+| Area                       | Status  | Gap                                                                                                                                                        |
+| -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `document_line_allocation` | Partial | Exists in migration, but is not wired into the live schema/service layer.                                                                                  |
+| Partial conversion         | Missing | `convertDocument()` still copies lines and archives the source document; it does not allocate remaining quantities or support repeated partial conversion. |
+| Belegverlauf chain         | Missing | `transactionId` is regenerated in conversion/storno instead of being propagated through the chain.                                                         |
+| Conversion guards          | Missing | Conversion does not yet block cancelled or archived source documents the way the wandlung spec requires.                                                   |
 
 ### Inventory Posting
 
-| Area | Status | Gap |
-|---|---|---|
-| `l` posting | Partial | `onHandQty` is updated, but `expectedPurchaseQty` is not decremented. |
-| `U` transfer tracing | Partial | Two movements are written, but serial/batch lineage is not preserved on transfer. |
-| `q` posting facts | Partial | Inventory effects are present, but the production variance / fact bookkeeping is still missing. |
-| `g` correction facts | Missing | The statistics checklist still marks correction facts as open. |
+| Area                 | Status  | Gap                                                                                             |
+| -------------------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `l` posting          | Partial | `onHandQty` is updated, but `expectedPurchaseQty` is not decremented.                           |
+| `U` transfer tracing | Partial | Two movements are written, but serial/batch lineage is not preserved on transfer.               |
+| `q` posting facts    | Partial | Inventory effects are present, but the production variance / fact bookkeeping is still missing. |
+| `g` correction facts | Missing | The statistics checklist still marks correction facts as open.                                  |
 
 ### Serial and Batch Tracking
 
-| Area | Status | Gap |
-|---|---|---|
-| Inbound serial creation | Missing | Freitext inbound SN input still needs a service-side insert path for `serial_number`. |
-| Group override support | Partial | `document_group.require_serial_tracking` / `require_batch_tracking` are in schema but not fully enforced in the UI flow. |
-| Stock return on serial cancellation | Missing | Serial status rollback on storno/delete is not complete. |
+| Area                                | Status  | Gap                                                                                                                      |
+| ----------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Inbound serial creation             | Missing | Freitext inbound SN input still needs a service-side insert path for `serial_number`.                                    |
+| Group override support              | Partial | `document_group.require_serial_tracking` / `require_batch_tracking` are in schema but not fully enforced in the UI flow. |
+| Stock return on serial cancellation | Missing | Serial status rollback on storno/delete is not complete.                                                                 |
 
 ### BOM and Derived Lines
 
-| Area | Status | Gap |
-|---|---|---|
-| `bomGroupId` preservation | Partial | Conversion does not preserve BOM grouping metadata for derived lines. |
-| Tracking row preservation | Partial | Conversion does not clone line tracking rows. |
-| BOM print behavior | Deferred | PDF/template rendering still needs explicit K-line handling. |
+| Area                      | Status   | Gap                                                                   |
+| ------------------------- | -------- | --------------------------------------------------------------------- |
+| `bomGroupId` preservation | Partial  | Conversion does not preserve BOM grouping metadata for derived lines. |
+| Tracking row preservation | Partial  | Conversion does not clone line tracking rows.                         |
+| BOM print behavior        | Deferred | PDF/template rendering still needs explicit K-line handling.          |
 
 ### Settings Metadata
 
-| Area | Status | Gap |
-|---|---|---|
-| `documentGroup.nextGroupId` | Partial | Present in schema, but not yet fully exposed through settings metadata. |
-| `requireSerialTracking` / `requireBatchTracking` | Partial | Present in schema, but not fully seeded into the settings field registry. |
-| Settings page shell | Implemented | The page exists; the remaining issue is metadata completeness, not the shell itself. |
+| Area                                             | Status      | Gap                                                                                  |
+| ------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------ |
+| `documentGroup.nextGroupId`                      | Partial     | Present in schema, but not yet fully exposed through settings metadata.              |
+| `requireSerialTracking` / `requireBatchTracking` | Partial     | Present in schema, but not fully seeded into the settings field registry.            |
+| Settings page shell                              | Implemented | The page exists; the remaining issue is metadata completeness, not the shell itself. |
 
 ### Statistics
 
-| Area | Status | Gap |
-|---|---|---|
-| Article-group stats | Missing | `mv_sales_period_article_group` and its query path are still not implemented. |
-| Period comparison route | Missing | `/app/statistics/period-comparison` is still deferred. |
-| Event-driven refresh | Deferred | `pg_notify`-driven refresh remains optional/deferred in the MIS doc. |
+| Area                    | Status   | Gap                                                                           |
+| ----------------------- | -------- | ----------------------------------------------------------------------------- |
+| Article-group stats     | Missing  | `mv_sales_period_article_group` and its query path are still not implemented. |
+| Period comparison route | Missing  | `/app/statistics/period-comparison` is still deferred.                        |
+| Event-driven refresh    | Deferred | `pg_notify`-driven refresh remains optional/deferred in the MIS doc.          |
 
 ## Priority Order
 

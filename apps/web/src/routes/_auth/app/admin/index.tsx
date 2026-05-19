@@ -1,14 +1,16 @@
+import { DataGrid } from "@repo/ui/components/data-grid";
+import { Dialog, DialogContent } from "@repo/ui/components/dialog";
+import { EntityMask } from "@repo/ui/components/entity-mask";
+import { cn } from "@repo/ui/lib/utils";
+import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { useCommands } from "@repo/ui/platform/command-registry";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { useTranslation } from "react-i18next";
-import { DataGrid } from "@repo/ui/components/data-grid";
-import { EntityMask } from "@repo/ui/components/entity-mask";
-import { Dialog, DialogContent } from "@repo/ui/components/dialog";
-import { useCommands } from "@repo/ui/platform/command-registry";
-import { useActionBar } from "@repo/ui/platform/action-bar-context";
-import { cn } from "@repo/ui/lib/utils";
+
+import { useGridUrlState } from "#/hooks/use-grid-url-state";
+
 import { LlmConfigView } from "./-llm-config";
 import { UserManagementView } from "./-user-management";
 
@@ -55,7 +57,16 @@ function AdminView() {
   const isEntity = selectedKey !== "llm-config";
 
   const { data: entityData, isLoading: isDataLoading } = useQuery({
-    queryKey: ["admin", "data", selectedKey, gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
+    queryKey: [
+      "admin",
+      "data",
+      selectedKey,
+      gridState.queryParams.page,
+      gridState.queryParams.limit,
+      gridState.queryParams.orderBy,
+      gridState.queryParams.search,
+      gridState.queryParams.filters,
+    ],
     queryFn: async () => {
       const p = new URLSearchParams({
         paginated: "true",
@@ -64,7 +75,8 @@ function AdminView() {
       });
       if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
       if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
-      if (gridState.queryParams.filters) p.set("filters", JSON.stringify(gridState.queryParams.filters));
+      if (gridState.queryParams.filters)
+        p.set("filters", JSON.stringify(gridState.queryParams.filters));
       const res = await fetch(`/api/admin/data/${selectedKey}?${p}`);
       if (!res.ok) return { data: [], total: 0 };
       return res.json() as Promise<{ data: any[]; total: number }>;
@@ -85,7 +97,7 @@ function AdminView() {
       isEnabled: () => true,
       handler: () => setShowCreate(true),
     });
-    
+
     const unregDelete = registerCommand({
       id: "delete-record",
       scope: "context",
@@ -93,10 +105,13 @@ function AdminView() {
       shortcut: "F4",
       isEnabled: () => !!editId,
       handler: () => {
-        if (editId) { setDeleteId(editId); setDeleteConfirm(true); }
+        if (editId) {
+          setDeleteId(editId);
+          setDeleteConfirm(true);
+        }
       },
     });
-    
+
     return () => {
       unregCreate();
       unregDelete();
@@ -104,52 +119,62 @@ function AdminView() {
   }, [registerCommand, selectedKey, t, editId, isEntity]);
 
   return (
-    <div className="flex h-full w-full overflow-hidden sw-root">
+    <div className="sw-root flex h-full w-full overflow-hidden">
       {/* Left sidebar */}
-      <div className="w-60 shrink-0 bg-canvas-soft border-r border-hairline flex flex-col overflow-hidden">
-        <div className="h-8 flex items-center px-3 shrink-0 border-b border-hairline text-[11px] uppercase tracking-wider font-medium text-ink-mute">
+      <div className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-hairline bg-canvas-soft">
+        <div className="flex h-8 shrink-0 items-center border-b border-hairline px-3 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
           {t("nav.administration")}
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           <div className="mb-4">
-             <div className="px-3 mb-1 text-[10px] uppercase tracking-widest font-bold text-ink-mute/60">
-                Infrastructure
-             </div>
-             {ADMIN_ENTITIES.filter(e => e.group === "infrastructure").map((entity) => (
-                <button
-                  key={entity.key}
-                  onClick={() => { setSelectedKey(entity.key); gridState.setPage(1); }}
-                  className={cn(
-                    "w-full flex items-center h-7 px-3 text-left text-[13px] cursor-pointer transition-colors group",
-                    selectedKey === entity.key ? "bg-primary text-primary-fg" : "text-ink-secondary hover:bg-canvas-soft hover:text-ink"
-                  )}
-                >
-                  <span>{entity.label}</span>
-                </button>
-             ))}
+            <div className="mb-1 px-3 text-[10px] font-bold tracking-widest text-ink-mute/60 uppercase">
+              Infrastructure
+            </div>
+            {ADMIN_ENTITIES.filter((e) => e.group === "infrastructure").map((entity) => (
+              <button
+                key={entity.key}
+                onClick={() => {
+                  setSelectedKey(entity.key);
+                  gridState.setPage(1);
+                }}
+                className={cn(
+                  "group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] transition-colors",
+                  selectedKey === entity.key
+                    ? "bg-primary text-primary-fg"
+                    : "text-ink-secondary hover:bg-canvas-soft hover:text-ink",
+                )}
+              >
+                <span>{entity.label}</span>
+              </button>
+            ))}
           </div>
           <div className="mb-4">
-             <div className="px-3 mb-1 text-[10px] uppercase tracking-widest font-bold text-ink-mute/60">
-                System
-             </div>
-             {ADMIN_ENTITIES.filter(e => e.group === "system").map((entity) => (
-                <button
-                  key={entity.key}
-                  onClick={() => { setSelectedKey(entity.key); gridState.setPage(1); }}
-                  className={cn(
-                    "w-full flex items-center h-7 px-3 text-left text-[13px] cursor-pointer transition-colors group",
-                    selectedKey === entity.key ? "bg-primary text-primary-fg" : "text-ink-secondary hover:bg-canvas-soft hover:text-ink"
-                  )}
-                >
-                  <span>{entity.label}</span>
-                </button>
-             ))}
+            <div className="mb-1 px-3 text-[10px] font-bold tracking-widest text-ink-mute/60 uppercase">
+              System
+            </div>
+            {ADMIN_ENTITIES.filter((e) => e.group === "system").map((entity) => (
+              <button
+                key={entity.key}
+                onClick={() => {
+                  setSelectedKey(entity.key);
+                  gridState.setPage(1);
+                }}
+                className={cn(
+                  "group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] transition-colors",
+                  selectedKey === entity.key
+                    ? "bg-primary text-primary-fg"
+                    : "text-ink-secondary hover:bg-canvas-soft hover:text-ink",
+                )}
+              >
+                <span>{entity.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 min-w-0 overflow-hidden bg-canvas flex flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas">
         {selectedKey === "llm-config" ? (
           <LlmConfigView />
         ) : (
@@ -157,7 +182,11 @@ function AdminView() {
             entityName={selectedKey}
             data={data}
             keyExtractor={(row: any) =>
-              row[`${selectedKey}Id`] ?? row.id ?? row.organizationId ?? row.companyId ?? row.userTenantId
+              row[`${selectedKey}Id`] ??
+              row.id ??
+              row.organizationId ??
+              row.companyId ??
+              row.userTenantId
             }
             isLoading={isDataLoading}
             title={viewLabel}
@@ -173,12 +202,22 @@ function AdminView() {
             filters={gridState.filters}
             onFiltersChange={gridState.setFilters}
             onRowClick={(row: any) => {
-              const id = row[`${selectedKey}Id`] ?? row.id ?? row.organizationId ?? row.companyId ?? row.userTenantId;
+              const id =
+                row[`${selectedKey}Id`] ??
+                row.id ??
+                row.organizationId ??
+                row.companyId ??
+                row.userTenantId;
               setEditId(id);
               setShowEdit(true);
             }}
             onRowOpen={(row: any) => {
-              const id = row[`${selectedKey}Id`] ?? row.id ?? row.organizationId ?? row.companyId ?? row.userTenantId;
+              const id =
+                row[`${selectedKey}Id`] ??
+                row.id ??
+                row.organizationId ??
+                row.companyId ??
+                row.userTenantId;
               setEditId(id);
               setShowEdit(true);
             }}
@@ -189,7 +228,7 @@ function AdminView() {
 
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden sw-root">
+        <DialogContent className="sw-root max-w-2xl overflow-hidden p-0">
           <EntityMask
             entityName={selectedKey}
             mode="create"
@@ -200,7 +239,7 @@ function AdminView() {
               queryClient.invalidateQueries({ queryKey: ["admin", "data", selectedKey] });
             }}
             apiBase="/api/admin/data"
-            className="border-none shadow-none rounded-none m-0"
+            className="m-0 rounded-none border-none shadow-none"
           />
         </DialogContent>
       </Dialog>
@@ -208,12 +247,11 @@ function AdminView() {
       {/* Edit Dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent
-            className={cn(
-                "p-0 overflow-hidden sw-root",
-                selectedKey === "user" ? "max-w-4xl" : "max-w-2xl"
-            )}
+          className={cn(
+            "sw-root overflow-hidden p-0",
+            selectedKey === "user" ? "max-w-4xl" : "max-w-2xl",
+          )}
         >
-
           {selectedKey === "user" && editId ? (
             <UserManagementView
               userId={editId}
@@ -235,7 +273,7 @@ function AdminView() {
                 queryClient.invalidateQueries({ queryKey: ["admin", "data", selectedKey] });
               }}
               apiBase="/api/admin/data"
-              className="border-none shadow-none rounded-none m-0"
+              className="m-0 rounded-none border-none shadow-none"
             />
           )}
         </DialogContent>
@@ -243,23 +281,25 @@ function AdminView() {
 
       {/* Delete confirm */}
       <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
-        <DialogContent className="max-w-sm sw-root">
-          <div className="p-6 flex flex-col gap-5">
+        <DialogContent className="sw-root max-w-sm">
+          <div className="flex flex-col gap-5 p-6">
             <div>
               <h3 className="text-[15px] font-medium text-ink">Eintrag hart löschen?</h3>
-              <p className="text-[13px] text-ink-mute mt-1">Diese Aktion ist dauerhaft und nur für Administration bzw. Tests gedacht.</p>
+              <p className="mt-1 text-[13px] text-ink-mute">
+                Diese Aktion ist dauerhaft und nur für Administration bzw. Tests gedacht.
+              </p>
             </div>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
-                className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
+                className="h-8 rounded border border-hairline px-4 text-[13px] hover:bg-canvas-soft"
                 onClick={() => setDeleteConfirm(false)}
               >
                 Abbrechen
               </button>
               <button
                 type="button"
-                className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
+                className="h-8 rounded bg-destructive px-4 text-[13px] text-white hover:opacity-90"
                 onClick={async () => {
                   if (!deleteId) return;
                   await fetch(`/api/admin/data/${selectedKey}/${deleteId}`, {

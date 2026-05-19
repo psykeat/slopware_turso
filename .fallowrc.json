@@ -1,0 +1,12 @@
+{
+  "health": {
+    "ignore": ["dist", "__generated__", "node_modules", ".output"]
+  },
+  "ignoreDependencies": [
+    "@tanstack/eslint-plugin-query",
+    "@tanstack/eslint-plugin-router",
+    "babel-plugin-react-compiler",
+    "eslint-plugin-react-hooks",
+    "vitest"
+  ]
+}

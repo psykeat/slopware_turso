@@ -25,7 +25,12 @@
     "auth:secret": "vpx auth@latest secret",
     "auth:generate": "vp run --filter=@repo/db auth:generate",
     "skills": "vpx skills@latest",
-    "intent": "vpx @tanstack/intent@latest"
+    "intent": "vpx @tanstack/intent@latest",
+    "fallow": "npx fallow",
+    "fallow:dead-code": "npx fallow dead-code",
+    "fallow:dupes": "npx fallow dupes",
+    "fallow:health": "npx fallow health",
+    "fallow:fix": "npx fallow fix --dry-run"
   },
   "devDependencies": {
     "@tanstack/eslint-plugin-query": "catalog:",

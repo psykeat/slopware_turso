@@ -1,14 +1,22 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+
+import { cn } from "../lib/utils";
 import { useCommands } from "../platform/command-registry";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
-import { cn } from "../lib/utils";
 
 const GROUPS = [
   {
     key: "navigation",
     labelKey: "shortcuts.navigation" as const,
-    ids: ["show-help", "nav-addresses", "nav-articles", "nav-documents", "nav-settings", "open-palette"],
+    ids: [
+      "show-help",
+      "nav-addresses",
+      "nav-articles",
+      "nav-documents",
+      "nav-settings",
+      "open-palette",
+    ],
   },
   {
     key: "recordOps",
@@ -18,7 +26,13 @@ const GROUPS = [
   {
     key: "workflow",
     labelKey: "shortcuts.workflow" as const,
-    ids: ["open-document", "post-document", "transform-record", "print-document", "open-statistics"],
+    ids: [
+      "open-document",
+      "post-document",
+      "transform-record",
+      "print-document",
+      "open-statistics",
+    ],
   },
 ] as const;
 
@@ -36,7 +50,7 @@ function KbdChips({ shortcut }: { shortcut: string }) {
       {parts.map((part, i) => (
         <kbd
           key={i}
-          className="h-5 px-1.5 font-mono text-[10px] border border-hairline-input bg-canvas-soft rounded text-ink-mute inline-flex items-center"
+          className="inline-flex h-5 items-center rounded border border-hairline-input bg-canvas-soft px-1.5 font-mono text-[10px] text-ink-mute"
         >
           {part}
         </kbd>
@@ -47,7 +61,7 @@ function KbdChips({ shortcut }: { shortcut: string }) {
 
 function ShortcutRow({ label, shortcut }: { label: string; shortcut: string }) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-hairline last:border-b-0">
+    <div className="flex items-center justify-between border-b border-hairline py-1.5 last:border-b-0">
       <span className="text-[13px] text-ink-secondary">{label}</span>
       <KbdChips shortcut={shortcut} />
     </div>
@@ -79,14 +93,14 @@ export function ShortcutHelp() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-[18px] font-light text-ink">
             {t("shortcuts.title")}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-x-10 mt-4">
+        <div className="mt-4 grid grid-cols-2 gap-x-10">
           {/* Left column: navigation + recordOps */}
           <div>
             {GROUPS.slice(0, 2).map((group) => {
@@ -104,7 +118,7 @@ export function ShortcutHelp() {
                 <div key={group.key} className="mb-4">
                   <p
                     className={cn(
-                      "text-[10px] uppercase tracking-wider text-ink-mute mb-1 mt-4 first:mt-0",
+                      "mt-4 mb-1 text-[10px] tracking-wider text-ink-mute uppercase first:mt-0",
                     )}
                   >
                     {t(group.labelKey)}
@@ -132,7 +146,7 @@ export function ShortcutHelp() {
 
               return (
                 <div key={group.key} className="mb-4">
-                  <p className="text-[10px] uppercase tracking-wider text-ink-mute mb-1 mt-4 first:mt-0">
+                  <p className="mt-4 mb-1 text-[10px] tracking-wider text-ink-mute uppercase first:mt-0">
                     {t(group.labelKey)}
                   </p>
                   {rows.map((row) => (
@@ -144,20 +158,20 @@ export function ShortcutHelp() {
 
             {/* Grid navigation keys */}
             <div className="mb-4">
-              <p className="text-[10px] uppercase tracking-wider text-ink-mute mb-1 mt-4">
+              <p className="mt-4 mb-1 text-[10px] tracking-wider text-ink-mute uppercase">
                 {t("shortcuts.gridNavigation")}
               </p>
               {NAV_KEYS.map((item) => (
                 <div
                   key={item.labelKey}
-                  className="flex items-center justify-between py-1.5 border-b border-hairline last:border-b-0"
+                  className="flex items-center justify-between border-b border-hairline py-1.5 last:border-b-0"
                 >
                   <span className="text-[13px] text-ink-secondary">{t(item.labelKey)}</span>
                   <div className="flex items-center gap-0.5">
                     {item.keys.map((key, i) => (
                       <kbd
                         key={i}
-                        className="h-5 px-1.5 font-mono text-[10px] border border-hairline-input bg-canvas-soft rounded text-ink-mute inline-flex items-center"
+                        className="inline-flex h-5 items-center rounded border border-hairline-input bg-canvas-soft px-1.5 font-mono text-[10px] text-ink-mute"
                       >
                         {key}
                       </kbd>

@@ -14,15 +14,19 @@ The issue is caused by **selection theft** and **circular dependencies** in the 
 ## Proposed Strategy
 
 ### 1. Pin Primary Entity ID in Modules
+
 In `addresses.tsx`, `articles.tsx`, and `documents.tsx`, I will introduce a pinned "Active ID" state that only tracks the ID of the primary entity (e.g., `addressId`). This state will be used for all dependent queries and computed values in the lower frame.
 
 ### 2. Update Queries to Use Pinned ID
+
 All `useQuery` hooks and dependent logic (like `selectedAddress`) will be updated to use the pinned ID instead of the volatile global `focusState.recordId`.
 
 ### 3. Implement Data Stability (Anti-Flash)
+
 I will add `placeholderData: keepPreviousData` to the dependent queries. This ensures that while scrolling or switching records, the previous data remains visible until the new data is loaded, preventing the "flashing" effect.
 
 ## Affected Files:
+
 - `apps/web/src/routes/_auth/app/addresses.tsx`
 - `apps/web/src/routes/_auth/app/articles.tsx`
 - `apps/web/src/routes/_auth/app/documents.tsx`
@@ -30,6 +34,7 @@ I will add `placeholderData: keepPreviousData` to the dependent queries. This en
 ## Detailed Implementation Steps
 
 ### Addresses Module
+
 1.  Import `keepPreviousData` from `@tanstack/react-query`.
 2.  Add `activeAddressId` state and `useEffect` to track the last address ID.
 3.  Update `addressStats`, `contacts`, and `deliveryAddresses` queries to use `activeAddressId` and `keepPreviousData`.
@@ -37,6 +42,7 @@ I will add `placeholderData: keepPreviousData` to the dependent queries. This en
 5.  Update `InspectorPanel` to use `activeAddressId`.
 
 ### Articles Module
+
 1.  Import `keepPreviousData` from `@tanstack/react-query`.
 2.  Add `activeArticleId` state and `useEffect` to track the last article ID.
 3.  Update `movements` and `articleStats` queries to use `activeArticleId` and `keepPreviousData`.
@@ -44,6 +50,7 @@ I will add `placeholderData: keepPreviousData` to the dependent queries. This en
 5.  Update `InspectorPanel`, `StockLedgerTable`, etc., to use `activeArticleId`.
 
 ### Documents Module
+
 1.  Import `keepPreviousData` from `@tanstack/react-query`.
 2.  Add `activeDocumentId` state and `useEffect` to track the last document ID.
 3.  Update `lines` query to use `activeDocumentId` and `keepPreviousData`.
@@ -53,6 +60,7 @@ I will add `placeholderData: keepPreviousData` to the dependent queries. This en
 ## Verification Plan
 
 ### Manual Verification:
+
 1.  **Addresses Module:**
     - Open Addresses.
     - Click an address, verify "Details" tab shows data.
@@ -65,4 +73,5 @@ I will add `placeholderData: keepPreviousData` to the dependent queries. This en
     - Repeat similar steps for Documents, verifying Document Lines tab.
 
 ### Automated Verification:
+
 - Run `pnpm lint` to ensure no regressions in type safety or hooks rules.

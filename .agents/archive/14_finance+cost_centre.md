@@ -8,20 +8,20 @@ Domäne: Finanzbuchhaltung, Kontenrahmen, Kostenstellen, Steuercodes, Fiskalperi
 
 ## Design-Entscheidungen
 
-| # | Thema | Entscheidung |
-|---|---|---|
-| 1 | Buchungshoheit | Nur `postDocument()` schreibt Journal-Einträge — kein direktes CRUD auf `journal_entry`/`journal_line` |
-| 2 | Derived Data | `journal_entry`/`journal_line` sind abgeleitete Daten; kein UI-Masken-Editing |
-| 3 | Export-Idempotenz | `accounting_export_batch` hat UNIQUE auf `(tenant_id, fiscal_period_id, company_id)` — doppelter Export ist DB-seitig blockiert |
-| 4 | Rebuild-Sperre | `rebuildBatch` schlägt fehl sobald `status = 'exported'` — Lock ist permanent |
-| 5 | Kontenfindung | `account_determination_rule` — Lookup über `(posting_context, article_group_id, tax_code_id)` mit Fallback-Hierarchie (spezifisch → generisch) |
-| 6 | Kostenstellen auf Zeilenebene | `cost_center_id` liegt auf `document_line` (nicht `document`) — je Belegzeile zuweisbar |
-| 7 | Steuerlogik | `tax_code` definiert den Steuersatz; `tax_class` auf dem Artikel klassifiziert nur — Kontenfindung braucht `tax_code_id` |
-| 8 | GL-Account-Typen | `account_type IN ('asset', 'liability', 'equity', 'revenue', 'expense', 'tax')` — kein freies Format |
-| 9 | Fiskalperioden | `generateFiscalPeriods()` erzeugt Perioden automatisch; kein manuelles UI-Anlegen von Einzelperioden nötig |
-| 10 | Offene Posten | AR/AP wird über `document.is_paid` / `paid_at` / `paid_amount` geführt; kein separates Debitoren-/Kreditoren-Modul |
-| 11 | Währung | `currency_id` auf Export-Zeile; Beleg-Währung stammt aus `document.currency_id` (wenn vorhanden) oder Tenant-Default |
-| 12 | Mandantentrennung | Alle Finanz-Tabellen sind `tenant_id` + `company_id` dual-scoped — Settings gelten pro Gesellschaft |
+| #   | Thema                         | Entscheidung                                                                                                                                   |
+| --- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Buchungshoheit                | Nur `postDocument()` schreibt Journal-Einträge — kein direktes CRUD auf `journal_entry`/`journal_line`                                         |
+| 2   | Derived Data                  | `journal_entry`/`journal_line` sind abgeleitete Daten; kein UI-Masken-Editing                                                                  |
+| 3   | Export-Idempotenz             | `accounting_export_batch` hat UNIQUE auf `(tenant_id, fiscal_period_id, company_id)` — doppelter Export ist DB-seitig blockiert                |
+| 4   | Rebuild-Sperre                | `rebuildBatch` schlägt fehl sobald `status = 'exported'` — Lock ist permanent                                                                  |
+| 5   | Kontenfindung                 | `account_determination_rule` — Lookup über `(posting_context, article_group_id, tax_code_id)` mit Fallback-Hierarchie (spezifisch → generisch) |
+| 6   | Kostenstellen auf Zeilenebene | `cost_center_id` liegt auf `document_line` (nicht `document`) — je Belegzeile zuweisbar                                                        |
+| 7   | Steuerlogik                   | `tax_code` definiert den Steuersatz; `tax_class` auf dem Artikel klassifiziert nur — Kontenfindung braucht `tax_code_id`                       |
+| 8   | GL-Account-Typen              | `account_type IN ('asset', 'liability', 'equity', 'revenue', 'expense', 'tax')` — kein freies Format                                           |
+| 9   | Fiskalperioden                | `generateFiscalPeriods()` erzeugt Perioden automatisch; kein manuelles UI-Anlegen von Einzelperioden nötig                                     |
+| 10  | Offene Posten                 | AR/AP wird über `document.is_paid` / `paid_at` / `paid_amount` geführt; kein separates Debitoren-/Kreditoren-Modul                             |
+| 11  | Währung                       | `currency_id` auf Export-Zeile; Beleg-Währung stammt aus `document.currency_id` (wenn vorhanden) oder Tenant-Default                           |
+| 12  | Mandantentrennung             | Alle Finanz-Tabellen sind `tenant_id` + `company_id` dual-scoped — Settings gelten pro Gesellschaft                                            |
 
 ---
 
@@ -147,24 +147,24 @@ accounting_export_row
 
 `packages/db/src/services/accounting-export-service.ts`
 
-| Methode | Funktion |
-|---|---|
-| `createExportBatch(tenantId, companyId, fiscalPeriodId, userId)` | Anlage, UNIQUE-Constraint schützt vor Duplikaten |
-| `buildExportRows(batchId, tenantId)` | Aggregiert `journal_line` nach `(gl_account_id, cost_center_id, tax_code_id, posting_date)`, schreibt `accounting_export_row` |
-| `rebuildBatch(batchId, tenantId)` | Löscht bestehende Rows, baut neu auf — nur wenn `status != 'exported'` |
-| `markBatchExported(batchId, tenantId)` | Setzt `status = 'exported'`, `exported_at = now()` |
-| `generateCsv(batchId, tenantId)` | Gibt CSV-String zurück (Semikolon-getrennt, UTF-8) |
+| Methode                                                          | Funktion                                                                                                                      |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `createExportBatch(tenantId, companyId, fiscalPeriodId, userId)` | Anlage, UNIQUE-Constraint schützt vor Duplikaten                                                                              |
+| `buildExportRows(batchId, tenantId)`                             | Aggregiert `journal_line` nach `(gl_account_id, cost_center_id, tax_code_id, posting_date)`, schreibt `accounting_export_row` |
+| `rebuildBatch(batchId, tenantId)`                                | Löscht bestehende Rows, baut neu auf — nur wenn `status != 'exported'`                                                        |
+| `markBatchExported(batchId, tenantId)`                           | Setzt `status = 'exported'`, `exported_at = now()`                                                                            |
+| `generateCsv(batchId, tenantId)`                                 | Gibt CSV-String zurück (Semikolon-getrennt, UTF-8)                                                                            |
 
 ### C — API-Routen
 
-| Methode | Route | Funktion |
-|---|---|---|
-| `GET` | `/api/accounting/batches` | Alle Batches des Tenants |
-| `POST` | `/api/accounting/batches` | Neuen Batch anlegen |
-| `POST` | `/api/accounting/batches/:batchId/build` | Rows aufbauen |
-| `POST` | `/api/accounting/batches/:batchId/rebuild` | Rows neu aufbauen |
-| `POST` | `/api/accounting/batches/:batchId/export` | Als exportiert markieren |
-| `GET` | `/api/accounting/batches/:batchId/csv` | CSV-Download |
+| Methode | Route                                      | Funktion                 |
+| ------- | ------------------------------------------ | ------------------------ |
+| `GET`   | `/api/accounting/batches`                  | Alle Batches des Tenants |
+| `POST`  | `/api/accounting/batches`                  | Neuen Batch anlegen      |
+| `POST`  | `/api/accounting/batches/:batchId/build`   | Rows aufbauen            |
+| `POST`  | `/api/accounting/batches/:batchId/rebuild` | Rows neu aufbauen        |
+| `POST`  | `/api/accounting/batches/:batchId/export`  | Als exportiert markieren |
+| `GET`   | `/api/accounting/batches/:batchId/csv`     | CSV-Download             |
 
 ### D — Accounting-Modul UI
 
@@ -191,6 +191,7 @@ accounting_export_row
 Das `gl_account`-Schema existiert, aber es gibt kein UI zur Pflege. Derzeit nur via generischer Data-API (`/api/data/gl_account`) und direktem DB-Zugriff zugänglich.
 
 **Umfang:**
+
 - Settings-Entity `gl_account` mit EntityMask (account_no, name, account_type, is_active)
 - Account-Type als Dropdown (5 feste Werte)
 - Lokalisierungen: `settings.gl_account.*`
@@ -200,6 +201,7 @@ Das `gl_account`-Schema existiert, aber es gibt kein UI zur Pflege. Derzeit nur 
 Analog zu GL-Konten — Schema existiert, kein UI.
 
 **Umfang:**
+
 - Settings-Entity `cost_center` mit EntityMask (code, name, is_active)
 - Zuweisung auf Belegzeilen: Kostenstellen-Auswahl in `document-editor.tsx` → `LineRow.costCenterId`
 - Filter im Belegeditor nur auf aktive, nicht-archivierte Kostenstellen
@@ -209,6 +211,7 @@ Analog zu GL-Konten — Schema existiert, kein UI.
 `account_determination_rule` hat kein UI. Buchhalter müssen Regeln direkt in der DB anlegen.
 
 **Umfang:**
+
 - Settings-Entity `account_determination_rule`
 - Felder: posting_context (Dropdown fester Werte), article_group (nullable Suche), tax_code (nullable Suche), gl_account (Suche)
 - Tabellarische Übersicht + Inline-Edit
@@ -220,6 +223,7 @@ Analog zu GL-Konten — Schema existiert, kein UI.
 Buchhalter brauchen Einsicht in `journal_entry` + `journal_line` nach Verbuchen.
 
 **Umfang:**
+
 - Neuer Tab oder Sub-Screen im Accounting-Modul
 - Filter: Fiskalperiode, GL-Konto, Kostenstelle, Belegart
 - Spalten: Datum, Belegnr., Buchungstext, Soll, Haben, Saldo laufend
@@ -231,6 +235,7 @@ Buchhalter brauchen Einsicht in `journal_entry` + `journal_line` nach Verbuchen.
 `generateFiscalPeriods()` existiert, aber es gibt kein UI zum Auslösen.
 
 **Umfang:**
+
 - Settings-Entity `fiscal_period` (read-only Liste + Generate-Action)
 - Command: "Fiskalperioden generieren" → Dialog (Jahr wählen, 12/13 Perioden)
 - `is_closed`-Toggle pro Periode (Sperre gegen Nachbuchungen)
@@ -241,6 +246,7 @@ Buchhalter brauchen Einsicht in `journal_entry` + `journal_line` nach Verbuchen.
 `tax_code` existiert nur im Schema, kein Settings-Screen.
 
 **Umfang:**
+
 - Settings-Entity `tax_code` (code, description, tax_rate, is_active)
 - Verknüpfung mit `article.tax_class_id` über `tax_code_id` im Kontenfindungs-Lookup
 - Hinweis: `tax_class` (auf Artikel) ≠ `tax_code` — Mapping-Logik klären
@@ -250,6 +256,7 @@ Buchhalter brauchen Einsicht in `journal_entry` + `journal_line` nach Verbuchen.
 `document.is_paid` / `paid_at` / `paid_amount` existieren, aber es gibt kein UI und keine automatische Fälligkeitslogik.
 
 **Umfang:**
+
 - `GET /api/stats/open-items?type=ar|ap` — offene Rechnungen nach Fälligkeit
 - Tab "Offene Posten" in Adressen-Detailansicht (bereits Platzhalter in `addresses.tsx`)
 - Manuelles Abbuchen: PATCH `{ isPaid: true, paidAt, paidAmount }` via Domain-Command (kein direktes CRUD)
@@ -260,6 +267,7 @@ Buchhalter brauchen Einsicht in `journal_entry` + `journal_line` nach Verbuchen.
 Derzeit enthält der CSV-Export keine aggregierte Steuerzeilen-Übersicht.
 
 **Umfang:**
+
 - Zusätzliche Sektion im CSV: Steuercodes × Nettobetrag × Steuerbetrag
 - API: `GET /api/accounting/batches/:batchId/vat-summary`
 
@@ -283,10 +291,10 @@ F4 (Journal-Viewer)     ← Nützlich zu haben, nicht kritisch für Basisfunktio
 
 ## Migrations-Referenz
 
-| Migration | Inhalt |
-|---|---|
+| Migration                                 | Inhalt                                                                                                                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `20260516054903_faithful_living_tribunal` | `accounting_export_batch`, `accounting_export_row`, `journal_entry`, `journal_line`, `gl_account`, `cost_center`, `account_determination_rule`, `fiscal_period`, `tax_code` |
-| `20260516120000_mis_stat_views` | Materialisierte Views (`mv_sales_period`, `mv_sales_period_customer`, `mv_sales_period_article`, ...) |
+| `20260516120000_mis_stat_views`           | Materialisierte Views (`mv_sales_period`, `mv_sales_period_customer`, `mv_sales_period_article`, ...)                                                                       |
 
 ---
 

@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { documentLine, documentLineTracking } from "@repo/db/schema";
-import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
+import { createFileRoute } from "@tanstack/react-router";
 import { and, eq } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 async function resolveDocumentLine(tenantId: string, documentId: string, lineId: string) {
   const rows = await db
@@ -20,9 +21,7 @@ async function resolveDocumentLine(tenantId: string, documentId: string, lineId:
   return rows[0] ?? null;
 }
 
-export const Route = createFileRoute(
-  "/api/documents/$documentId/lines/$lineId/tracking",
-)({
+export const Route = createFileRoute("/api/documents/$documentId/lines/$lineId/tracking")({
   server: {
     handlers: {
       GET: async ({ request, params }) => {
@@ -33,11 +32,7 @@ export const Route = createFileRoute(
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context) return new Response("No active tenant found", { status: 403 });
 
-        const line = await resolveDocumentLine(
-          context.tenantId,
-          params.documentId,
-          params.lineId,
-        );
+        const line = await resolveDocumentLine(context.tenantId, params.documentId, params.lineId);
         if (!line) return new Response("Document line not found", { status: 404 });
 
         const rows = await db
@@ -70,11 +65,7 @@ export const Route = createFileRoute(
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context) return new Response("No active tenant found", { status: 403 });
 
-        const line = await resolveDocumentLine(
-          context.tenantId,
-          params.documentId,
-          params.lineId,
-        );
+        const line = await resolveDocumentLine(context.tenantId, params.documentId, params.lineId);
         if (!line) return new Response("Document line not found", { status: 404 });
 
         let body: { serialNumberId?: string; serialNo?: string; batchNo?: string; qty: string };

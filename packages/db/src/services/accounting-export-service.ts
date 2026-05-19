@@ -1,4 +1,6 @@
 import "@tanstack/react-start/server-only";
+import { eq, and, sql, gte, lte } from "drizzle-orm";
+
 import { db } from "../index";
 import {
   accountingExportBatch,
@@ -8,7 +10,6 @@ import {
   fiscalPeriod,
   document,
 } from "../schema/app.schema";
-import { eq, and, sql, gte, lte } from "drizzle-orm";
 
 export class AccountingExportService {
   // 1. Create a new export batch for a fiscal period + company
@@ -36,10 +37,7 @@ export class AccountingExportService {
   }
 
   // 2. Build export rows from journal data for this batch
-  async buildExportRows(
-    tenantId: string,
-    batchId: string,
-  ): Promise<{ rowCount: number }> {
+  async buildExportRows(tenantId: string, batchId: string): Promise<{ rowCount: number }> {
     return await db.transaction(async (tx) => {
       // Fetch the batch
       const [batch] = await tx
@@ -141,10 +139,7 @@ export class AccountingExportService {
   }
 
   // 3. Mark batch as exported (idempotent if already exported)
-  async markBatchExported(
-    tenantId: string,
-    batchId: string,
-  ): Promise<void> {
+  async markBatchExported(tenantId: string, batchId: string): Promise<void> {
     const [batch] = await db
       .select()
       .from(accountingExportBatch)
@@ -178,10 +173,7 @@ export class AccountingExportService {
 
   // 4. Rebuild: clear existing rows and re-run buildExportRows
   // Only allowed if status != 'exported'
-  async rebuildBatch(
-    tenantId: string,
-    batchId: string,
-  ): Promise<{ rowCount: number }> {
+  async rebuildBatch(tenantId: string, batchId: string): Promise<{ rowCount: number }> {
     return await db.transaction(async (tx) => {
       const [batch] = await tx
         .select()
@@ -198,9 +190,7 @@ export class AccountingExportService {
       if (batch.status === "exported") throw new Error("Cannot rebuild an already exported batch");
 
       // Delete existing rows for this batch
-      await tx
-        .delete(accountingExportRow)
-        .where(eq(accountingExportRow.batchId, batchId));
+      await tx.delete(accountingExportRow).where(eq(accountingExportRow.batchId, batchId));
 
       // Fetch the fiscal period
       const [period] = await tx
@@ -287,10 +277,7 @@ export class AccountingExportService {
   }
 
   // 5. Generate CSV string from persisted rows
-  async generateCsv(
-    tenantId: string,
-    batchId: string,
-  ): Promise<string> {
+  async generateCsv(tenantId: string, batchId: string): Promise<string> {
     // Verify batch belongs to tenant
     const [batch] = await db
       .select()
@@ -309,10 +296,7 @@ export class AccountingExportService {
       .select()
       .from(accountingExportRow)
       .where(
-        and(
-          eq(accountingExportRow.batchId, batchId),
-          eq(accountingExportRow.tenantId, tenantId),
-        ),
+        and(eq(accountingExportRow.batchId, batchId), eq(accountingExportRow.tenantId, tenantId)),
       );
 
     const header =
@@ -337,10 +321,7 @@ export class AccountingExportService {
   }
 
   // 6. Get batch details including rows
-  async getBatch(
-    tenantId: string,
-    batchId: string,
-  ): Promise<{ batch: unknown; rows: unknown[] }> {
+  async getBatch(tenantId: string, batchId: string): Promise<{ batch: unknown; rows: unknown[] }> {
     const [batch] = await db
       .select()
       .from(accountingExportBatch)
@@ -358,20 +339,14 @@ export class AccountingExportService {
       .select()
       .from(accountingExportRow)
       .where(
-        and(
-          eq(accountingExportRow.batchId, batchId),
-          eq(accountingExportRow.tenantId, tenantId),
-        ),
+        and(eq(accountingExportRow.batchId, batchId), eq(accountingExportRow.tenantId, tenantId)),
       );
 
     return { batch, rows };
   }
 
   // 7. List all batches for a tenant
-  async listBatches(
-    tenantId: string,
-    companyId?: string,
-  ): Promise<unknown[]> {
+  async listBatches(tenantId: string, companyId?: string): Promise<unknown[]> {
     const conditions = [eq(accountingExportBatch.tenantId, tenantId)];
 
     if (companyId) {

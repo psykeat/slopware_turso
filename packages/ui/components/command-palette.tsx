@@ -1,8 +1,9 @@
+import { SearchIcon } from "lucide-react";
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+
 import { useCommands } from "../platform/command-registry";
 import { useFocus } from "../platform/focus-manager";
-import { useTranslation } from "react-i18next";
-import { SearchIcon } from "lucide-react";
 
 function KbdChip({ shortcut }: { shortcut: string }) {
   const tokens = shortcut.split("+");
@@ -11,7 +12,7 @@ function KbdChip({ shortcut }: { shortcut: string }) {
       {tokens.map((token, i) => (
         <kbd
           key={i}
-          className="h-5 px-1 font-mono text-[10px] border border-hairline-input bg-canvas-soft rounded text-ink-mute"
+          className="h-5 rounded border border-hairline-input bg-canvas-soft px-1 font-mono text-[10px] text-ink-mute"
         >
           {token}
         </kbd>
@@ -83,20 +84,20 @@ export function CommandPalette() {
   return (
     <div
       role="presentation"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/30"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 pt-[20vh]"
       onClick={closePalette}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Command Palette"
-        className="w-full max-w-lg bg-canvas rounded-xl border border-hairline shadow-2xl overflow-hidden"
+        className="w-full max-w-lg overflow-hidden rounded-xl border border-hairline bg-canvas shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         {/* Search input */}
-        <div className="flex items-center gap-2 px-4 h-12 border-b border-hairline">
-          <SearchIcon className="size-4 text-ink-mute shrink-0" />
+        <div className="flex h-12 items-center gap-2 border-b border-hairline px-4">
+          <SearchIcon className="size-4 shrink-0 text-ink-mute" />
           <input
             ref={inputRef}
             value={query}
@@ -105,9 +106,9 @@ export function CommandPalette() {
               setSelectedIdx(0);
             }}
             placeholder="Search commands…"
-            className="flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-mute outline-none"
+            className="flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-mute"
           />
-          <kbd className="h-5 px-1.5 font-mono text-[10px] border border-hairline-input bg-canvas-soft rounded text-ink-mute">
+          <kbd className="h-5 rounded border border-hairline-input bg-canvas-soft px-1.5 font-mono text-[10px] text-ink-mute">
             Esc
           </kbd>
         </div>
@@ -115,14 +116,16 @@ export function CommandPalette() {
         {/* Command list */}
         <div className="max-h-80 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[13px] text-ink-mute">No commands found.</div>
+            <div className="px-4 py-8 text-center text-[13px] text-ink-mute">
+              No commands found.
+            </div>
           ) : (
             filtered.map((cmd, idx) => {
               const active = idx === selectedIdx;
               return (
                 <button
                   key={cmd.id}
-                  className="w-full flex items-center gap-3 px-4 h-10 text-left cursor-pointer transition-colors"
+                  className="flex h-10 w-full cursor-pointer items-center gap-3 px-4 text-left transition-colors"
                   style={
                     active
                       ? {
@@ -137,14 +140,14 @@ export function CommandPalette() {
                     executeCommand(cmd.id);
                   }}
                 >
-                  <span className="flex-1 text-[13px] text-ink truncate">{cmd.label[lang]}</span>
+                  <span className="flex-1 truncate text-[13px] text-ink">{cmd.label[lang]}</span>
                   {cmd.shortcut && (
-                    <span className="shrink-0 ml-2">
+                    <span className="ml-2 shrink-0">
                       <KbdChip shortcut={cmd.shortcut} />
                     </span>
                   )}
                   {cmd.scope !== "global" && (
-                    <span className="text-[10px] text-ink-mute uppercase tracking-wider border border-hairline px-1.5 rounded-full">
+                    <span className="rounded-full border border-hairline px-1.5 text-[10px] tracking-wider text-ink-mute uppercase">
                       {cmd.scope}
                     </span>
                   )}

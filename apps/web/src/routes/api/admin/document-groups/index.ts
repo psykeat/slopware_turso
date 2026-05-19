@@ -1,19 +1,34 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { documentGroup } from "@repo/db/schema";
-import { eq } from "drizzle-orm";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
 import { DIRECTION_FROM_TYPE } from "@repo/db/services/document-service";
+import { createFileRoute } from "@tanstack/react-router";
+import { eq } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 const TYPE_ORDER: Record<string, number> = {
-  OUTBOUND: 1, INBOUND: 2, ADJUSTMENT: 3, PRODUCTION: 4,
+  OUTBOUND: 1,
+  INBOUND: 2,
+  ADJUSTMENT: 3,
+  PRODUCTION: 4,
 };
 const TYPE_SEQUENCE: Record<string, number> = {
-  N: 1, A: 2, L: 3, R: 4, G: 5,
-  b: 1, l: 2, r: 3, g: 4,
-  V: 1, Z: 2, E: 3, U: 4,
-  q: 1, p: 2,
+  N: 1,
+  A: 2,
+  L: 3,
+  R: 4,
+  G: 5,
+  b: 1,
+  l: 2,
+  r: 3,
+  g: 4,
+  V: 1,
+  Z: 2,
+  E: 3,
+  U: 4,
+  q: 1,
+  p: 2,
 };
 
 export const Route = createFileRoute("/api/admin/document-groups/")({

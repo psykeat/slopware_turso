@@ -13,29 +13,29 @@
 
 ### Colors — Light Mode
 
-| Token | Hex | Used for |
-|---|---|---|
-| `--primary` | `#533afd` | CTA, active nav, focus rings, primary buttons |
-| `--primary-deep` | `#4434d4` | Hover/press state |
-| `--primary-press` | `#2e2b8c` | Active/pressed state |
-| `--primary-soft` | `#7d6efd` | Tinted fills, avatars, selected-row accent |
-| `--primary-fg` | `#ffffff` | Text/icon on solid primary surface |
-| `--primary-bg-subdued-hover` | `#b9b9f9` | Subtle primary hover fill |
-| `--brand-dark-900` | `#1c1e54` | AppBar background — always dark, both modes |
-| `--ink` | `#0d253d` | Default body text — never pure black |
-| `--ink-secondary` | `#273951` | Secondary text |
-| `--ink-mute` | `#64748d` | Labels, captions, placeholders |
-| `--canvas` | `#ffffff` | Work surface background |
-| `--canvas-soft` | `#f6f9fc` | Panel headers, table headers, tree background |
-| `--canvas-cream` | `#f5e9d4` | Warm alternate surface (marketing, toasts) |
-| `--hairline` | `#e3e8ee` | All non-input borders and dividers |
-| `--hairline-input` | `#a8c3de` | Input field borders only |
-| `--destructive` | `#c43c4d` | Errors, danger menu items |
-| `--ok` | `#2fa770` | Success/online status dot |
-| `--warn` | `#d6a416` | Warning status |
-| `--ruby` | `#ea2261` | Brand accent (marketing only) |
-| `--magenta` | `#f96bee` | Brand accent (marketing only) |
-| `--lemon` | `#9b6829` | Brand accent (marketing only) |
+| Token                        | Hex       | Used for                                      |
+| ---------------------------- | --------- | --------------------------------------------- |
+| `--primary`                  | `#533afd` | CTA, active nav, focus rings, primary buttons |
+| `--primary-deep`             | `#4434d4` | Hover/press state                             |
+| `--primary-press`            | `#2e2b8c` | Active/pressed state                          |
+| `--primary-soft`             | `#7d6efd` | Tinted fills, avatars, selected-row accent    |
+| `--primary-fg`               | `#ffffff` | Text/icon on solid primary surface            |
+| `--primary-bg-subdued-hover` | `#b9b9f9` | Subtle primary hover fill                     |
+| `--brand-dark-900`           | `#1c1e54` | AppBar background — always dark, both modes   |
+| `--ink`                      | `#0d253d` | Default body text — never pure black          |
+| `--ink-secondary`            | `#273951` | Secondary text                                |
+| `--ink-mute`                 | `#64748d` | Labels, captions, placeholders                |
+| `--canvas`                   | `#ffffff` | Work surface background                       |
+| `--canvas-soft`              | `#f6f9fc` | Panel headers, table headers, tree background |
+| `--canvas-cream`             | `#f5e9d4` | Warm alternate surface (marketing, toasts)    |
+| `--hairline`                 | `#e3e8ee` | All non-input borders and dividers            |
+| `--hairline-input`           | `#a8c3de` | Input field borders only                      |
+| `--destructive`              | `#c43c4d` | Errors, danger menu items                     |
+| `--ok`                       | `#2fa770` | Success/online status dot                     |
+| `--warn`                     | `#d6a416` | Warning status                                |
+| `--ruby`                     | `#ea2261` | Brand accent (marketing only)                 |
+| `--magenta`                  | `#f96bee` | Brand accent (marketing only)                 |
+| `--lemon`                    | `#9b6829` | Brand accent (marketing only)                 |
 
 ### Colors — Dark Mode (`data-mode="dark"`)
 
@@ -56,26 +56,26 @@ The AppBar (`--brand-dark-900`) stays dark in both modes. Only the work surface 
 
 ### Typography — Inter, weight 300 throughout
 
-| Token | Size | Weight | Tracking | Feature | Use |
-|---|---|---|---|---|---|
-| Display | 26px | 300 | −0.26px | — | Section/page titles |
-| Display XXL | 56px | 300 | −1.4px | — | Hero/marketing headlines |
-| Body | 15px | 300 | 0 | — | Default UI text |
-| Tabular | 14px | 300 | −0.42px | `tnum` | **All numbers, IDs, dates** |
-| Caption | 13px | 400 | −0.39px | — | Labels, column headers |
-| Micro | 11px | 300 | 0 | — | Status bar, shortcuts, fine print |
-| Mono | JetBrains Mono | 400 | — | — | Record codes, kbd badges |
+| Token       | Size           | Weight | Tracking | Feature | Use                               |
+| ----------- | -------------- | ------ | -------- | ------- | --------------------------------- |
+| Display     | 26px           | 300    | −0.26px  | —       | Section/page titles               |
+| Display XXL | 56px           | 300    | −1.4px   | —       | Hero/marketing headlines          |
+| Body        | 15px           | 300    | 0        | —       | Default UI text                   |
+| Tabular     | 14px           | 300    | −0.42px  | `tnum`  | **All numbers, IDs, dates**       |
+| Caption     | 13px           | 400    | −0.39px  | —       | Labels, column headers            |
+| Micro       | 11px           | 300    | 0        | —       | Status bar, shortcuts, fine print |
+| Mono        | JetBrains Mono | 400    | —        | —       | Record codes, kbd badges          |
 
 > Always enable `font-variant-numeric: tabular-nums` on any numeric data — prices, quantities, dates, IDs.
 
 ### Radii
 
-| Name | Value | Use |
-|---|---|---|
-| `xs` | 4px | Tight chips, micro badges |
-| `sm` | 6px | Inputs |
-| `md` | 8px | Dropdowns, popovers |
-| `lg` | 12px | Cards, panels |
+| Name   | Value  | Use                             |
+| ------ | ------ | ------------------------------- |
+| `xs`   | 4px    | Tight chips, micro badges       |
+| `sm`   | 6px    | Inputs                          |
+| `md`   | 8px    | Dropdowns, popovers             |
+| `lg`   | 12px   | Cards, panels                   |
 | `pill` | 9999px | ActionBar buttons, primary CTAs |
 
 ### Shadows
@@ -96,18 +96,18 @@ no component hardcodes a hex color for interactive elements.
 
 ### Theme Palette Table
 
-| id | Light primary | Dark primary | Notes |
-|---|---|---|---|
-| `indigo` | `#533afd` | `#7466ff` | **Default** — matches the brand spec |
-| `ocean` | `#2563eb` | `#6d97f5` | Classic enterprise blue |
-| `cyan` | `#0e7490` | `#38c4dc` | Cool teal-cyan |
-| `teal` | `#0f766e` | `#2dd4bf` | Mid-spectrum green-blue |
-| `emerald` | `#047857` | `#34d399` | Saturated green |
-| `forest` | `#4d7c0f` | `#a3e635` | Olive/lime |
-| `amber` | `#b45309` | `#f59e0b` | Warm; dark-mode uses dark text on primary |
-| `rose` | `#e11d48` | `#fb7185` | Warm red |
-| `violet` | `#7c3aed` | `#a78bfa` | Cooler than indigo |
-| `slate` | `#475569` | `#94a3b8` | Neutral/mono mode |
+| id        | Light primary | Dark primary | Notes                                     |
+| --------- | ------------- | ------------ | ----------------------------------------- |
+| `indigo`  | `#533afd`     | `#7466ff`    | **Default** — matches the brand spec      |
+| `ocean`   | `#2563eb`     | `#6d97f5`    | Classic enterprise blue                   |
+| `cyan`    | `#0e7490`     | `#38c4dc`    | Cool teal-cyan                            |
+| `teal`    | `#0f766e`     | `#2dd4bf`    | Mid-spectrum green-blue                   |
+| `emerald` | `#047857`     | `#34d399`    | Saturated green                           |
+| `forest`  | `#4d7c0f`     | `#a3e635`    | Olive/lime                                |
+| `amber`   | `#b45309`     | `#f59e0b`    | Warm; dark-mode uses dark text on primary |
+| `rose`    | `#e11d48`     | `#fb7185`    | Warm red                                  |
+| `violet`  | `#7c3aed`     | `#a78bfa`    | Cooler than indigo                        |
+| `slate`   | `#475569`     | `#94a3b8`    | Neutral/mono mode                         |
 
 ### Color-mix rules — keep theme purity
 
@@ -240,22 +240,22 @@ Fixed bottom, 32px, canvas-soft, hairline top. Left: Tenant · Module · Record 
 
 Wired platform-wide; inputs/textareas swallow most (except Esc).
 
-| Key | Action |
-|---|---|
-| `Alt+1` | Open Addresses |
-| `Alt+2` | Open Articles |
-| `Alt+3` | Open Documents |
-| `Alt+0` | Open Settings / Company master data |
-| `Alt+I` | Open StatisticsModule for current context |
-| `F3` | New record in active context |
-| `F4` | Archive/delete current record (where allowed) |
-| `F5` | Open lookup table for active lookup-capable field |
-| `F7` | Transform (e.g. document conversion) |
-| `F8` | Duplicate current record |
-| `F9` | Execute primary contextual process (post, etc.) |
-| `F10` | Save and close |
-| `?` | Open shortcut overlay |
-| `Esc` | Contextual close: overlay → form → panel → workspace |
+| Key     | Action                                               |
+| ------- | ---------------------------------------------------- |
+| `Alt+1` | Open Addresses                                       |
+| `Alt+2` | Open Articles                                        |
+| `Alt+3` | Open Documents                                       |
+| `Alt+0` | Open Settings / Company master data                  |
+| `Alt+I` | Open StatisticsModule for current context            |
+| `F3`    | New record in active context                         |
+| `F4`    | Archive/delete current record (where allowed)        |
+| `F5`    | Open lookup table for active lookup-capable field    |
+| `F7`    | Transform (e.g. document conversion)                 |
+| `F8`    | Duplicate current record                             |
+| `F9`    | Execute primary contextual process (post, etc.)      |
+| `F10`   | Save and close                                       |
+| `?`     | Open shortcut overlay                                |
+| `Esc`   | Contextual close: overlay → form → panel → workspace |
 
 Arrow keys, Home, End, Enter, Tab, Shift+Tab must behave consistently in grids, forms, trees, dialogs.
 
@@ -274,6 +274,7 @@ TriView: Article Group tree → Article grid (Number, Name, Unit, Price, Stock) 
 ### Documents
 
 Two modes:
+
 - **Browse** (TriView): Document type/group tree → Document grid (No., Date, Customer, Total, Status) → ContextTabs: Lines · Header Details
 - **Edit** (DocumentEditor): compact header + dedicated line editor — separate route/workspace from browse
 
@@ -316,6 +317,7 @@ Three layers — all three must agree:
 ## 9. Do's and Don'ts
 
 **DO:**
+
 - Use Inter weight 300 for all UI text including headings.
 - Use `--primary` (or active theme primary) as the sole interactive accent color.
 - Use `color-mix()` for tinted fills so they theme-adapt automatically.
@@ -325,6 +327,7 @@ Three layers — all three must agree:
 - Keep NavigationTree as hierarchy-only — no mutation logic inside it.
 
 **DON'T:**
+
 - Use pure black — use `--ink` (`#0d253d`).
 - Add a left sidebar. Module navigation is in the AppBar; in-module hierarchy is in the TriView NavigationTree. These are different layers.
 - Introduce a secondary accent color for interactive elements.
@@ -342,15 +345,15 @@ Three layers — all three must agree:
 The design handoff (`slopware.html` + companion JSX/CSS files) is the pixel-level reference.
 Key files to read when implementing a new component:
 
-| Prototype file | What it contains |
-|---|---|
-| `tokens.css` | All CSS variables, dark mode overrides, 10 theme palettes — single source of truth |
-| `appbar.jsx` | AppBar implementation: brand, tenant switcher, module tabs, overflow, avatar menu |
-| `bars.jsx` | ActionBar (crumbs + pills) and StatusBar |
-| `triview.jsx` | NavigationTree, DataGrid, ContextTabs, InspectorPanel |
-| `forms.jsx` | EntityMask form + ShortcutOverlay modal |
-| `modules.jsx` | Per-module TriView content + AdminUsersView |
-| `app.jsx` | Root state, keyboard wiring, theme/mode, resize logic |
+| Prototype file | What it contains                                                                   |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `tokens.css`   | All CSS variables, dark mode overrides, 10 theme palettes — single source of truth |
+| `appbar.jsx`   | AppBar implementation: brand, tenant switcher, module tabs, overflow, avatar menu  |
+| `bars.jsx`     | ActionBar (crumbs + pills) and StatusBar                                           |
+| `triview.jsx`  | NavigationTree, DataGrid, ContextTabs, InspectorPanel                              |
+| `forms.jsx`    | EntityMask form + ShortcutOverlay modal                                            |
+| `modules.jsx`  | Per-module TriView content + AdminUsersView                                        |
+| `app.jsx`      | Root state, keyboard wiring, theme/mode, resize logic                              |
 
 When implementing in the actual TanStack codebase, match the visual output of the prototype.
 Do not copy prototype internal structure (React/Babel script tags, etc.) — use the project's

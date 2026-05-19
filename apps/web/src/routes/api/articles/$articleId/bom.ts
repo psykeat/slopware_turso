@@ -1,9 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { db } from "@repo/db";
-import { articleBom, article } from "@repo/db/schema";
 import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
+import { db } from "@repo/db";
+import { articleBom, article, unit } from "@repo/db/schema";
+import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, asc, max, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/articles/$articleId/bom")({
   server: {
@@ -16,6 +18,9 @@ export const Route = createFileRoute("/api/articles/$articleId/bom")({
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context) return new Response("No active tenant found", { status: 403 });
 
+        const baseUnit = alias(unit, "component_base_unit");
+        const salesUnit = alias(unit, "component_sales_unit");
+
         const rows = await db
           .select({
             bomId: articleBom.bomId,
@@ -25,10 +30,13 @@ export const Route = createFileRoute("/api/articles/$articleId/bom")({
             quantity: articleBom.quantity,
             scrapPercentage: articleBom.scrapPercentage,
             sortOrder: articleBom.sortOrder,
-            unit: article.salesUnit,
+            baseUnitCode: baseUnit.code,
+            salesUnitCode: salesUnit.code,
           })
           .from(articleBom)
           .innerJoin(article, eq(article.articleId, articleBom.componentArticleId))
+          .leftJoin(baseUnit, eq(baseUnit.unitId, article.baseUnitId))
+          .leftJoin(salesUnit, eq(salesUnit.unitId, article.salesUnitId))
           .where(
             and(
               eq(articleBom.tenantId, context.tenantId),
@@ -47,7 +55,7 @@ export const Route = createFileRoute("/api/articles/$articleId/bom")({
           quantity: String(r.quantity),
           scrapPercentage: String(r.scrapPercentage),
           sortOrder: r.sortOrder,
-          unit: r.unit ?? null,
+          unit: r.salesUnitCode ?? r.baseUnitCode ?? null,
         }));
 
         return new Response(JSON.stringify({ components }), {
@@ -67,11 +75,13 @@ export const Route = createFileRoute("/api/articles/$articleId/bom")({
         const headerArticle = await db
           .select({ articleId: article.articleId })
           .from(article)
-          .where(and(eq(article.articleId, params.articleId), eq(article.tenantId, context.tenantId)))
+          .where(
+            and(eq(article.articleId, params.articleId), eq(article.tenantId, context.tenantId)),
+          )
           .limit(1);
         if (headerArticle.length === 0) return new Response("Article not found", { status: 404 });
 
-        const body = await request.json() as {
+        const body = (await request.json()) as {
           componentArticleId: string;
           quantity: number;
           scrapPercentage?: number;

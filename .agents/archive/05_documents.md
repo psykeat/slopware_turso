@@ -16,6 +16,7 @@
 ## Architecture Context (Updated 2026-05-15)
 
 > **IMPORTANT**: The architecture described in the original "What Is Already Done" section below was aspirational. As of 2026-05-15, the actual implementation is:
+>
 > - **No `packages/domain`** — domain logic is in `packages/db/src/services/document-service.ts`
 > - **No `server-functions.ts`** — all server logic in `apps/web/src/routes/api/` route handlers
 > - `db.execute()` returns the array directly (postgres-js) — NOT `result.rows`
@@ -23,6 +24,7 @@
 > - `article.taxClassId` (not taxCodeId), no `article.salesPrice`
 
 The codebase has two layers:
+
 - **Service layer** (`packages/db/src/services/document-service.ts`) — posting engine (all movement types + AVCO + COGS + pg_notify), storno, convert, tree query, pricing, delta correction
 - **Route layer** (`apps/web/src/routes/api/documents/`, `apps/web/src/routes/api/stats/`) — REST endpoints calling the service layer; UI (`documents.tsx`, `document-editor.tsx`) now wired to real endpoints
 
@@ -335,18 +337,23 @@ Note: Only affects new companies; existing data retains old prefixes.
 - [ ] **4.C1** Create `apps/web/src/lib/feedback-snapshot.ts`:
   ```ts
   export interface FeedbackSnapshot {
-    url: string; userAgent: string;
+    url: string;
+    userAgent: string;
     viewport: { width: number; height: number };
-    userId: string; tenantId: string; locale: string;
+    userId: string;
+    tenantId: string;
+    locale: string;
     lastError: { message: string; stack?: string } | null;
     timestamp: string;
     focusState: { entity?: string; recordId?: string; panelId?: string };
   }
   export function captureFeedbackSnapshot(
-    userId: string, tenantId: string, locale: string,
+    userId: string,
+    tenantId: string,
+    locale: string,
     focusState: FocusContextState,
-    lastError: { message: string; stack?: string } | null
-  ): FeedbackSnapshot
+    lastError: { message: string; stack?: string } | null,
+  ): FeedbackSnapshot;
   ```
   Pure function — no side effects.
 
@@ -458,49 +465,18 @@ Note: Only affects new companies; existing data retains old prefixes.
 ## Recommended Execution Order
 
 **P0 bugs (do first — data correctness):**
+
 1. **1.A1** — Seed name/prefix fix
 2. **1.B1** — available_qty for type b
 
-**Domain wiring (unblocks full document workflow):**
-3. ~~**1.E1–1.E5**~~ ✓ DocumentEditor real posting/conversion/storno wiring
-4. ~~**1.E6–1.E7**~~ ✓ New-document flow + address/article search endpoints
-5. ~~**1.C1–1.C4**~~ ✓ Three-level sidebar tree + server-side filtering
-6. ~~**1.D1–1.D2**~~ ✓ Document list filtering
-7. ~~**1.G1**~~ ✓ Article autocomplete → price+tax wired in DocumentLinesEditor
+**Domain wiring (unblocks full document workflow):** 3. ~~**1.E1–1.E5**~~ ✓ DocumentEditor real posting/conversion/storno wiring 4. ~~**1.E6–1.E7**~~ ✓ New-document flow + address/article search endpoints 5. ~~**1.C1–1.C4**~~ ✓ Three-level sidebar tree + server-side filtering 6. ~~**1.D1–1.D2**~~ ✓ Document list filtering 7. ~~**1.G1**~~ ✓ Article autocomplete → price+tax wired in DocumentLinesEditor
 
-**Child section features (high user value, self-contained):**
-7. **1.H1–1.H3** — InventoryBalanceTable in EntityMask
-8. **1.I1–1.I3** — CustomerStatsSection in address dialog
+**Child section features (high user value, self-contained):** 7. **1.H1–1.H3** — InventoryBalanceTable in EntityMask 8. **1.I1–1.I3** — CustomerStatsSection in address dialog
 
-**Settings redesign (medium effort, important for admin UX):**
-9. **2.A1** — EntityMask inline prop
-10. **2.B1–2.B2** — SettingsView component
-11. **2.C1–2.C3** — Sidebar 20 entities in 5 groups
-12. **2.D1–2.D3** — Firmenstamm pseudo-singleton form
-13. **2.E1** — List entity DataGrid + dialog
-14. **2.F1–2.F2** — DB migration: seed tenant_fields
-15. **2.G1–2.G2** — Settings i18n keys
+**Settings redesign (medium effort, important for admin UX):** 9. **2.A1** — EntityMask inline prop 10. **2.B1–2.B2** — SettingsView component 11. **2.C1–2.C3** — Sidebar 20 entities in 5 groups 12. **2.D1–2.D3** — Firmenstamm pseudo-singleton form 13. **2.E1** — List entity DataGrid + dialog 14. **2.F1–2.F2** — DB migration: seed tenant_fields 15. **2.G1–2.G2** — Settings i18n keys
 
-**Statistics — DB first, then domain, then UI:**
-16. **3.A1–3.A5** — Schema: fiscal_period + fact_purchase_event + extensions
-17. **3.B1–3.B3** — Materialized views + pg_cron
-18. **3.C1–3.C2** — Fiscal period generator
-19. **3.D1–3.D4** — Posting extensions (AVCO, COGS, pg_notify)
-20. **3.E1–3.E4** — Server functions for stats
-21. **3.F1** — StatisticsModule real KPIs
-22. **3.F2** — StockLedgerTable component
-23. **3.F3–3.F5** — Article/address stats tabs + period comparison route
-24. **3.G1–3.G2** — Stats i18n keys
+**Statistics — DB first, then domain, then UI:** 16. **3.A1–3.A5** — Schema: fiscal_period + fact_purchase_event + extensions 17. **3.B1–3.B3** — Materialized views + pg_cron 18. **3.C1–3.C2** — Fiscal period generator 19. **3.D1–3.D4** — Posting extensions (AVCO, COGS, pg_notify) 20. **3.E1–3.E4** — Server functions for stats 21. **3.F1** — StatisticsModule real KPIs 22. **3.F2** — StockLedgerTable component 23. **3.F3–3.F5** — Article/address stats tabs + period comparison route 24. **3.G1–3.G2** — Stats i18n keys
 
-**AI Feedback (self-contained, can be done in parallel):**
-25. **4.A1–4.A3** — Python microservice
-26. **4.B1–4.B3** — Config storage + server functions
-27. **4.C1** — captureFeedbackSnapshot function
-28. **4.D1–4.D2** — FeedbackModal component
-29. **4.E1** — submitFeedbackFn
-30. **4.F1–4.F4** — Header entry point + error listener
-31. **4.G1–4.G2** — Admin config panel + i18n
+**AI Feedback (self-contained, can be done in parallel):** 25. **4.A1–4.A3** — Python microservice 26. **4.B1–4.B3** — Config storage + server functions 27. **4.C1** — captureFeedbackSnapshot function 28. **4.D1–4.D2** — FeedbackModal component 29. **4.E1** — submitFeedbackFn 30. **4.F1–4.F4** — Header entry point + error listener 31. **4.G1–4.G2** — Admin config panel + i18n
 
-**Gap closure:**
-32. **5.1–5.4** — Remaining 04_redesign.md items
-33. **1.F1** — applyDeltaEffect UI trigger
+**Gap closure:** 32. **5.1–5.4** — Remaining 04_redesign.md items 33. **1.F1** — applyDeltaEffect UI trigger

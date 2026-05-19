@@ -1,16 +1,11 @@
-import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useFocus } from "../platform/focus-manager";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerDescription,
-} from "./drawer";
-import { Skeleton } from "./skeleton";
+
 import { formatMoney } from "../lib/formatters";
+import { useFocus } from "../platform/focus-manager";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "./drawer";
+import { Skeleton } from "./skeleton";
 
 interface DashboardKpi {
   revenue: { current: number; prior: number };
@@ -31,15 +26,15 @@ function KpiCard({
   delta?: { text: string; positive: boolean } | string;
 }) {
   return (
-    <div className="p-4 border-b border-hairline last:border-0">
-      <div className="text-[11px] uppercase tracking-wider text-ink-mute mb-1">{label}</div>
-      <div className="text-[26px] font-light tabular-nums text-ink">{value}</div>
+    <div className="border-b border-hairline p-4 last:border-0">
+      <div className="mb-1 text-[11px] tracking-wider text-ink-mute uppercase">{label}</div>
+      <div className="text-[26px] font-light text-ink tabular-nums">{value}</div>
       {delta && typeof delta === "string" && (
-        <div className="text-[11px] text-ink-mute mt-0.5">{delta}</div>
+        <div className="mt-0.5 text-[11px] text-ink-mute">{delta}</div>
       )}
       {delta && typeof delta === "object" && (
         <div
-          className="text-[11px] mt-0.5 font-medium"
+          className="mt-0.5 text-[11px] font-medium"
           style={{ color: delta.positive ? "var(--ok)" : "var(--destructive)" }}
         >
           {delta.positive ? "▲" : "▼"} {delta.text}
@@ -51,8 +46,8 @@ function KpiCard({
 
 function KpiSkeleton() {
   return (
-    <div className="p-4 border-b border-hairline last:border-0">
-      <Skeleton className="h-3 w-24 mb-2" />
+    <div className="border-b border-hairline p-4 last:border-0">
+      <Skeleton className="mb-2 h-3 w-24" />
       <Skeleton className="h-8 w-32" />
     </div>
   );
@@ -109,23 +104,13 @@ export function StatisticsModule() {
 
     kpiContent = (
       <>
-        <KpiCard
-          label={t("stats.revenue")}
-          value={formatMoney(revenue)}
-          delta={revenueDelta}
-        />
-        <KpiCard
-          label={t("stats.profit")}
-          value={formatMoney(kpiData?.profit.current ?? 0)}
-        />
+        <KpiCard label={t("stats.revenue")} value={formatMoney(revenue)} delta={revenueDelta} />
+        <KpiCard label={t("stats.profit")} value={formatMoney(kpiData?.profit.current ?? 0)} />
         <KpiCard
           label={t("stats.openOrders")}
           value={`${kpiData?.openOrders.count ?? 0} (${formatMoney(kpiData?.openOrders.value ?? 0)})`}
         />
-        <KpiCard
-          label={t("stats.draftCount")}
-          value={kpiData?.draftCount ?? 0}
-        />
+        <KpiCard label={t("stats.draftCount")} value={kpiData?.draftCount ?? 0} />
         <KpiCard
           label={t("stats.inventoryValue")}
           value={formatMoney(kpiData?.inventoryValue ?? 0)}
@@ -136,7 +121,7 @@ export function StatisticsModule() {
 
   return (
     <Drawer open={open} onOpenChange={setOpen} direction="right">
-      <DrawerContent className="bg-canvas shadow-2xl border-l border-hairline">
+      <DrawerContent className="border-l border-hairline bg-canvas shadow-2xl">
         <DrawerHeader>
           <DrawerTitle className="text-xl font-semibold text-ink">
             Statistics: {focusState.entity || "Context"}

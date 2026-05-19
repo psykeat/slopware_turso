@@ -17,7 +17,6 @@ catalog:
   "@base-ui/react": ^1.4.1
   "@better-auth/drizzle-adapter": https://pkg.pr.new/@better-auth/drizzle-adapter@9489
   "@fontsource-variable/inter": ^5.2.8
-  "@icons-pack/react-simple-icons": ^13.13.0
   "@react-pdf/renderer": ^4.5.1
   "@rolldown/plugin-babel": ^0.2.3
   "@tailwindcss/vite": ^4.3.0
@@ -27,7 +26,6 @@ catalog:
   "@tanstack/eslint-plugin-router": ^1.161.6
   "@tanstack/react-devtools": ^0.10.3
   "@tanstack/react-form-devtools": ^0.2.27
-  "@tanstack/react-form-start": ^1.32.0
   "@tanstack/react-query": ^5.100.10
   "@tanstack/react-query-devtools": ^5.100.10
   "@tanstack/react-router": ^1.169.2
@@ -45,7 +43,6 @@ catalog:
   better-auth: ^1.6.11
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
-  date-fns: ^4.1.0
   dotenv: ^17.4.2
   i18next: ^24.0.0
   react-i18next: ^15.0.0
@@ -53,8 +50,6 @@ catalog:
   drizzle-orm: rc
   eslint-plugin-react-hooks: ^7.1.1
   lucide-react: ^1.14.0
-  motion: ^12.38.0
-  nanoid: ^5.1.11
   nitro: ^3.0.260429-beta
   postgres: ^3.4.9
   react: ^19.2.6
@@ -69,20 +64,14 @@ catalog:
   typescript: ^6.0.3
   vaul: ^1.1.2
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  zod: ^4.4.3
-
+  vite-plus: ^0.1.21
 catalogMode: prefer
 
 overrides:
   "@better-auth/drizzle-adapter": "catalog:"
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"

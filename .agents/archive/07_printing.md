@@ -6,13 +6,13 @@ Generate tenant-scoped PDFs for all 13 ERP document types on demand. The print b
 
 ## Architecture Decisions
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| Template strategy | Single parametrised React component | All 13 types share the same layout (header, positions table, totals, footer); type label is a prop |
-| PDF engine | `@react-pdf/renderer` v3 | Runs in the Node.js process directly — no browser binary, no queue, no timeout management |
-| Tenant customisation | Deferred (v2+) | v1 draws company data from the `company` table; no `print_config` table, no logo upload |
-| Print UX | `GET /api/documents/:id/print` → PDF download | No in-app preview step; filename is `{typeLabel}-{documentNo}.pdf` |
-| Trigger | F6 shortcut + CommandRegistry | Consistent with existing F9/F10 keyboard-first pattern; no ad-hoc keydown handlers |
+| Decision             | Choice                                        | Rationale                                                                                          |
+| -------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Template strategy    | Single parametrised React component           | All 13 types share the same layout (header, positions table, totals, footer); type label is a prop |
+| PDF engine           | `@react-pdf/renderer` v3                      | Runs in the Node.js process directly — no browser binary, no queue, no timeout management          |
+| Tenant customisation | Deferred (v2+)                                | v1 draws company data from the `company` table; no `print_config` table, no logo upload            |
+| Print UX             | `GET /api/documents/:id/print` → PDF download | No in-app preview step; filename is `{typeLabel}-{documentNo}.pdf`                                 |
+| Trigger              | F6 shortcut + CommandRegistry                 | Consistent with existing F9/F10 keyboard-first pattern; no ad-hoc keydown handlers                 |
 
 ## Architecture Invariants
 
@@ -87,12 +87,12 @@ Generate tenant-scoped PDFs for all 13 ERP document types on demand. The print b
 - [x] **7.D1** `apps/web/src/routes/_auth/app/documents.tsx`: `print-document` command registered in the main command `useEffect` block
   - `id: "print-document"` · `scope: "context"` · `group: "recordOps"` · shortcut **F6**
   - `isEnabled: (s) => !!s.recordId && s.entity === "document"`
-  - `handler`: `window.open(\`/api/documents/${s.recordId}/print\`, "_blank")`
+  - `handler`: `window.open(\`/api/documents/${s.recordId}/print\`, "\_blank")`
   - Cleanup: `unregPrint()` added to return function
 
 - [x] **7.D2** `packages/ui/components/document-editor.tsx`: same `print-document` command in a dedicated `useEffect`
   - Guard: `if (isNew) return` — not shown for new unsaved documents
-  - `handler`: `window.open(\`/api/documents/${documentId}/print\`, "_blank")`
+  - `handler`: `window.open(\`/api/documents/${documentId}/print\`, "\_blank")`
   - Dependencies: `[registerCommand, documentId, isNew]`
 
 ---
@@ -130,10 +130,12 @@ For full tenant-editable HTML/PDF templates:
 ## Verification Checklist
 
 ### Dependencies
+
 - [x] `pnpm install` — no unresolved peer deps
 - [x] `pnpm lint` — 0 errors (49 pre-existing warnings, unchanged)
 
 ### Route
+
 - [ ] `GET /api/documents/:id/print` returns 401 when unauthenticated
 - [ ] Returns 404 for unknown `documentId`
 - [ ] Returns 404 when company record missing for tenant
@@ -142,6 +144,7 @@ For full tenant-editable HTML/PDF templates:
 - [ ] Tenant isolation: document from tenant A is not accessible when session belongs to tenant B
 
 ### PDF Content
+
 - [ ] Sender block shows company name, address, VAT-ID from `company` table
 - [ ] Recipient block shows `billingAddress` JSONB fields
 - [ ] Delivery address block appears only when `deliveryAddress` differs from billing
@@ -154,6 +157,7 @@ For full tenant-editable HTML/PDF templates:
 - [ ] Footer: IBAN, BIC, email present when set on company
 
 ### UI
+
 - [ ] F6 in documents module → PDF download opens in new tab for selected document
 - [ ] F6 in DocumentEditor (existing document) → PDF download opens in new tab
 - [ ] F6 in DocumentEditor (new unsaved document, `documentId === "__new__"`) → no action / command disabled

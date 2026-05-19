@@ -19,14 +19,15 @@ export function captureFeedbackSnapshot(
   locale: string,
   focusState: { entity?: string; recordId?: string; panelId?: string },
   lastError: { message: string; stack?: string } | null,
-  telemetry: TelemetrySnapshot
+  telemetry: TelemetrySnapshot,
 ): FeedbackSnapshot {
   return {
-    url: typeof window !== 'undefined' ? window.location.href : '',
-    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-    viewport: typeof window !== 'undefined'
-      ? { width: window.innerWidth, height: window.innerHeight }
-      : { width: 0, height: 0 },
+    url: typeof window !== "undefined" ? window.location.href : "",
+    userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+    viewport:
+      typeof window !== "undefined"
+        ? { width: window.innerWidth, height: window.innerHeight }
+        : { width: 0, height: 0 },
     userId,
     tenantId,
     locale,

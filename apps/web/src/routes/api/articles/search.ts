@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { db } from "@repo/db";
-import { article } from "@repo/db/schema";
 import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
+import { db } from "@repo/db";
+import { article, unit } from "@repo/db/schema";
+import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, ilike, isNull, or } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/articles/search")({
   server: {
@@ -25,12 +26,13 @@ export const Route = createFileRoute("/api/articles/search")({
             articleId: article.articleId,
             articleNo: article.articleNo,
             name: article.name,
-            baseUnit: article.baseUnit,
+            baseUnitCode: unit.code,
             taxClassId: article.taxClassId,
             bomType: article.bomType,
             trackingMode: article.trackingMode,
           })
           .from(article)
+          .leftJoin(unit, eq(unit.unitId, article.baseUnitId))
           .where(
             and(
               eq(article.tenantId, context.tenantId),

@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { address } from "@repo/db/schema";
-import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
+import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, ilike, or } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/addresses/search")({
   server: {

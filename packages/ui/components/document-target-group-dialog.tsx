@@ -1,6 +1,7 @@
 import React from "react";
-import { Dialog, DialogContent } from "./dialog";
+
 import { cn } from "../lib/utils";
+import { Dialog, DialogContent } from "./dialog";
 
 export interface DocumentTargetGroupCandidate {
   documentGroupId: string;
@@ -41,10 +42,10 @@ export function DocumentTargetGroupDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm p-0 overflow-hidden">
-        <div className="px-5 py-4 border-b border-hairline">
+      <DialogContent className="max-w-sm overflow-hidden p-0">
+        <div className="border-b border-hairline px-5 py-4">
           <h3 className="text-[15px] font-medium text-ink">{title}</h3>
-          <p className="text-[13px] text-ink-mute mt-0.5">{description}</p>
+          <p className="mt-0.5 text-[13px] text-ink-mute">{description}</p>
         </div>
         <div className="flex flex-col py-1">
           {candidates.map((c) => {
@@ -55,11 +56,13 @@ export function DocumentTargetGroupDialog({
                 type="button"
                 className={cn(
                   "h-9 px-5 text-left text-[13px] transition-colors",
-                  isSelected ? "bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] text-ink" : "hover:bg-canvas-soft",
+                  isSelected
+                    ? "bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] text-ink"
+                    : "hover:bg-canvas-soft",
                 )}
                 onClick={() => onSelectGroupId(c.documentGroupId)}
               >
-                <span className="font-mono text-[12px] text-ink-secondary mr-2">
+                <span className="mr-2 font-mono text-[12px] text-ink-secondary">
                   {c.documentType}
                   {String(c.groupNumber).padStart(2, "0")}
                 </span>
@@ -68,17 +71,17 @@ export function DocumentTargetGroupDialog({
             );
           })}
         </div>
-        <div className="px-5 py-4 border-t border-hairline flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-2 border-t border-hairline px-5 py-4">
           <button
             type="button"
-            className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink transition-colors"
+            className="h-7 rounded-full border border-hairline px-4 text-[13px] text-ink-secondary transition-colors hover:text-ink"
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </button>
           <button
             type="button"
-            className="h-7 px-4 rounded-full text-[13px] disabled:opacity-40 transition-colors"
+            className="h-7 rounded-full px-4 text-[13px] transition-colors disabled:opacity-40"
             style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
             disabled={!canConfirm}
             onClick={onConfirm}

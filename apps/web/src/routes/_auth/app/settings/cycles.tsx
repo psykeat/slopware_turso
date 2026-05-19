@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
+import { createFileRoute } from "@tanstack/react-router";
 import { CheckIcon, XIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_auth/app/settings/cycles")({
   component: CyclesPage,
@@ -27,10 +27,10 @@ function ProgressBar({ score, max }: { score: number; max: number }) {
   const color = pct === 100 ? "bg-green-500" : pct >= 60 ? "bg-yellow-500" : "bg-red-500";
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-canvas-soft rounded-full overflow-hidden">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-canvas-soft">
         <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-[11px] text-ink-secondary tabular-nums w-8 text-right">{pct}%</span>
+      <span className="w-8 text-right text-[11px] text-ink-secondary tabular-nums">{pct}%</span>
     </div>
   );
 }
@@ -64,7 +64,7 @@ function CyclesView() {
       {/* Header */}
       <div className="shrink-0 border-b border-hairline px-4 py-3">
         <h1 className="text-[15px] font-semibold text-ink">{t("devCycles.title")}</h1>
-        <p className="mt-1 text-[11px] text-ink-mute font-mono">{t("devCycles.apiHelp")}</p>
+        <p className="mt-1 font-mono text-[11px] text-ink-mute">{t("devCycles.apiHelp")}</p>
       </div>
 
       {/* Table */}
@@ -81,25 +81,25 @@ function CyclesView() {
           <table className="w-full text-[13px] text-ink">
             <thead>
               <tr className="border-b border-hairline bg-canvas-soft">
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-ink-mute uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                   {t("devCycles.cycleNumber")}
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-ink-mute uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                   Recorded
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-ink-mute uppercase tracking-wider w-40">
+                <th className="w-40 px-3 py-2 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                   {t("devCycles.sliceFit")}
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-ink-mute uppercase tracking-wider w-40">
+                <th className="w-40 px-3 py-2 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                   {t("devCycles.storyCoverage")}
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-ink-mute uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                   {t("devCycles.testsAdded")}
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-ink-mute uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                   {t("devCycles.vpTestPass")}
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-ink-mute uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                   {t("devCycles.blocker")}
                 </th>
               </tr>
@@ -108,10 +108,10 @@ function CyclesView() {
               {cycles.map((cycle, idx) => (
                 <tr
                   key={cycle.cycleId}
-                  className={`border-b border-hairline ${idx % 2 === 0 ? "bg-canvas" : "bg-canvas-soft/40"} hover:bg-canvas-soft transition-colors`}
+                  className={`border-b border-hairline ${idx % 2 === 0 ? "bg-canvas" : "bg-canvas-soft/40"} transition-colors hover:bg-canvas-soft`}
                 >
-                  <td className="px-3 py-2 tabular-nums font-medium">#{cycle.cycleNumber}</td>
-                  <td className="px-3 py-2 tabular-nums text-ink-secondary text-[12px]">
+                  <td className="px-3 py-2 font-medium tabular-nums">#{cycle.cycleNumber}</td>
+                  <td className="px-3 py-2 text-[12px] text-ink-secondary tabular-nums">
                     {new Date(cycle.recordedAt).toLocaleDateString(undefined, {
                       year: "numeric",
                       month: "2-digit",
@@ -124,7 +124,7 @@ function CyclesView() {
                   <td className="px-3 py-2">
                     <ProgressBar score={cycle.storyCoverage} max={cycle.storyCoverageMax} />
                   </td>
-                  <td className="px-3 py-2 tabular-nums text-center">{cycle.testsAdded}</td>
+                  <td className="px-3 py-2 text-center tabular-nums">{cycle.testsAdded}</td>
                   <td className="px-3 py-2 text-center">
                     {cycle.vpTestPass === null ? (
                       <span className="text-ink-mute">—</span>
@@ -134,7 +134,7 @@ function CyclesView() {
                       <XIcon className="inline h-3.5 w-3.5 text-red-500" />
                     )}
                   </td>
-                  <td className="px-3 py-2 text-ink-secondary text-[12px] max-w-xs truncate">
+                  <td className="max-w-xs truncate px-3 py-2 text-[12px] text-ink-secondary">
                     {cycle.blocker ?? "—"}
                   </td>
                 </tr>

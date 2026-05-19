@@ -55,7 +55,9 @@ export const tenant = pgTable(
   (table) => [
     index("idx_tenant_organization").on(table.organizationId),
     index("tenant_slug_key").on(table.slug),
-    uniqueIndex("uq_single_base_tenant").on(table.isBase).where(sql`is_base = true`),
+    uniqueIndex("uq_single_base_tenant")
+      .on(table.isBase)
+      .where(sql`is_base = true`),
   ],
 );
 
@@ -220,6 +222,9 @@ export const addressCategory = pgTable(
       .notNull()
       .references(() => tenant.tenantId),
     name: jsonb("name").notNull(),
+    taxClassId: uuid("tax_class_id").references(() => taxClass.taxClassId),
+    paymentTermId: uuid("payment_term_id").references(() => paymentTerm.paymentTermId),
+    currencyId: char("currency_id", { length: 3 }),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     customAttributes: jsonb("custom_attributes"),
@@ -241,7 +246,6 @@ export const address = pgTable(
       .notNull()
       .references(() => tenant.tenantId),
     addressNo: text("address_no").notNull(),
-    addressType: text("address_type").notNull(),
     isCustomer: boolean("is_customer").notNull().default(false),
     isSupplier: boolean("is_supplier").notNull().default(false),
     companyName: text("company_name"),
@@ -261,7 +265,6 @@ export const address = pgTable(
     customAttributes: jsonb("custom_attributes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
-    bankAccountId: uuid("bank_account_id"),
     defaultDeliveryAddressId: uuid("default_delivery_address_id"),
     searchText: text("search_text"),
     addressCategoryId: uuid("address_category_id").references(() => addressCategory.categoryId),
@@ -273,7 +276,6 @@ export const address = pgTable(
     index("idx_address_customer").on(table.tenantId, table.isCustomer),
     index("idx_address_supplier").on(table.tenantId, table.isSupplier),
     index("idx_address_tenant").on(table.tenantId),
-    index("idx_address_type").on(table.tenantId, table.addressType),
   ],
 );
 
@@ -327,6 +329,12 @@ export const articleGroup = pgTable(
       .references(() => tenant.tenantId),
     code: text("code").notNull(),
     name: text("name").notNull(),
+    taxClassId: uuid("tax_class_id").references(() => taxClass.taxClassId),
+    baseUnitId: uuid("base_unit_id").references(() => unit.unitId),
+    salesUnitId: uuid("sales_unit_id").references(() => unit.unitId),
+    purchaseUnitId: uuid("purchase_unit_id").references(() => unit.unitId),
+    trackingMode: text("tracking_mode"),
+    bomType: text("bom_type").notNull().default("none"),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -350,10 +358,10 @@ export const article = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     articleGroupId: uuid("article_group_id").references(() => articleGroup.articleGroupId),
-    taxClassId: uuid("tax_class_id"),
-    baseUnit: text("base_unit"),
-    salesUnit: text("sales_unit"),
-    purchaseUnit: text("purchase_unit"),
+    taxClassId: uuid("tax_class_id").references(() => taxClass.taxClassId),
+    baseUnitId: uuid("base_unit_id").references(() => unit.unitId),
+    salesUnitId: uuid("sales_unit_id").references(() => unit.unitId),
+    purchaseUnitId: uuid("purchase_unit_id").references(() => unit.unitId),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     customAttributes: jsonb("custom_attributes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -1783,9 +1791,15 @@ export const unit = pgTable(
 export const fiscalPeriod = pgTable(
   "fiscal_period",
   {
-    fiscalPeriodId: uuid("fiscal_period_id").primaryKey().default(sql`uuidv7()`),
-    tenantId: uuid("tenant_id").notNull().references(() => tenant.tenantId),
-    companyId: uuid("company_id").notNull().references(() => company.companyId),
+    fiscalPeriodId: uuid("fiscal_period_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => company.companyId),
     fiscalYear: integer("fiscal_year").notNull(),
     periodNo: integer("period_no").notNull(),
     startDate: date("start_date").notNull(),
@@ -1794,15 +1808,26 @@ export const fiscalPeriod = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    unique("fiscal_period_company_year_period").on(table.companyId, table.fiscalYear, table.periodNo),
-    index("idx_fiscal_period_tenant_date").on(table.tenantId, table.companyId, table.startDate, table.endDate),
+    unique("fiscal_period_company_year_period").on(
+      table.companyId,
+      table.fiscalYear,
+      table.periodNo,
+    ),
+    index("idx_fiscal_period_tenant_date").on(
+      table.tenantId,
+      table.companyId,
+      table.startDate,
+      table.endDate,
+    ),
   ],
 );
 
 export const factPurchaseEvent = pgTable(
   "fact_purchase_event",
   {
-    factPurchaseEventId: uuid("fact_purchase_event_id").primaryKey().default(sql`uuidv7()`),
+    factPurchaseEventId: uuid("fact_purchase_event_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
     tenantId: uuid("tenant_id").notNull(),
     companyId: uuid("company_id").notNull(),
     sourceDocumentId: uuid("source_document_id"),
@@ -1829,10 +1854,18 @@ export const factPurchaseEvent = pgTable(
 export const accountingExportBatch = pgTable(
   "accounting_export_batch",
   {
-    batchId: uuid("batch_id").primaryKey().default(sql`uuidv7()`),
-    tenantId: uuid("tenant_id").notNull().references(() => tenant.tenantId),
-    companyId: uuid("company_id").notNull().references(() => company.companyId),
-    fiscalPeriodId: uuid("fiscal_period_id").notNull().references(() => fiscalPeriod.fiscalPeriodId),
+    batchId: uuid("batch_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => company.companyId),
+    fiscalPeriodId: uuid("fiscal_period_id")
+      .notNull()
+      .references(() => fiscalPeriod.fiscalPeriodId),
     status: text("status").notNull().default("pending"),
     rowCount: integer("row_count").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -1840,7 +1873,11 @@ export const accountingExportBatch = pgTable(
     createdBy: uuid("created_by"),
   },
   (table) => [
-    unique("accounting_export_batch_period_company").on(table.tenantId, table.fiscalPeriodId, table.companyId),
+    unique("accounting_export_batch_period_company").on(
+      table.tenantId,
+      table.fiscalPeriodId,
+      table.companyId,
+    ),
     index("idx_accounting_export_batch_tenant").on(table.tenantId),
     index("idx_accounting_export_batch_period").on(table.tenantId, table.fiscalPeriodId),
     check("chk_accounting_export_batch_status", sql`status IN ('pending', 'exported', 'failed')`),
@@ -1850,12 +1887,22 @@ export const accountingExportBatch = pgTable(
 export const accountingExportRow = pgTable(
   "accounting_export_row",
   {
-    rowId: uuid("row_id").primaryKey().default(sql`uuidv7()`),
-    batchId: uuid("batch_id").notNull().references(() => accountingExportBatch.batchId),
-    tenantId: uuid("tenant_id").notNull().references(() => tenant.tenantId),
-    companyId: uuid("company_id").notNull().references(() => company.companyId),
+    rowId: uuid("row_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => accountingExportBatch.batchId),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => company.companyId),
     postingDate: date("posting_date").notNull(),
-    glAccountId: uuid("gl_account_id").notNull().references(() => glAccount.glAccountId),
+    glAccountId: uuid("gl_account_id")
+      .notNull()
+      .references(() => glAccount.glAccountId),
     costCenterId: uuid("cost_center_id").references(() => costCenter.costCenterId),
     taxCodeId: uuid("tax_code_id").references(() => taxCode.taxCodeId),
     debitAmount: numeric("debit_amount").notNull().default("0"),
@@ -1872,7 +1919,9 @@ export const accountingExportRow = pgTable(
 );
 
 export const devCycles = pgTable("dev_cycles", {
-  cycleId: uuid("cycle_id").primaryKey().default(sql`uuidv7()`),
+  cycleId: uuid("cycle_id")
+    .primaryKey()
+    .default(sql`uuidv7()`),
   cycleNumber: integer("cycle_number").notNull(),
   recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
   sliceFitScore: integer("slice_fit_score").notNull(),

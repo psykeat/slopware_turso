@@ -51,14 +51,15 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
   shellComponent: RootDocument,
 });
 
-import { FocusProvider } from "@repo/ui/platform/focus-manager";
-import { CommandProvider } from "@repo/ui/platform/command-registry";
-import { GlobalCommands } from "@repo/ui/platform/global-commands";
+import { CommandPalette } from "@repo/ui/components/command-palette";
 import { ShortcutHelp } from "@repo/ui/components/shortcut-help";
 import { StatisticsModule } from "@repo/ui/components/statistics-module";
-import { CommandPalette } from "@repo/ui/components/command-palette";
 import { TooltipProvider } from "@repo/ui/components/tooltip";
+import { CommandProvider } from "@repo/ui/platform/command-registry";
+import { FocusProvider } from "@repo/ui/platform/focus-manager";
+import { GlobalCommands } from "@repo/ui/platform/global-commands";
 import { I18nextProvider } from "react-i18next";
+
 import i18n from "#/lib/i18n";
 
 function RootDocument({ children }: { readonly children: React.ReactNode }) {
@@ -85,7 +86,6 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
             <Toaster richColors />
           </ThemeProvider>
         </I18nextProvider>
-
 
         <TanStackDevtools
           plugins={[

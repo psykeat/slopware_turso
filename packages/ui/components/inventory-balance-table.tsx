@@ -1,5 +1,6 @@
-import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import React from "react";
+
 import { Skeleton } from "./skeleton";
 
 interface InventoryBalance {
@@ -18,15 +19,19 @@ export function InventoryBalanceTable({ articleId }: { articleId: string }) {
   const { data: rows = [], isLoading } = useQuery<InventoryBalance[]>({
     queryKey: ["data", "inventoryBalance", articleId],
     queryFn: async () => {
-      const res = await fetch(`/api/data/inventoryBalance?articleId=${encodeURIComponent(articleId)}`);
+      const res = await fetch(
+        `/api/data/inventoryBalance?articleId=${encodeURIComponent(articleId)}`,
+      );
       if (!res.ok) throw new Error("Failed to fetch inventory balance");
       return res.json();
     },
     enabled: !!articleId,
   });
 
-  const colHeaderClass = "text-[11px] uppercase tracking-wider font-medium text-ink-mute text-right select-none px-3 py-0";
-  const colHeaderClassLeft = "text-[11px] uppercase tracking-wider font-medium text-ink-mute text-left select-none px-3 py-0";
+  const colHeaderClass =
+    "text-[11px] uppercase tracking-wider font-medium text-ink-mute text-right select-none px-3 py-0";
+  const colHeaderClassLeft =
+    "text-[11px] uppercase tracking-wider font-medium text-ink-mute text-left select-none px-3 py-0";
   const rowClass = "h-10 border-b border-hairline last:border-b-0";
   const cellClass = "px-3 tabular-nums font-mono text-[13px] text-right";
   const cellClassLeft = "px-3 text-[13px] font-mono text-left";
@@ -36,21 +41,41 @@ export function InventoryBalanceTable({ articleId }: { articleId: string }) {
       <table className="w-full table-fixed border-collapse" role="table">
         <thead>
           <tr className="h-8 border-b border-hairline">
-            <th className={colHeaderClassLeft} style={{ width: "30%" }}>Lager</th>
-            <th className={colHeaderClass} style={{ width: "14%" }}>Bestand</th>
-            <th className={colHeaderClass} style={{ width: "14%" }}>Reserviert</th>
-            <th className={colHeaderClass} style={{ width: "14%" }}>Verfügbar</th>
-            <th className={colHeaderClass} style={{ width: "14%" }}>Erwartet</th>
+            <th className={colHeaderClassLeft} style={{ width: "30%" }}>
+              Lager
+            </th>
+            <th className={colHeaderClass} style={{ width: "14%" }}>
+              Bestand
+            </th>
+            <th className={colHeaderClass} style={{ width: "14%" }}>
+              Reserviert
+            </th>
+            <th className={colHeaderClass} style={{ width: "14%" }}>
+              Verfügbar
+            </th>
+            <th className={colHeaderClass} style={{ width: "14%" }}>
+              Erwartet
+            </th>
           </tr>
         </thead>
         <tbody>
           {[0, 1, 2].map((i) => (
             <tr key={i} className={rowClass}>
-              <td className={cellClassLeft}><Skeleton className="h-3 w-24" /></td>
-              <td className={cellClass}><Skeleton className="h-3 w-12 ml-auto" /></td>
-              <td className={cellClass}><Skeleton className="h-3 w-10 ml-auto" /></td>
-              <td className={cellClass}><Skeleton className="h-3 w-12 ml-auto" /></td>
-              <td className={cellClass}><Skeleton className="h-3 w-10 ml-auto" /></td>
+              <td className={cellClassLeft}>
+                <Skeleton className="h-3 w-24" />
+              </td>
+              <td className={cellClass}>
+                <Skeleton className="ml-auto h-3 w-12" />
+              </td>
+              <td className={cellClass}>
+                <Skeleton className="ml-auto h-3 w-10" />
+              </td>
+              <td className={cellClass}>
+                <Skeleton className="ml-auto h-3 w-12" />
+              </td>
+              <td className={cellClass}>
+                <Skeleton className="ml-auto h-3 w-10" />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -60,7 +85,7 @@ export function InventoryBalanceTable({ articleId }: { articleId: string }) {
 
   if (rows.length === 0) {
     return (
-      <div className="flex items-center justify-center h-24 text-[13px] text-ink-mute">
+      <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
         Keine Lagerbewegungen
       </div>
     );
@@ -76,11 +101,21 @@ export function InventoryBalanceTable({ articleId }: { articleId: string }) {
     <table className="w-full table-fixed border-collapse" role="table">
       <thead>
         <tr className="h-8 border-b border-hairline">
-          <th className={colHeaderClassLeft} style={{ width: "30%" }}>Lager</th>
-          <th className={colHeaderClass} style={{ width: "14%" }}>Bestand</th>
-          <th className={colHeaderClass} style={{ width: "14%" }}>Reserviert</th>
-          <th className={colHeaderClass} style={{ width: "14%" }}>Verfügbar</th>
-          <th className={colHeaderClass} style={{ width: "14%" }}>Erwartet</th>
+          <th className={colHeaderClassLeft} style={{ width: "30%" }}>
+            Lager
+          </th>
+          <th className={colHeaderClass} style={{ width: "14%" }}>
+            Bestand
+          </th>
+          <th className={colHeaderClass} style={{ width: "14%" }}>
+            Reserviert
+          </th>
+          <th className={colHeaderClass} style={{ width: "14%" }}>
+            Verfügbar
+          </th>
+          <th className={colHeaderClass} style={{ width: "14%" }}>
+            Erwartet
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -99,10 +134,7 @@ export function InventoryBalanceTable({ articleId }: { articleId: string }) {
               >
                 {formatQty(reserved)}
               </td>
-              <td
-                className={cellClass}
-                style={availColor ? { color: availColor } : undefined}
-              >
+              <td className={cellClass} style={availColor ? { color: availColor } : undefined}>
                 {formatQty(avail)}
               </td>
               <td className={cellClass}>{formatQty(row.expectedPurchaseQty ?? 0)}</td>
@@ -111,7 +143,7 @@ export function InventoryBalanceTable({ articleId }: { articleId: string }) {
         })}
 
         {showTotal && (
-          <tr className="h-10 font-bold border-t border-hairline">
+          <tr className="h-10 border-t border-hairline font-bold">
             <td className={`${cellClassLeft} font-bold`}>Gesamt</td>
             <td className={`${cellClass} font-bold`}>{formatQty(totalOnHand)}</td>
             <td
@@ -126,8 +158,8 @@ export function InventoryBalanceTable({ articleId }: { articleId: string }) {
                 totalAvailable > 0
                   ? { color: "var(--ok)" }
                   : totalAvailable < 0
-                  ? { color: "var(--destructive)" }
-                  : undefined
+                    ? { color: "var(--destructive)" }
+                    : undefined
               }
             >
               {formatQty(totalAvailable)}

@@ -6,8 +6,8 @@ export const Route = createFileRoute("/_auth/app/admin")({
 
 function AdminLayout() {
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 min-h-0 overflow-hidden">
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <Outlet />
       </div>
     </div>

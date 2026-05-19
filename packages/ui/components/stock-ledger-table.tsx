@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Skeleton } from "./skeleton";
+
 import { formatDate } from "../lib/formatters";
+import { Skeleton } from "./skeleton";
 
 interface StockLedgerRow {
   inventory_movement_id: string;
@@ -80,13 +81,13 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
                 <Skeleton className="h-3 w-24" />
               </td>
               <td className={cellClass}>
-                <Skeleton className="h-3 w-10 ml-auto" />
+                <Skeleton className="ml-auto h-3 w-10" />
               </td>
               <td className={cellClass}>
-                <Skeleton className="h-3 w-10 ml-auto" />
+                <Skeleton className="ml-auto h-3 w-10" />
               </td>
               <td className={cellClass}>
-                <Skeleton className="h-3 w-12 ml-auto" />
+                <Skeleton className="ml-auto h-3 w-12" />
               </td>
             </tr>
           ))}
@@ -97,7 +98,7 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
 
   if (rows.length === 0) {
     return (
-      <div className="flex items-center justify-center h-24 text-[13px] text-ink-mute">
+      <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
         Keine Lagerbewegungen
       </div>
     );
@@ -137,7 +138,7 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
           return (
             <tr key={row.inventory_movement_id} className={rowClass}>
               <td className={cellClassLeft}>
-                <span className="font-mono tabular-nums text-[12px]">
+                <span className="font-mono text-[12px] tabular-nums">
                   {formatDate(row.created_at)}
                 </span>
               </td>
@@ -154,9 +155,7 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
                 </span>
               </td>
               <td className={cellClass}>
-                {qty > 0 ? (
-                  <span style={{ color: "var(--ok)" }}>{qty.toFixed(3)}</span>
-                ) : null}
+                {qty > 0 ? <span style={{ color: "var(--ok)" }}>{qty.toFixed(3)}</span> : null}
               </td>
               <td className={cellClass}>
                 {qty < 0 ? (

@@ -1,3 +1,6 @@
+import { eq, and, or, sql, inArray, asc } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
 import { db } from "../index";
 import {
   document,
@@ -20,10 +23,10 @@ import {
   journalEntry,
   journalLine,
   accountDeterminationRule,
+  unit,
 } from "../schema/app.schema";
-import { refreshStatisticsMVs } from "./statistics";
-import { eq, and, or, sql, inArray, asc } from "drizzle-orm";
 import { resolveFiscalPeriodId } from "./fiscal-period-generator";
+import { refreshStatisticsMVs } from "./statistics";
 
 export interface TypeNode {
   documentType: string;
@@ -104,31 +107,75 @@ export interface DocumentAuditTrail {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  N: "Angebote", A: "Aufträge", L: "Lieferscheine", R: "Rechnungen", G: "Gutschriften",
-  b: "Bestellungen", l: "Wareneingänge", r: "Eingangsrechnungen", g: "Eingangsgutschriften",
-  V: "Inventur", U: "Umbuchungen", Z: "Zugänge", E: "Entnahmen",
-  q: "Produktionsaufträge", p: "Fertigmeldungen",
+  N: "Angebote",
+  A: "Aufträge",
+  L: "Lieferscheine",
+  R: "Rechnungen",
+  G: "Gutschriften",
+  b: "Bestellungen",
+  l: "Wareneingänge",
+  r: "Eingangsrechnungen",
+  g: "Eingangsgutschriften",
+  V: "Inventur",
+  U: "Umbuchungen",
+  Z: "Zugänge",
+  E: "Entnahmen",
+  q: "Produktionsaufträge",
+  p: "Fertigmeldungen",
 };
 
 export const DIRECTION_FROM_TYPE: Record<string, string> = {
-  N: "OUTBOUND", A: "OUTBOUND", L: "OUTBOUND", R: "OUTBOUND", G: "OUTBOUND",
-  b: "INBOUND", l: "INBOUND", r: "INBOUND", g: "INBOUND",
-  V: "ADJUSTMENT", Z: "ADJUSTMENT", E: "ADJUSTMENT", U: "ADJUSTMENT",
-  q: "PRODUCTION", p: "PRODUCTION",
+  N: "OUTBOUND",
+  A: "OUTBOUND",
+  L: "OUTBOUND",
+  R: "OUTBOUND",
+  G: "OUTBOUND",
+  b: "INBOUND",
+  l: "INBOUND",
+  r: "INBOUND",
+  g: "INBOUND",
+  V: "ADJUSTMENT",
+  Z: "ADJUSTMENT",
+  E: "ADJUSTMENT",
+  U: "ADJUSTMENT",
+  q: "PRODUCTION",
+  p: "PRODUCTION",
 };
 
 const TYPE_SEQUENCE: Record<string, number> = {
-  N: 1, A: 2, L: 3, R: 4, G: 5,
-  b: 1, l: 2, r: 3, g: 4,
-  V: 1, Z: 2, E: 3, U: 4,
-  q: 1, p: 2,
+  N: 1,
+  A: 2,
+  L: 3,
+  R: 4,
+  G: 5,
+  b: 1,
+  l: 2,
+  r: 3,
+  g: 4,
+  V: 1,
+  Z: 2,
+  E: 3,
+  U: 4,
+  q: 1,
+  p: 2,
 };
 
 const NEXT_TYPE: Record<string, string | undefined> = {
-  N: "A", A: "L", L: "R", R: undefined, G: undefined,
-  b: "l", l: "r", r: undefined, g: undefined,
-  V: "Z", Z: "E", E: "U", U: undefined,
-  q: "p", p: undefined,
+  N: "A",
+  A: "L",
+  L: "R",
+  R: undefined,
+  G: undefined,
+  b: "l",
+  l: "r",
+  r: undefined,
+  g: undefined,
+  V: "Z",
+  Z: "E",
+  E: "U",
+  U: undefined,
+  q: "p",
+  p: undefined,
 };
 
 const OUTBOUND_DUPLICATE_TYPES = new Set(["N", "A", "L", "R", "G"]);
@@ -175,10 +222,7 @@ function generateDocumentNo(prefix: string, nextValue: number, padding: number):
   return prefix + String(nextValue).padStart(padding, "0");
 }
 
-async function resolveCurrencyCode(
-  tx: any,
-  currencyValue?: string | null,
-): Promise<string | null> {
+async function resolveCurrencyCode(tx: any, currencyValue?: string | null): Promise<string | null> {
   if (!currencyValue) return null;
   if (currencyValue.length === 3) return currencyValue;
 
@@ -275,6 +319,920 @@ function deriveDocumentAuditContext(
   };
 }
 
+type DocumentPostingDoc = {
+  documentId: string;
+  companyId: string;
+  documentType: string;
+  documentNo: string;
+  status: string;
+  warehouseId: string | null;
+  targetWarehouseId: string | null;
+  customerId: string | null;
+  postingDate: string | null;
+  documentDate: string;
+  documentGroupId: string | null;
+  billingAddress: unknown;
+  deliveryAddress: unknown;
+  deliveryAddressId: string | null;
+  customAttributes: unknown;
+  paymentTermId: string | null;
+  shippingMethodId: string | null;
+  documentTypeId: string | null;
+  transactionId: string;
+};
+
+type DocumentPostingLine = {
+  documentLineId: string;
+  articleId: string | null;
+  lineType: string;
+  warehouseId: string | null;
+  quantity: string | number | null;
+  netPrice: string | number | null;
+  lineTotalNet: string | null;
+  taxCodeId: string | null;
+  costCenterId: string | null;
+  bomGroupId: string | null;
+};
+
+type DocumentPostingLineWithArticle = DocumentPostingLine & {
+  articleId: string;
+};
+
+type DocumentGroupAccountFallback = {
+  defaultSalesAccountId: string | null;
+  defaultCostAccountId: string | null;
+} | null;
+
+type JournalPostingContext = {
+  lineContext: string;
+  counterContext: string;
+};
+
+const JOURNAL_POSTING_CONTEXTS: Record<string, JournalPostingContext> = {
+  R: { lineContext: "SALES_REVENUE", counterContext: "ACCOUNTS_RECEIVABLE" },
+  G: { lineContext: "SALES_CREDIT", counterContext: "ACCOUNTS_RECEIVABLE" },
+  r: { lineContext: "PURCHASE_COST", counterContext: "ACCOUNTS_PAYABLE" },
+  g: { lineContext: "PURCHASE_CREDIT", counterContext: "ACCOUNTS_PAYABLE" },
+};
+
+function isOutboundFinancialMovement(movementType: string): boolean {
+  return movementType === "R" || movementType === "G";
+}
+
+function resolveInventoryInitialQty(movementType: string, qty: number): string {
+  if (movementType === "V") return String(qty);
+  if (movementType === "A") return "0";
+  if (["L", "R", "g", "E"].includes(movementType)) return String(-qty);
+  return String(qty);
+}
+
+function resolveInventoryMovementQtyDelta(
+  movementType: string,
+  qty: number,
+  stocktakeOnHandBefore: number,
+): string {
+  if (movementType === "V") return String(qty - stocktakeOnHandBefore);
+  return String(["L", "R", "g", "E"].includes(movementType) ? -qty : qty);
+}
+
+function resolveInventoryBalanceSet(
+  movementType: string,
+  qty: number,
+  lineNetPrice: number,
+): Record<string, unknown> {
+  if (movementType === "L") {
+    return {
+      onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
+      reservedQty: sql`${inventoryBalance.reservedQty} - ${qty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - (${inventoryBalance.reservedQty} - ${qty})`,
+    };
+  }
+
+  if (movementType === "A") {
+    return {
+      reservedQty: sql`${inventoryBalance.reservedQty} + ${qty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - (${inventoryBalance.reservedQty} + ${qty})`,
+    };
+  }
+
+  if (movementType === "R") {
+    return {
+      onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
+    };
+  }
+
+  if (movementType === "G") {
+    return {
+      onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
+    };
+  }
+
+  if (movementType === "b") {
+    return {
+      expectedPurchaseQty: sql`${inventoryBalance.expectedPurchaseQty} + ${qty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${inventoryBalance.reservedQty} + (${inventoryBalance.expectedPurchaseQty} + ${qty})`,
+    };
+  }
+
+  if (movementType === "l") {
+    return {
+      onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
+      expectedPurchaseQty: sql`GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty} + GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
+    };
+  }
+
+  if (movementType === "r") {
+    return {
+      onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
+      gldPurchase: sql`CASE WHEN (${inventoryBalance.onHandQty} + ${qty}) = 0 THEN 0
+        ELSE (COALESCE(${inventoryBalance.gldPurchase}, 0) * ${inventoryBalance.onHandQty} + ${lineNetPrice} * ${qty}) / (${inventoryBalance.onHandQty} + ${qty})
+        END`,
+    };
+  }
+
+  if (movementType === "g") {
+    return {
+      onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
+    };
+  }
+
+  if (movementType === "Z") {
+    return {
+      onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
+    };
+  }
+
+  if (movementType === "E") {
+    return {
+      onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
+    };
+  }
+
+  if (movementType === "V") {
+    return {
+      onHandQty: String(qty),
+      availableQty: sql`${qty} - ${inventoryBalance.reservedQty}`,
+    };
+  }
+
+  return {};
+}
+
+function resolveInventorySeedValues(movementType: string, qty: number): {
+  onHandQty: string;
+  reservedQty: string;
+  availableQty: string;
+} {
+  const initialOnHand = resolveInventoryInitialQty(movementType, qty);
+  return {
+    onHandQty: movementType === "A" ? "0" : initialOnHand,
+    reservedQty: movementType === "A" ? String(qty) : "0",
+    availableQty: movementType === "A" ? String(-qty) : initialOnHand,
+  };
+}
+
+async function loadLineTrackingRows(
+  tx: any,
+  tenantId: string,
+  documentLineId: string,
+): Promise<
+  Array<{
+    trackingId: string;
+    serialNumberId: string | null;
+    serialNo: string | null;
+    batchNo: string | null;
+  }>
+> {
+  return await tx
+    .select({
+      trackingId: documentLineTracking.trackingId,
+      serialNumberId: documentLineTracking.serialNumberId,
+      serialNo: documentLineTracking.serialNo,
+      batchNo: documentLineTracking.batchNo,
+    })
+    .from(documentLineTracking)
+    .where(and(eq(documentLineTracking.tenantId, tenantId), eq(documentLineTracking.documentLineId, documentLineId)))
+    .orderBy(asc(documentLineTracking.createdAt), asc(documentLineTracking.trackingId));
+}
+
+async function applyTrackingForMovement(
+  tx: any,
+  tenantId: string,
+  movementId: string,
+  line: Pick<DocumentPostingLineWithArticle, "documentLineId" | "articleId" | "lineType">,
+  docMovementType: string,
+) {
+  const trackingRows = await loadLineTrackingRows(tx, tenantId, line.documentLineId);
+  if (trackingRows.length === 0) return;
+
+  const tracking = trackingRows[0];
+  if (tracking.batchNo) {
+    await tx
+      .update(inventoryMovement)
+      .set({ batchNo: tracking.batchNo })
+      .where(eq(inventoryMovement.inventoryMovementId, movementId));
+    return;
+  }
+
+  const lifecycle = resolveSerialLifecycle(docMovementType, line.lineType);
+
+  if (tracking.serialNo) {
+    const [createdSerial] = await tx
+      .insert(serialNumber)
+      .values({
+        tenantId,
+        articleId: line.articleId!,
+        serialNo: tracking.serialNo,
+        status: lifecycle.status,
+        createdMovementId: lifecycle.movementLink === "createdMovementId" ? movementId : null,
+        consumedMovementId: lifecycle.movementLink === "consumedMovementId" ? movementId : null,
+      })
+      .returning({ serialNumberId: serialNumber.serialNumberId });
+
+    if (createdSerial?.serialNumberId) {
+      await tx
+        .update(inventoryMovement)
+        .set({ serialNumberId: createdSerial.serialNumberId })
+        .where(eq(inventoryMovement.inventoryMovementId, movementId));
+    }
+    return;
+  }
+
+  if (tracking.serialNumberId) {
+    const serialUpdate: Record<string, unknown> = {
+      status: lifecycle.status,
+    };
+
+    if (lifecycle.movementLink === "createdMovementId") {
+      serialUpdate.createdMovementId = movementId;
+    } else if (lifecycle.movementLink === "consumedMovementId") {
+      serialUpdate.consumedMovementId = movementId;
+    }
+
+    await tx
+      .update(serialNumber)
+      .set(serialUpdate)
+      .where(
+        and(
+          eq(serialNumber.tenantId, tenantId),
+          eq(serialNumber.serialNumberId, tracking.serialNumberId),
+        ),
+      );
+
+    await tx
+      .update(inventoryMovement)
+      .set({ serialNumberId: tracking.serialNumberId })
+      .where(eq(inventoryMovement.inventoryMovementId, movementId));
+  }
+}
+
+async function getDocumentGroupAccountFallback(
+  tx: any,
+  tenantId: string,
+  documentGroupId: string | null,
+): Promise<DocumentGroupAccountFallback> {
+  if (!documentGroupId) return null;
+
+  const [docGroup] = await tx
+    .select({
+      defaultSalesAccountId: documentGroup.defaultSalesAccountId,
+      defaultCostAccountId: documentGroup.defaultCostAccountId,
+    })
+    .from(documentGroup)
+    .where(and(eq(documentGroup.documentGroupId, documentGroupId), eq(documentGroup.tenantId, tenantId)))
+    .limit(1);
+
+  return docGroup ?? null;
+}
+
+async function resolveJournalGlAccount(
+  tx: any,
+  tenantId: string,
+  postingContext: string,
+  articleGroupId: string | null,
+  taxCodeId: string | null,
+  docGroup: DocumentGroupAccountFallback,
+  movementType: string,
+): Promise<string | null> {
+  try {
+    if (articleGroupId || taxCodeId) {
+      const rules = await tx
+        .select({ glAccountId: accountDeterminationRule.glAccountId })
+        .from(accountDeterminationRule)
+        .where(
+          and(
+            eq(accountDeterminationRule.tenantId, tenantId),
+            eq(accountDeterminationRule.postingContext, postingContext),
+            articleGroupId
+              ? eq(accountDeterminationRule.articleGroupId, articleGroupId)
+              : sql`${accountDeterminationRule.articleGroupId} IS NULL`,
+            taxCodeId
+              ? eq(accountDeterminationRule.taxCodeId, taxCodeId)
+              : sql`${accountDeterminationRule.taxCodeId} IS NULL`,
+          ),
+        )
+        .limit(1);
+      if (rules[0]?.glAccountId) return rules[0].glAccountId;
+    }
+
+    const fallbackRules = await tx
+      .select({ glAccountId: accountDeterminationRule.glAccountId })
+      .from(accountDeterminationRule)
+      .where(
+        and(
+          eq(accountDeterminationRule.tenantId, tenantId),
+          eq(accountDeterminationRule.postingContext, postingContext),
+          sql`${accountDeterminationRule.articleGroupId} IS NULL`,
+          sql`${accountDeterminationRule.taxCodeId} IS NULL`,
+        ),
+      )
+      .limit(1);
+    if (fallbackRules[0]?.glAccountId) return fallbackRules[0].glAccountId;
+
+    if (docGroup) {
+      if (isOutboundFinancialMovement(movementType) && docGroup.defaultSalesAccountId) {
+        return docGroup.defaultSalesAccountId;
+      }
+      if (!isOutboundFinancialMovement(movementType) && docGroup.defaultCostAccountId) {
+        return docGroup.defaultCostAccountId;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function getArticleGroupId(
+  tx: any,
+  tenantId: string,
+  articleId: string | null,
+): Promise<string | null> {
+  if (!articleId) return null;
+
+  const [art] = await tx
+    .select({ articleGroupId: article.articleGroupId })
+    .from(article)
+    .where(and(eq(article.articleId, articleId), eq(article.tenantId, tenantId)))
+    .limit(1);
+
+  return art?.articleGroupId ?? null;
+}
+
+async function postFinancialJournalEntries(
+  tx: any,
+  tenantId: string,
+  doc: DocumentPostingDoc,
+  movementType: string,
+  lines: DocumentPostingLine[],
+) {
+  const journalContexts = JOURNAL_POSTING_CONTEXTS[movementType];
+  if (!journalContexts) return;
+
+  const docGroup = await getDocumentGroupAccountFallback(tx, tenantId, doc.documentGroupId);
+  const counterGlAccountId = await resolveJournalGlAccount(
+    tx,
+    tenantId,
+    journalContexts.counterContext,
+    null,
+    null,
+    docGroup,
+    movementType,
+  );
+
+  const journalLines: Array<{
+    glAccountId: string;
+    debitAmount: string;
+    creditAmount: string;
+    costCenterId: string | null;
+    taxCodeId: string | null;
+  }> = [];
+
+  for (const line of lines) {
+    const amount = Number(line.lineTotalNet ?? "0");
+    if (!amount) continue;
+
+    const absAmount = Math.abs(amount);
+    const articleGroupId = await getArticleGroupId(tx, tenantId, line.articleId);
+    const lineGlAccountId = await resolveJournalGlAccount(
+      tx,
+      tenantId,
+      journalContexts.lineContext,
+      articleGroupId,
+      line.taxCodeId ?? null,
+      docGroup,
+      movementType,
+    );
+
+    if (!lineGlAccountId) continue;
+
+    const isOutbound = isOutboundFinancialMovement(movementType);
+    journalLines.push({
+      glAccountId: lineGlAccountId,
+      debitAmount: isOutbound ? "0" : String(absAmount),
+      creditAmount: isOutbound ? String(absAmount) : "0",
+      costCenterId: line.costCenterId ?? null,
+      taxCodeId: line.taxCodeId ?? null,
+    });
+
+    if (counterGlAccountId) {
+      journalLines.push({
+        glAccountId: counterGlAccountId,
+        debitAmount: isOutbound ? String(absAmount) : "0",
+        creditAmount: isOutbound ? "0" : String(absAmount),
+        costCenterId: null,
+        taxCodeId: null,
+      });
+    }
+  }
+
+  if (journalLines.length === 0) return;
+
+  const postingDate = doc.postingDate ?? doc.documentDate;
+  const [entry] = await tx
+    .insert(journalEntry)
+    .values({
+      tenantId,
+      companyId: doc.companyId,
+      postingDate,
+      sourceDocumentId: doc.documentId,
+      description: doc.documentNo,
+    })
+    .returning({ journalEntryId: journalEntry.journalEntryId });
+
+  await tx.insert(journalLine).values(
+    journalLines.map((jl) => ({
+      tenantId,
+      companyId: doc.companyId,
+      journalEntryId: entry.journalEntryId,
+      glAccountId: jl.glAccountId,
+      debitAmount: jl.debitAmount,
+      creditAmount: jl.creditAmount,
+      costCenterId: jl.costCenterId,
+      taxCodeId: jl.taxCodeId,
+    })),
+  );
+}
+
+async function postProductionDocumentLine(
+  tx: any,
+  tenantId: string,
+  doc: DocumentPostingDoc,
+  line: DocumentPostingLineWithArticle,
+  movementType: string,
+  now: Date,
+  txId: string,
+) {
+  const warehouseId = line.warehouseId ?? doc.warehouseId;
+  if (!warehouseId) return;
+
+  const qty = Number(line.quantity);
+  const isComponent = line.lineType === "bom_component";
+  const signedQty = isComponent ? -qty : qty;
+
+  await tx
+    .insert(inventoryBalance)
+    .values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId,
+      articleId: line.articleId,
+      onHandQty: String(signedQty),
+      reservedQty: "0",
+      availableQty: String(signedQty),
+    })
+    .onConflictDoUpdate({
+      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
+      set: {
+        onHandQty: sql`${inventoryBalance.onHandQty} + ${signedQty}`,
+        availableQty: sql`${inventoryBalance.onHandQty} + ${signedQty} - ${inventoryBalance.reservedQty}`,
+      },
+    });
+
+  const [movement] = await tx
+    .insert(inventoryMovement)
+    .values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId,
+      articleId: line.articleId,
+      movementType,
+      qtyDelta: String(signedQty),
+      movementDate: now,
+      sourceDocumentId: doc.documentId,
+      sourceDocumentLineId: line.documentLineId,
+      transactionId: txId,
+      referenceText: doc.documentNo,
+    })
+    .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
+
+  if (movement?.inventoryMovementId) {
+    await applyTrackingForMovement(tx, tenantId, movement.inventoryMovementId, line, movementType);
+  }
+}
+
+async function postTransferDocumentLine(
+  tx: any,
+  tenantId: string,
+  doc: DocumentPostingDoc,
+  line: DocumentPostingLineWithArticle,
+  movementType: string,
+  now: Date,
+  txId: string,
+) {
+  const sourceWh = doc.warehouseId;
+  const targetWh = doc.targetWarehouseId;
+  if (!sourceWh || !targetWh) return;
+
+  const qty = Number(line.quantity);
+
+  await tx
+    .insert(inventoryBalance)
+    .values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId: sourceWh,
+      articleId: line.articleId,
+      onHandQty: String(-qty),
+      reservedQty: "0",
+      availableQty: String(-qty),
+    })
+    .onConflictDoUpdate({
+      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
+      set: {
+        onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
+        availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
+      },
+    });
+
+  await tx
+    .insert(inventoryBalance)
+    .values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId: targetWh,
+      articleId: line.articleId,
+      onHandQty: String(qty),
+      reservedQty: "0",
+      availableQty: String(qty),
+    })
+    .onConflictDoUpdate({
+      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
+      set: {
+        onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
+        availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
+      },
+    });
+
+  await tx.insert(inventoryMovement).values({
+    tenantId,
+    companyId: doc.companyId,
+    warehouseId: sourceWh,
+    articleId: line.articleId,
+    movementType,
+    qtyDelta: String(-qty),
+    movementDate: now,
+    sourceDocumentId: doc.documentId,
+    sourceDocumentLineId: line.documentLineId,
+    transactionId: txId,
+    referenceText: doc.documentNo,
+  });
+
+  const [targetMovement] = await tx
+    .insert(inventoryMovement)
+    .values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId: targetWh,
+      articleId: line.articleId,
+      movementType,
+      qtyDelta: String(qty),
+      movementDate: now,
+      sourceDocumentId: doc.documentId,
+      sourceDocumentLineId: line.documentLineId,
+      transactionId: txId,
+      referenceText: doc.documentNo,
+    })
+    .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
+
+  const [sourceMovement] = await tx
+    .select({ inventoryMovementId: inventoryMovement.inventoryMovementId })
+    .from(inventoryMovement)
+    .where(
+      and(
+        eq(inventoryMovement.tenantId, tenantId),
+        eq(inventoryMovement.companyId, doc.companyId),
+        eq(inventoryMovement.transactionId, txId),
+        eq(inventoryMovement.warehouseId, sourceWh),
+        eq(inventoryMovement.articleId, line.articleId),
+      ),
+    )
+    .orderBy(asc(inventoryMovement.createdAt))
+    .limit(1);
+
+  const transferTrackingRows = await loadLineTrackingRows(tx, tenantId, line.documentLineId);
+  if (transferTrackingRows.length === 0) return;
+
+  const tracking = transferTrackingRows[0];
+  const serialUpdate: Record<string, unknown> = {};
+  if (tracking.batchNo) {
+    serialUpdate.batchNo = tracking.batchNo;
+  } else if (tracking.serialNumberId) {
+    serialUpdate.serialNumberId = tracking.serialNumberId;
+  } else if (tracking.serialNo) {
+    const [createdSerial] = await tx
+      .insert(serialNumber)
+      .values({
+        tenantId,
+        articleId: line.articleId,
+        serialNo: tracking.serialNo,
+        status: "in_stock",
+      })
+      .onConflictDoNothing()
+      .returning({ serialNumberId: serialNumber.serialNumberId });
+
+    if (createdSerial?.serialNumberId) {
+      serialUpdate.serialNumberId = createdSerial.serialNumberId;
+    } else {
+      const [existingSerial] = await tx
+        .select({ serialNumberId: serialNumber.serialNumberId })
+        .from(serialNumber)
+        .where(
+          and(
+            eq(serialNumber.tenantId, tenantId),
+            eq(serialNumber.articleId, line.articleId),
+            eq(serialNumber.serialNo, tracking.serialNo),
+          ),
+        )
+        .limit(1);
+
+      if (existingSerial?.serialNumberId) {
+        serialUpdate.serialNumberId = existingSerial.serialNumberId;
+      }
+    }
+  }
+
+  if (Object.keys(serialUpdate).length > 0) {
+    if (sourceMovement?.inventoryMovementId) {
+      await tx
+        .update(inventoryMovement)
+        .set(serialUpdate)
+        .where(eq(inventoryMovement.inventoryMovementId, sourceMovement.inventoryMovementId));
+    }
+    if (targetMovement?.inventoryMovementId) {
+      await tx
+        .update(inventoryMovement)
+        .set(serialUpdate)
+        .where(eq(inventoryMovement.inventoryMovementId, targetMovement.inventoryMovementId));
+    }
+  }
+}
+
+async function postStandardDocumentLine(
+  tx: any,
+  tenantId: string,
+  doc: DocumentPostingDoc,
+  line: DocumentPostingLineWithArticle,
+  movementType: string,
+  now: Date,
+  txId: string,
+) {
+  const warehouseId = line.warehouseId ?? doc.warehouseId;
+  if (!warehouseId) return;
+
+  const qty = Number(line.quantity);
+  let stocktakeOnHandBefore = 0;
+  if (movementType === "V") {
+    const [balanceBefore] = await tx
+      .select({
+        onHandQty: inventoryBalance.onHandQty,
+      })
+      .from(inventoryBalance)
+      .where(
+        and(
+          eq(inventoryBalance.tenantId, tenantId),
+          eq(inventoryBalance.warehouseId, warehouseId),
+          eq(inventoryBalance.articleId, line.articleId),
+        ),
+      )
+      .limit(1);
+
+    stocktakeOnHandBefore = Number(balanceBefore?.onHandQty ?? 0);
+  }
+
+  const lineNetPrice = Number(line.netPrice ?? 0);
+  const balanceUpdate = resolveInventoryBalanceSet(movementType, qty, lineNetPrice);
+  const seedValues = resolveInventorySeedValues(movementType, qty);
+  const inventorySeedValues =
+    movementType === "r"
+      ? {
+          ...seedValues,
+          gldPurchase: String(lineNetPrice),
+          gldCost: String(lineNetPrice),
+        }
+      : seedValues;
+
+  await tx
+    .insert(inventoryBalance)
+    .values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId,
+      articleId: line.articleId,
+      ...inventorySeedValues,
+    })
+    .onConflictDoUpdate({
+      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
+      set: balanceUpdate,
+    });
+
+  const [movement] = await tx
+    .insert(inventoryMovement)
+    .values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId,
+      articleId: line.articleId,
+      movementType,
+      qtyDelta: resolveInventoryMovementQtyDelta(movementType, qty, stocktakeOnHandBefore),
+      absoluteQty: movementType === "V" ? String(qty) : null,
+      movementDate: now,
+      sourceDocumentId: doc.documentId,
+      sourceDocumentLineId: line.documentLineId,
+      transactionId: txId,
+      referenceText: doc.documentNo,
+    })
+    .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
+
+  if (movement?.inventoryMovementId) {
+    await applyTrackingForMovement(tx, tenantId, movement.inventoryMovementId, line, movementType);
+  }
+
+  if (movementType === "r") {
+    const balances = await tx
+      .select({
+        onHandQty: inventoryBalance.onHandQty,
+        gldPurchase: inventoryBalance.gldPurchase,
+      })
+      .from(inventoryBalance)
+      .where(
+        and(
+          eq(inventoryBalance.tenantId, tenantId),
+          eq(inventoryBalance.warehouseId, warehouseId),
+          eq(inventoryBalance.articleId, line.articleId),
+        ),
+      )
+      .limit(1);
+
+    const currentQty = Number(balances[0]?.onHandQty ?? 0);
+    const newAvgCost = Number(balances[0]?.gldPurchase ?? 0);
+    const lineQty = qty;
+    const linePrice = lineNetPrice;
+    const avgCostBefore = currentQty > lineQty
+      ? (currentQty * newAvgCost - lineQty * linePrice) / (currentQty - lineQty)
+      : newAvgCost;
+
+    await tx
+      .update(inventoryBalance)
+      .set({ gldCost: String(newAvgCost) })
+      .where(
+        and(
+          eq(inventoryBalance.tenantId, tenantId),
+          eq(inventoryBalance.warehouseId, warehouseId),
+          eq(inventoryBalance.articleId, line.articleId),
+        ),
+      );
+
+    const fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
+
+    await tx.insert(factPurchaseEvent).values({
+      tenantId,
+      companyId: doc.companyId,
+      sourceDocumentId: doc.documentId,
+      sourceDocumentLineId: line.documentLineId,
+      supplierId: doc.customerId,
+      articleId: line.articleId,
+      eventType: "purchase",
+      quantityDelta: String(lineQty),
+      amountNetDelta: String(lineQty * linePrice),
+      avgCostBefore: String(avgCostBefore),
+      avgCostAfter: String(newAvgCost),
+      fiscalPeriodId,
+      bookingPeriod: doc.documentDate,
+    });
+  }
+
+  if (movementType === "g") {
+    const balances = await tx
+      .select({
+        gldPurchase: inventoryBalance.gldPurchase,
+      })
+      .from(inventoryBalance)
+      .where(
+        and(
+          eq(inventoryBalance.tenantId, tenantId),
+          eq(inventoryBalance.warehouseId, warehouseId),
+          eq(inventoryBalance.articleId, line.articleId),
+        ),
+      )
+      .limit(1);
+
+    const avgCost = Number(balances[0]?.gldPurchase ?? 0);
+    const lineQty = qty;
+    const linePrice = lineNetPrice;
+    const fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
+
+    await tx.insert(factPurchaseEvent).values({
+      tenantId,
+      companyId: doc.companyId,
+      sourceDocumentId: doc.documentId,
+      sourceDocumentLineId: line.documentLineId,
+      supplierId: doc.customerId,
+      articleId: line.articleId,
+      eventType: "correction",
+      quantityDelta: String(-lineQty),
+      amountNetDelta: String(-(lineQty * linePrice)),
+      avgCostBefore: String(avgCost),
+      avgCostAfter: String(avgCost),
+      fiscalPeriodId,
+      bookingPeriod: doc.documentDate,
+    });
+  }
+
+  if (movementType === "R" || movementType === "L") {
+    let cogsDelta: string | null = null;
+    let fiscalPeriodId: string | null = null;
+
+    if (movementType === "R") {
+      const balance = await tx
+        .select({ gldPurchase: inventoryBalance.gldPurchase })
+        .from(inventoryBalance)
+        .where(
+          and(
+            eq(inventoryBalance.tenantId, tenantId),
+            eq(inventoryBalance.warehouseId, warehouseId),
+            eq(inventoryBalance.articleId, line.articleId),
+          ),
+        )
+        .limit(1);
+
+      const gldPurchase = Number(balance[0]?.gldPurchase ?? 0);
+      cogsDelta = String(gldPurchase * Math.abs(qty));
+      fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
+    }
+
+    await tx.insert(factSalesEvent).values({
+      tenantId,
+      companyId: doc.companyId,
+      sourceDocumentId: doc.documentId,
+      sourceDocumentLineId: line.documentLineId,
+      customerId: doc.customerId,
+      articleId: line.articleId,
+      eventType: movementType === "R" ? "invoice" : "delivery",
+      quantityDelta: String(-qty),
+      amountNetDelta: line.lineTotalNet ?? "0",
+      bookingPeriod: doc.documentDate,
+      transactionId: txId,
+      cogsDelta,
+      fiscalPeriodId,
+    });
+  }
+}
+
+async function postDocumentLine(
+  tx: any,
+  tenantId: string,
+  doc: DocumentPostingDoc,
+  line: DocumentPostingLine,
+  movementType: string,
+  now: Date,
+  txId: string,
+) {
+  if (!line.articleId) return;
+  if (line.lineType === "sales_bom_header") return;
+  if (movementType === "N" || movementType === "p") return;
+
+  if (movementType === "q") {
+    await postProductionDocumentLine(tx, tenantId, doc, line as DocumentPostingLineWithArticle, movementType, now, txId);
+    return;
+  }
+
+  if (movementType === "U") {
+    await postTransferDocumentLine(tx, tenantId, doc, line as DocumentPostingLineWithArticle, movementType, now, txId);
+    return;
+  }
+
+  await postStandardDocumentLine(tx, tenantId, doc, line as DocumentPostingLineWithArticle, movementType, now, txId);
+}
+
 export class DocumentService {
   async createDocumentLine(
     tenantId: string,
@@ -315,7 +1273,8 @@ export class DocumentService {
         quantity: String(data.quantity),
         unit: data.unit ?? null,
         netPrice: String(data.netPrice),
-        discountPercentage: data.discountPercentage != null ? String(data.discountPercentage) : null,
+        discountPercentage:
+          data.discountPercentage != null ? String(data.discountPercentage) : null,
         taxCodeId: data.taxCodeId ?? null,
         taxAmount: data.taxAmount != null ? String(data.taxAmount) : null,
         lineTotalNet: data.lineTotalNet != null ? String(data.lineTotalNet) : null,
@@ -336,12 +1295,7 @@ export class DocumentService {
           bomType: article.bomType,
         })
         .from(article)
-        .where(
-          and(
-            eq(article.articleId, baseLine.articleId),
-            eq(article.tenantId, tenantId),
-          ),
-        )
+        .where(and(eq(article.articleId, baseLine.articleId), eq(article.tenantId, tenantId)))
         .limit(1);
 
       const shouldExpandSalesBom =
@@ -353,7 +1307,12 @@ export class DocumentService {
         return await tx.insert(documentLine).values(baseLine).returning();
       }
 
-      const bomHeaderLineType = shouldExpandProductionBom ? "production_output" : "sales_bom_header";
+      const bomHeaderLineType = shouldExpandProductionBom
+        ? "production_output"
+        : "sales_bom_header";
+
+      const bomBaseUnit = alias(unit, "bom_base_unit");
+      const bomSalesUnit = alias(unit, "bom_sales_unit");
 
       const components = await tx
         .select({
@@ -361,11 +1320,13 @@ export class DocumentService {
           quantity: articleBom.quantity,
           scrapPercentage: articleBom.scrapPercentage,
           name: article.name,
-          baseUnit: article.baseUnit,
-          salesUnit: article.salesUnit,
+          baseUnitCode: bomBaseUnit.code,
+          salesUnitCode: bomSalesUnit.code,
         })
         .from(articleBom)
         .innerJoin(article, eq(article.articleId, articleBom.componentArticleId))
+        .leftJoin(bomBaseUnit, eq(bomBaseUnit.unitId, article.baseUnitId))
+        .leftJoin(bomSalesUnit, eq(bomSalesUnit.unitId, article.salesUnitId))
         .where(
           and(
             eq(articleBom.tenantId, tenantId),
@@ -406,7 +1367,7 @@ export class DocumentService {
               articleId: component.componentArticleId,
               articleTextSnapshot: component.name,
               quantity: String(parentQty * componentQty * scrapFactor),
-              unit: component.salesUnit ?? component.baseUnit ?? null,
+              unit: component.salesUnitCode ?? component.baseUnitCode ?? null,
               netPrice: "0",
               discountPercentage: null,
               taxCodeId: null,
@@ -442,766 +1403,20 @@ export class DocumentService {
       if (!doc) throw new Error("Document not found");
       if (doc.status !== "draft") throw new Error("Document must be in draft status to post");
 
-      const lines = await tx
+      const lines = (await tx
         .select()
         .from(documentLine)
-        .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)));
+        .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)))) as DocumentPostingLine[];
 
       const movementType = doc.documentType;
       const now = new Date();
       const txId = crypto.randomUUID();
 
-      const applyTrackingForMovement = async (
-        movementId: string,
-        line: (typeof lines)[number],
-        docMovementType: string,
-      ) => {
-        const trackingRows = await tx
-          .select({
-            trackingId: documentLineTracking.trackingId,
-            serialNumberId: documentLineTracking.serialNumberId,
-            serialNo: documentLineTracking.serialNo,
-            batchNo: documentLineTracking.batchNo,
-          })
-          .from(documentLineTracking)
-          .where(
-            and(
-              eq(documentLineTracking.tenantId, tenantId),
-              eq(documentLineTracking.documentLineId, line.documentLineId),
-            ),
-          )
-          .orderBy(asc(documentLineTracking.createdAt), asc(documentLineTracking.trackingId));
-
-        if (trackingRows.length === 0) return;
-
-        const tracking = trackingRows[0];
-        if (tracking.batchNo) {
-          await tx
-            .update(inventoryMovement)
-            .set({ batchNo: tracking.batchNo })
-            .where(eq(inventoryMovement.inventoryMovementId, movementId));
-          return;
-        }
-
-        const lifecycle = resolveSerialLifecycle(docMovementType, line.lineType);
-
-        if (tracking.serialNo) {
-          const [createdSerial] = await tx
-            .insert(serialNumber)
-            .values({
-              tenantId,
-              articleId: line.articleId!,
-              serialNo: tracking.serialNo,
-              status: lifecycle.status,
-              createdMovementId: lifecycle.movementLink === "createdMovementId" ? movementId : null,
-              consumedMovementId: lifecycle.movementLink === "consumedMovementId" ? movementId : null,
-            })
-            .returning({ serialNumberId: serialNumber.serialNumberId });
-
-          if (createdSerial?.serialNumberId) {
-            await tx
-              .update(inventoryMovement)
-              .set({ serialNumberId: createdSerial.serialNumberId })
-              .where(eq(inventoryMovement.inventoryMovementId, movementId));
-          }
-          return;
-        }
-
-        if (tracking.serialNumberId) {
-          const serialUpdate: Record<string, unknown> = {
-            status: lifecycle.status,
-          };
-
-          if (lifecycle.movementLink === "createdMovementId") {
-            serialUpdate.createdMovementId = movementId;
-          } else if (lifecycle.movementLink === "consumedMovementId") {
-            serialUpdate.consumedMovementId = movementId;
-          }
-
-          await tx
-            .update(serialNumber)
-            .set(serialUpdate)
-            .where(
-              and(
-                eq(serialNumber.tenantId, tenantId),
-                eq(serialNumber.serialNumberId, tracking.serialNumberId),
-              ),
-            );
-
-          await tx
-            .update(inventoryMovement)
-            .set({ serialNumberId: tracking.serialNumberId })
-            .where(eq(inventoryMovement.inventoryMovementId, movementId));
-        }
-      };
-
       for (const line of lines) {
-        if (!line.articleId) continue;
-        if (line.lineType === "sales_bom_header") continue;
-
-        const warehouseId = line.warehouseId ?? doc.warehouseId;
-
-        if (movementType === "N" || movementType === "p") {
-          continue;
-        }
-
-        const qty = Number(line.quantity);
-
-        if (movementType === "q") {
-          if (!warehouseId) continue;
-
-          const isComponent = line.lineType === "bom_component";
-          const signedQty = isComponent ? -qty : qty;
-
-          await tx
-            .insert(inventoryBalance)
-            .values({
-              tenantId,
-              companyId: doc.companyId,
-              warehouseId,
-              articleId: line.articleId,
-              onHandQty: String(signedQty),
-              reservedQty: "0",
-              availableQty: String(signedQty),
-            })
-            .onConflictDoUpdate({
-              target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
-              set: {
-                onHandQty: sql`${inventoryBalance.onHandQty} + ${signedQty}`,
-                availableQty: sql`${inventoryBalance.onHandQty} + ${signedQty} - ${inventoryBalance.reservedQty}`,
-              },
-            });
-
-          const [movement] = await tx
-            .insert(inventoryMovement)
-            .values({
-              tenantId,
-              companyId: doc.companyId,
-              warehouseId,
-              articleId: line.articleId,
-              movementType,
-              qtyDelta: String(signedQty),
-              movementDate: now,
-              sourceDocumentId: documentId,
-              sourceDocumentLineId: line.documentLineId,
-              transactionId: txId,
-              referenceText: doc.documentNo,
-            })
-            .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
-
-          if (movement?.inventoryMovementId) {
-            await applyTrackingForMovement(movement.inventoryMovementId, line, movementType);
-          }
-          continue;
-        }
-
-        if (movementType === "U") {
-          const sourceWh = doc.warehouseId;
-          const targetWh = doc.targetWarehouseId;
-          if (!sourceWh || !targetWh) continue;
-
-          await tx
-            .insert(inventoryBalance)
-            .values({
-              tenantId,
-              companyId: doc.companyId,
-              warehouseId: sourceWh,
-              articleId: line.articleId,
-              onHandQty: String(-qty),
-              reservedQty: "0",
-              availableQty: String(-qty),
-            })
-            .onConflictDoUpdate({
-              target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
-              set: {
-                onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-                availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
-              },
-            });
-
-          await tx
-            .insert(inventoryBalance)
-            .values({
-              tenantId,
-              companyId: doc.companyId,
-              warehouseId: targetWh,
-              articleId: line.articleId,
-              onHandQty: String(qty),
-              reservedQty: "0",
-              availableQty: String(qty),
-            })
-            .onConflictDoUpdate({
-              target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
-              set: {
-                onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-                availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
-              },
-            });
-
-          await tx.insert(inventoryMovement).values({
-            tenantId,
-            companyId: doc.companyId,
-            warehouseId: sourceWh,
-            articleId: line.articleId,
-            movementType,
-            qtyDelta: String(-qty),
-            movementDate: now,
-            sourceDocumentId: documentId,
-            sourceDocumentLineId: line.documentLineId,
-            transactionId: txId,
-            referenceText: doc.documentNo,
-          });
-
-          const [targetMovement] = await tx.insert(inventoryMovement).values({
-            tenantId,
-            companyId: doc.companyId,
-            warehouseId: targetWh,
-            articleId: line.articleId,
-            movementType,
-            qtyDelta: String(qty),
-            movementDate: now,
-            sourceDocumentId: documentId,
-            sourceDocumentLineId: line.documentLineId,
-            transactionId: txId,
-            referenceText: doc.documentNo,
-          }).returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
-
-          const [sourceMovement] = await tx
-            .select({ inventoryMovementId: inventoryMovement.inventoryMovementId })
-            .from(inventoryMovement)
-            .where(
-              and(
-                eq(inventoryMovement.tenantId, tenantId),
-                eq(inventoryMovement.companyId, doc.companyId),
-                eq(inventoryMovement.transactionId, txId),
-                eq(inventoryMovement.warehouseId, sourceWh),
-                eq(inventoryMovement.articleId, line.articleId),
-              ),
-            )
-            .orderBy(asc(inventoryMovement.createdAt))
-            .limit(1);
-
-          const transferTrackingRows = await tx
-            .select({
-              serialNumberId: documentLineTracking.serialNumberId,
-              serialNo: documentLineTracking.serialNo,
-              batchNo: documentLineTracking.batchNo,
-            })
-            .from(documentLineTracking)
-            .where(
-              and(
-                eq(documentLineTracking.tenantId, tenantId),
-                eq(documentLineTracking.documentLineId, line.documentLineId),
-              ),
-            )
-            .orderBy(asc(documentLineTracking.createdAt), asc(documentLineTracking.trackingId));
-
-          if (transferTrackingRows.length > 0) {
-            const tracking = transferTrackingRows[0];
-            const serialUpdate: Record<string, unknown> = {};
-            if (tracking.batchNo) {
-              serialUpdate.batchNo = tracking.batchNo;
-            } else if (tracking.serialNumberId) {
-              serialUpdate.serialNumberId = tracking.serialNumberId;
-            } else if (tracking.serialNo) {
-              const [createdSerial] = await tx
-                .insert(serialNumber)
-                .values({
-                  tenantId,
-                  articleId: line.articleId,
-                  serialNo: tracking.serialNo,
-                  status: "in_stock",
-                })
-                .onConflictDoNothing()
-                .returning({ serialNumberId: serialNumber.serialNumberId });
-
-              if (createdSerial?.serialNumberId) {
-                serialUpdate.serialNumberId = createdSerial.serialNumberId;
-              } else {
-                const [existingSerial] = await tx
-                  .select({ serialNumberId: serialNumber.serialNumberId })
-                  .from(serialNumber)
-                  .where(
-                    and(
-                      eq(serialNumber.tenantId, tenantId),
-                      eq(serialNumber.articleId, line.articleId),
-                      eq(serialNumber.serialNo, tracking.serialNo),
-                    ),
-                  )
-                  .limit(1);
-
-                if (existingSerial?.serialNumberId) {
-                  serialUpdate.serialNumberId = existingSerial.serialNumberId;
-                }
-              }
-            }
-
-            if (Object.keys(serialUpdate).length > 0) {
-              if (sourceMovement?.inventoryMovementId) {
-                await tx
-                  .update(inventoryMovement)
-                  .set(serialUpdate)
-                  .where(eq(inventoryMovement.inventoryMovementId, sourceMovement.inventoryMovementId));
-              }
-              if (targetMovement?.inventoryMovementId) {
-                await tx
-                  .update(inventoryMovement)
-                  .set(serialUpdate)
-                  .where(eq(inventoryMovement.inventoryMovementId, targetMovement.inventoryMovementId));
-              }
-            }
-          }
-
-          continue;
-        }
-
-        if (!warehouseId) continue;
-
-        let stocktakeOnHandBefore = 0;
-        if (movementType === "V") {
-          const [balanceBefore] = await tx
-            .select({
-              onHandQty: inventoryBalance.onHandQty,
-            })
-            .from(inventoryBalance)
-            .where(
-              and(
-                eq(inventoryBalance.tenantId, tenantId),
-                eq(inventoryBalance.warehouseId, warehouseId),
-                eq(inventoryBalance.articleId, line.articleId),
-              ),
-            )
-            .limit(1);
-
-          stocktakeOnHandBefore = Number(balanceBefore?.onHandQty ?? 0);
-        }
-
-        let balanceUpdate: Record<string, unknown> = {};
-
-        if (movementType === "L") {
-          balanceUpdate = {
-            onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-            reservedQty: sql`${inventoryBalance.reservedQty} - ${qty}`,
-            availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - (${inventoryBalance.reservedQty} - ${qty})`,
-          };
-        } else if (movementType === "A") {
-          balanceUpdate = {
-            reservedQty: sql`${inventoryBalance.reservedQty} + ${qty}`,
-            availableQty: sql`${inventoryBalance.onHandQty} - (${inventoryBalance.reservedQty} + ${qty})`,
-          };
-        } else if (movementType === "R") {
-          balanceUpdate = {
-            onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-            availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
-          };
-        } else if (movementType === "G") {
-          balanceUpdate = {
-            onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-            availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
-          };
-        } else if (movementType === "b") {
-          balanceUpdate = {
-            expectedPurchaseQty: sql`${inventoryBalance.expectedPurchaseQty} + ${qty}`,
-            availableQty: sql`${inventoryBalance.onHandQty} - ${inventoryBalance.reservedQty} + (${inventoryBalance.expectedPurchaseQty} + ${qty})`,
-          };
-        } else if (movementType === "l") {
-          balanceUpdate = {
-            onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-            expectedPurchaseQty: sql`GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
-            availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty} + GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
-          };
-        } else if (movementType === "r") {
-          const unitCost = Number(line.netPrice ?? 0);
-          balanceUpdate = {
-            onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-            availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
-            gldPurchase: sql`CASE WHEN (${inventoryBalance.onHandQty} + ${qty}) = 0 THEN 0
-              ELSE (COALESCE(${inventoryBalance.gldPurchase}, 0) * ${inventoryBalance.onHandQty} + ${unitCost} * ${qty}) / (${inventoryBalance.onHandQty} + ${qty})
-              END`,
-          };
-        } else if (movementType === "g") {
-          balanceUpdate = {
-            onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-            availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
-          };
-        } else if (movementType === "Z") {
-          balanceUpdate = {
-            onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-            availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
-          };
-        } else if (movementType === "E") {
-          balanceUpdate = {
-            onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-            availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
-          };
-        } else if (movementType === "V") {
-          balanceUpdate = {
-            onHandQty: String(qty),
-            availableQty: sql`${qty} - ${inventoryBalance.reservedQty}`,
-          };
-        }
-
-        const initialOnHand =
-          movementType === "L" || movementType === "R" || movementType === "g" || movementType === "E"
-            ? String(-qty)
-            : movementType === "V"
-              ? String(qty)
-              : String(movementType === "A" ? 0 : qty);
-
-        await tx
-          .insert(inventoryBalance)
-          .values({
-            tenantId,
-            companyId: doc.companyId,
-            warehouseId,
-            articleId: line.articleId,
-            onHandQty: movementType === "A" ? "0" : initialOnHand,
-            reservedQty: movementType === "A" ? String(qty) : "0",
-            availableQty: movementType === "A" ? String(-qty) : initialOnHand,
-          })
-          .onConflictDoUpdate({
-            target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
-            set: balanceUpdate,
-          });
-
-        const isStocktaking = movementType === "V";
-        const [movement] = await tx.insert(inventoryMovement).values({
-          tenantId,
-          companyId: doc.companyId,
-          warehouseId,
-          articleId: line.articleId,
-          movementType,
-          qtyDelta: isStocktaking
-            ? String(qty - stocktakeOnHandBefore)
-            : String(["L", "R", "g", "E"].includes(movementType) ? -qty : qty),
-          absoluteQty: isStocktaking ? String(qty) : null,
-          movementDate: now,
-          sourceDocumentId: documentId,
-          sourceDocumentLineId: line.documentLineId,
-          transactionId: txId,
-          referenceText: doc.documentNo,
-        }).returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
-
-        if (movement?.inventoryMovementId) {
-          await applyTrackingForMovement(movement.inventoryMovementId, line, movementType);
-        }
-
-        if (movementType === "r") {
-          // AVCO: re-read balance post-upsert and update gldCost
-          const balances = await tx
-            .select({
-              onHandQty: inventoryBalance.onHandQty,
-              gldPurchase: inventoryBalance.gldPurchase,
-            })
-            .from(inventoryBalance)
-            .where(
-              and(
-                eq(inventoryBalance.tenantId, tenantId),
-                eq(inventoryBalance.warehouseId, warehouseId),
-                eq(inventoryBalance.articleId, line.articleId),
-              ),
-            )
-            .limit(1);
-
-          const currentQty = Number(balances[0]?.onHandQty ?? 0);
-          // gldPurchase was updated by the SQL-level upsert above; read it as the new AVCO
-          const newAvgCost = Number(balances[0]?.gldPurchase ?? 0);
-          const lineQty = qty;
-          const linePrice = Number(line.netPrice ?? 0);
-
-          // Reconstruct what the avg cost was before this purchase
-          const avgCostBefore =
-            currentQty > lineQty
-              ? (currentQty * newAvgCost - lineQty * linePrice) / (currentQty - lineQty)
-              : 0;
-
-          // Sync gldCost to match the updated weighted-average purchase cost
-          await tx
-            .update(inventoryBalance)
-            .set({ gldCost: String(newAvgCost) })
-            .where(
-              and(
-                eq(inventoryBalance.tenantId, tenantId),
-                eq(inventoryBalance.warehouseId, warehouseId),
-                eq(inventoryBalance.articleId, line.articleId),
-              ),
-            );
-
-          const fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
-
-          await tx.insert(factPurchaseEvent).values({
-            tenantId,
-            companyId: doc.companyId,
-            sourceDocumentId: documentId,
-            sourceDocumentLineId: line.documentLineId,
-            supplierId: doc.customerId,
-            articleId: line.articleId,
-            eventType: "purchase",
-            quantityDelta: String(lineQty),
-            amountNetDelta: String(lineQty * linePrice),
-            avgCostBefore: String(avgCostBefore),
-            avgCostAfter: String(newAvgCost),
-            fiscalPeriodId,
-            bookingPeriod: doc.documentDate,
-          });
-        }
-
-        if (movementType === "g") {
-          // WE-Gutschrift (vendor credit note): record a correction event with negative qty
-          const balances = await tx
-            .select({
-              gldPurchase: inventoryBalance.gldPurchase,
-            })
-            .from(inventoryBalance)
-            .where(
-              and(
-                eq(inventoryBalance.tenantId, tenantId),
-                eq(inventoryBalance.warehouseId, warehouseId),
-                eq(inventoryBalance.articleId, line.articleId),
-              ),
-            )
-            .limit(1);
-
-          const avgCost = Number(balances[0]?.gldPurchase ?? 0);
-          const lineQty = qty;
-          const linePrice = Number(line.netPrice ?? 0);
-          const fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
-
-          await tx.insert(factPurchaseEvent).values({
-            tenantId,
-            companyId: doc.companyId,
-            sourceDocumentId: documentId,
-            sourceDocumentLineId: line.documentLineId,
-            supplierId: doc.customerId,
-            articleId: line.articleId,
-            eventType: "correction",
-            quantityDelta: String(-lineQty),
-            amountNetDelta: String(-(lineQty * linePrice)),
-            avgCostBefore: String(avgCost),
-            avgCostAfter: String(avgCost),
-            fiscalPeriodId,
-            bookingPeriod: doc.documentDate,
-          });
-        }
-
-        if (movementType === "R" || movementType === "L") {
-          let cogsDelta: string | null = null;
-          let fiscalPeriodId: string | null = null;
-
-          if (movementType === "R") {
-            // Get current avg cost for COGS
-            const balance = await tx
-              .select({ gldPurchase: inventoryBalance.gldPurchase })
-              .from(inventoryBalance)
-              .where(
-                and(
-                  eq(inventoryBalance.tenantId, tenantId),
-                  eq(inventoryBalance.warehouseId, warehouseId),
-                  eq(inventoryBalance.articleId, line.articleId),
-                ),
-              )
-              .limit(1);
-
-            const gldPurchase = Number(balance[0]?.gldPurchase ?? 0);
-            cogsDelta = String(gldPurchase * Math.abs(qty));
-            fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
-          }
-
-          await tx.insert(factSalesEvent).values({
-            tenantId,
-            companyId: doc.companyId,
-            sourceDocumentId: documentId,
-            sourceDocumentLineId: line.documentLineId,
-            customerId: doc.customerId,
-            articleId: line.articleId,
-            eventType: movementType === "R" ? "invoice" : "delivery",
-            quantityDelta: String(-qty),
-            amountNetDelta: line.lineTotalNet ?? "0",
-            bookingPeriod: doc.documentDate,
-            transactionId: txId,
-            cogsDelta,
-            fiscalPeriodId,
-          });
-        }
+        await postDocumentLine(tx, tenantId, doc as DocumentPostingDoc, line as DocumentPostingLine, movementType, now, txId);
       }
 
-      // ── Journal entry writing ──────────────────────────────────────────────
-      // Only write journal entries for financial posting types.
-      // Skip: N (Angebot), b (Bestellung), A (Auftrag), q (Produktionsauftrag),
-      //        L (Lieferschein), l (Wareneingang), Z, E, U, V, p
-      const JOURNAL_POSTING_CONTEXTS: Record<string, { lineContext: string; counterContext: string }> = {
-        R: { lineContext: "SALES_REVENUE", counterContext: "ACCOUNTS_RECEIVABLE" },
-        G: { lineContext: "SALES_CREDIT", counterContext: "ACCOUNTS_RECEIVABLE" },
-        r: { lineContext: "PURCHASE_COST", counterContext: "ACCOUNTS_PAYABLE" },
-        g: { lineContext: "PURCHASE_CREDIT", counterContext: "ACCOUNTS_PAYABLE" },
-      };
-
-      const journalContexts = JOURNAL_POSTING_CONTEXTS[movementType];
-
-      if (journalContexts) {
-        // Fetch the document group for fallback GL accounts
-        const [docGroup] = doc.documentGroupId
-          ? await tx
-              .select({
-                defaultSalesAccountId: documentGroup.defaultSalesAccountId,
-                defaultCostAccountId: documentGroup.defaultCostAccountId,
-              })
-              .from(documentGroup)
-              .where(
-                and(
-                  eq(documentGroup.documentGroupId, doc.documentGroupId),
-                  eq(documentGroup.tenantId, tenantId),
-                ),
-              )
-              .limit(1)
-          : [undefined];
-
-        // Resolve counter-account (receivables / payables) — same for all lines
-        // Use the counterContext against account_determination_rule with no articleGroupId
-        const resolveGlAccount = async (
-          postingContext: string,
-          articleGroupId: string | null,
-          taxCodeId: string | null,
-        ): Promise<string | null> => {
-          try {
-            // Try specific rule first (with articleGroupId + taxCodeId)
-            if (articleGroupId || taxCodeId) {
-              const rules = await tx
-                .select({ glAccountId: accountDeterminationRule.glAccountId })
-                .from(accountDeterminationRule)
-                .where(
-                  and(
-                    eq(accountDeterminationRule.tenantId, tenantId),
-                    eq(accountDeterminationRule.postingContext, postingContext),
-                    articleGroupId
-                      ? eq(accountDeterminationRule.articleGroupId, articleGroupId)
-                      : sql`${accountDeterminationRule.articleGroupId} IS NULL`,
-                    taxCodeId
-                      ? eq(accountDeterminationRule.taxCodeId, taxCodeId)
-                      : sql`${accountDeterminationRule.taxCodeId} IS NULL`,
-                  ),
-                )
-                .limit(1);
-              if (rules[0]?.glAccountId) return rules[0].glAccountId;
-            }
-
-            // Fall back to context-only rule (no articleGroup, no taxCode specificity)
-            const fallbackRules = await tx
-              .select({ glAccountId: accountDeterminationRule.glAccountId })
-              .from(accountDeterminationRule)
-              .where(
-                and(
-                  eq(accountDeterminationRule.tenantId, tenantId),
-                  eq(accountDeterminationRule.postingContext, postingContext),
-                  sql`${accountDeterminationRule.articleGroupId} IS NULL`,
-                  sql`${accountDeterminationRule.taxCodeId} IS NULL`,
-                ),
-              )
-              .limit(1);
-            if (fallbackRules[0]?.glAccountId) return fallbackRules[0].glAccountId;
-
-            // Fall back to document group defaults
-            if (docGroup) {
-              const isOutbound = movementType === "R" || movementType === "G";
-              if (isOutbound && docGroup.defaultSalesAccountId) return docGroup.defaultSalesAccountId;
-              if (!isOutbound && docGroup.defaultCostAccountId) return docGroup.defaultCostAccountId;
-            }
-
-            return null;
-          } catch {
-            return null;
-          }
-        };
-
-        // Resolve counter GL account (receivables/payables) — no article context
-        const counterGlAccountId = await resolveGlAccount(journalContexts.counterContext, null, null);
-
-        // Collect lines that have amounts
-        const journalLines: Array<{
-          glAccountId: string;
-          debitAmount: string;
-          creditAmount: string;
-          costCenterId: string | null;
-          taxCodeId: string | null;
-        }> = [];
-
-        for (const line of lines) {
-          const amount = Number(line.lineTotalNet ?? "0");
-          if (!amount) continue;
-
-          const absAmount = Math.abs(amount);
-
-          // Look up article group for this line
-          let articleGroupId: string | null = null;
-          if (line.articleId) {
-            const [art] = await tx
-              .select({ articleGroupId: article.articleGroupId })
-              .from(article)
-              .where(and(eq(article.articleId, line.articleId), eq(article.tenantId, tenantId)))
-              .limit(1);
-            articleGroupId = art?.articleGroupId ?? null;
-          }
-
-          const lineGlAccountId = await resolveGlAccount(
-            journalContexts.lineContext,
-            articleGroupId,
-            line.taxCodeId ?? null,
-          );
-
-          if (!lineGlAccountId) continue; // silent skip — GL setup incomplete
-
-          // OUTBOUND R/G: debit receivables, credit revenue
-          // INBOUND r/g: debit expense, credit payables
-          const isOutbound = movementType === "R" || movementType === "G";
-
-          journalLines.push({
-            glAccountId: lineGlAccountId,
-            debitAmount: isOutbound ? "0" : String(absAmount),
-            creditAmount: isOutbound ? String(absAmount) : "0",
-            costCenterId: line.costCenterId ?? null,
-            taxCodeId: line.taxCodeId ?? null,
-          });
-
-          if (counterGlAccountId) {
-            journalLines.push({
-              glAccountId: counterGlAccountId,
-              debitAmount: isOutbound ? String(absAmount) : "0",
-              creditAmount: isOutbound ? "0" : String(absAmount),
-              costCenterId: null,
-              taxCodeId: null,
-            });
-          }
-        }
-
-        if (journalLines.length > 0) {
-          const postingDate = doc.postingDate ?? doc.documentDate;
-
-          const [entry] = await tx
-            .insert(journalEntry)
-            .values({
-              tenantId,
-              companyId: doc.companyId,
-              postingDate,
-              sourceDocumentId: documentId,
-              description: doc.documentNo,
-            })
-            .returning({ journalEntryId: journalEntry.journalEntryId });
-
-          await tx.insert(journalLine).values(
-            journalLines.map((jl) => ({
-              tenantId,
-              companyId: doc.companyId,
-              journalEntryId: entry.journalEntryId,
-              glAccountId: jl.glAccountId,
-              debitAmount: jl.debitAmount,
-              creditAmount: jl.creditAmount,
-              costCenterId: jl.costCenterId,
-              taxCodeId: jl.taxCodeId,
-            })),
-          );
-        }
-      }
-      // ── End journal entry writing ──────────────────────────────────────────
+      await postFinancialJournalEntries(tx, tenantId, doc as DocumentPostingDoc, movementType, lines as DocumentPostingLine[]);
 
       const [updated] = await tx
         .update(document)
@@ -1341,7 +1556,12 @@ export class DocumentService {
           .returning({ documentLineId: documentLine.documentLineId });
 
         if (insertedLine?.documentLineId) {
-          await copyDocumentLineTrackingRows(tx, tenantId, line.documentLineId, insertedLine.documentLineId);
+          await copyDocumentLineTrackingRows(
+            tx,
+            tenantId,
+            line.documentLineId,
+            insertedLine.documentLineId,
+          );
         }
       }
 
@@ -1362,7 +1582,9 @@ export class DocumentService {
   async getConversionCandidates(
     documentId: string,
     tenantId: string,
-  ): Promise<Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }>> {
+  ): Promise<
+    Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }>
+  > {
     const [doc] = await db
       .select()
       .from(document)
@@ -1375,7 +1597,12 @@ export class DocumentService {
     const [sourceGroup] = await db
       .select()
       .from(documentGroup)
-      .where(and(eq(documentGroup.documentGroupId, doc.documentGroupId), eq(documentGroup.tenantId, tenantId)))
+      .where(
+        and(
+          eq(documentGroup.documentGroupId, doc.documentGroupId),
+          eq(documentGroup.tenantId, tenantId),
+        ),
+      )
       .limit(1);
 
     if (!sourceGroup) throw new Error("Source group not found");
@@ -1384,10 +1611,22 @@ export class DocumentService {
       const [targetGroup] = await db
         .select()
         .from(documentGroup)
-        .where(and(eq(documentGroup.documentGroupId, sourceGroup.nextGroupId), eq(documentGroup.tenantId, tenantId)))
+        .where(
+          and(
+            eq(documentGroup.documentGroupId, sourceGroup.nextGroupId),
+            eq(documentGroup.tenantId, tenantId),
+          ),
+        )
         .limit(1);
       if (!targetGroup) throw new Error("Configured next group not found");
-      return [{ documentGroupId: targetGroup.documentGroupId, name: targetGroup.name, documentType: targetGroup.documentType, groupNumber: targetGroup.groupNumber }];
+      return [
+        {
+          documentGroupId: targetGroup.documentGroupId,
+          name: targetGroup.name,
+          documentType: targetGroup.documentType,
+          groupNumber: targetGroup.groupNumber,
+        },
+      ];
     }
 
     const nextType = NEXT_TYPE[sourceGroup.documentType];
@@ -1417,7 +1656,9 @@ export class DocumentService {
   async getDuplicateCandidates(
     documentId: string,
     tenantId: string,
-  ): Promise<Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }>> {
+  ): Promise<
+    Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }>
+  > {
     const [doc] = await db
       .select()
       .from(document)
@@ -1430,13 +1671,19 @@ export class DocumentService {
       ? await db
           .select()
           .from(documentGroup)
-          .where(and(eq(documentGroup.documentGroupId, doc.documentGroupId), eq(documentGroup.tenantId, tenantId)))
+          .where(
+            and(
+              eq(documentGroup.documentGroupId, doc.documentGroupId),
+              eq(documentGroup.tenantId, tenantId),
+            ),
+          )
           .limit(1)
       : [null];
 
     const sourceType = sourceGroup?.documentType ?? doc.documentType;
     const allowedTypes = resolveDuplicateTargetTypes(sourceType);
-    if (allowedTypes.length === 0) throw new Error("No duplicate target: unable to resolve source document type");
+    if (allowedTypes.length === 0)
+      throw new Error("No duplicate target: unable to resolve source document type");
 
     const candidates = await db
       .select()
@@ -1451,7 +1698,8 @@ export class DocumentService {
 
     return candidates
       .sort((a, b) => {
-        const typeDelta = (TYPE_SEQUENCE[a.documentType] ?? 99) - (TYPE_SEQUENCE[b.documentType] ?? 99);
+        const typeDelta =
+          (TYPE_SEQUENCE[a.documentType] ?? 99) - (TYPE_SEQUENCE[b.documentType] ?? 99);
         if (typeDelta !== 0) return typeDelta;
         return a.groupNumber - b.groupNumber;
       })
@@ -1484,10 +1732,7 @@ export class DocumentService {
       .select()
       .from(documentGroup)
       .where(
-        and(
-          eq(documentGroup.documentGroupId, targetGroupId),
-          eq(documentGroup.tenantId, tenantId),
-        ),
+        and(eq(documentGroup.documentGroupId, targetGroupId), eq(documentGroup.tenantId, tenantId)),
       )
       .limit(1);
 
@@ -1658,9 +1903,10 @@ export class DocumentService {
     const byDirection = new Map<string, Map<string, typeof groups>>();
 
     for (const g of groups) {
-      const dir = (g.direction && g.direction.length > 0)
-        ? g.direction
-        : (DIRECTION_FROM_TYPE[g.documentType] ?? "OTHER");
+      const dir =
+        g.direction && g.direction.length > 0
+          ? g.direction
+          : (DIRECTION_FROM_TYPE[g.documentType] ?? "OTHER");
       if (!byDirection.has(dir)) byDirection.set(dir, new Map());
       const byType = byDirection.get(dir)!;
       if (!byType.has(g.documentType)) byType.set(g.documentType, []);
@@ -1677,24 +1923,26 @@ export class DocumentService {
           const mainGroup = sortedGroups.find((g) => g.groupNumber === 0);
           if (!mainGroup) return [];
 
-          return [{
-            documentType: docType,
-            typeLabel: TYPE_LABELS[docType] ?? docType,
-            mainGroup: {
-              documentGroupId: mainGroup.documentGroupId,
-              name: mainGroup.name,
-              documentType: mainGroup.documentType,
-              groupNumber: mainGroup.groupNumber,
+          return [
+            {
+              documentType: docType,
+              typeLabel: TYPE_LABELS[docType] ?? docType,
+              mainGroup: {
+                documentGroupId: mainGroup.documentGroupId,
+                name: mainGroup.name,
+                documentType: mainGroup.documentType,
+                groupNumber: mainGroup.groupNumber,
+              },
+              groups: sortedGroups
+                .filter((g) => g.groupNumber > 0)
+                .map((g) => ({
+                  documentGroupId: g.documentGroupId,
+                  name: g.name,
+                  documentType: g.documentType,
+                  groupNumber: g.groupNumber,
+                })),
             },
-            groups: sortedGroups
-              .filter((g) => g.groupNumber > 0)
-              .map((g) => ({
-                documentGroupId: g.documentGroupId,
-                name: g.name,
-                documentType: g.documentType,
-                groupNumber: g.groupNumber,
-              })),
-          }];
+          ];
         });
     };
 
@@ -1716,10 +1964,7 @@ export class DocumentService {
     return sections;
   }
 
-  async getDocumentAuditTrail(
-    documentId: string,
-    tenantId: string,
-  ): Promise<DocumentAuditTrail> {
+  async getDocumentAuditTrail(documentId: string, tenantId: string): Promise<DocumentAuditTrail> {
     const [seed] = await db
       .select()
       .from(document)
@@ -1771,11 +2016,16 @@ export class DocumentService {
       if (aTime !== bTime) return aTime - bTime;
       return a.documentNo.localeCompare(b.documentNo) || a.documentId.localeCompare(b.documentId);
     });
-    const index = new Map(nodesRaw.map((row) => [row.documentId, {
-      documentId: row.documentId,
-      parentDocumentId: row.parentDocumentId ?? null,
-      stornoDocumentId: row.stornoDocumentId ?? null,
-    }]));
+    const index = new Map(
+      nodesRaw.map((row) => [
+        row.documentId,
+        {
+          documentId: row.documentId,
+          parentDocumentId: row.parentDocumentId ?? null,
+          stornoDocumentId: row.stornoDocumentId ?? null,
+        },
+      ]),
+    );
 
     const nodes: DocumentAuditNode[] = nodesRaw.map((row) => {
       const context = deriveDocumentAuditContext(row, index, seed.documentId);
@@ -1994,7 +2244,11 @@ export class DocumentService {
           availableQty: String(effectiveQty),
         })
         .onConflictDoUpdate({
-          target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
+          target: [
+            inventoryBalance.tenantId,
+            inventoryBalance.warehouseId,
+            inventoryBalance.articleId,
+          ],
           set: {
             onHandQty: sql`${inventoryBalance.onHandQty} + ${effectiveQty}`,
             availableQty: sql`${inventoryBalance.onHandQty} + ${effectiveQty} - ${inventoryBalance.reservedQty}`,
@@ -2040,7 +2294,12 @@ export class DocumentService {
     const [grp] = await db
       .select()
       .from(documentGroup)
-      .where(and(eq(documentGroup.documentGroupId, data.documentGroupId), eq(documentGroup.tenantId, tenantId)))
+      .where(
+        and(
+          eq(documentGroup.documentGroupId, data.documentGroupId),
+          eq(documentGroup.tenantId, tenantId),
+        ),
+      )
       .limit(1);
 
     if (!grp) throw new Error("Document group not found");
@@ -2146,7 +2405,12 @@ export class DocumentService {
       ? await db
           .select()
           .from(documentGroup)
-          .where(and(eq(documentGroup.documentGroupId, src.documentGroupId), eq(documentGroup.tenantId, tenantId)))
+          .where(
+            and(
+              eq(documentGroup.documentGroupId, src.documentGroupId),
+              eq(documentGroup.tenantId, tenantId),
+            ),
+          )
           .limit(1)
           .then((rows) => rows[0] ?? null)
       : null;
@@ -2158,7 +2422,11 @@ export class DocumentService {
       throw new Error("Target document group not allowed for this document type");
     }
 
-    const sourceDirection = sourceGroup?.direction ?? DIRECTION_FROM_TYPE[src.documentType] ?? targetGroup.direction ?? src.documentDirection;
+    const sourceDirection =
+      sourceGroup?.direction ??
+      DIRECTION_FROM_TYPE[src.documentType] ??
+      targetGroup.direction ??
+      src.documentDirection;
     const targetDirection = targetGroup.direction ?? sourceDirection;
 
     const lines = await db
@@ -2265,6 +2533,7 @@ export class DocumentService {
       .select()
       .from(documentLine)
       .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)));
+    const lineIds = lines.map((line) => line.documentLineId);
 
     if (doc.status === "draft") {
       await db.transaction(async (tx) => {
@@ -2287,10 +2556,7 @@ export class DocumentService {
             .select()
             .from(document)
             .where(
-              and(
-                eq(document.documentId, doc.parentDocumentId),
-                eq(document.tenantId, tenantId),
-              ),
+              and(eq(document.documentId, doc.parentDocumentId), eq(document.tenantId, tenantId)),
             )
             .limit(1);
 
@@ -2298,7 +2564,9 @@ export class DocumentService {
             await tx
               .update(document)
               .set({ status: "draft", archivedAt: null, updatedAt: new Date() })
-              .where(and(eq(document.documentId, parent.documentId), eq(document.tenantId, tenantId)));
+              .where(
+                and(eq(document.documentId, parent.documentId), eq(document.tenantId, tenantId)),
+              );
           }
         }
 
@@ -2309,8 +2577,6 @@ export class DocumentService {
       });
       return { deleted: false, archived: false, cancelled: true };
     }
-
-    const lineIds = lines.map((line) => line.documentLineId);
 
     await db.transaction(async (tx) => {
       const movements = await tx
@@ -2326,7 +2592,8 @@ export class DocumentService {
 
       for (const movement of movements) {
         const qtyDelta = parseQty(movement.qtyDelta ?? movement.absoluteQty ?? 0);
-        const qty = movement.absoluteQty != null ? parseQty(movement.absoluteQty) : Math.abs(qtyDelta);
+        const qty =
+          movement.absoluteQty != null ? parseQty(movement.absoluteQty) : Math.abs(qtyDelta);
         const warehouseId = movement.warehouseId;
         if (!warehouseId || !movement.articleId) continue;
 
@@ -2483,10 +2750,7 @@ export class DocumentService {
           .select()
           .from(document)
           .where(
-            and(
-              eq(document.documentId, doc.parentDocumentId),
-              eq(document.tenantId, tenantId),
-            ),
+            and(eq(document.documentId, doc.parentDocumentId), eq(document.tenantId, tenantId)),
           )
           .limit(1);
 
@@ -2494,7 +2758,9 @@ export class DocumentService {
           await tx
             .update(document)
             .set({ status: "draft", archivedAt: null, updatedAt: new Date() })
-            .where(and(eq(document.documentId, parent.documentId), eq(document.tenantId, tenantId)));
+            .where(
+              and(eq(document.documentId, parent.documentId), eq(document.tenantId, tenantId)),
+            );
         }
       }
 

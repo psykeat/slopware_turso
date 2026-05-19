@@ -65,7 +65,7 @@ export default defineConfig({
     },
     options: {
       typeAware: true,
-      typeCheck: true,
+      typeCheck: process.env.NODE_ENV === "production",
     },
     jsPlugins: [
       { name: "react-hooks-js", specifier: "eslint-plugin-react-hooks" },

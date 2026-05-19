@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { documentLine, documentLineTracking } from "@repo/db/schema";
-import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
+import { createFileRoute } from "@tanstack/react-router";
 import { and, eq } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute(
   "/api/documents/$documentId/lines/$lineId/tracking/$trackingId",

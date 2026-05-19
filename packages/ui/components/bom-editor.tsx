@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2, Plus, CornerDownRight } from "lucide-react";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trash2, Plus, CornerDownRight } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 
 interface BomComponent {
   bomId: string;
@@ -19,7 +19,7 @@ interface ArticleSearchResult {
   articleId: string;
   articleNo: string;
   name: string;
-  baseUnit: string | null;
+  baseUnitCode: string | null;
 }
 
 interface BomEditorProps {
@@ -36,7 +36,11 @@ export function BomEditor({ articleId }: BomEditorProps) {
   const [searchResults, setSearchResults] = useState<ArticleSearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<{ quantity: string; scrapPercentage: string; sortOrder: string }>({
+  const [editValues, setEditValues] = useState<{
+    quantity: string;
+    scrapPercentage: string;
+    sortOrder: string;
+  }>({
     quantity: "",
     scrapPercentage: "",
     sortOrder: "",
@@ -141,23 +145,33 @@ export function BomEditor({ articleId }: BomEditorProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-24 text-[13px] text-ink-mute">
+      <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
         Lade Stückliste…
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full overflow-auto">
+    <div className="flex h-full flex-col overflow-auto">
       {/* Component table */}
       <table className="w-full table-fixed border-collapse">
         <thead>
           <tr className="h-8 border-b border-hairline">
-            <th className="text-[11px] uppercase tracking-wider font-medium text-ink-mute text-left px-3 py-0 w-[100px]">Nr.</th>
-            <th className="text-[11px] uppercase tracking-wider font-medium text-ink-mute text-left px-3 py-0">Bezeichnung</th>
-            <th className="text-[11px] uppercase tracking-wider font-medium text-ink-mute text-right px-3 py-0 w-[90px]">Menge</th>
-            <th className="text-[11px] uppercase tracking-wider font-medium text-ink-mute text-right px-3 py-0 w-[80px]">Ausschuss%</th>
-            <th className="text-[11px] uppercase tracking-wider font-medium text-ink-mute text-right px-3 py-0 w-[70px]">Sort.</th>
+            <th className="w-[100px] px-3 py-0 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+              Nr.
+            </th>
+            <th className="px-3 py-0 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+              Bezeichnung
+            </th>
+            <th className="w-[90px] px-3 py-0 text-right text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+              Menge
+            </th>
+            <th className="w-[80px] px-3 py-0 text-right text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+              Ausschuss%
+            </th>
+            <th className="w-[70px] px-3 py-0 text-right text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+              Sort.
+            </th>
             <th className="w-[40px]" />
           </tr>
         </thead>
@@ -172,12 +186,12 @@ export function BomEditor({ articleId }: BomEditorProps) {
           {components.map((c) => (
             <tr
               key={c.bomId}
-              className="h-9 border-b border-hairline last:border-0 hover:bg-surface-hover group"
+              className="hover:bg-surface-hover group h-9 border-b border-hairline last:border-0"
               onDoubleClick={() => startEdit(c)}
             >
-              <td className="px-3 text-[13px] font-mono text-ink-mute">
+              <td className="px-3 font-mono text-[13px] text-ink-mute">
                 <div className="flex items-center gap-1">
-                  <CornerDownRight className="w-3 h-3 opacity-40 flex-shrink-0" />
+                  <CornerDownRight className="h-3 w-3 flex-shrink-0 opacity-40" />
                   {c.articleNo}
                 </div>
               </td>
@@ -190,17 +204,25 @@ export function BomEditor({ articleId }: BomEditorProps) {
                       value={editValues.quantity}
                       onChange={(e) => setEditValues((v) => ({ ...v, quantity: e.target.value }))}
                       onBlur={() => commitEdit(c.bomId)}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(c.bomId); if (e.key === "Escape") setEditingId(null); }}
-                      className="h-6 text-[13px] text-right"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEdit(c.bomId);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className="h-6 text-right text-[13px]"
                     />
                   </td>
                   <td className="px-1">
                     <Input
                       value={editValues.scrapPercentage}
-                      onChange={(e) => setEditValues((v) => ({ ...v, scrapPercentage: e.target.value }))}
+                      onChange={(e) =>
+                        setEditValues((v) => ({ ...v, scrapPercentage: e.target.value }))
+                      }
                       onBlur={() => commitEdit(c.bomId)}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(c.bomId); if (e.key === "Escape") setEditingId(null); }}
-                      className="h-6 text-[13px] text-right"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEdit(c.bomId);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className="h-6 text-right text-[13px]"
                     />
                   </td>
                   <td className="px-1">
@@ -208,24 +230,35 @@ export function BomEditor({ articleId }: BomEditorProps) {
                       value={editValues.sortOrder}
                       onChange={(e) => setEditValues((v) => ({ ...v, sortOrder: e.target.value }))}
                       onBlur={() => commitEdit(c.bomId)}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(c.bomId); if (e.key === "Escape") setEditingId(null); }}
-                      className="h-6 text-[13px] text-right"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEdit(c.bomId);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className="h-6 text-right text-[13px]"
                     />
                   </td>
                 </>
               ) : (
                 <>
-                  <td className="px-3 text-[13px] tabular-nums text-right">{Number(c.quantity).toLocaleString("de-DE", { maximumFractionDigits: 4 })} {c.unit ?? ""}</td>
-                  <td className="px-3 text-[13px] tabular-nums text-right">{Number(c.scrapPercentage).toLocaleString("de-DE", { maximumFractionDigits: 2 })}%</td>
-                  <td className="px-3 text-[13px] tabular-nums text-right">{c.sortOrder}</td>
+                  <td className="px-3 text-right text-[13px] tabular-nums">
+                    {Number(c.quantity).toLocaleString("de-DE", { maximumFractionDigits: 4 })}{" "}
+                    {c.unit ?? ""}
+                  </td>
+                  <td className="px-3 text-right text-[13px] tabular-nums">
+                    {Number(c.scrapPercentage).toLocaleString("de-DE", {
+                      maximumFractionDigits: 2,
+                    })}
+                    %
+                  </td>
+                  <td className="px-3 text-right text-[13px] tabular-nums">{c.sortOrder}</td>
                 </>
               )}
               <td className="px-1">
                 <button
                   onClick={() => handleDelete(c.bomId)}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded text-destructive hover:bg-destructive/10 transition-opacity"
+                  className="rounded p-1 text-destructive opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </td>
             </tr>
@@ -234,12 +267,18 @@ export function BomEditor({ articleId }: BomEditorProps) {
       </table>
 
       {/* Add new component row */}
-      <div className="border-t border-hairline p-3 flex items-end gap-2 bg-surface-subtle flex-shrink-0">
-        <div className="flex-1 relative" ref={dropdownRef}>
-          <div className="text-[11px] uppercase tracking-wider font-medium text-ink-mute mb-1">Komponente</div>
+      <div className="bg-surface-subtle flex flex-shrink-0 items-end gap-2 border-t border-hairline p-3">
+        <div className="relative flex-1" ref={dropdownRef}>
+          <div className="mb-1 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+            Komponente
+          </div>
           <Input
             ref={searchRef}
-            value={selectedComponent ? `${selectedComponent.articleNo} – ${selectedComponent.name}` : addSearch}
+            value={
+              selectedComponent
+                ? `${selectedComponent.articleNo} – ${selectedComponent.name}`
+                : addSearch
+            }
             onChange={(e) => {
               if (selectedComponent) setSelectedComponent(null);
               setAddSearch(e.target.value);
@@ -248,11 +287,11 @@ export function BomEditor({ articleId }: BomEditorProps) {
             className="h-7 text-[13px]"
           />
           {showDropdown && (
-            <div className="absolute top-full mt-1 left-0 right-0 bg-popover border border-hairline rounded shadow-lg z-50 max-h-48 overflow-auto">
+            <div className="absolute top-full right-0 left-0 z-50 mt-1 max-h-48 overflow-auto rounded border border-hairline bg-popover shadow-lg">
               {searchResults.map((r) => (
                 <button
                   key={r.articleId}
-                  className="w-full text-left px-3 py-2 text-[13px] hover:bg-surface-hover flex gap-2"
+                  className="hover:bg-surface-hover flex w-full gap-2 px-3 py-2 text-left text-[13px]"
                   onMouseDown={() => {
                     setSelectedComponent(r);
                     setAddSearch("");
@@ -267,38 +306,46 @@ export function BomEditor({ articleId }: BomEditorProps) {
           )}
         </div>
         <div className="w-24">
-          <div className="text-[11px] uppercase tracking-wider font-medium text-ink-mute mb-1">Menge</div>
+          <div className="mb-1 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+            Menge
+          </div>
           <Input
             value={addQty}
             onChange={(e) => setAddQty(e.target.value)}
-            className="h-7 text-[13px] text-right"
-            onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+            className="h-7 text-right text-[13px]"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleAdd();
+            }}
           />
         </div>
         <div className="w-20">
-          <div className="text-[11px] uppercase tracking-wider font-medium text-ink-mute mb-1">Ausschuss%</div>
+          <div className="mb-1 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+            Ausschuss%
+          </div>
           <Input
             value={addScrap}
             onChange={(e) => setAddScrap(e.target.value)}
-            className="h-7 text-[13px] text-right"
+            className="h-7 text-right text-[13px]"
           />
         </div>
         <div className="w-16">
-          <div className="text-[11px] uppercase tracking-wider font-medium text-ink-mute mb-1">Sort.</div>
+          <div className="mb-1 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+            Sort.
+          </div>
           <Input
             value={addSortOrder}
             onChange={(e) => setAddSortOrder(e.target.value)}
             placeholder="auto"
-            className="h-7 text-[13px] text-right"
+            className="h-7 text-right text-[13px]"
           />
         </div>
         <Button
           size="sm"
           onClick={handleAdd}
           disabled={!selectedComponent || !addQty}
-          className="h-7 px-3 flex-shrink-0"
+          className="h-7 flex-shrink-0 px-3"
         >
-          <Plus className="w-3.5 h-3.5 mr-1" />
+          <Plus className="mr-1 h-3.5 w-3.5" />
           Hinzufügen
         </Button>
       </div>

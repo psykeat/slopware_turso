@@ -48,7 +48,7 @@ const ARTICLE_FIELD_OVERRIDES = [
 ];
 
 function ArticlesModule() {
-  const { state: focusState } = useFocus();
+  const { state: focusState, setFocus } = useFocus();
   const { registerCommand } = useCommands();
   const { setSubCrumb } = useActionBar();
   const { t } = useTranslation("ui");
@@ -59,26 +59,30 @@ function ArticlesModule() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [activeArticleId, setActiveArticleId] = useState<string | null>(
-    focusState.entity === "article" ? focusState.recordId : null,
-  );
+  const activeArticleId = focusState.entity === "article" ? focusState.recordId : null;
   const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
-  useEffect(() => {
-    if (focusState.entity === "article" && focusState.recordId) {
-      setActiveArticleId(focusState.recordId);
-    }
-  }, [focusState.entity, focusState.recordId]);
-
-  const restoreArticleGrid = useCallback((recordId?: string | null) => {
-    articleGridRef.current?.restoreFocus(recordId ?? activeArticleId ?? null);
-  }, [activeArticleId]);
+  const restoreArticleGrid = useCallback(
+    (recordId?: string | null) => {
+      articleGridRef.current?.restoreFocus(recordId ?? activeArticleId ?? null);
+    },
+    [activeArticleId],
+  );
 
   // Fetch articles — paginated
   const { data: articleData, isLoading: isDataLoading } = useQuery({
-    queryKey: ["data", "article", selectedGroupId, gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
+    queryKey: [
+      "data",
+      "article",
+      selectedGroupId,
+      gridState.queryParams.page,
+      gridState.queryParams.limit,
+      gridState.queryParams.orderBy,
+      gridState.queryParams.search,
+      gridState.queryParams.filters,
+    ],
     queryFn: async () => {
       const p = new URLSearchParams({
         paginated: "true",
@@ -88,7 +92,8 @@ function ArticlesModule() {
       if (selectedGroupId) p.set("articleGroupId", selectedGroupId);
       if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
       if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
-      if (gridState.queryParams.filters) p.set("filters", JSON.stringify(gridState.queryParams.filters));
+      if (gridState.queryParams.filters)
+        p.set("filters", JSON.stringify(gridState.queryParams.filters));
       const res = await fetch(`/api/data/article?${p}`);
       if (!res.ok) throw new Error("Failed to fetch articles");
       return res.json() as Promise<{ data: any[]; total: number }>;
@@ -104,14 +109,38 @@ function ArticlesModule() {
       const res = await fetch("/api/data/articleGroup");
       if (!res.ok) throw new Error("Failed to fetch article groups");
       const data = await res.json();
-      return data.map((g: any): TreeNode => ({
-        id: g.articleGroupId,
-        label: g.name || "Unnamed Group",
-      }));
+      return data.map(
+        (g: any): TreeNode => ({
+          id: g.articleGroupId,
+          label: g.name || "Unnamed Group",
+        }),
+      );
     },
   });
 
-  const groupMap = useMemo(() => new Map<string, string>(groups.map((g: TreeNode) => [g.id, g.label])), [groups]);
+  const { data: units = [] } = useQuery({
+    queryKey: ["data", "unit"],
+    queryFn: async () => {
+      const res = await fetch("/api/data/unit");
+      if (!res.ok) throw new Error("Failed to fetch units");
+      return res.json();
+    },
+  });
+
+  const groupMap = useMemo(
+    () => new Map<string, string>(groups.map((g: TreeNode) => [g.id, g.label])),
+    [groups],
+  );
+
+  const treeNodes = useMemo<TreeNode[]>(
+    () => [{ id: "ALL", label: t("tree.all", { defaultValue: "All" }) }, ...groups],
+    [groups, t],
+  );
+
+  const unitMap = useMemo(
+    () => new Map<string, string>(units.map((u: any) => [u.unitId, u.code])),
+    [units],
+  );
 
   // Fetch inventory movements for selected article (server-side FK filter)
   const { data: movements = [] } = useQuery({
@@ -198,10 +227,71 @@ function ArticlesModule() {
         queryClient.invalidateQueries({ queryKey: ["data", "article"] });
       },
     });
-    return () => { unregF3(); unregEdit(); unregF4(); unregDup(); };
+    return () => {
+      unregF3();
+      unregEdit();
+      unregF4();
+      unregDup();
+    };
   }, [registerCommand, t, queryClient]);
 
   const selectedArticle = articles.find((a: any) => a.articleId === activeArticleId);
+  const modalOpen = showCreate || showEdit || deleteConfirm;
+
+  const selectTreeNode = useCallback(
+    (id: string) => {
+      const node = treeNodes.find((item) => item.id === id);
+      setSubCrumb(node?.label);
+      setSelectedGroupId(node?.id === "ALL" ? null : node?.id ?? null);
+      setFocus({
+        area: "tree",
+        treeEntity: "articleGroup",
+        treePanel: "article-tree",
+        treeRecordId: node?.id ?? null,
+        panel: "article-tree",
+      });
+      gridState.setPage(1);
+    },
+    [gridState, setFocus, setSubCrumb, treeNodes],
+  );
+
+  useEffect(() => {
+    const navigateTree = (delta: number) => {
+      if (treeNodes.length === 0) return;
+      const currentId = selectedGroupId ?? "ALL";
+      const currentIndex = treeNodes.findIndex((node) => node.id === currentId);
+      const base = currentIndex < 0 ? (delta > 0 ? -1 : treeNodes.length) : currentIndex;
+      const nextIndex = (base + delta + treeNodes.length) % treeNodes.length;
+      const nextNode = treeNodes[nextIndex];
+      if (!nextNode) return;
+      selectTreeNode(nextNode.id);
+      restoreArticleGrid();
+    };
+
+    const unregDown = registerCommand({
+      id: "article-tree-nav-down",
+      scope: "context",
+      group: "navigation",
+      label: { en: "Next Tree Item", de: "Nächster Eintrag" },
+      shortcut: "Ctrl+ArrowDown",
+      isEnabled: () => !modalOpen && treeNodes.length > 0,
+      handler: () => navigateTree(1),
+    });
+    const unregUp = registerCommand({
+      id: "article-tree-nav-up",
+      scope: "context",
+      group: "navigation",
+      label: { en: "Previous Tree Item", de: "Vorheriger Eintrag" },
+      shortcut: "Ctrl+ArrowUp",
+      isEnabled: () => !modalOpen && treeNodes.length > 0,
+      handler: () => navigateTree(-1),
+    });
+
+    return () => {
+      unregDown();
+      unregUp();
+    };
+  }, [modalOpen, registerCommand, restoreArticleGrid, selectTreeNode, selectedGroupId, treeNodes]);
 
   const dependentTabs = [
     {
@@ -215,15 +305,31 @@ function ArticlesModule() {
             {
               title: "Identification",
               fields: [
-                { label: "No.", value: <span className="font-mono tabular-nums">{selectedArticle?.articleNo}</span> },
+                {
+                  label: "No.",
+                  value: (
+                    <span className="font-mono tabular-nums">{selectedArticle?.articleNo}</span>
+                  ),
+                },
                 { label: "Name", value: selectedArticle?.name },
-                { label: "Unit", value: selectedArticle?.baseUnit },
+                {
+                  label: "Unit",
+                  value: selectedArticle?.baseUnitId
+                    ? unitMap.get(selectedArticle.baseUnitId) ?? selectedArticle.baseUnitId
+                    : "—",
+                },
               ],
             },
             {
               title: "Inventory",
               fields: [
-                { label: "Article Group", value: selectedArticle?.articleGroupId },
+                {
+                  label: "Article Group",
+                  value: selectedArticle?.articleGroupId
+                    ? groupMap.get(selectedArticle.articleGroupId) ??
+                      selectedArticle.articleGroupId
+                    : "—",
+                },
                 { label: "Warehouse", value: selectedArticle?.defaultWarehouseId },
                 { label: "Tracking", value: selectedArticle?.trackingMode },
               ],
@@ -245,15 +351,34 @@ function ArticlesModule() {
           title="Inventory Movements"
           toolbar={false}
           columns={[
-            { key: "movementDate", header: "Date", render: (r: any) => <span className="tabular-nums">{formatDate(r.movementDate)}</span> },
-            { key: "movementType", header: "Type", render: (r: any) => <span className="font-mono">{r.movementType}</span> },
-            { key: "qtyDelta", header: "Qty", isNumeric: true, render: (r: any) => <span className="tabular-nums">{r.qtyDelta}</span> },
+            {
+              key: "movementDate",
+              header: "Date",
+              render: (r: any) => (
+                <span className="tabular-nums">{formatDate(r.movementDate)}</span>
+              ),
+            },
+            {
+              key: "movementType",
+              header: "Type",
+              render: (r: any) => <span className="font-mono">{r.movementType}</span>,
+            },
+            {
+              key: "qtyDelta",
+              header: "Qty",
+              isNumeric: true,
+              render: (r: any) => <span className="tabular-nums">{r.qtyDelta}</span>,
+            },
             { key: "referenceText", header: "Reference" },
-            { key: "batchNo", header: "Batch", render: (r: any) => <span className="font-mono text-[12px]">{r.batchNo ?? "—"}</span> },
+            {
+              key: "batchNo",
+              header: "Batch",
+              render: (r: any) => <span className="font-mono text-[12px]">{r.batchNo ?? "—"}</span>,
+            },
           ]}
           emptyTitle="No movements recorded."
           emptySubtitle="Inventory movements appear here when stock changes."
-          className="h-full border-none rounded-none"
+          className="h-full rounded-none border-none"
         />
       ),
     },
@@ -261,38 +386,44 @@ function ArticlesModule() {
       id: "statistics",
       label: t("stats.revenue"),
       content: (
-        <div className="overflow-auto h-full">
+        <div className="h-full overflow-auto">
           {!articleStats || articleStats.revenueByPeriod.length === 0 ? (
-            <div className="flex items-center justify-center h-24 text-[13px] text-ink-mute">
+            <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
               {t("empty.title")}
             </div>
           ) : (
             <table className="w-full table-fixed border-collapse">
               <thead>
                 <tr className="h-8 border-b border-hairline">
-                  <th className="text-[11px] uppercase tracking-wider font-medium text-ink-mute text-left px-3 py-0">
+                  <th className="px-3 py-0 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                     {t("stats.fiscalYear")}
                   </th>
-                  <th className="text-[11px] uppercase tracking-wider font-medium text-ink-mute text-left px-3 py-0">
+                  <th className="px-3 py-0 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                     {t("stats.period")}
                   </th>
-                  <th className="text-[11px] uppercase tracking-wider font-medium text-ink-mute text-right px-3 py-0">
+                  <th className="px-3 py-0 text-right text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                     {t("stats.revenue")}
                   </th>
-                  <th className="text-[11px] uppercase tracking-wider font-medium text-ink-mute text-right px-3 py-0">
+                  <th className="px-3 py-0 text-right text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                     Menge
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {articleStats.revenueByPeriod.map((row) => (
-                  <tr key={`${row.fiscal_year}-${row.period_no}`} className="h-9 border-b border-hairline last:border-0">
-                    <td className="px-3 tabular-nums text-[13px]">{row.fiscal_year}</td>
-                    <td className="px-3 tabular-nums text-[13px]">{row.period_no}</td>
-                    <td className="px-3 tabular-nums font-mono text-[13px] text-right">
-                      {new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(Number(row.total_amount_net))}
+                  <tr
+                    key={`${row.fiscal_year}-${row.period_no}`}
+                    className="h-9 border-b border-hairline last:border-0"
+                  >
+                    <td className="px-3 text-[13px] tabular-nums">{row.fiscal_year}</td>
+                    <td className="px-3 text-[13px] tabular-nums">{row.period_no}</td>
+                    <td className="px-3 text-right font-mono text-[13px] tabular-nums">
+                      {new Intl.NumberFormat("de-DE", {
+                        style: "currency",
+                        currency: "EUR",
+                      }).format(Number(row.total_amount_net))}
                     </td>
-                    <td className="px-3 tabular-nums font-mono text-[13px] text-right">
+                    <td className="px-3 text-right font-mono text-[13px] tabular-nums">
                       {Number(row.total_qty).toFixed(3)}
                     </td>
                   </tr>
@@ -309,7 +440,7 @@ function ArticlesModule() {
       content: activeArticleId ? (
         <StockLedgerTable articleId={activeArticleId} />
       ) : (
-        <div className="flex items-center justify-center h-24 text-[13px] text-ink-mute">
+        <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
           {t("empty.title")}
         </div>
       ),
@@ -323,15 +454,10 @@ function ArticlesModule() {
           <NavigationTree
             entityName="articleGroup"
             panelId="article-tree"
-            data={groups}
+            data={treeNodes}
             header={t("tree.groups")}
             isLoading={isTreeLoading}
-            onSelect={(id) => {
-              const group = groups.find((g: TreeNode) => g.id === id);
-              setSubCrumb(group?.label);
-              setSelectedGroupId(id);
-              gridState.setPage(1);
-            }}
+            onSelect={selectTreeNode}
             onSelectCommit={() => restoreArticleGrid()}
           />
         }
@@ -345,12 +471,41 @@ function ArticlesModule() {
             keyExtractor={(row: any) => row.articleId}
             title={t("nav.articles")}
             columns={[
-              { key: "articleNo", header: "No.", sortable: true, render: (r: any) => <span className="font-mono tabular-nums text-ink-mute">{r.articleNo}</span> },
+              {
+                key: "articleNo",
+                header: "No.",
+                sortable: true,
+                render: (r: any) => (
+                  <span className="font-mono text-ink-mute tabular-nums">{r.articleNo}</span>
+                ),
+              },
               { key: "name", header: "Name", sortable: true },
-              { key: "baseUnit", header: "Unit" },
-              { key: "articleGroupId", header: "Group", render: (r: any) => <span>{groupMap.get(r.articleGroupId) ?? "—"}</span> },
-              { key: "trackingMode", header: "Tracking", render: (r: any) => <span className="font-mono text-[11px] text-ink-mute">{r.trackingMode ?? "—"}</span> },
-              { key: "bomType", header: "BOM", render: (r: any) => <span className="font-mono text-[11px] text-ink-mute">{r.bomType ?? "—"}</span> },
+              {
+                key: "baseUnitId",
+                header: "Unit",
+                render: (r: any) => <span>{unitMap.get(r.baseUnitId) ?? "—"}</span>,
+              },
+              {
+                key: "articleGroupId",
+                header: "Group",
+                render: (r: any) => <span>{groupMap.get(r.articleGroupId) ?? "—"}</span>,
+              },
+              {
+                key: "trackingMode",
+                header: "Tracking",
+                render: (r: any) => (
+                  <span className="font-mono text-[11px] text-ink-mute">
+                    {r.trackingMode ?? "—"}
+                  </span>
+                ),
+              },
+              {
+                key: "bomType",
+                header: "BOM",
+                render: (r: any) => (
+                  <span className="font-mono text-[11px] text-ink-mute">{r.bomType ?? "—"}</span>
+                ),
+              },
             ]}
             totalCount={articleData?.total}
             page={gridState.page}
@@ -432,19 +587,44 @@ function ArticlesModule() {
       </Dialog>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden">
+        <DialogContent className="sw-root max-w-2xl overflow-hidden p-0" variant="form">
           <EntityMask
             entityName="article"
             mode="create"
             title="New Article"
             fieldOverrides={ARTICLE_FIELD_OVERRIDES}
             onCancel={() => setShowCreate(false)}
+            onFieldChange={async (key, value, _formData, setFormData) => {
+              if (key !== "articleGroupId" || !value) return;
+              const res = await fetch(`/api/data/articleGroup/${value}`);
+              if (!res.ok) return;
+              const groupData = await res.json();
+              const group = Array.isArray(groupData) ? groupData[0] ?? {} : groupData ?? {};
+              const isBlank = (next: unknown) => next === undefined || next === null || next === "";
+              setFormData((curr) => {
+                const next = { ...curr };
+                const fieldMap = {
+                  taxClassId: group.taxClassId,
+                  baseUnitId: group.baseUnitId,
+                  salesUnitId: group.salesUnitId,
+                  purchaseUnitId: group.purchaseUnitId,
+                  trackingMode: group.trackingMode === "none" ? null : group.trackingMode,
+                  bomType: group.bomType,
+                } as const;
+                for (const [field, defaultValue] of Object.entries(fieldMap)) {
+                  if (isBlank(curr[field]) && !isBlank(defaultValue)) {
+                    next[field] = defaultValue;
+                  }
+                }
+                return next;
+              });
+            }}
             onSaved={(record) => {
               setShowCreate(false);
               queryClient.invalidateQueries({ queryKey: ["data", "article"] });
               restoreArticleGrid((record as any)?.articleId ?? (record as any)?.id ?? null);
             }}
-            className="border-none shadow-none rounded-none"
+            className="rounded-none border-none shadow-none"
           />
         </DialogContent>
       </Dialog>

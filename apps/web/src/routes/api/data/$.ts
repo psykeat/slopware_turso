@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { auth } from "@repo/auth/auth";
 import { DataService } from "@repo/db/services/data";
 import { DocumentService } from "@repo/db/services/document-service";
-import { auth } from "@repo/auth/auth";
+import { createFileRoute } from "@tanstack/react-router";
+
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/data/$")({
@@ -40,7 +41,15 @@ export const Route = createFileRoute("/api/data/$")({
           }
 
           // Extract query params for FK filtering; exclude pagination/reserved keys
-          const reserved = new Set(["limit", "offset", "page", "orderBy", "paginated", "search", "filters"]);
+          const reserved = new Set([
+            "limit",
+            "offset",
+            "page",
+            "orderBy",
+            "paginated",
+            "search",
+            "filters",
+          ]);
           const filters: Record<string, string> = {};
           for (const [key, value] of url.searchParams.entries()) {
             if (!reserved.has(key)) {
@@ -61,26 +70,35 @@ export const Route = createFileRoute("/api/data/$")({
           const filtersParam = url.searchParams.get("filters");
           let filterRules: Array<{ col: string; op: string; val: string }> | undefined;
           if (filtersParam) {
-            try { filterRules = JSON.parse(filtersParam); } catch { /* ignore */ }
+            try {
+              filterRules = JSON.parse(filtersParam);
+            } catch {
+              /* ignore */
+            }
           }
 
           console.log(`[Data API] GET List: ${entityName} Filters:`, filters);
 
           if (paginated) {
-            const result = await service.list(entityName, filters, {
+            const result = (await service.list(entityName, filters, {
               limit: effectiveLimit,
               offset,
               orderBy,
               count: true,
               search,
               filterRules,
-            }) as { data: any[]; total: number };
+            })) as { data: any[]; total: number };
             return new Response(JSON.stringify(result), {
               headers: { "content-type": "application/json" },
             });
           }
 
-          const data = await service.list(entityName, filters, { limit, orderBy, search, filterRules });
+          const data = await service.list(entityName, filters, {
+            limit,
+            orderBy,
+            search,
+            filterRules,
+          });
           return new Response(JSON.stringify(data), {
             headers: { "content-type": "application/json" },
           });

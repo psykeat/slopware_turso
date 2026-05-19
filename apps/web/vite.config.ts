@@ -41,6 +41,9 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 3000,
   },
+  optimizeDeps: {
+    exclude: ["@react-pdf/renderer"],
+  },
   plugins: [
     devtools(),
     tanstackStart(),
@@ -52,9 +55,11 @@ export default defineConfig({
     }),
     viteReact(),
     // https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#react-compiler
-    babel({
-      presets: [reactCompilerPreset()],
-    }),
+    process.env.NODE_ENV === "production"
+      ? babel({
+          presets: [reactCompilerPreset()],
+        })
+      : null,
     tailwindcss(),
-  ],
+  ].filter(Boolean),
 });

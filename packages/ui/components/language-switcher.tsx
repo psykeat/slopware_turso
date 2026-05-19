@@ -1,5 +1,6 @@
-import React, { useState } from "react";
 import { GlobeIcon } from "lucide-react";
+import React, { useState } from "react";
+
 import { Button } from "./button";
 import {
   DropdownMenu,
@@ -20,7 +21,7 @@ export function LanguageSwitcher() {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="ghost" size="sm" className="h-8 px-2 gap-2 text-ink-mute hover:text-ink">
+          <Button variant="ghost" size="sm" className="h-8 gap-2 px-2 text-ink-mute hover:text-ink">
             <GlobeIcon className="size-4" />
             <span className="text-xs font-medium uppercase">{lang}</span>
           </Button>
@@ -30,7 +31,7 @@ export function LanguageSwitcher() {
         {languages.map((l) => (
           <DropdownMenuItem
             key={l.code}
-            className="text-xs cursor-pointer"
+            className="cursor-pointer text-xs"
             onClick={() => setLang(l.code as any)}
           >
             {l.label}

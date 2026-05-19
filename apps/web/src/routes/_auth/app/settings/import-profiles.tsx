@@ -1,17 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { Button } from "@repo/ui/components/button";
 import { Label } from "@repo/ui/components/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/components/select";
-import { cn } from "@repo/ui/lib/utils";
 import {
-  PlusIcon,
-  Trash2Icon,
-  SaveIcon,
-  ZapIcon,
-} from "lucide-react";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/components/select";
+import { cn } from "@repo/ui/lib/utils";
+import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { PlusIcon, Trash2Icon, SaveIcon, ZapIcon } from "lucide-react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_auth/app/settings/import-profiles")({
@@ -108,15 +109,19 @@ function ImportProfilesView() {
 
   useEffect(() => {
     if (serverMappings && !mappingsLoaded) {
-      setMappingRows(serverMappings.map((m) => ({ ...m, _localId: crypto.randomUUID() })));
-      setMappingsLoaded(true);
+      queueMicrotask(() => {
+        setMappingRows(serverMappings.map((m) => ({ ...m, _localId: crypto.randomUUID() })));
+        setMappingsLoaded(true);
+      });
     }
   }, [serverMappings, mappingsLoaded]);
 
   // Reset mappings when connector changes
   useEffect(() => {
-    setMappingRows([]);
-    setMappingsLoaded(false);
+    queueMicrotask(() => {
+      setMappingRows([]);
+      setMappingsLoaded(false);
+    });
   }, [selectedConnectorId, selectedProfileId]);
 
   // ── Profile form helpers ───────────────────────────────────────────────
@@ -212,7 +217,9 @@ function ImportProfilesView() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["import", "mappings", selectedProfileId, selectedConnectorId] });
+      queryClient.invalidateQueries({
+        queryKey: ["import", "mappings", selectedProfileId, selectedConnectorId],
+      });
       toast.success("Mappings saved");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -237,7 +244,9 @@ function ImportProfilesView() {
 
   // ── Mapping row helpers ────────────────────────────────────────────────
   const updateRow = (localId: string, field: keyof Omit<MappingRow, "_localId">, value: string) => {
-    setMappingRows((rows) => rows.map((r) => (r._localId === localId ? { ...r, [field]: value } : r)));
+    setMappingRows((rows) =>
+      rows.map((r) => (r._localId === localId ? { ...r, [field]: value } : r)),
+    );
   };
 
   const removeRow = (localId: string) => {
@@ -255,12 +264,14 @@ function ImportProfilesView() {
   return (
     <div className="flex h-full w-full overflow-hidden">
       {/* ── Left: Profile list ── */}
-      <div className="w-60 shrink-0 bg-canvas-soft border-r border-hairline flex flex-col overflow-hidden">
-        <div className="h-8 flex items-center justify-between px-3 shrink-0 border-b border-hairline">
-          <span className="text-[11px] uppercase tracking-wider font-medium text-ink-mute">Import Profiles</span>
+      <div className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-hairline bg-canvas-soft">
+        <div className="flex h-8 shrink-0 items-center justify-between border-b border-hairline px-3">
+          <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+            Import Profiles
+          </span>
           <button
             onClick={startCreate}
-            className="size-5 flex items-center justify-center rounded hover:bg-canvas-soft text-ink-mute hover:text-ink transition-colors"
+            className="flex size-5 items-center justify-center rounded text-ink-mute transition-colors hover:bg-canvas-soft hover:text-ink"
             title="New Profile"
           >
             <PlusIcon className="size-3.5" />
@@ -280,14 +291,19 @@ function ImportProfilesView() {
                   key={p.profileId}
                   onClick={() => loadProfile(p)}
                   className={cn(
-                    "w-full flex flex-col items-start h-auto px-3 py-2 text-left cursor-pointer transition-colors",
+                    "flex h-auto w-full cursor-pointer flex-col items-start px-3 py-2 text-left transition-colors",
                     isActive
                       ? "bg-primary text-primary-fg"
                       : "text-ink-secondary hover:bg-canvas hover:text-ink",
                   )}
                 >
-                  <span className="text-[13px] truncate w-full">{p.label}</span>
-                  <span className={cn("text-[10px] font-mono", isActive ? "text-primary-fg/70" : "text-ink-mute")}>
+                  <span className="w-full truncate text-[13px]">{p.label}</span>
+                  <span
+                    className={cn(
+                      "font-mono text-[10px]",
+                      isActive ? "text-primary-fg/70" : "text-ink-mute",
+                    )}
+                  >
                     {p.slug}
                   </span>
                 </button>
@@ -296,7 +312,7 @@ function ImportProfilesView() {
           )}
 
           {isCreating && (
-            <div className="px-3 py-2 bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] border-l-2 border-primary text-[13px] text-ink">
+            <div className="border-l-2 border-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] px-3 py-2 text-[13px] text-ink">
               New Profile…
             </div>
           )}
@@ -305,11 +321,11 @@ function ImportProfilesView() {
 
       {/* ── Right: Edit form + mappings ── */}
       {showPanel ? (
-        <div className="flex-1 min-w-0 overflow-y-auto bg-canvas">
-          <div className="max-w-2xl mx-auto px-6 py-6 flex flex-col gap-6">
+        <div className="min-w-0 flex-1 overflow-y-auto bg-canvas">
+          <div className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-6">
             {/* Profile form */}
             <section className="flex flex-col gap-4">
-              <h2 className="text-[14px] font-semibold text-ink border-b border-hairline pb-2">
+              <h2 className="border-b border-hairline pb-2 text-[14px] font-semibold text-ink">
                 {isCreating ? "New Import Profile" : "Profile Settings"}
               </h2>
 
@@ -322,13 +338,16 @@ function ImportProfilesView() {
                     value={formLabel}
                     onChange={(e) => setFormLabel(e.target.value)}
                     placeholder="My Import Profile"
-                    className="h-8 rounded border border-hairline px-2.5 text-[13px] bg-canvas focus:outline-none focus:border-primary"
+                    className="h-8 rounded border border-hairline bg-canvas px-2.5 text-[13px] focus:border-primary focus:outline-none"
                   />
                 </div>
 
                 {/* Slug */}
                 <div className="flex flex-col gap-1.5">
-                  <Label>Slug {!isCreating && <span className="text-[10px] text-ink-mute">(read-only)</span>}</Label>
+                  <Label>
+                    Slug{" "}
+                    {!isCreating && <span className="text-[10px] text-ink-mute">(read-only)</span>}
+                  </Label>
                   <input
                     type="text"
                     value={formSlug}
@@ -336,8 +355,8 @@ function ImportProfilesView() {
                     readOnly={!isCreating}
                     placeholder="my-import-profile"
                     className={cn(
-                      "h-8 rounded border border-hairline px-2.5 text-[13px] font-mono bg-canvas focus:outline-none focus:border-primary",
-                      !isCreating && "opacity-60 cursor-default bg-canvas-soft",
+                      "h-8 rounded border border-hairline bg-canvas px-2.5 font-mono text-[13px] focus:border-primary focus:outline-none",
+                      !isCreating && "cursor-default bg-canvas-soft opacity-60",
                     )}
                   />
                 </div>
@@ -345,7 +364,10 @@ function ImportProfilesView() {
                 {/* Target Entity */}
                 <div className="flex flex-col gap-1.5">
                   <Label>Target Entity</Label>
-                  <Select value={formTargetEntity} onValueChange={(v) => v && setFormTargetEntity(v)}>
+                  <Select
+                    value={formTargetEntity}
+                    onValueChange={(v) => v && setFormTargetEntity(v)}
+                  >
                     <SelectTrigger className="h-8 text-[13px]">
                       <SelectValue />
                     </SelectTrigger>
@@ -364,14 +386,14 @@ function ImportProfilesView() {
                     value={formCommandKey}
                     onChange={(e) => setFormCommandKey(e.target.value)}
                     placeholder="upsert"
-                    className="h-8 rounded border border-hairline px-2.5 text-[13px] font-mono bg-canvas focus:outline-none focus:border-primary"
+                    className="h-8 rounded border border-hairline bg-canvas px-2.5 font-mono text-[13px] focus:border-primary focus:outline-none"
                   />
                 </div>
               </div>
 
               {/* Toggles */}
               <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="checkbox"
                     checked={formRequiresApproval}
@@ -382,7 +404,7 @@ function ImportProfilesView() {
                 </label>
 
                 {!isCreating && (
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className="flex cursor-pointer items-center gap-2">
                     <input
                       type="checkbox"
                       checked={!formArchived}
@@ -401,7 +423,7 @@ function ImportProfilesView() {
                   disabled={!formLabel || !formSlug || isPending}
                   size="sm"
                 >
-                  <SaveIcon className="size-3.5 mr-1.5" />
+                  <SaveIcon className="mr-1.5 size-3.5" />
                   {isCreating ? "Create Profile" : "Save Profile"}
                 </Button>
               </div>
@@ -410,14 +432,17 @@ function ImportProfilesView() {
             {/* Field Mappings section — only after profile exists */}
             {!isCreating && selectedProfileId && (
               <section className="flex flex-col gap-4">
-                <h2 className="text-[14px] font-semibold text-ink border-b border-hairline pb-2">
+                <h2 className="border-b border-hairline pb-2 text-[14px] font-semibold text-ink">
                   Field Mappings
                 </h2>
 
                 {/* Connector selector */}
-                <div className="flex flex-col gap-1.5 max-w-xs">
+                <div className="flex max-w-xs flex-col gap-1.5">
                   <Label>Connector</Label>
-                  <Select value={selectedConnectorId} onValueChange={(v) => v && setSelectedConnectorId(v)}>
+                  <Select
+                    value={selectedConnectorId}
+                    onValueChange={(v) => v && setSelectedConnectorId(v)}
+                  >
                     <SelectTrigger className="h-8 text-[13px]">
                       <SelectValue placeholder="Select connector…" />
                     </SelectTrigger>
@@ -434,28 +459,49 @@ function ImportProfilesView() {
                 {/* Mapping table */}
                 {selectedConnectorId && (
                   <>
-                    <div className="border border-hairline rounded-md overflow-hidden">
+                    <div className="overflow-hidden rounded-md border border-hairline">
                       <table className="w-full text-[12px]">
-                        <thead className="bg-canvas-soft border-b border-hairline">
+                        <thead className="border-b border-hairline bg-canvas-soft">
                           <tr>
-                            <th className="px-2 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute">Source Field</th>
-                            <th className="px-2 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute">Target Table</th>
-                            <th className="px-2 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute">Target Column</th>
-                            <th className="px-2 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute">Transform</th>
-                            <th className="px-2 py-2 text-left text-[10px] uppercase tracking-wider font-medium text-ink-mute">Default</th>
+                            <th className="px-2 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                              Source Field
+                            </th>
+                            <th className="px-2 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                              Target Table
+                            </th>
+                            <th className="px-2 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                              Target Column
+                            </th>
+                            <th className="px-2 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                              Transform
+                            </th>
+                            <th className="px-2 py-2 text-left text-[10px] font-medium tracking-wider text-ink-mute uppercase">
+                              Default
+                            </th>
                             <th className="w-8" />
                           </tr>
                         </thead>
                         <tbody>
                           {mappingRows.map((row) => (
-                            <tr key={row._localId} className="border-b border-hairline last:border-0">
-                              {(["sourceField", "targetTable", "targetColumn", "transform", "defaultValue"] as const).map((field) => (
+                            <tr
+                              key={row._localId}
+                              className="border-b border-hairline last:border-0"
+                            >
+                              {(
+                                [
+                                  "sourceField",
+                                  "targetTable",
+                                  "targetColumn",
+                                  "transform",
+                                  "defaultValue",
+                                ] as const
+                              ).map((field) => (
                                 <td key={field} className="px-1 py-1">
                                   <input
                                     type="text"
                                     value={row[field]}
                                     onChange={(e) => updateRow(row._localId, field, e.target.value)}
-                                    className="w-full h-7 rounded border border-transparent px-1.5 text-[12px] bg-transparent hover:border-hairline focus:border-primary focus:outline-none"
+                                    className="h-7 w-full rounded border border-transparent bg-transparent px-1.5 text-[12px] hover:border-hairline focus:border-primary focus:outline-none"
                                     placeholder="…"
                                   />
                                 </td>
@@ -463,7 +509,7 @@ function ImportProfilesView() {
                               <td className="px-1 py-1 text-center">
                                 <button
                                   onClick={() => removeRow(row._localId)}
-                                  className="size-6 flex items-center justify-center rounded text-ink-mute hover:text-red-500 hover:bg-red-50 transition-colors"
+                                  className="flex size-6 items-center justify-center rounded text-ink-mute transition-colors hover:bg-red-50 hover:text-red-500"
                                   title="Remove row"
                                 >
                                   <Trash2Icon className="size-3.5" />
@@ -473,7 +519,10 @@ function ImportProfilesView() {
                           ))}
                           {mappingRows.length === 0 && (
                             <tr>
-                              <td colSpan={6} className="px-3 py-4 text-center text-[12px] text-ink-mute">
+                              <td
+                                colSpan={6}
+                                className="px-3 py-4 text-center text-[12px] text-ink-mute"
+                              >
                                 No mappings yet. Add a row to get started.
                               </td>
                             </tr>
@@ -485,7 +534,7 @@ function ImportProfilesView() {
                     <div className="flex items-center justify-between">
                       <button
                         onClick={addRow}
-                        className="flex items-center gap-1.5 text-[13px] text-ink-secondary hover:text-ink transition-colors"
+                        className="flex items-center gap-1.5 text-[13px] text-ink-secondary transition-colors hover:text-ink"
                       >
                         <PlusIcon className="size-3.5" />
                         Add Row
@@ -498,7 +547,7 @@ function ImportProfilesView() {
                           onClick={() => saveMappingsMutation.mutate()}
                           disabled={saveMappingsMutation.isPending}
                         >
-                          <SaveIcon className="size-3.5 mr-1.5" />
+                          <SaveIcon className="mr-1.5 size-3.5" />
                           {saveMappingsMutation.isPending ? "Saving…" : "Save Mappings"}
                         </Button>
                         <Button
@@ -506,7 +555,7 @@ function ImportProfilesView() {
                           onClick={() => activateMutation.mutate()}
                           disabled={activateMutation.isPending || mappingRows.length === 0}
                         >
-                          <ZapIcon className="size-3.5 mr-1.5" />
+                          <ZapIcon className="mr-1.5 size-3.5" />
                           {activateMutation.isPending ? "Activating…" : "Activate Version"}
                         </Button>
                       </div>
@@ -518,7 +567,7 @@ function ImportProfilesView() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-[13px] text-ink-mute bg-canvas">
+        <div className="flex flex-1 items-center justify-center bg-canvas text-[13px] text-ink-mute">
           Select a profile or create a new one
         </div>
       )}

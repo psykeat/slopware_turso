@@ -1,4 +1,6 @@
 import "@tanstack/react-start/server-only";
+import { eq, and, desc, max } from "drizzle-orm";
+
 import { db } from "../index";
 import {
   importProfile,
@@ -10,8 +12,8 @@ import {
   connectorDefinition,
   article,
   address,
+  unit,
 } from "../schema/app.schema";
-import { eq, and, desc, max } from "drizzle-orm";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -27,6 +29,19 @@ function toStr(v: unknown): string {
 function toStrOrNull(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   return toStr(v);
+}
+
+async function resolveUnitIdByCode(tenantId: string, code: unknown) {
+  const unitCode = toStrOrNull(code)?.trim();
+  if (!unitCode) return null;
+
+  const [row] = await db
+    .select({ unitId: unit.unitId })
+    .from(unit)
+    .where(and(eq(unit.tenantId, tenantId), eq(unit.code, unitCode)))
+    .limit(1);
+
+  return row?.unitId ?? null;
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -177,7 +192,9 @@ export class ImportService {
     await db
       .update(importProfile)
       .set({ archived: true, updatedAt: new Date() })
-      .where(and(eq(importProfile.profileId, profileId), eq(importProfile.tenantId, this.tenantId)));
+      .where(
+        and(eq(importProfile.profileId, profileId), eq(importProfile.tenantId, this.tenantId)),
+      );
   }
 
   // ─── Mappings ─────────────────────────────────────────────────────────────
@@ -195,7 +212,11 @@ export class ImportService {
       );
   }
 
-  async saveMappings(tenantConnectorId: string, profileId: string, rows: MappingRow[]): Promise<void> {
+  async saveMappings(
+    tenantConnectorId: string,
+    profileId: string,
+    rows: MappingRow[],
+  ): Promise<void> {
     await db.transaction(async (tx) => {
       // Delete existing mapping rows for this connector×profile pair
       await tx
@@ -219,7 +240,8 @@ export class ImportService {
             targetTable: r.targetTable,
             targetColumn: r.targetColumn,
             transform: (r.transform ?? { type: "direct" }) as Record<string, unknown>,
-            defaultValue: r.defaultValue !== undefined ? (r.defaultValue as Record<string, unknown>) : null,
+            defaultValue:
+              r.defaultValue !== undefined ? (r.defaultValue as Record<string, unknown>) : null,
           })),
         );
       }
@@ -364,9 +386,7 @@ export class ImportService {
     const [profile] = await db
       .select()
       .from(importProfile)
-      .where(
-        and(eq(importProfile.profileId, profileId), eq(importProfile.tenantId, this.tenantId)),
-      )
+      .where(and(eq(importProfile.profileId, profileId), eq(importProfile.tenantId, this.tenantId)))
       .limit(1);
 
     if (!profile) throw new Error("Import profile not found");
@@ -516,6 +536,10 @@ export class ImportService {
         const payload = row.payload as Record<string, unknown>;
 
         if (row.targetEntity === "article") {
+          const baseUnitId = await resolveUnitIdByCode(this.tenantId, payload.baseUnit);
+          const salesUnitId = await resolveUnitIdByCode(this.tenantId, payload.salesUnit);
+          const purchaseUnitId = await resolveUnitIdByCode(this.tenantId, payload.purchaseUnit);
+
           await db
             .insert(article)
             .values({
@@ -523,7 +547,9 @@ export class ImportService {
               articleNo: toStr(payload.articleNo),
               name: toStr(payload.name),
               description: toStrOrNull(payload.description),
-              baseUnit: toStrOrNull(payload.baseUnit),
+              baseUnitId,
+              salesUnitId,
+              purchaseUnitId,
             })
             .onConflictDoUpdate({
               target: [article.tenantId, article.articleNo],
@@ -532,7 +558,9 @@ export class ImportService {
                 ...(payload.description !== undefined && {
                   description: toStrOrNull(payload.description),
                 }),
-                ...(payload.baseUnit !== undefined && { baseUnit: toStrOrNull(payload.baseUnit) }),
+                ...(payload.baseUnit !== undefined && { baseUnitId }),
+                ...(payload.salesUnit !== undefined && { salesUnitId }),
+                ...(payload.purchaseUnit !== undefined && { purchaseUnitId }),
                 updatedAt: new Date(),
               },
             });
@@ -543,7 +571,6 @@ export class ImportService {
             .values({
               tenantId: this.tenantId,
               addressNo: toStr(payload.addressNo),
-              addressType: toStr(payload.addressType || "customer"),
               addressLine1: toStr(payload.addressLine1),
               postalCode: toStr(payload.postalCode),
               city: toStr(payload.city),
@@ -555,9 +582,6 @@ export class ImportService {
             .onConflictDoUpdate({
               target: [address.tenantId, address.addressNo],
               set: {
-                ...(payload.addressType !== undefined && {
-                  addressType: toStr(payload.addressType),
-                }),
                 ...(payload.addressLine1 !== undefined && {
                   addressLine1: toStr(payload.addressLine1),
                 }),
@@ -571,7 +595,9 @@ export class ImportService {
                 ...(payload.companyName !== undefined && {
                   companyName: toStrOrNull(payload.companyName),
                 }),
-                ...(payload.firstName !== undefined && { firstName: toStrOrNull(payload.firstName) }),
+                ...(payload.firstName !== undefined && {
+                  firstName: toStrOrNull(payload.firstName),
+                }),
                 ...(payload.lastName !== undefined && { lastName: toStrOrNull(payload.lastName) }),
                 updatedAt: new Date(),
               },

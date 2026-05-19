@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { systemSettings } from "@repo/db/schema";
+import { createFileRoute } from "@tanstack/react-router";
 import { eq, and } from "drizzle-orm";
+
 import { decrypt } from "../admin/llm-config";
 
 export const Route = createFileRoute("/api/feedback/submit")({
@@ -21,12 +22,7 @@ export const Route = createFileRoute("/api/feedback/submit")({
         const configRow = await db
           .select()
           .from(systemSettings)
-          .where(
-            and(
-              eq(systemSettings.scope, "global"),
-              eq(systemSettings.key, "llm_config"),
-            ),
-          )
+          .where(and(eq(systemSettings.scope, "global"), eq(systemSettings.key, "llm_config")))
           .limit(1);
 
         if (!configRow[0]) {
@@ -93,32 +89,26 @@ User says: ${body.description}`;
 
         // 4. Create GitHub issue
         const [owner, repo] = (llmConfig.githubRepo || "/").split("/");
-        const ghRes = await fetch(
-          `https://api.github.com/repos/${owner}/${repo}/issues`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `token ${llmConfig.githubToken}`,
-              "Content-Type": "application/json",
-              Accept: "application/vnd.github.v3+json",
-            },
-            body: JSON.stringify({
-              title: issueData.title,
-              body: issueData.body,
-              labels: [issueData.label],
-            }),
+        const ghRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
+          method: "POST",
+          headers: {
+            Authorization: `token ${llmConfig.githubToken}`,
+            "Content-Type": "application/json",
+            Accept: "application/vnd.github.v3+json",
           },
-        );
+          body: JSON.stringify({
+            title: issueData.title,
+            body: issueData.body,
+            labels: [issueData.label],
+          }),
+        });
 
         if (!ghRes.ok) {
           const errText = await ghRes.text();
-          return new Response(
-            JSON.stringify({ error: `GitHub API error: ${errText}` }),
-            {
-              status: 502,
-              headers: { "content-type": "application/json" },
-            },
-          );
+          return new Response(JSON.stringify({ error: `GitHub API error: ${errText}` }), {
+            status: 502,
+            headers: { "content-type": "application/json" },
+          });
         }
 
         const ghIssue = (await ghRes.json()) as { html_url: string };

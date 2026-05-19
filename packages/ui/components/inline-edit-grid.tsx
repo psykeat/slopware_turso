@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, CheckIcon, XIcon, PencilIcon, Trash2Icon } from "lucide-react";
-import { cn } from "../lib/utils";
+import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
+import { cn } from "../lib/utils";
 
 export interface InlineColumnDef {
   key: string;
@@ -49,9 +50,7 @@ export function InlineEditGrid({
   const saveMutation = useMutation({
     mutationFn: async (data: Record<string, any>) => {
       const isNew = editingId === NEW_ROW_ID;
-      const url = isNew
-        ? `/api/data/${entityName}`
-        : `/api/data/${entityName}/${editingId}`;
+      const url = isNew ? `/api/data/${entityName}` : `/api/data/${entityName}/${editingId}`;
       const body = isNew ? { ...parentKey, ...data } : data;
       const res = await fetch(url, {
         method: isNew ? "POST" : "PATCH",
@@ -103,19 +102,18 @@ export function InlineEditGrid({
     firstEditInputRef.current?.focus();
   }, [editingId]);
 
-  const allRows =
-    editingId === NEW_ROW_ID ? [...rows, { [keyColumn]: NEW_ROW_ID }] : rows;
+  const allRows = editingId === NEW_ROW_ID ? [...rows, { [keyColumn]: NEW_ROW_ID }] : rows;
 
   return (
-    <div className={cn("flex flex-col h-full", className)}>
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-hairline shrink-0">
+    <div className={cn("flex h-full flex-col", className)}>
+      <div className="flex shrink-0 items-center justify-between border-b border-hairline px-3 py-1.5">
         <span className="text-[11px] font-medium text-ink-mute">
           {rows.length > 0 ? `${rows.length} record${rows.length !== 1 ? "s" : ""}` : ""}
         </span>
         <button
           onClick={startNew}
           disabled={editingId !== null}
-          className="flex items-center gap-1 h-6 px-2 rounded text-[12px] text-ink-secondary hover:text-ink hover:bg-surface-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="hover:bg-surface-hover flex h-6 items-center gap-1 rounded px-2 text-[12px] text-ink-secondary transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
         >
           <PlusIcon className="size-3" />
           Add
@@ -129,7 +127,7 @@ export function InlineEditGrid({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className="text-left text-[11px] font-medium text-ink-mute uppercase tracking-wider px-3 py-0 whitespace-nowrap"
+                  className="px-3 py-0 text-left text-[11px] font-medium tracking-wider whitespace-nowrap text-ink-mute uppercase"
                   style={col.width ? { width: col.width } : undefined}
                 >
                   {col.header}
@@ -143,7 +141,7 @@ export function InlineEditGrid({
               <tr>
                 <td
                   colSpan={columns.length + 1}
-                  className="text-center text-[13px] text-ink-mute py-10"
+                  className="py-10 text-center text-[13px] text-ink-mute"
                 >
                   No records yet.
                 </td>
@@ -157,10 +155,8 @@ export function InlineEditGrid({
                 <tr
                   key={id}
                   className={cn(
-                    "border-b border-hairline last:border-0 group",
-                    isEditing
-                      ? "bg-surface-hover"
-                      : "hover:bg-surface-hover/50 cursor-pointer",
+                    "group border-b border-hairline last:border-0",
+                    isEditing ? "bg-surface-hover" : "hover:bg-surface-hover/50 cursor-pointer",
                   )}
                   onClick={!isEditing ? () => startEdit(row) : undefined}
                 >
@@ -185,17 +181,18 @@ export function InlineEditGrid({
                               setEditData((d) => ({ ...d, [col.key]: e.target.value }))
                             }
                             onKeyDown={(e) => {
-                              if (e.key === "Escape") { e.stopPropagation(); cancelEdit(); }
+                              if (e.key === "Escape") {
+                                e.stopPropagation();
+                                cancelEdit();
+                              }
                             }}
-                            className="h-7 w-full min-w-[80px] border border-hairline-input bg-canvas rounded px-2 text-[13px] outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            className="h-7 w-full min-w-[80px] rounded border border-hairline-input bg-canvas px-2 text-[13px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                           />
                         )
                       ) : col.type === "boolean" ? (
                         <span className="text-ink-mute">{row[col.key] ? "✓" : "—"}</span>
                       ) : (
-                        <span className="truncate max-w-[200px] block">
-                          {row[col.key] ?? "—"}
-                        </span>
+                        <span className="block max-w-[200px] truncate">{row[col.key] ?? "—"}</span>
                       )}
                     </td>
                   ))}
@@ -208,7 +205,7 @@ export function InlineEditGrid({
                             saveMutation.mutate(editData);
                           }}
                           disabled={saveMutation.isPending}
-                          className="size-6 flex items-center justify-center rounded hover:bg-primary/10 text-primary transition-colors disabled:opacity-50"
+                          className="flex size-6 items-center justify-center rounded text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
                           title="Save"
                         >
                           <CheckIcon className="size-3.5" />
@@ -218,20 +215,20 @@ export function InlineEditGrid({
                             e.stopPropagation();
                             cancelEdit();
                           }}
-                          className="size-6 flex items-center justify-center rounded hover:bg-surface-hover text-ink-mute hover:text-ink transition-colors"
+                          className="hover:bg-surface-hover flex size-6 items-center justify-center rounded text-ink-mute transition-colors hover:text-ink"
                           title="Cancel"
                         >
                           <XIcon className="size-3.5" />
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             startEdit(row);
                           }}
-                          className="size-6 flex items-center justify-center rounded hover:bg-surface-hover text-ink-mute hover:text-ink transition-colors"
+                          className="hover:bg-surface-hover flex size-6 items-center justify-center rounded text-ink-mute transition-colors hover:text-ink"
                           title="Edit"
                         >
                           <PencilIcon className="size-3" />
@@ -242,7 +239,7 @@ export function InlineEditGrid({
                             archiveMutation.mutate(id);
                           }}
                           disabled={archiveMutation.isPending}
-                          className="size-6 flex items-center justify-center rounded hover:bg-destructive/10 text-ink-mute hover:text-destructive transition-colors disabled:opacity-50"
+                          className="flex size-6 items-center justify-center rounded text-ink-mute transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                           title="Delete"
                         >
                           <Trash2Icon className="size-3" />

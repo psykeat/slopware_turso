@@ -1,12 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { renderToBuffer } from "@react-pdf/renderer";
-import React from "react";
+import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { document, documentLine, company } from "@repo/db/schema";
+import { createFileRoute } from "@tanstack/react-router";
 import { eq, and, asc } from "drizzle-orm";
-import { auth } from "@repo/auth/auth";
+import React from "react";
+
 import { resolveTenantContext } from "#/lib/resolve-tenant";
-import DocumentPDF, { TYPE_LABELS } from "#/pdf/document-pdf";
 import type { DocumentForPrint, CompanyForPrint, DocumentLine } from "#/pdf/document-pdf";
 
 export const Route = createFileRoute("/api/documents/$documentId/print")({
@@ -53,14 +52,22 @@ export const Route = createFileRoute("/api/documents/$documentId/print")({
             .select()
             .from(company)
             .where(
-              and(
-                eq(company.companyId, doc.companyId),
-                eq(company.tenantId, context.tenantId),
-              ),
+              and(eq(company.companyId, doc.companyId), eq(company.tenantId, context.tenantId)),
             )
             .limit(1);
           const co = companies[0];
           if (!co) return new Response("Company not found", { status: 404 });
+
+          // Lazy-load PDF engine and component
+          const [pdfRenderer, pdfComponent] = await Promise.all([
+            import("@react-pdf/renderer"),
+            import("#/pdf/document-pdf"),
+          ]);
+          const { renderToBuffer } = pdfRenderer;
+          const { default: DocumentPDF, TYPE_LABELS } = pdfComponent as unknown as {
+            default: React.ComponentType<any>;
+            TYPE_LABELS: Record<string, string>;
+          };
 
           const typeLabel = TYPE_LABELS[doc.documentType] ?? doc.documentType;
 
@@ -129,3 +136,4 @@ export const Route = createFileRoute("/api/documents/$documentId/print")({
     },
   },
 });
+

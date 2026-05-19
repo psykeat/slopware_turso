@@ -1,5 +1,6 @@
-import React, { useState } from "react";
 import { MoreHorizontalIcon } from "lucide-react";
+import React, { useState } from "react";
+
 import { cn } from "../lib/utils";
 
 export interface TabDef {
@@ -23,10 +24,10 @@ export function ContextTabs({ tabs, defaultValue, className }: ContextTabsProps)
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
 
   return (
-    <div className={cn("flex flex-col h-full w-full", className)}>
+    <div className={cn("flex h-full w-full flex-col", className)}>
       {/* Tab bar — 32px */}
       <div
-        className="h-8 flex items-center bg-canvas-soft border-b border-hairline shrink-0 overflow-x-auto"
+        className="flex h-8 shrink-0 items-center overflow-x-auto border-b border-hairline bg-canvas-soft"
         style={{ scrollbarWidth: "none" }}
       >
         {tabs.map((tab) => (
@@ -34,29 +35,25 @@ export function ContextTabs({ tabs, defaultValue, className }: ContextTabsProps)
             key={tab.id}
             onClick={() => setActive(tab.id)}
             className={cn(
-              "h-8 px-3 text-[13px] select-none border-b-2 whitespace-nowrap flex items-center gap-1 transition-colors shrink-0",
+              "flex h-8 shrink-0 items-center gap-1 border-b-2 px-3 text-[13px] whitespace-nowrap transition-colors select-none",
               active === tab.id
-                ? "text-ink border-primary"
-                : "text-ink-mute border-transparent hover:text-ink",
+                ? "border-primary text-ink"
+                : "border-transparent text-ink-mute hover:text-ink",
             )}
           >
             {tab.label}
-            {tab.count != null && (
-              <span className="text-[11px] text-ink-mute">({tab.count})</span>
-            )}
+            {tab.count != null && <span className="text-[11px] text-ink-mute">({tab.count})</span>}
           </button>
         ))}
         {/* More actions button */}
-        <div className="ml-auto flex items-center pr-1 shrink-0">
-          <button className="size-7 grid place-items-center rounded-sm text-ink-mute hover:bg-canvas hover:text-ink transition-colors">
+        <div className="ml-auto flex shrink-0 items-center pr-1">
+          <button className="grid size-7 place-items-center rounded-sm text-ink-mute transition-colors hover:bg-canvas hover:text-ink">
             <MoreHorizontalIcon className="size-3.5" />
           </button>
         </div>
       </div>
       {/* Content */}
-      <div className="flex-1 overflow-hidden min-h-0">
-        {activeTab?.content}
-      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">{activeTab?.content}</div>
     </div>
   );
 }

@@ -1,10 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
 import { db } from "@repo/db";
-import { sql } from "drizzle-orm";
 import { document as documentTable } from "@repo/db/schema";
+import { createFileRoute } from "@tanstack/react-router";
+import { sql } from "drizzle-orm";
 import { eq, and, desc } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/stats/address/$addressId")({
   server: {
@@ -33,12 +34,7 @@ export const Route = createFileRoute("/api/stats/address/$addressId")({
             isPaid: documentTable.isPaid,
           })
           .from(documentTable)
-          .where(
-            and(
-              eq(documentTable.tenantId, tenantId),
-              eq(documentTable.customerId, addressId),
-            ),
-          )
+          .where(and(eq(documentTable.tenantId, tenantId), eq(documentTable.customerId, addressId)))
           .orderBy(desc(documentTable.documentDate))
           .limit(20);
 

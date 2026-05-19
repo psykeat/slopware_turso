@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
 import { db } from "@repo/db";
+import { createFileRoute } from "@tanstack/react-router";
 import { sql } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/stats/articles")({
   server: {
@@ -15,22 +16,22 @@ export const Route = createFileRoute("/api/stats/articles")({
         if (!context) return new Response("Forbidden", { status: 403 });
         const { tenantId } = context;
 
-        const [totals] = await db.execute(
+        const [totals] = (await db.execute(
           sql`SELECT
             COUNT(*)                                           AS total,
             COUNT(*) FILTER (WHERE archived_at IS NULL)       AS active_count,
             COUNT(*) FILTER (WHERE archived_at IS NOT NULL)   AS archived_count
           FROM article
           WHERE tenant_id = ${tenantId}::uuid`,
-        ) as any[];
+        )) as any[];
 
-        const [lowStock] = await db.execute(
+        const [lowStock] = (await db.execute(
           sql`SELECT COUNT(DISTINCT article_id) AS cnt
               FROM inventory_balance
               WHERE tenant_id = ${tenantId}::uuid AND on_hand_qty <= 0`,
-        ) as any[];
+        )) as any[];
 
-        const [noPrice] = await db.execute(
+        const [noPrice] = (await db.execute(
           sql`SELECT COUNT(*) AS cnt
               FROM article a
               WHERE a.tenant_id = ${tenantId}::uuid
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/api/stats/articles")({
                   SELECT 1 FROM price_list_item pli
                   WHERE pli.tenant_id = ${tenantId}::uuid AND pli.article_id = a.article_id
                 )`,
-        ) as any[];
+        )) as any[];
 
         const topGroups = await db.execute(
           sql`SELECT ag.name, COUNT(a.article_id) AS cnt

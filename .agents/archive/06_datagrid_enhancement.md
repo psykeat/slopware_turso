@@ -70,9 +70,12 @@ Keyboard navigation currently uses `window.addEventListener`, which races with t
 - [ ] **6.C3** Replace the single `service.list()` call with a branch:
   ```typescript
   if (paginated) {
-    const result = await service.list(entityName, filters, {
-      limit: limit ?? 50, offset, orderBy, count: true,
-    }) as { data: any[]; total: number };
+    const result = (await service.list(entityName, filters, {
+      limit: limit ?? 50,
+      offset,
+      orderBy,
+      count: true,
+    })) as { data: any[]; total: number };
     return new Response(JSON.stringify(result), {
       headers: { "content-type": "application/json" },
     });
@@ -142,8 +145,12 @@ Keyboard navigation currently uses `window.addEventListener`, which races with t
 - [ ] **6.F1** Import from `@tanstack/react-table`:
   ```typescript
   import {
-    useReactTable, getCoreRowModel, getSortingRowModel,
-    type ColumnDef as TsColumnDef, type SortingState, type VisibilityState,
+    useReactTable,
+    getCoreRowModel,
+    getSortingRowModel,
+    type ColumnDef as TsColumnDef,
+    type SortingState,
+    type VisibilityState,
   } from "@tanstack/react-table";
   ```
 - [ ] **6.F2** Translate `ColumnDef<T>[]` → `TsColumnDef<T>[]` inside the component using `useMemo`. Cell renderer:
@@ -213,11 +220,21 @@ Keyboard navigation currently uses `window.addEventListener`, which races with t
 - [ ] **6.I4** `handleKeyDown` is a React `KeyboardEvent<HTMLDivElement>` handler:
   ```typescript
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIndex(p => Math.min(p+1, data.length-1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setSelectedIndex(p => Math.max(p-1, 0)); }
-    else if (e.key === "Home") { e.preventDefault(); setSelectedIndex(0); }
-    else if (e.key === "End") { e.preventDefault(); setSelectedIndex(data.length-1); }
-    else if (e.key === "Enter" && data[selectedIndex]) { onRowOpen?.(data[selectedIndex]); }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((p) => Math.min(p + 1, data.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((p) => Math.max(p - 1, 0));
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setSelectedIndex(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setSelectedIndex(data.length - 1);
+    } else if (e.key === "Enter" && data[selectedIndex]) {
+      onRowOpen?.(data[selectedIndex]);
+    }
   };
   ```
 - [ ] **6.I5** `focusState.area/panel` gating is NOT needed anymore (container focus handles isolation naturally). Keep only the FocusManager `setFocus()` call on row click for the inspector/command system.
@@ -318,10 +335,12 @@ Keyboard navigation currently uses `window.addEventListener`, which races with t
 ## Verification Checklist
 
 ### Dependencies
+
 - [ ] `pnpm install` completes — no unresolved peer deps
 - [ ] `pnpm lint` — zero errors
 
 ### Pagination (primary grids)
+
 - [ ] Addresses module: pagination bar visible at bottom of primary grid
 - [ ] Page 1 loads 50 rows; page 2 loads next 50 (different records)
 - [ ] Changing page size to 25 reloads with 25 rows
@@ -330,23 +349,27 @@ Keyboard navigation currently uses `window.addEventListener`, which races with t
 - [ ] Non-paginated calls (contacts tab, lines tab) still return raw arrays
 
 ### Sorting
+
 - [ ] Click sortable column header → rows re-sort ascending; chevron points up
 - [ ] Click again → descending; click again → unsorted
 - [ ] Sort + page: changing sort resets to page 1
 - [ ] Sort state is passed as `?orderBy=col:dir` to API
 
 ### Column visibility
+
 - [ ] "Columns" button appears in toolbar when `toolbar={true}`
 - [ ] Toggle a column → it disappears from the table immediately
 - [ ] Reload page → column preference is restored from `localStorage`
 - [ ] Different entityNames have independent preferences
 
 ### Virtualization
+
 - [ ] 10k addresses fetched server-side as 50-row page — DevTools heap: ~50 row objects, not 10k
 - [ ] Scroll through 50 rows smoothly — DOM inspector shows ~20 `<tr>` elements, not 50
 - [ ] No blank gaps or layout shift while scrolling
 
 ### Keyboard navigation
+
 - [ ] Click a row to focus grid; ArrowDown/Up moves selection
 - [ ] `virtualizer.scrollToIndex` called — selection stays visible during keyboard nav
 - [ ] Home/End jump to first/last row in current page
@@ -356,6 +379,7 @@ Keyboard navigation currently uses `window.addEventListener`, which races with t
 - [ ] `window.addEventListener` block is gone — no racing with CommandRegistry
 
 ### Design constraints
+
 - [ ] Row height exactly 40px; header exactly 36px
 - [ ] Selected row: `2px solid var(--primary-soft)` left border + `color-mix(in oklab, var(--primary) 9%, transparent)` background
 - [ ] No hardcoded hex colors anywhere in the new DataGrid
@@ -363,6 +387,7 @@ Keyboard navigation currently uses `window.addEventListener`, which races with t
 - [ ] Sort chevron uses `opacity` + CSS transform — no colored icon variants
 
 ### Backward compatibility
+
 - [ ] `addresses.tsx` sub-grids (contacts, delivery, docs, open items) — no pagination bar, no error
 - [ ] `documents.tsx` DocumentEditor lines grid — no pagination bar, no error
 - [ ] `admin/users.tsx`, `admin/tenants.tsx` — DataGrid with no new props — renders as before

@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { DocumentService } from "@repo/db/services/document-service";
 import { auth } from "@repo/auth/auth";
+import { DocumentService } from "@repo/db/services/document-service";
+import { createFileRoute } from "@tanstack/react-router";
+
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/articles/$articleId/pricing")({
@@ -20,7 +21,8 @@ export const Route = createFileRoute("/api/articles/$articleId/pricing")({
 
         const url = new URL(request.url);
         const customerId = url.searchParams.get("customerId") ?? null;
-        const documentDate = url.searchParams.get("documentDate") ?? new Date().toISOString().slice(0, 10);
+        const documentDate =
+          url.searchParams.get("documentDate") ?? new Date().toISOString().slice(0, 10);
 
         try {
           const svc = new DocumentService();

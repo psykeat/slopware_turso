@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
 import { getUserTenantInfo, getTenantInfoById } from "@repo/db/services/tenant";
+import { createFileRoute } from "@tanstack/react-router";
 
 function parseCookie(header: string | null, name: string): string | null {
   if (!header) return null;
@@ -32,9 +32,12 @@ export const Route = createFileRoute("/api/me")({
         }
 
         if (!info) {
-          return new Response(JSON.stringify({ tenantId: null, tenantName: "Default", orgName: "" }), {
-            headers: { "content-type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ tenantId: null, tenantName: "Default", orgName: "" }),
+            {
+              headers: { "content-type": "application/json" },
+            },
+          );
         }
 
         return new Response(JSON.stringify(info), {

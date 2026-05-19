@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
 import { db } from "@repo/db";
+import { createFileRoute } from "@tanstack/react-router";
 import { sql } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/stats/article/$articleId")({
   server: {

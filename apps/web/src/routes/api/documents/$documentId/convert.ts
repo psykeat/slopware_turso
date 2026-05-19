@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { DocumentService } from "@repo/db/services/document-service";
 import { auth } from "@repo/auth/auth";
+import { DocumentService } from "@repo/db/services/document-service";
+import { createFileRoute } from "@tanstack/react-router";
+
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/documents/$documentId/convert")({
@@ -41,15 +42,11 @@ export const Route = createFileRoute("/api/documents/$documentId/convert")({
             });
           }
 
-          const candidates = await svc.getConversionCandidates(
-            params.documentId,
-            context.tenantId,
-          );
+          const candidates = await svc.getConversionCandidates(params.documentId, context.tenantId);
 
-          return new Response(
-            JSON.stringify({ candidates }),
-            { headers: { "content-type": "application/json" } },
-          );
+          return new Response(JSON.stringify({ candidates }), {
+            headers: { "content-type": "application/json" },
+          });
         } catch (err: any) {
           return new Response(err.message, { status: 400 });
         }

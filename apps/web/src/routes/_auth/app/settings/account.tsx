@@ -3,6 +3,7 @@ import { authQueryOptions } from "@repo/auth/tanstack/queries";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
 import { Label } from "@repo/ui/components/label";
+import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import {
@@ -15,8 +16,6 @@ import {
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-
-import { useActionBar } from "@repo/ui/platform/action-bar-context";
 
 type AccountUser = {
   name?: string | null;
@@ -144,8 +143,10 @@ function AccountPage() {
 
             <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight text-ink">{t("account.title")}</h1>
-                <span className="rounded-full border border-hairline bg-canvas px-2 py-0.5 text-[11px] uppercase tracking-wider text-ink-mute">
+                <h1 className="text-2xl font-semibold tracking-tight text-ink">
+                  {t("account.title")}
+                </h1>
+                <span className="rounded-full border border-hairline bg-canvas px-2 py-0.5 text-[11px] tracking-wider text-ink-mute uppercase">
                   {t("account.selfService")}
                 </span>
               </div>
@@ -169,7 +170,9 @@ function AccountPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-medium text-ink">{t("account.displayNameTitle")}</h2>
-                <p className="mt-1 text-sm text-ink-secondary">{t("account.displayNameDescription")}</p>
+                <p className="mt-1 text-sm text-ink-secondary">
+                  {t("account.displayNameDescription")}
+                </p>
 
                 <div className="mt-4 grid gap-3">
                   <div className="grid gap-2">
@@ -186,7 +189,9 @@ function AccountPage() {
 
                   <div className="flex flex-wrap items-center gap-3">
                     <Button type="submit" disabled={updateNameMutation.isPending}>
-                      {updateNameMutation.isPending && <LoaderCircleIcon className="animate-spin" />}
+                      {updateNameMutation.isPending && (
+                        <LoaderCircleIcon className="animate-spin" />
+                      )}
                       {t("account.saveName")}
                     </Button>
                   </div>
@@ -233,7 +238,9 @@ function AccountPage() {
 
                   <div className="flex flex-wrap items-center gap-3">
                     <Button type="submit" disabled={changeEmailMutation.isPending}>
-                      {changeEmailMutation.isPending && <LoaderCircleIcon className="animate-spin" />}
+                      {changeEmailMutation.isPending && (
+                        <LoaderCircleIcon className="animate-spin" />
+                      )}
                       {t("account.changeEmail")}
                     </Button>
                     <span className="text-xs text-ink-mute">{t("account.emailNote")}</span>
@@ -256,7 +263,9 @@ function AccountPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-medium text-ink">{t("account.passwordTitle")}</h2>
-                <p className="mt-1 text-sm text-ink-secondary">{t("account.passwordDescription")}</p>
+                <p className="mt-1 text-sm text-ink-secondary">
+                  {t("account.passwordDescription")}
+                </p>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
@@ -301,7 +310,9 @@ function AccountPage() {
 
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <Button type="submit" disabled={changePasswordMutation.isPending}>
-                    {changePasswordMutation.isPending && <LoaderCircleIcon className="animate-spin" />}
+                    {changePasswordMutation.isPending && (
+                      <LoaderCircleIcon className="animate-spin" />
+                    )}
                     {t("account.changePassword")}
                   </Button>
                   <span className="text-xs text-ink-mute">{t("account.passwordNote")}</span>

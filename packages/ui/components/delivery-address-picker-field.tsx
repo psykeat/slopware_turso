@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Edit2Icon, SearchIcon, XIcon } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+
 import { cn } from "../lib/utils";
 import type { AddressSnapshot } from "./address-picker-field";
 
@@ -109,20 +110,17 @@ export function DeliveryAddressPickerField({
 
   useEffect(() => {
     if (locked) {
-      setIsOpen(false);
-      setQuery("");
-      setSelectedIndex(0);
-      setIsEditing(false);
+      queueMicrotask(() => {
+        setIsOpen(false);
+        setQuery("");
+        setSelectedIndex(0);
+        setIsEditing(false);
+      });
     }
   }, [locked]);
 
-  useEffect(() => {
-    if (!isEditing) {
-      setLocalSnap(addressData ?? (selectedDeliveryAddress ? toSnapshot(selectedDeliveryAddress) : {}));
-    }
-  }, [addressData, isEditing, selectedDeliveryAddress]);
-
-  const resolvedSnap = addressData ?? (selectedDeliveryAddress ? toSnapshot(selectedDeliveryAddress) : localSnap);
+  const resolvedSnap =
+    addressData ?? (selectedDeliveryAddress ? toSnapshot(selectedDeliveryAddress) : localSnap);
 
   const handleSelect = (addr: DeliveryAddressResult) => {
     if (locked) return;
@@ -171,14 +169,14 @@ export function DeliveryAddressPickerField({
   return (
     <div className={cn("flex flex-col gap-1.5", className)} ref={containerRef}>
       <div className="flex items-center justify-between gap-2">
-        <label className="text-[11px] font-medium uppercase tracking-wider text-ink-mute">
+        <label className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
           {label}
         </label>
         {onToggleLock ? (
           <button
             type="button"
             className={cn(
-              "h-6 rounded-full border px-2 text-[10px] font-medium uppercase tracking-wider transition-colors",
+              "h-6 rounded-full border px-2 text-[10px] font-medium tracking-wider uppercase transition-colors",
               locked
                 ? "border-primary/30 bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] text-primary"
                 : "border-hairline text-ink-secondary hover:text-ink",
@@ -218,7 +216,7 @@ export function DeliveryAddressPickerField({
         {value && !locked ? (
           <button
             tabIndex={-1}
-            className="absolute top-2 right-2 text-ink-mute hover:text-ink transition-colors"
+            className="absolute top-2 right-2 text-ink-mute transition-colors hover:text-ink"
             onClick={handleClear}
           >
             <XIcon className="size-3.5" />
@@ -228,13 +226,16 @@ export function DeliveryAddressPickerField({
         )}
 
         {isOpen && results.length > 0 && (
-          <div className="absolute z-50 mt-1 w-full overflow-auto rounded-md border border-hairline bg-canvas shadow-lg" style={{ maxHeight: 260 }}>
+          <div
+            className="absolute z-50 mt-1 w-full overflow-auto rounded-md border border-hairline bg-canvas shadow-lg"
+            style={{ maxHeight: 260 }}
+          >
             {results.map((r, idx) => (
               <button
                 key={r.deliveryAddressId}
                 type="button"
                 className={cn(
-                  "flex w-full cursor-pointer flex-col border-b border-hairline px-3 py-2 text-left last:border-0 hover:bg-canvas-soft transition-colors",
+                  "flex w-full cursor-pointer flex-col border-b border-hairline px-3 py-2 text-left transition-colors last:border-0 hover:bg-canvas-soft",
                   idx === selectedIndex && "bg-canvas-soft",
                 )}
                 onMouseEnter={() => setSelectedIndex(idx)}
@@ -244,11 +245,9 @@ export function DeliveryAddressPickerField({
                   <span className="truncate text-[13px] font-medium text-ink">
                     {r.name || r.companyName || r.addressNo}
                   </span>
-                  <span className="shrink-0 font-mono text-[11px] text-primary">
-                    {r.addressNo}
-                  </span>
+                  <span className="shrink-0 font-mono text-[11px] text-primary">{r.addressNo}</span>
                 </div>
-                <span className="text-[12px] text-ink-mute truncate">{r.addressLine1}</span>
+                <span className="truncate text-[12px] text-ink-mute">{r.addressLine1}</span>
                 <span className="text-[11px] text-ink-mute">
                   {r.postalCode} {r.city} · {r.countryCode}
                 </span>
@@ -262,19 +261,19 @@ export function DeliveryAddressPickerField({
         {isEditing ? (
           <div
             className={cn(
-              "rounded border px-3 py-2 text-[12px] transition-colors min-h-[56px] text-left w-full",
+              "min-h-[56px] w-full rounded border px-3 py-2 text-left text-[12px] transition-colors",
               "border-hairline-input bg-canvas",
             )}
           >
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-primary">
+              <div className="mb-0.5 flex items-center justify-between">
+                <span className="text-[10px] font-medium tracking-wider text-primary uppercase">
                   Manuelle Bearbeitung
                 </span>
                 <button
                   type="button"
                   tabIndex={-1}
-                  className="text-ink-mute hover:text-ink transition-colors"
+                  className="text-ink-mute transition-colors hover:text-ink"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsEditing(false);
@@ -323,10 +322,10 @@ export function DeliveryAddressPickerField({
           <button
             type="button"
             className={cn(
-              "rounded border px-3 py-2 text-[12px] transition-colors min-h-[56px] text-left w-full",
+              "min-h-[56px] w-full rounded border px-3 py-2 text-left text-[12px] transition-colors",
               locked
-                ? "border-hairline bg-canvas-soft cursor-not-allowed opacity-70"
-                : "border-hairline bg-canvas-soft cursor-pointer hover:border-hairline-input",
+                ? "cursor-not-allowed border-hairline bg-canvas-soft opacity-70"
+                : "cursor-pointer border-hairline bg-canvas-soft hover:border-hairline-input",
             )}
             tabIndex={locked ? -1 : 0}
             onClick={() => {
@@ -338,14 +337,16 @@ export function DeliveryAddressPickerField({
             {hasData ? (
               <>
                 <div className="font-medium text-ink">{displayName(resolvedSnap)}</div>
-                {resolvedSnap.addressLine1 && <div className="text-ink-mute">{resolvedSnap.addressLine1}</div>}
+                {resolvedSnap.addressLine1 && (
+                  <div className="text-ink-mute">{resolvedSnap.addressLine1}</div>
+                )}
                 {(resolvedSnap.postalCode || resolvedSnap.city) && (
                   <div className="text-ink-mute">
                     {resolvedSnap.postalCode} {resolvedSnap.city}
                     {resolvedSnap.countryCode && ` · ${resolvedSnap.countryCode}`}
                   </div>
                 )}
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100">
                   <Edit2Icon className="size-3 text-ink-mute" />
                 </div>
               </>

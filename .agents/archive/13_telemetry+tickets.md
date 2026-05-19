@@ -16,16 +16,16 @@ Three interlocking systems:
 
 ## Architecture Decisions
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| LLM proxy | FastAPI + `litellm` (`services/llm/main.py`, port 11435) | Provider-agnostic; model/endpoint forwarded per-request so runtime reconfiguration needs no restart |
-| LLM config storage | `system_settings` table (scope=`global`, key=`llm_config`) | Reuses existing infra; no new table; secrets AES-256-GCM encrypted with `ENCRYPTION_SECRET` env var |
-| Snapshot capture timing | At modal-open transition (not on workspace mount) | Maximally fresh state — captures the error that just happened |
-| Telemetry storage | `useRef` ring buffers inside `TelemetryProvider` (no `useState`) | Zero re-renders; telemetry collection is a side effect, not reactive state |
-| Click/command tracking | Via `subscribeToExecutions` on `CommandProvider` | No ad-hoc instrumentation — leverages the existing command registry as the single source of executed actions |
-| Fetch interception | `window.fetch` monkey-patch inside `TelemetryProvider` `useEffect` | Catches all `fetch` calls including TanStack Query queryFns; only `/api/` paths recorded |
-| Dev-cycle auth | Bearer token (`CYCLE_API_KEY` env var) for POST, session+isSystemAdmin for GET | Machine-to-machine write path; browser read path follows existing admin gate pattern |
-| Cycle dashboard | Tailwind progress bars, no chart library | No new dependency; green/yellow/red bars communicate 100%/≥60%/<60% at a glance |
+| Decision                | Choice                                                                         | Rationale                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| LLM proxy               | FastAPI + `litellm` (`services/llm/main.py`, port 11435)                       | Provider-agnostic; model/endpoint forwarded per-request so runtime reconfiguration needs no restart          |
+| LLM config storage      | `system_settings` table (scope=`global`, key=`llm_config`)                     | Reuses existing infra; no new table; secrets AES-256-GCM encrypted with `ENCRYPTION_SECRET` env var          |
+| Snapshot capture timing | At modal-open transition (not on workspace mount)                              | Maximally fresh state — captures the error that just happened                                                |
+| Telemetry storage       | `useRef` ring buffers inside `TelemetryProvider` (no `useState`)               | Zero re-renders; telemetry collection is a side effect, not reactive state                                   |
+| Click/command tracking  | Via `subscribeToExecutions` on `CommandProvider`                               | No ad-hoc instrumentation — leverages the existing command registry as the single source of executed actions |
+| Fetch interception      | `window.fetch` monkey-patch inside `TelemetryProvider` `useEffect`             | Catches all `fetch` calls including TanStack Query queryFns; only `/api/` paths recorded                     |
+| Dev-cycle auth          | Bearer token (`CYCLE_API_KEY` env var) for POST, session+isSystemAdmin for GET | Machine-to-machine write path; browser read path follows existing admin gate pattern                         |
+| Cycle dashboard         | Tailwind progress bars, no chart library                                       | No new dependency; green/yellow/red bars communicate 100%/≥60%/<60% at a glance                              |
 
 ## Architecture Invariants
 
@@ -172,17 +172,20 @@ Three interlocking systems:
 ## Verification Checklist
 
 ### LLM Service
+
 - [ ] `GET http://localhost:11435/health` returns `{ "ok": true }`
 - [ ] `POST /complete` with valid model + prompt returns `{ content: "..." }`
 - [ ] `POST /complete` with `endpoint_url` pointing to a local Ollama instance works
 
 ### LLM Admin Config
+
 - [ ] `GET /api/admin/llm-config` returns 403 for non-admin session
 - [ ] `GET /api/admin/llm-config` returns `{ configured: false }` on fresh install
 - [ ] Save config → reload → `apiKey` field shows `"••••••••"` (not plaintext)
 - [ ] Saving with sentinel value preserves the previously stored encrypted key
 
 ### Feedback Modal
+
 - [ ] `Shift+F1` opens the modal from any view
 - [ ] `?` button in header opens the modal
 - [ ] Snapshot collapsible shows `telemetry.apiCalls`, `telemetry.navigation`, `telemetry.commands`
@@ -191,6 +194,7 @@ Three interlocking systems:
 - [ ] Successful submission shows GitHub issue URL as a clickable link
 
 ### Telemetry Ring Buffers
+
 - [ ] Navigate to 6 routes → `navigation` array holds at most 5 entries (oldest dropped)
 - [ ] Trigger `window.onerror` 6 times → `errors` holds at most 5 entries
 - [ ] Make 11 `/api/` fetch calls → `apiCalls` holds at most 10 entries
@@ -199,6 +203,7 @@ Three interlocking systems:
 - [ ] `window.fetch` is fully restored after `TelemetryProvider` unmounts
 
 ### Dev-Cycle-Metrics
+
 - [ ] `POST /api/admin/cycles` without `Authorization` header returns 401
 - [ ] `POST /api/admin/cycles` with invalid token returns 401
 - [ ] `POST /api/admin/cycles` with valid `CYCLE_API_KEY` creates row and returns 201

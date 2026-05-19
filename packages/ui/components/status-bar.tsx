@@ -1,8 +1,9 @@
-import React from "react";
 import { useLocation } from "@tanstack/react-router";
+import React from "react";
 import { useTranslation } from "react-i18next";
-import { useFocus } from "../platform/focus-manager";
+
 import { cn } from "../lib/utils";
+import { useFocus } from "../platform/focus-manager";
 
 export interface StatusBarProps {
   tenantName: string;
@@ -18,15 +19,14 @@ export function StatusBar({ tenantName, className, isOnline = true }: StatusBarP
   const moduleSlug = location.pathname.split("/app/")[1]?.split("/")[0] ?? "";
   const displayModule = moduleSlug
     ? t(`modules.${moduleSlug}`, {
-        defaultValue:
-          moduleSlug.charAt(0).toUpperCase() + moduleSlug.slice(1),
+        defaultValue: moduleSlug.charAt(0).toUpperCase() + moduleSlug.slice(1),
       })
     : "";
 
   return (
     <footer
       className={cn(
-        "h-8 border-t border-hairline bg-canvas-soft flex items-center justify-between px-4 text-[11px] text-ink-mute shrink-0",
+        "flex h-8 shrink-0 items-center justify-between border-t border-hairline bg-canvas-soft px-4 text-[11px] text-ink-mute",
         className,
       )}
     >
@@ -49,7 +49,7 @@ export function StatusBar({ tenantName, className, isOnline = true }: StatusBarP
         <span>v0.1.0</span>
         <span>·</span>
         <span
-          className="size-1.5 rounded-full inline-block"
+          className="inline-block size-1.5 rounded-full"
           style={{ background: isOnline ? "var(--ok)" : "var(--destructive)" }}
         />
         <span>{t(isOnline ? "status.online" : "status.offline")}</span>

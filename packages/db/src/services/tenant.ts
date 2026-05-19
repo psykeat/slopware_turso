@@ -1,3 +1,5 @@
+import { asc, eq, and } from "drizzle-orm";
+
 import { db } from "../index";
 import {
   tenant,
@@ -8,8 +10,8 @@ import {
   article,
   documentType,
   documentGroup,
+  unit,
 } from "../schema/app.schema";
-import { asc, eq, and } from "drizzle-orm";
 
 export async function initializeDefaultTenant(userId: string, name: string) {
   return await db.transaction(async (tx) => {
@@ -52,10 +54,24 @@ export async function initializeDefaultTenant(userId: string, name: string) {
     });
 
     // 5. Seed Sample Business Data
+    await tx
+      .insert(unit)
+      .values({
+        tenantId: t.tenantId,
+        code: "pcs",
+        name: { en: "Pieces", de: "Stück" },
+      })
+      .onConflictDoNothing();
+
+    const [pcsUnit] = await tx
+      .select({ unitId: unit.unitId })
+      .from(unit)
+      .where(and(eq(unit.tenantId, t.tenantId), eq(unit.code, "pcs")))
+      .limit(1);
+
     await tx.insert(address).values({
       tenantId: t.tenantId,
       addressNo: "10000",
-      addressType: "company",
       isCustomer: true,
       companyName: "Sample Customer",
       addressLine1: "Main Street 1",
@@ -68,17 +84,15 @@ export async function initializeDefaultTenant(userId: string, name: string) {
       tenantId: t.tenantId,
       articleNo: "ART-001",
       name: "Sample Product",
-      baseUnit: "pcs",
+      baseUnitId: pcsUnit?.unitId ?? null,
     });
 
-    await tx
-      .insert(documentType)
-      .values({
-        tenantId: t.tenantId,
-        code: "INV",
-        name: "Invoice",
-        movementType: "L",
-      });
+    await tx.insert(documentType).values({
+      tenantId: t.tenantId,
+      code: "INV",
+      name: "Invoice",
+      movementType: "L",
+    });
 
     await tx.insert(documentGroup).values({
       tenantId: t.tenantId,
@@ -142,7 +156,11 @@ export async function getTenantInfoById(tenantId: string) {
 
 export async function getTenantContextById(tenantId: string) {
   const result = await db
-    .select({ tenantId: tenant.tenantId, organizationId: tenant.organizationId, isActive: tenant.isActive })
+    .select({
+      tenantId: tenant.tenantId,
+      organizationId: tenant.organizationId,
+      isActive: tenant.isActive,
+    })
     .from(tenant)
     .where(eq(tenant.tenantId, tenantId))
     .limit(1);

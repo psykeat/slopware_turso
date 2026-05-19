@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { DocumentService } from "@repo/db/services/document-service";
 import { auth } from "@repo/auth/auth";
+import { DocumentService } from "@repo/db/services/document-service";
+import { createFileRoute } from "@tanstack/react-router";
+
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/documents/tree")({
@@ -21,7 +22,13 @@ export const Route = createFileRoute("/api/documents/tree")({
         try {
           const svc = new DocumentService();
           const tree = await svc.getDocumentTree(context.tenantId);
-          console.log("[Tree API] tenantId:", context.tenantId, "sections:", tree.length, JSON.stringify(tree));
+          console.log(
+            "[Tree API] tenantId:",
+            context.tenantId,
+            "sections:",
+            tree.length,
+            JSON.stringify(tree),
+          );
           return new Response(JSON.stringify(tree), {
             headers: { "content-type": "application/json" },
           });

@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { articleBom } from "@repo/db/schema";
-import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
+import { createFileRoute } from "@tanstack/react-router";
 import { and, eq } from "drizzle-orm";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/articles/$articleId/bom/$bomId")({
   server: {
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/api/articles/$articleId/bom/$bomId")({
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context) return new Response("No active tenant found", { status: 403 });
 
-        const body = await request.json() as {
+        const body = (await request.json()) as {
           quantity?: number;
           scrapPercentage?: number;
           sortOrder?: number;
@@ -24,7 +25,8 @@ export const Route = createFileRoute("/api/articles/$articleId/bom/$bomId")({
 
         const updates: Record<string, any> = {};
         if (body.quantity !== undefined) updates.quantity = String(body.quantity);
-        if (body.scrapPercentage !== undefined) updates.scrapPercentage = String(body.scrapPercentage);
+        if (body.scrapPercentage !== undefined)
+          updates.scrapPercentage = String(body.scrapPercentage);
         if (body.sortOrder !== undefined) updates.sortOrder = body.sortOrder;
 
         if (Object.keys(updates).length === 0) {

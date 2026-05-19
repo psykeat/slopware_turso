@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@repo/auth/auth";
-import { resolveTenantContext } from "#/lib/resolve-tenant";
 import { ImportService } from "@repo/db/services/import-service";
+import { createFileRoute } from "@tanstack/react-router";
+
+import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/import/batches/$batchId/post")({
   server: {
@@ -21,8 +22,7 @@ export const Route = createFileRoute("/api/import/batches/$batchId/post")({
           });
         } catch (err: any) {
           const status =
-            err.message?.includes("cannot be posted") ||
-            err.message?.includes("requires approval")
+            err.message?.includes("cannot be posted") || err.message?.includes("requires approval")
               ? 400
               : 404;
           return new Response(err.message, { status });

@@ -1,6 +1,7 @@
-import { useEffect } from "react";
-import { useCommands } from "./command-registry";
 import { useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+
+import { useCommands } from "./command-registry";
 
 export function GlobalCommands() {
   const { registerCommand } = useCommands();

@@ -1,14 +1,20 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
-import { useCommands } from "@repo/ui/platform/command-registry";
-import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { Button } from "@repo/ui/components/button";
 import { DataGrid } from "@repo/ui/components/data-grid";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
-import { Button } from "@repo/ui/components/button";
 import { Label } from "@repo/ui/components/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/components/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/components/select";
+import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { useCommands } from "@repo/ui/platform/command-registry";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_auth/app/accounting")({
   component: AccountingModule,
@@ -124,7 +130,9 @@ function AccountingModule() {
     setIsBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/accounting/batches/${selectedBatchId}/build`, { method: "POST" });
+      const res = await fetch(`/api/accounting/batches/${selectedBatchId}/build`, {
+        method: "POST",
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Fehler beim Aufbauen");
       await queryClient.invalidateQueries({ queryKey: ["accounting", "batches"] });
@@ -140,7 +148,9 @@ function AccountingModule() {
     setIsBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/accounting/batches/${selectedBatchId}/export`, { method: "POST" });
+      const res = await fetch(`/api/accounting/batches/${selectedBatchId}/export`, {
+        method: "POST",
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Fehler beim Exportieren");
       await queryClient.invalidateQueries({ queryKey: ["accounting", "batches"] });
@@ -156,7 +166,9 @@ function AccountingModule() {
     setIsBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/accounting/batches/${selectedBatchId}/rebuild`, { method: "POST" });
+      const res = await fetch(`/api/accounting/batches/${selectedBatchId}/rebuild`, {
+        method: "POST",
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Fehler beim Neuaufbauen");
       await queryClient.invalidateQueries({ queryKey: ["accounting", "batches"] });
@@ -226,7 +238,7 @@ function AccountingModule() {
       unregRebuild();
       unregDownload();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registerCommand, selectedBatchId, selectedBatch]);
 
   const columns = [
@@ -235,7 +247,9 @@ function AccountingModule() {
       header: "Status",
       width: "120px",
       render: (row: ExportBatch) => (
-        <span className={STATUS_COLORS[row.status] ?? ""}>{STATUS_LABELS[row.status] ?? row.status}</span>
+        <span className={STATUS_COLORS[row.status] ?? ""}>
+          {STATUS_LABELS[row.status] ?? row.status}
+        </span>
       ),
     },
     { key: "fiscalPeriodId", header: "Fiskalperiode", width: "280px" },
@@ -250,19 +264,20 @@ function AccountingModule() {
       key: "exportedAt",
       header: "Exportiert",
       width: "160px",
-      render: (row: ExportBatch) => (row.exportedAt ? new Date(row.exportedAt).toLocaleDateString("de") : "—"),
+      render: (row: ExportBatch) =>
+        row.exportedAt ? new Date(row.exportedAt).toLocaleDateString("de") : "—",
     },
   ] satisfies import("@repo/ui/components/data-grid").ColumnDef<ExportBatch>[];
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="h-8 flex items-center px-4 shrink-0 border-b border-hairline text-[11px] uppercase tracking-wider font-medium text-ink-mute bg-canvas-soft">
+      <div className="flex h-8 shrink-0 items-center border-b border-hairline bg-canvas-soft px-4 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
         {t("nav.accounting")}
       </div>
 
       {error && (
-        <div className="mx-4 mt-2 px-3 py-2 text-sm bg-red-50 text-red-700 rounded border border-red-200">
+        <div className="mx-4 mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -306,14 +321,19 @@ function AccountingModule() {
 
             <div className="flex flex-col gap-1.5">
               <Label>Fiskalperiode</Label>
-              <Select value={newPeriodId} onValueChange={(v) => setNewPeriodId(v ?? "")} disabled={!newCompanyId}>
+              <Select
+                value={newPeriodId}
+                onValueChange={(v) => setNewPeriodId(v ?? "")}
+                disabled={!newCompanyId}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Periode wählen…" />
                 </SelectTrigger>
                 <SelectContent>
                   {periods.map((p) => (
                     <SelectItem key={p.fiscalPeriodId} value={p.fiscalPeriodId}>
-                      {p.fiscalYear} / P{String(p.periodNo).padStart(2, "0")} ({p.startDate} – {p.endDate})
+                      {p.fiscalYear} / P{String(p.periodNo).padStart(2, "0")} ({p.startDate} –{" "}
+                      {p.endDate})
                     </SelectItem>
                   ))}
                 </SelectContent>

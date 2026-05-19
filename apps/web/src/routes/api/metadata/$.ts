@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { MetadataResolver } from "@repo/db/services/metadata";
 import { auth } from "@repo/auth/auth";
+import { MetadataResolver } from "@repo/db/services/metadata";
+import { createFileRoute } from "@tanstack/react-router";
+
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/metadata/$")({
@@ -16,7 +17,9 @@ export const Route = createFileRoute("/api/metadata/$")({
         const isSystemAdmin = (session.user as any).isSystemAdmin;
         let context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context) {
-          console.warn(`[Metadata API] No tenant context for user ${session.user.id}, falling back to global.`);
+          console.warn(
+            `[Metadata API] No tenant context for user ${session.user.id}, falling back to global.`,
+          );
           context = { tenantId: "", organizationId: "" }; // Empty context for global resolution
         }
 
@@ -49,7 +52,9 @@ export const Route = createFileRoute("/api/metadata/$")({
             const segments = pathname.split("/").filter(Boolean);
             const layoutKey = segments.pop();
             const entityName = segments.pop();
-            console.log(`[Metadata API] Resolving layout for entity: ${entityName}, key: ${layoutKey}`);
+            console.log(
+              `[Metadata API] Resolving layout for entity: ${entityName}, key: ${layoutKey}`,
+            );
             if (!entityName || !layoutKey) return new Response("Bad Request", { status: 400 });
             const layout = await resolver.getEffectiveLayout(entityName, layoutKey);
             return new Response(JSON.stringify(layout), {
@@ -60,7 +65,9 @@ export const Route = createFileRoute("/api/metadata/$")({
           return new Response("Not Found", { status: 404 });
         } catch (err) {
           console.error("API Metadata Error:", err);
-          return new Response(err instanceof Error ? err.message : "Internal Server Error", { status: 500 });
+          return new Response(err instanceof Error ? err.message : "Internal Server Error", {
+            status: 500,
+          });
         }
       },
     },

@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
-import { cn } from "../lib/utils";
-import { Skeleton } from "./skeleton";
 import { AlertCircleIcon } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+
+import { cn } from "../lib/utils";
 import { LookupField, buildLookupConfigFromField, createRemoteLookupSource } from "./lookup-field";
+import { Skeleton } from "./skeleton";
 
 export interface FieldDef {
   key: string;
@@ -44,6 +45,12 @@ export interface EntityMaskProps {
   layout?: "single" | "two-column";
   onCancel?: () => void;
   onSaved?: (record: unknown) => void;
+  onFieldChange?: (
+    key: string,
+    value: any,
+    formData: Record<string, any>,
+    setFormData: React.Dispatch<React.SetStateAction<Record<string, any>>>,
+  ) => void;
   apiBase?: string;
   embedded?: boolean;
   /** Renders directly in document flow with no modal wrapper and no Cancel button */
@@ -55,10 +62,13 @@ export interface EntityMaskProps {
 }
 
 const inputBase =
-  "h-9 w-full border bg-canvas rounded-md px-3 text-[13px] text-ink outline-none transition-colors border-hairline-input focus-visible:ring-[3px] focus-visible:ring-[color-mix(in_oklab,var(--primary)_20%,transparent)] focus-visible:border-primary disabled:opacity-50 disabled:cursor-not-allowed";
+  "h-7 w-full border bg-canvas rounded px-2 text-[12px] text-ink outline-none transition-colors border-hairline-input focus-visible:ring-[2px] focus-visible:ring-[color-mix(in_oklab,var(--primary)_20%,transparent)] focus-visible:border-primary disabled:opacity-50 disabled:cursor-not-allowed";
 
 const inputError =
   "border-destructive focus-visible:ring-[color-mix(in_oklab,var(--destructive)_20%,transparent)] focus-visible:border-destructive";
+
+const shellClassName =
+  "w-full rounded border px-3 py-2 transition-colors border-hairline-input bg-canvas";
 
 function FieldInput({
   field,
@@ -76,15 +86,10 @@ function FieldInput({
   const displayValue =
     typeof value === "object" && value !== null && ("en" in value || "de" in value)
       ? value[i18n.language] || value.en || value.de || ""
-      : value ?? "";
+      : (value ?? "");
 
   if (field.type === "lookup") {
-    const sourceConfig = buildLookupConfigFromField(
-      field,
-      field.label,
-      undefined,
-      "No results",
-    );
+    const sourceConfig = buildLookupConfigFromField(field, field.label, undefined, "No results");
     if (!sourceConfig) {
       return null;
     }
@@ -101,13 +106,13 @@ function FieldInput({
 
   if (field.type === "boolean") {
     return (
-      <label className="flex items-center gap-2 cursor-pointer select-none">
+      <label className="flex cursor-pointer items-center gap-2 select-none">
         <input
           type="checkbox"
           checked={!!value}
           disabled={disabled || field.readonly}
           onChange={(e) => onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-hairline-input accent-[var(--primary)] disabled:opacity-50 cursor-pointer"
+          className="h-4 w-4 cursor-pointer rounded border-hairline-input accent-[var(--primary)] disabled:opacity-50"
         />
         <span className="text-[13px] text-ink-secondary">
           {i18n.language === "de" && field.labelDe ? field.labelDe : field.label}
@@ -171,6 +176,7 @@ export function EntityMask({
   layout: _layout = "two-column",
   onCancel,
   onSaved,
+  onFieldChange,
   apiBase = "/api/data",
   embedded = false,
   inline = false,
@@ -197,13 +203,15 @@ export function EntityMask({
           if (Array.isArray(data)) {
             // Find by primary key if list returned (some APIs return full table)
             const pk = recordId;
-            const record = data.find(r => 
-              r[`${entityName}Id`] === pk || 
-              r.id === pk || 
-              r.code === pk || 
-              r.accountNo === pk ||
-              r.iso2Code === pk
-            ) || data[0];
+            const record =
+              data.find(
+                (r) =>
+                  r[`${entityName}Id`] === pk ||
+                  r.id === pk ||
+                  r.code === pk ||
+                  r.accountNo === pk ||
+                  r.iso2Code === pk,
+              ) || data[0];
             setFormData(record || {});
           } else if (data) {
             setFormData(data);
@@ -303,10 +311,7 @@ export function EntityMask({
     });
   }, [fields.length, loading]);
 
-  const {
-    mutate: saveRecord,
-    isPending: isSaving,
-  } = useMutation({
+  const { mutate: saveRecord, isPending: isSaving } = useMutation({
     mutationFn: async (data: Record<string, any>) => {
       setGlobalError(null);
       const isEdit = recordId && mode !== "create";
@@ -352,40 +357,60 @@ export function EntityMask({
   }, [formData, onCancel, saveRecord]);
 
   const handleChange = (key: string, val: any) => {
+    let nextFormData: Record<string, any> | null = null;
+
     setFormData((prev) => {
       const next = { ...prev, [key]: val };
-      
+
       // Auto-generate slug from name if slug exists in fields
-      if (key === "name" && fields.some(f => f.key === "slug")) {
-        const generatedSlug = val.toString().toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/(^-|-$)+/g, '');
-        
+      if (key === "name" && fields.some((f) => f.key === "slug")) {
+        const generatedSlug = val
+          .toString()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)+/g, "");
+
         // Only auto-generate if slug is empty or matches the old auto-generated version of name
-        const oldGeneratedSlug = prev.name ? prev.name.toString().toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/(^-|-$)+/g, '') : "";
+        const oldGeneratedSlug = prev.name
+          ? prev.name
+              .toString()
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/(^-|-$)+/g, "")
+          : "";
 
         if (!next.slug || next.slug === oldGeneratedSlug) {
-            next.slug = generatedSlug;
+          next.slug = generatedSlug;
         }
       }
 
-      // Auto-lookup city if countryCode and postalCode are present
-      if ((key === "countryCode" || key === "postalCode") && next.countryCode && next.postalCode) {
-        // Trigger lookup
-        fetch(`/api/data/postalCode?countryCode=${next.countryCode}&plz=${next.postalCode}`)
-          .then(res => res.ok ? res.json() : [])
-          .then(data => {
-            if (Array.isArray(data) && data.length === 1) {
-              setFormData(curr => ({ ...curr, city: data[0].city }));
-            }
-          })
-          .catch(err => console.warn("City lookup failed", err));
-      }
-      
+      nextFormData = next;
       return next;
     });
+
+    if (!nextFormData) return;
+
+    const currentFormData = nextFormData as Record<string, any>;
+
+    onFieldChange?.(key, val, currentFormData, setFormData);
+
+    // Auto-lookup city if countryCode and postalCode are present
+    if (
+      (key === "countryCode" || key === "postalCode") &&
+      currentFormData.countryCode &&
+      currentFormData.postalCode
+    ) {
+      fetch(
+        `/api/data/postalCode?countryCode=${currentFormData.countryCode}&plz=${currentFormData.postalCode}`,
+      )
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          if (Array.isArray(data) && data.length === 1) {
+            setFormData((curr) => ({ ...curr, city: data[0].city }));
+          }
+        })
+        .catch((err) => console.warn("City lookup failed", err));
+    }
   };
 
   const fieldLabel = (field: FieldDef) =>
@@ -396,8 +421,8 @@ export function EntityMask({
 
   if (loading) {
     return (
-      <div className={cn("bg-canvas p-6 rounded-xl border border-hairline", className)}>
-        <Skeleton className="h-5 w-32 mb-6" />
+      <div className={cn(shellClassName, className)}>
+        <Skeleton className="mb-6 h-5 w-32" />
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
           {[1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-14 w-full" />
@@ -414,11 +439,11 @@ export function EntityMask({
   const fieldsGrid = (
     <div className="flex flex-col gap-6">
       {globalError && (
-        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200">
-          <AlertCircleIcon className="size-4 text-destructive shrink-0 mt-0.5" />
+        <div className="flex animate-in items-start gap-3 rounded-lg border border-destructive/20 bg-destructive/10 p-3 duration-200 fade-in slide-in-from-top-1">
+          <AlertCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
           <div className="flex flex-col gap-1">
             <span className="text-[13px] font-medium text-destructive">Save Failed</span>
-            <span className="text-[12px] text-destructive/80 leading-relaxed">{globalError}</span>
+            <span className="text-[12px] leading-relaxed text-destructive/80">{globalError}</span>
           </div>
         </div>
       )}
@@ -426,17 +451,31 @@ export function EntityMask({
         {fields.map((field) => (
           <React.Fragment key={field.key}>
             {field.sectionLabel && (
-              <div className={cn("border-t border-hairline pt-2 -mb-2", !isSingleColumn ? "col-span-2" : "")}>
-                <span className="text-[11px] font-medium text-ink-mute uppercase tracking-wider">
-                  {i18n.language === "de" && field.sectionLabelDe ? field.sectionLabelDe : field.sectionLabel}
+              <div
+                className={cn(
+                  "-mb-2 border-t border-hairline pt-2",
+                  !isSingleColumn ? "col-span-2" : "",
+                )}
+              >
+                <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                  {i18n.language === "de" && field.sectionLabelDe
+                    ? field.sectionLabelDe
+                    : field.sectionLabel}
                 </span>
               </div>
             )}
-            <div className={cn("flex flex-col gap-1.5 min-w-0", field.fullWidth && !isSingleColumn && "col-span-2")}>
+            <div
+              className={cn(
+                "flex min-w-0 flex-col gap-1.5",
+                field.fullWidth && !isSingleColumn && "col-span-2",
+              )}
+            >
               {field.type !== "boolean" && (
-                <label className="text-[12px] font-medium text-ink-secondary flex items-center gap-1 select-none">
+                <label className="flex items-center gap-1 text-[12px] font-medium text-ink-secondary select-none">
                   <span className="truncate">{fieldLabel(field)}</span>
-                  {field.required && <span className="text-destructive leading-none shrink-0">*</span>}
+                  {field.required && (
+                    <span className="shrink-0 leading-none text-destructive">*</span>
+                  )}
                 </label>
               )}
               <div className="w-full min-w-0">
@@ -460,20 +499,18 @@ export function EntityMask({
     </div>
   );
 
-  const childSectionNode = hasChildContent
-    ? (
-      <div className="mt-4 border-t border-hairline pt-4">
-        {childSection!(formData as Record<string, unknown>)}
-      </div>
-    )
-    : null;
+  const childSectionNode = hasChildContent ? (
+    <div className="mt-4 border-t border-hairline pt-4">
+      {childSection!(formData as Record<string, unknown>)}
+    </div>
+  ) : null;
 
   const footerButtons = (
     <div className="flex justify-end gap-3">
       {showCancel && (
         <button
           onClick={onCancel}
-          className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink hover:border-hairline-input transition-colors"
+          className="h-7 rounded-full border border-hairline px-4 text-[13px] text-ink-secondary transition-colors hover:border-hairline-input hover:text-ink"
         >
           {t("actions.cancel")}
         </button>
@@ -481,30 +518,21 @@ export function EntityMask({
       <button
         onClick={() => saveRecord(formData)}
         disabled={isSaving}
-        className="h-7 px-4 rounded-full text-[13px] disabled:opacity-50"
+        className="h-7 rounded-full px-4 text-[13px] disabled:opacity-50"
         style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
       >
-        {isSaving
-          ? t("form.saving")
-          : recordId
-            ? t("form.update")
-            : t("form.create")}{" "}
-        (F10)
+        {isSaving ? t("form.saving") : recordId ? t("form.update") : t("form.create")} (F10)
       </button>
     </div>
   );
 
-  const footer = (
-    <div className="mt-6 pt-5 border-t border-hairline">
-      {footerButtons}
-    </div>
-  );
+  const footer = <div className="mt-6 border-t border-hairline pt-5">{footerButtons}</div>;
 
   if (inline) {
     return (
       <div ref={formRef} className={cn("p-4", className)}>
-        {title && <h2 className="text-[18px] font-light text-ink mb-1">{title}</h2>}
-        <p className="text-[13px] text-ink-mute mb-6">{t("form.requiredHint")}</p>
+        {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
+        <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
         {fieldsGrid}
         {childSectionNode}
         {footer}
@@ -514,26 +542,24 @@ export function EntityMask({
 
   if (embedded && childLayout === "side" && hasChildContent) {
     return (
-      <div ref={formRef} className={cn("flex flex-col overflow-hidden h-full", className)}>
-        <div className="flex flex-1 overflow-hidden min-h-0 divide-x divide-hairline">
-          <div className="w-[35%] shrink-0 overflow-y-auto p-6 bg-canvas-soft/30">
-            {title && <h2 className="text-[18px] font-light text-ink mb-1">{title}</h2>}
-            <p className="text-[13px] text-ink-mute mb-4">{t("form.requiredHint")}</p>
+      <div ref={formRef} className={cn("flex h-full flex-col overflow-hidden", className)}>
+        <div className="flex min-h-0 flex-1 divide-x divide-hairline overflow-hidden">
+          <div className="w-[35%] shrink-0 overflow-y-auto bg-canvas-soft/30 p-6">
+            {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
+            <p className="mb-4 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
             {globalError && (
-              <div className="mb-4 bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex gap-3 items-start">
-                <AlertCircleIcon className="size-4 text-destructive shrink-0 mt-0.5" />
+              <div className="mb-4 flex items-start gap-3 rounded-lg border border-destructive/20 bg-destructive/10 p-3">
+                <AlertCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
                 <span className="text-[12px] text-destructive/80">{globalError}</span>
               </div>
             )}
             {fieldsGrid}
           </div>
-          <div className="flex-1 overflow-y-auto overflow-x-auto p-6">
+          <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
             {childSection!(formData as Record<string, unknown>)}
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-hairline shrink-0 bg-canvas">
-          {footerButtons}
-        </div>
+        <div className="shrink-0 border-t border-hairline bg-canvas px-6 py-4">{footerButtons}</div>
       </div>
     );
   }
@@ -541,8 +567,8 @@ export function EntityMask({
   if (embedded) {
     return (
       <div ref={formRef} className={cn("overflow-auto p-4", className)}>
-        {title && <h2 className="text-[18px] font-light text-ink mb-1">{title}</h2>}
-        <p className="text-[13px] text-ink-mute mb-6">{t("form.requiredHint")}</p>
+        {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
+        <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
         {fieldsGrid}
         {childSectionNode}
         {footer}
@@ -551,15 +577,9 @@ export function EntityMask({
   }
 
   return (
-    <div
-      ref={formRef}
-      className={cn(
-        "bg-canvas rounded-xl border border-hairline shadow-lg p-6 max-w-2xl mx-auto my-8",
-        className,
-      )}
-    >
-      {title && <h2 className="text-[18px] font-light text-ink mb-1">{title}</h2>}
-      <p className="text-[13px] text-ink-mute mb-6">{t("form.requiredHint")}</p>
+    <div ref={formRef} className={cn("mx-auto my-8 max-w-2xl", shellClassName, className)}>
+      {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
+      <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
       {fieldsGrid}
       {childSectionNode}
       {footer}

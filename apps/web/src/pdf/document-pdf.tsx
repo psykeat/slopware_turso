@@ -1,11 +1,4 @@
-import {
-  Document,
-  Page,
-  StyleSheet,
-  Text,
-  View,
-  type Styles,
-} from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, Text, View, type Styles } from "@react-pdf/renderer";
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -56,7 +49,7 @@ export interface CompanyForPrint {
   bankBic: string | null;
 }
 
-export interface DocumentPDFProps {
+interface DocumentPDFProps {
   doc: DocumentForPrint;
   company: CompanyForPrint;
   typeLabel: string;
@@ -136,7 +129,7 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica",
     fontSize: 9,
     color: C.text,
-    paddingTop: 56.69,    // ~2 cm in pt
+    paddingTop: 56.69, // ~2 cm in pt
     paddingLeft: 56.69,
     paddingRight: 56.69,
     paddingBottom: 70.87, // ~2.5 cm in pt
@@ -351,13 +344,7 @@ const styles = StyleSheet.create({
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function AddressBlock({
-  addr,
-  style,
-}: {
-  addr: Record<string, any>;
-  style?: Styles[string];
-}) {
+function AddressBlock({ addr, style }: { addr: Record<string, any>; style?: Styles[string] }) {
   const name = addr.companyName || addr.name || null;
   const line1 = addr.addressLine1 || null;
   const line2 = addr.addressLine2 || null;
@@ -369,18 +356,14 @@ function AddressBlock({
       {name ? <Text style={styles.recipientName}>{name}</Text> : null}
       {line1 ? <Text style={styles.recipientLine}>{line1}</Text> : null}
       {line2 ? <Text style={styles.recipientLine}>{line2}</Text> : null}
-      {(postal || city) ? (
+      {postal || city ? (
         <Text style={styles.recipientLine}>{`${postal} ${city}`.trim()}</Text>
       ) : null}
     </View>
   );
 }
 
-function DeliveryAddressBlock({
-  addr,
-}: {
-  addr: Record<string, any>;
-}) {
+function DeliveryAddressBlock({ addr }: { addr: Record<string, any> }) {
   const name = addr.companyName || addr.name || null;
   const line1 = addr.addressLine1 || null;
   const line2 = addr.addressLine2 || null;
@@ -393,7 +376,7 @@ function DeliveryAddressBlock({
       {name ? <Text style={styles.deliveryLine}>{name}</Text> : null}
       {line1 ? <Text style={styles.deliveryLine}>{line1}</Text> : null}
       {line2 ? <Text style={styles.deliveryLine}>{line2}</Text> : null}
-      {(postal || city) ? (
+      {postal || city ? (
         <Text style={styles.deliveryLine}>{`${postal} ${city}`.trim()}</Text>
       ) : null}
     </View>
@@ -401,19 +384,9 @@ function DeliveryAddressBlock({
 }
 
 // Check if two address objects differ meaningfully
-function addressesDiffer(
-  a: Record<string, any> | null,
-  b: Record<string, any> | null,
-): boolean {
+function addressesDiffer(a: Record<string, any> | null, b: Record<string, any> | null): boolean {
   if (!a || !b) return false;
-  const fields = [
-    "companyName",
-    "name",
-    "addressLine1",
-    "addressLine2",
-    "postalCode",
-    "city",
-  ];
+  const fields = ["companyName", "name", "addressLine1", "addressLine2", "postalCode", "city"];
   return fields.some((f) => (a[f] ?? "") !== (b[f] ?? ""));
 }
 
@@ -421,11 +394,10 @@ function addressesDiffer(
 // Main component
 // ---------------------------------------------------------------------------
 
-export function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
+function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
   const currency = doc.currencyId;
   const showDelivery =
-    !!doc.deliveryAddress &&
-    addressesDiffer(doc.billingAddress, doc.deliveryAddress);
+    !!doc.deliveryAddress && addressesDiffer(doc.billingAddress, doc.deliveryAddress);
 
   // Build footer strings
   const footerLeftParts: string[] = [company.name];
@@ -456,7 +428,7 @@ export function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
             {company.addressLine2 ? (
               <Text style={styles.senderLine}>{company.addressLine2}</Text>
             ) : null}
-            {(company.postalCode || company.city) ? (
+            {company.postalCode || company.city ? (
               <Text style={styles.senderLine}>
                 {`${company.postalCode ?? ""} ${company.city ?? ""}`.trim()}
               </Text>
@@ -465,9 +437,7 @@ export function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
             {company.vatId ? (
               <Text style={styles.senderMuted}>UID: {company.vatId}</Text>
             ) : company.taxNumber ? (
-              <Text style={styles.senderMuted}>
-                Steuernr: {company.taxNumber}
-              </Text>
+              <Text style={styles.senderMuted}>Steuernr: {company.taxNumber}</Text>
             ) : null}
           </View>
 
@@ -484,10 +454,7 @@ export function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
 
         {/* ---- Recipient ---- */}
         {doc.billingAddress ? (
-          <AddressBlock
-            addr={doc.billingAddress}
-            style={styles.recipientBlock}
-          />
+          <AddressBlock addr={doc.billingAddress} style={styles.recipientBlock} />
         ) : null}
 
         {/* ---- Delivery address ---- */}
@@ -500,52 +467,16 @@ export function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
           {/* Table header */}
           <View style={styles.tableHeaderRow}>
             <Text style={[styles.tableHeaderCell, styles.colPos]}>Pos</Text>
-            <Text style={[styles.tableHeaderCell, styles.colDesc]}>
-              Bezeichnung
-            </Text>
-            <Text
-              style={[
-                styles.tableHeaderCell,
-                styles.colQty,
-                { textAlign: "right" },
-              ]}
-            >
+            <Text style={[styles.tableHeaderCell, styles.colDesc]}>Bezeichnung</Text>
+            <Text style={[styles.tableHeaderCell, styles.colQty, { textAlign: "right" }]}>
               Menge
             </Text>
-            <Text
-              style={[
-                styles.tableHeaderCell,
-                styles.colUnit,
-                { textAlign: "right" },
-              ]}
-            >
+            <Text style={[styles.tableHeaderCell, styles.colUnit, { textAlign: "right" }]}>
               Einheit
             </Text>
-            <Text
-              style={[
-                styles.tableHeaderCell,
-                styles.colEp,
-                { textAlign: "right" },
-              ]}
-            >
-              EP
-            </Text>
-            <Text
-              style={[
-                styles.tableHeaderCell,
-                styles.colDisc,
-                { textAlign: "right" },
-              ]}
-            >
-              R%
-            </Text>
-            <Text
-              style={[
-                styles.tableHeaderCell,
-                styles.colNet,
-                { textAlign: "right" },
-              ]}
-            >
+            <Text style={[styles.tableHeaderCell, styles.colEp, { textAlign: "right" }]}>EP</Text>
+            <Text style={[styles.tableHeaderCell, styles.colDisc, { textAlign: "right" }]}>R%</Text>
+            <Text style={[styles.tableHeaderCell, styles.colNet, { textAlign: "right" }]}>
               Netto
             </Text>
           </View>
@@ -553,44 +484,32 @@ export function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
           {/* Table rows */}
           {doc.lines.map((line, idx) => {
             const isAlt = idx % 2 !== 0;
-            const rowStyle = isAlt
-              ? [styles.tableRow, styles.tableRowAlt]
-              : [styles.tableRow];
+            const rowStyle = isAlt ? [styles.tableRow, styles.tableRowAlt] : [styles.tableRow];
 
             if (line.lineType === "comment") {
               return (
                 <View key={line.documentLineId} style={rowStyle}>
-                  <Text style={styles.tableCellComment}>
-                    {line.articleTextSnapshot ?? ""}
-                  </Text>
+                  <Text style={styles.tableCellComment}>{line.articleTextSnapshot ?? ""}</Text>
                 </View>
               );
             }
 
-            const disc = line.discountPercentage
-              ? `${formatNum(line.discountPercentage)}%`
-              : "";
+            const disc = line.discountPercentage ? `${formatNum(line.discountPercentage)}%` : "";
 
             return (
               <View key={line.documentLineId} style={rowStyle}>
-                <Text style={[styles.tableCell, styles.colPos]}>
-                  {line.lineNo}
-                </Text>
+                <Text style={[styles.tableCell, styles.colPos]}>{line.lineNo}</Text>
                 <Text style={[styles.tableCell, styles.colDesc]}>
                   {line.articleTextSnapshot ?? ""}
                 </Text>
                 <Text style={[styles.tableCellRight, styles.colQty]}>
                   {formatNum(line.quantity)}
                 </Text>
-                <Text style={[styles.tableCellRight, styles.colUnit]}>
-                  {line.unit ?? ""}
-                </Text>
+                <Text style={[styles.tableCellRight, styles.colUnit]}>{line.unit ?? ""}</Text>
                 <Text style={[styles.tableCellRight, styles.colEp]}>
                   {formatNum(line.netPrice)}
                 </Text>
-                <Text style={[styles.tableCellRight, styles.colDisc]}>
-                  {disc}
-                </Text>
+                <Text style={[styles.tableCellRight, styles.colDisc]}>{disc}</Text>
                 <Text style={[styles.tableCellRight, styles.colNet]}>
                   {formatNum(line.lineTotalNet)}
                 </Text>
@@ -604,33 +523,23 @@ export function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
           <View style={styles.totalsBlock}>
             <View style={styles.totalsRow}>
               <Text style={styles.totalsLabel}>Netto:</Text>
-              <Text style={styles.totalsValue}>
-                {fmtAmt(doc.totalNet, currency)}
-              </Text>
+              <Text style={styles.totalsValue}>{fmtAmt(doc.totalNet, currency)}</Text>
             </View>
             <View style={styles.totalsRow}>
               <Text style={styles.totalsLabel}>MwSt:</Text>
-              <Text style={styles.totalsValue}>
-                {fmtAmt(doc.totalTax, currency)}
-              </Text>
+              <Text style={styles.totalsValue}>{fmtAmt(doc.totalTax, currency)}</Text>
             </View>
             <View style={styles.totalsGrossRow}>
               <Text style={styles.totalsGrossLabel}>Brutto:</Text>
-              <Text style={styles.totalsGrossValue}>
-                {fmtAmt(doc.totalGross, currency)}
-              </Text>
+              <Text style={styles.totalsGrossValue}>{fmtAmt(doc.totalGross, currency)}</Text>
             </View>
           </View>
         </View>
 
         {/* ---- Footer ---- */}
         <View style={styles.footer} fixed>
-          <Text style={styles.footerLeft}>
-            {footerLeftParts.join("  |  ")}
-          </Text>
-          <Text style={styles.footerRight}>
-            {footerRightParts.join("  |  ")}
-          </Text>
+          <Text style={styles.footerLeft}>{footerLeftParts.join("  |  ")}</Text>
+          <Text style={styles.footerRight}>{footerRightParts.join("  |  ")}</Text>
         </View>
       </Page>
     </Document>

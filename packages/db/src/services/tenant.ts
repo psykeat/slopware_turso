@@ -145,6 +145,7 @@ export async function getTenantInfoById(tenantId: string) {
       organizationId: tenant.organizationId,
       orgName: organization.name,
       isActive: tenant.isActive,
+      isBase: tenant.isBase,
     })
     .from(tenant)
     .innerJoin(organization, eq(tenant.organizationId, organization.organizationId))
@@ -160,6 +161,7 @@ export async function getTenantContextById(tenantId: string) {
       tenantId: tenant.tenantId,
       organizationId: tenant.organizationId,
       isActive: tenant.isActive,
+      isBase: tenant.isBase,
     })
     .from(tenant)
     .where(eq(tenant.tenantId, tenantId))

@@ -1,1 +1,1 @@
-ALTER TABLE "article_bom" ADD COLUMN "sort_order" integer NOT NULL DEFAULT 0;
+-- Column sort_order was already added in migration 20260516072847_slippery_black_tarantula

@@ -1693,9 +1693,15 @@ export const tenantFields = pgTable(
     lookupFilter: jsonb("lookup_filter"),
   },
   (table) => [
-    unique("uq_fields_global").on(table.entityName, table.fieldName),
-    unique("uq_fields_org").on(table.organizationId, table.entityName, table.fieldName),
-    unique("uq_fields_tenant").on(table.tenantId, table.entityName, table.fieldName),
+    uniqueIndex("uq_fields_global")
+      .on(table.entityName, table.fieldName)
+      .where(sql`scope = 'global'`),
+    uniqueIndex("uq_fields_org")
+      .on(table.organizationId, table.entityName, table.fieldName)
+      .where(sql`scope = 'org'`),
+    uniqueIndex("uq_fields_tenant")
+      .on(table.tenantId, table.entityName, table.fieldName)
+      .where(sql`scope = 'tenant'`),
   ],
 );
 
@@ -1717,9 +1723,15 @@ export const tenantGroups = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    unique("uq_groups_global").on(table.entityName, table.groupKey),
-    unique("uq_groups_org").on(table.organizationId, table.entityName, table.groupKey),
-    unique("uq_groups_tenant").on(table.tenantId, table.entityName, table.groupKey),
+    uniqueIndex("uq_groups_global")
+      .on(table.entityName, table.groupKey)
+      .where(sql`scope = 'global'`),
+    uniqueIndex("uq_groups_org")
+      .on(table.organizationId, table.entityName, table.groupKey)
+      .where(sql`scope = 'org'`),
+    uniqueIndex("uq_groups_tenant")
+      .on(table.tenantId, table.entityName, table.groupKey)
+      .where(sql`scope = 'tenant'`),
   ],
 );
 
@@ -1738,9 +1750,15 @@ export const tenantLayouts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    unique("uq_layouts_global").on(table.entityName, table.layoutKey),
-    unique("uq_layouts_org").on(table.organizationId, table.entityName, table.layoutKey),
-    unique("uq_layouts_tenant").on(table.tenantId, table.entityName, table.layoutKey),
+    uniqueIndex("uq_layouts_global")
+      .on(table.entityName, table.layoutKey)
+      .where(sql`scope = 'global'`),
+    uniqueIndex("uq_layouts_org")
+      .on(table.organizationId, table.entityName, table.layoutKey)
+      .where(sql`scope = 'org'`),
+    uniqueIndex("uq_layouts_tenant")
+      .on(table.tenantId, table.entityName, table.layoutKey)
+      .where(sql`scope = 'tenant'`),
   ],
 );
 
@@ -1764,6 +1782,28 @@ export const tenantRules = pgTable(
     unique("uq_rules_global").on(table.entityName, table.hookName),
     unique("uq_rules_org").on(table.organizationId, table.entityName, table.hookName),
     unique("uq_rules_tenant").on(table.tenantId, table.entityName, table.hookName),
+  ],
+);
+
+export const metadataHistory = pgTable(
+  "metadata_history",
+  {
+    historyId: uuid("history_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id").references(() => tenant.tenantId),
+    userId: text("user_id").references(() => user.id),
+    entityName: text("entity_name").notNull(),
+    metadataType: text("metadata_type").notNull(), // 'field', 'group', 'layout'
+    metadataKey: text("metadata_key").notNull(), // fieldName, groupKey, or layoutKey
+    oldValue: jsonb("old_value"),
+    newValue: jsonb("new_value"),
+    changeType: text("change_type").notNull(), // 'insert', 'update', 'delete'
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_metadata_history_entity").on(table.entityName),
+    index("idx_metadata_history_tenant").on(table.tenantId),
   ],
 );
 

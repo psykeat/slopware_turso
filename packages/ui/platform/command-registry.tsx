@@ -1,7 +1,16 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  useRef,
+} from "react";
+
 import { useFocus, FocusContextState } from "./focus-manager";
 
-export interface Command {
+interface Command {
   id: string;
   scope: "global" | "context" | "local";
   group?: string;
@@ -13,7 +22,11 @@ export interface Command {
   handler: (state: FocusContextState) => void | Promise<void>;
 }
 
-const COMMAND_SCOPE_PRIORITY: Record<Command["scope"], number> = { local: 0, context: 1, global: 2 };
+const COMMAND_SCOPE_PRIORITY: Record<Command["scope"], number> = {
+  local: 0,
+  context: 1,
+  global: 2,
+};
 
 interface CommandContextValue {
   commands: Command[];
@@ -63,7 +76,8 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
         .map((command, index) => ({ command, index }))
         .filter(({ command }) => command.shortcut === shortcut)
         .sort((a, b) => {
-          const scopeDelta = COMMAND_SCOPE_PRIORITY[a.command.scope] - COMMAND_SCOPE_PRIORITY[b.command.scope];
+          const scopeDelta =
+            COMMAND_SCOPE_PRIORITY[a.command.scope] - COMMAND_SCOPE_PRIORITY[b.command.scope];
           if (scopeDelta !== 0) return scopeDelta;
           return a.index - b.index;
         })
@@ -103,7 +117,8 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
 
       const isModifierShortcut = ctrl || alt || meta;
       const isFunctionKey = /^F\d{1,2}$/i.test(key);
-      const allowInEditable = key === "?" || key === "Escape" || isModifierShortcut || isFunctionKey;
+      const allowInEditable =
+        key === "?" || key === "Escape" || isModifierShortcut || isFunctionKey;
 
       // Skip plain text editing keys in editable elements, but allow function keys
       // and modifier shortcuts so local commands still work in forms and lookups.

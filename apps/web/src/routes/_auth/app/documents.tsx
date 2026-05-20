@@ -1,37 +1,59 @@
-import { createFileRoute } from "@tanstack/react-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useGridUrlState } from "#/hooks/use-grid-url-state";
-import { useTranslation } from "react-i18next";
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
-import { toast } from "sonner";
-import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
-import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
-import { InspectorPanel } from "@repo/ui/components/inspector-panel";
-import { DocumentEditor } from "@repo/ui/components/document-editor";
-import { DocumentTargetGroupDialog, type DocumentTargetGroupCandidate } from "@repo/ui/components/document-target-group-dialog";
-import { Skeleton } from "@repo/ui/components/skeleton";
-import { formatMoney, formatDate, StatusDot } from "@repo/ui/lib/formatters";
+import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
-import { useFocus } from "@repo/ui/platform/focus-manager";
-import { useCommands } from "@repo/ui/platform/command-registry";
+import { DocumentEditor } from "@repo/ui/components/document-editor";
+import {
+  DocumentTargetGroupDialog,
+  type DocumentTargetGroupCandidate,
+} from "@repo/ui/components/document-target-group-dialog";
+import { InspectorPanel } from "@repo/ui/components/inspector-panel";
+import { Skeleton } from "@repo/ui/components/skeleton";
+import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
+import { formatMoney, formatDate, StatusDot } from "@repo/ui/lib/formatters";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { useCommands } from "@repo/ui/platform/command-registry";
+import { useFocus } from "@repo/ui/platform/focus-manager";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+
+import { useGridUrlState } from "#/hooks/use-grid-url-state";
 
 export const Route = createFileRoute("/_auth/app/documents")({
   component: DocumentsModule,
 });
 
+const EMPTY_ARRAY: any[] = [];
+
 const DOC_TYPE_LABELS: Record<string, string> = {
-  N: "Angebot", A: "Auftrag", L: "Lieferschein", R: "Rechnung", G: "Gutschrift",
-  b: "Bestellung", l: "Wareneingang", r: "Eingangsrechnung", g: "Eingangsgutschrift",
-  V: "Inventur", U: "Umbuchung", Z: "Zugang", E: "Entnahme",
-  q: "Prod.-Auftrag", p: "Fertigmeldung",
+  N: "Angebot",
+  A: "Auftrag",
+  L: "Lieferschein",
+  R: "Rechnung",
+  G: "Gutschrift",
+  b: "Bestellung",
+  l: "Wareneingang",
+  r: "Eingangsrechnung",
+  g: "Eingangsgutschrift",
+  V: "Inventur",
+  U: "Umbuchung",
+  Z: "Zugang",
+  E: "Entnahme",
+  q: "Prod.-Auftrag",
+  p: "Fertigmeldung",
 };
 
 function addressDisplayName(addr: any): string {
   if (!addr) return "";
-  return addr.companyName || [addr.firstName, addr.lastName].filter(Boolean).join(" ") || addr.addressNo || "";
+  return (
+    addr.companyName ||
+    [addr.firstName, addr.lastName].filter(Boolean).join(" ") ||
+    addr.addressNo ||
+    ""
+  );
 }
 
 interface DocumentGroup {
@@ -75,7 +97,12 @@ function DocumentNavigationTree({
   sections: TreeSection[];
   isLoading: boolean;
   selection: TreeSelection;
-  onSelectType: (documentType: string, direction: string, label: string, groupId: string | null) => void;
+  onSelectType: (
+    documentType: string,
+    direction: string,
+    label: string,
+    groupId: string | null,
+  ) => void;
   onSelectGroup: (groupId: string, documentType: string, direction: string, label: string) => void;
   expandedDirections: Set<string>;
   onToggleDirection: (direction: string) => void;
@@ -90,8 +117,8 @@ function DocumentNavigationTree({
     selection.kind === "group" && selection.groupId === groupId;
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-canvas-soft border-r border-hairline">
-      <div className="h-8 flex items-center px-3 shrink-0 border-b border-hairline text-[11px] uppercase tracking-wider font-medium text-ink-mute">
+    <div className="flex h-full w-full flex-col overflow-hidden border-r border-hairline bg-canvas-soft">
+      <div className="flex h-8 shrink-0 items-center border-b border-hairline px-3 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
         {header ?? "Belegtypen"}
       </div>
 
@@ -99,9 +126,13 @@ function DocumentNavigationTree({
         {isLoading ? (
           <>
             {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-              <div key={i} className="h-7 flex items-center gap-1.5" style={{ paddingLeft: i % 3 === 0 ? 8 : i % 3 === 1 ? 22 : 36 }}>
+              <div
+                key={i}
+                className="flex h-7 items-center gap-1.5"
+                style={{ paddingLeft: i % 3 === 0 ? 8 : i % 3 === 1 ? 22 : 36 }}
+              >
                 <Skeleton className="size-3 shrink-0" />
-                <Skeleton className="h-2.5" style={{ width: 80 + (i * 13) % 60 }} />
+                <Skeleton className="h-2.5" style={{ width: 80 + ((i * 13) % 60) }} />
               </div>
             ))}
           </>
@@ -115,7 +146,7 @@ function DocumentNavigationTree({
                   role="treeitem"
                   aria-expanded={isExpanded}
                   tabIndex={0}
-                  className="h-7 flex items-center gap-1.5 cursor-pointer select-none text-[13px] transition-colors hover:bg-canvas font-medium text-ink"
+                  className="flex h-7 cursor-pointer items-center gap-1.5 text-[13px] font-medium text-ink transition-colors select-none hover:bg-canvas"
                   style={{ paddingLeft: 8 }}
                   onClick={() => onToggleDirection(section.direction)}
                   onKeyDown={(e) => {
@@ -125,8 +156,11 @@ function DocumentNavigationTree({
                   <button
                     type="button"
                     aria-label={isExpanded ? "Collapse" : "Expand"}
-                    className="size-3 flex items-center justify-center shrink-0 bg-transparent border-0 p-0 cursor-pointer"
-                    onClick={(e) => { e.stopPropagation(); onToggleDirection(section.direction); }}
+                    className="flex size-3 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleDirection(section.direction);
+                    }}
                   >
                     {isExpanded ? (
                       <ChevronDownIcon size={12} strokeWidth={1.5} />
@@ -134,82 +168,111 @@ function DocumentNavigationTree({
                       <ChevronRightIcon size={12} strokeWidth={1.5} />
                     )}
                   </button>
-                  <span className="size-3.5 flex items-center justify-center shrink-0">
+                  <span className="flex size-3.5 shrink-0 items-center justify-center">
                     {isExpanded ? (
                       <FolderOpenIcon size={13} strokeWidth={1.4} />
                     ) : (
                       <FolderIcon size={13} strokeWidth={1.4} />
                     )}
                   </span>
-                  <span className="flex-1 truncate">{getDirectionLabel(section.direction, section.label)}</span>
+                  <span className="flex-1 truncate">
+                    {getDirectionLabel(section.direction, section.label)}
+                  </span>
                 </div>
 
                 {/* Layer 2: Type nodes */}
-                {isExpanded && (section.types ?? []).map((type) => {
-                  const sel = isTypeSelected(type.documentType);
-                  return (
-                    <React.Fragment key={type.documentType}>
-                      <div
-                        role="treeitem"
-                        aria-selected={sel}
-                        tabIndex={0}
-                        className={`h-7 flex items-center gap-1.5 cursor-pointer select-none text-[13px] transition-colors${!sel ? " hover:bg-canvas" : ""}`}
-                        style={{
-                          paddingLeft: 22,
-                          ...(sel ? { background: "var(--primary)", color: "var(--primary-fg)" } : {}),
-                        }}
-                        onClick={() => {
-                          onSelectType(type.documentType, section.direction, getTypeLabel(type.documentType, type.typeLabel), type.mainGroup?.documentGroupId ?? null);
-                          requestAnimationFrame(() => onSelectCommit?.());
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            onSelectType(type.documentType, section.direction, getTypeLabel(type.documentType, type.typeLabel), type.mainGroup?.documentGroupId ?? null);
+                {isExpanded &&
+                  (section.types ?? []).map((type) => {
+                    const sel = isTypeSelected(type.documentType);
+                    return (
+                      <React.Fragment key={type.documentType}>
+                        <div
+                          role="treeitem"
+                          aria-selected={sel}
+                          tabIndex={0}
+                          className={`flex h-7 cursor-pointer items-center gap-1.5 text-[13px] select-none transition-colors${!sel ? " hover:bg-canvas" : ""}`}
+                          style={{
+                            paddingLeft: 22,
+                            ...(sel
+                              ? { background: "var(--primary)", color: "var(--primary-fg)" }
+                              : {}),
+                          }}
+                          onClick={() => {
+                            onSelectType(
+                              type.documentType,
+                              section.direction,
+                              getTypeLabel(type.documentType, type.typeLabel),
+                              type.mainGroup?.documentGroupId ?? null,
+                            );
                             requestAnimationFrame(() => onSelectCommit?.());
-                          }
-                        }}
-                      >
-                        <span className="size-3 shrink-0" />
-                        <span className="flex-1 truncate">
-                          <span className="font-mono text-[11px] opacity-60 mr-1.5">{type.documentType}</span>
-                          {type.typeLabel}
-                        </span>
-                      </div>
-
-                      {/* Layer 3: Additional groups (groupNumber > 0) */}
-                      {type.groups.map((group) => {
-                        const groupLabel = `${group.documentType}${String(group.groupNumber).padStart(2, "0")} – ${group.name}`;
-                        const gsel = isGroupSelected(group.documentGroupId);
-                        return (
-                          <div
-                            key={group.documentGroupId}
-                            role="treeitem"
-                            aria-selected={gsel}
-                            tabIndex={0}
-                            className={`h-7 flex items-center gap-1.5 cursor-pointer select-none text-[13px] transition-colors${!gsel ? " hover:bg-canvas" : ""}`}
-                            style={{
-                              paddingLeft: 36,
-                              ...(gsel ? { background: "var(--primary)", color: "var(--primary-fg)" } : {}),
-                            }}
-                            onClick={() => {
-                              onSelectGroup(group.documentGroupId, group.documentType, section.direction, groupLabel);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              onSelectType(
+                                type.documentType,
+                                section.direction,
+                                getTypeLabel(type.documentType, type.typeLabel),
+                                type.mainGroup?.documentGroupId ?? null,
+                              );
                               requestAnimationFrame(() => onSelectCommit?.());
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                onSelectGroup(group.documentGroupId, group.documentType, section.direction, groupLabel);
+                            }
+                          }}
+                        >
+                          <span className="size-3 shrink-0" />
+                          <span className="flex-1 truncate">
+                            <span className="mr-1.5 font-mono text-[11px] opacity-60">
+                              {type.documentType}
+                            </span>
+                            {type.typeLabel}
+                          </span>
+                        </div>
+
+                        {/* Layer 3: Additional groups (groupNumber > 0) */}
+                        {type.groups.map((group) => {
+                          const groupLabel = `${group.documentType}${String(group.groupNumber).padStart(2, "0")} – ${group.name}`;
+                          const gsel = isGroupSelected(group.documentGroupId);
+                          return (
+                            <div
+                              key={group.documentGroupId}
+                              role="treeitem"
+                              aria-selected={gsel}
+                              tabIndex={0}
+                              className={`flex h-7 cursor-pointer items-center gap-1.5 text-[13px] select-none transition-colors${!gsel ? " hover:bg-canvas" : ""}`}
+                              style={{
+                                paddingLeft: 36,
+                                ...(gsel
+                                  ? { background: "var(--primary)", color: "var(--primary-fg)" }
+                                  : {}),
+                              }}
+                              onClick={() => {
+                                onSelectGroup(
+                                  group.documentGroupId,
+                                  group.documentType,
+                                  section.direction,
+                                  groupLabel,
+                                );
                                 requestAnimationFrame(() => onSelectCommit?.());
-                              }
-                            }}
-                          >
-                            <span className="size-3 shrink-0" />
-                            <span className="flex-1 truncate">{groupLabel}</span>
-                          </div>
-                        );
-                      })}
-                    </React.Fragment>
-                  );
-                })}
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  onSelectGroup(
+                                    group.documentGroupId,
+                                    group.documentType,
+                                    section.direction,
+                                    groupLabel,
+                                  );
+                                  requestAnimationFrame(() => onSelectCommit?.());
+                                }
+                              }}
+                            >
+                              <span className="size-3 shrink-0" />
+                              <span className="flex-1 truncate">{groupLabel}</span>
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
               </React.Fragment>
             );
           })
@@ -228,7 +291,13 @@ function buildFlatNodes(
   | { kind: "group"; groupId: string; documentType: string; direction: string; label: string }
 > {
   const nodes: Array<
-    | { kind: "type"; documentType: string; direction: string; label: string; groupId: string | null }
+    | {
+        kind: "type";
+        documentType: string;
+        direction: string;
+        label: string;
+        groupId: string | null;
+      }
     | { kind: "group"; groupId: string; documentType: string; direction: string; label: string }
   > = [];
   for (const section of sections) {
@@ -243,7 +312,13 @@ function buildFlatNodes(
       });
       for (const group of type.groups) {
         const label = `${group.documentType}${String(group.groupNumber).padStart(2, "0")} – ${group.name}`;
-        nodes.push({ kind: "group", groupId: group.documentGroupId, documentType: group.documentType, direction: section.direction, label });
+        nodes.push({
+          kind: "group",
+          groupId: group.documentGroupId,
+          documentType: group.documentType,
+          direction: section.direction,
+          label,
+        });
       }
     }
   }
@@ -256,11 +331,13 @@ function DocumentsModule() {
   const { setSubCrumb } = useActionBar();
   const { t } = useTranslation("ui");
   const getTypeLabel = useCallback(
-    (documentType: string, fallback: string) => t(`documentTypes.${documentType}`, { defaultValue: fallback }),
+    (documentType: string, fallback: string) =>
+      t(`documentTypes.${documentType}`, { defaultValue: fallback }),
     [t],
   );
   const getDirectionLabel = useCallback(
-    (direction: string, fallback: string) => t(`documentDirections.${direction}`, { defaultValue: fallback }),
+    (direction: string, fallback: string) =>
+      t(`documentDirections.${direction}`, { defaultValue: fallback }),
     [t],
   );
   const queryClient = useQueryClient();
@@ -270,14 +347,21 @@ function DocumentsModule() {
   const [selection, setSelection] = useState<TreeSelection>({ kind: "all" });
   // Ref so command handlers always see the latest selection without re-registering
   const selectionRef = React.useRef(selection);
-  useEffect(() => { selectionRef.current = selection; }, [selection]);
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
   const [expandedDirections, setExpandedDirections] = useState<Set<string>>(
     () => new Set(["OUTBOUND", "INBOUND"]),
   );
   const [conversionDialog, setConversionDialog] = useState<{
     open: boolean;
     recordId: string | null;
-    candidates: Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }>;
+    candidates: Array<{
+      documentGroupId: string;
+      name: string;
+      documentType: string;
+      groupNumber: number;
+    }>;
   }>({ open: false, recordId: null, candidates: [] });
   const [duplicateDialog, setDuplicateDialog] = useState<{
     open: boolean;
@@ -289,6 +373,7 @@ function DocumentsModule() {
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(
     focusState.entity === "document" ? focusState.recordId : null,
   );
+  const lastSyncIdRef = React.useRef<string | null>(activeDocumentId);
   const gridState = useGridUrlState({ defaultPageSize: 50 });
   const documentRestoreIdRef = React.useRef<string | null | undefined>(undefined);
   const prevEditorDocIdRef = React.useRef<string | null>(editorDocId);
@@ -296,7 +381,12 @@ function DocumentsModule() {
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
   useEffect(() => {
-    if (focusState.entity === "document" && focusState.recordId) {
+    if (
+      focusState.entity === "document" &&
+      focusState.recordId &&
+      focusState.recordId !== lastSyncIdRef.current
+    ) {
+      lastSyncIdRef.current = focusState.recordId;
       setActiveDocumentId(focusState.recordId);
     }
   }, [focusState.entity, focusState.recordId]);
@@ -305,16 +395,24 @@ function DocumentsModule() {
     const prevEditorDocId = prevEditorDocIdRef.current;
     prevEditorDocIdRef.current = editorDocId;
     if (prevEditorDocId === null || editorDocId !== null) return;
-    const restoreId = documentRestoreIdRef.current === undefined
-      ? activeDocumentId
-      : documentRestoreIdRef.current;
+    const restoreId =
+      documentRestoreIdRef.current === undefined ? activeDocumentId : documentRestoreIdRef.current;
     documentRestoreIdRef.current = undefined;
     requestAnimationFrame(() => documentGridRef.current?.restoreFocus(restoreId ?? null));
   }, [editorDocId, activeDocumentId]);
 
   // Fetch documents — paginated, filtered by tree selection
   const { data: documentData, isLoading: isDataLoading } = useQuery({
-    queryKey: ["data", "document", selection, gridState.queryParams.page, gridState.queryParams.limit, gridState.queryParams.orderBy, gridState.queryParams.search, gridState.queryParams.filters],
+    queryKey: [
+      "data",
+      "document",
+      selection,
+      gridState.queryParams.page,
+      gridState.queryParams.limit,
+      gridState.queryParams.orderBy,
+      gridState.queryParams.search,
+      gridState.queryParams.filters,
+    ],
     queryFn: async () => {
       const p = new URLSearchParams({
         paginated: "true",
@@ -323,7 +421,8 @@ function DocumentsModule() {
       });
       if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
       if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
-      if (gridState.queryParams.filters) p.set("filters", JSON.stringify(gridState.queryParams.filters));
+      if (gridState.queryParams.filters)
+        p.set("filters", JSON.stringify(gridState.queryParams.filters));
       if (selection.kind === "group") p.set("documentGroupId", selection.groupId);
       else if (selection.kind === "type") p.set("documentType", selection.documentType);
       const res = await fetch(`/api/data/document?${p}`);
@@ -332,10 +431,14 @@ function DocumentsModule() {
     },
   });
 
-  const documents = useMemo(() => documentData?.data ?? [], [documentData]);
+  const documents = useMemo(() => documentData?.data ?? EMPTY_ARRAY, [documentData]);
 
   // Fetch document tree sections — always fresh, no stale cache
-  const { data: treeSections = [], isLoading: isTreeLoading, error: treeError } = useQuery({
+  const {
+    data: treeSections = [],
+    isLoading: isTreeLoading,
+    error: treeError,
+  } = useQuery({
     queryKey: ["documents", "tree"],
     staleTime: 0,
     queryFn: async () => {
@@ -346,7 +449,6 @@ function DocumentsModule() {
         throw new Error(`Tree fetch ${res.status}: ${text}`);
       }
       const raw = await res.json();
-      console.log("[Tree] response", JSON.stringify(raw));
       // Normalise: older cached format may have `groups` instead of `types`
       return (raw as any[]).map((s: any) => ({
         ...s,
@@ -361,7 +463,7 @@ function DocumentsModule() {
 
   if (treeError) console.error("[Tree] query error", treeError);
 
-  const { data: addresses = [] } = useQuery({
+  const { data: addresses = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "address", "all"],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
@@ -371,7 +473,7 @@ function DocumentsModule() {
     },
   });
 
-  const { data: documentGroups = [] } = useQuery({
+  const { data: documentGroups = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "documentGroup", "all"],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
@@ -381,7 +483,7 @@ function DocumentsModule() {
     },
   });
 
-  const { data: warehouses = [] } = useQuery({
+  const { data: warehouses = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "warehouse", "all"],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
@@ -392,15 +494,15 @@ function DocumentsModule() {
   });
 
   const addressMap = useMemo(
-    () => new Map((addresses as any[]).map((a) => [a.addressId, a])),
+    () => new Map((addresses || EMPTY_ARRAY).map((a: any) => [a.addressId, a])),
     [addresses],
   );
   const groupMap = useMemo(
-    () => new Map((documentGroups as any[]).map((g) => [g.documentGroupId, g])),
+    () => new Map((documentGroups || EMPTY_ARRAY).map((g: any) => [g.documentGroupId, g])),
     [documentGroups],
   );
   const warehouseMap = useMemo(
-    () => new Map((warehouses as any[]).map((w) => [w.warehouseId, w])),
+    () => new Map((warehouses || EMPTY_ARRAY).map((w: any) => [w.warehouseId, w])),
     [warehouses],
   );
   const onTreeSelectionCommitted = useCallback(() => {
@@ -408,10 +510,12 @@ function DocumentsModule() {
   }, [activeDocumentId]);
 
   // Fetch document lines for selected document (server-side FK filter)
-  const { data: lines = [] } = useQuery({
+  const { data: lines = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "documentLine", activeDocumentId],
     queryFn: async () => {
-      const res = await fetch(`/api/data/documentLine?documentId=${activeDocumentId}&orderBy=lineNo:asc`);
+      const res = await fetch(
+        `/api/data/documentLine?documentId=${activeDocumentId}&orderBy=lineNo:asc`,
+      );
       if (!res.ok) throw new Error("Failed to fetch document lines");
       return res.json();
     },
@@ -419,7 +523,12 @@ function DocumentsModule() {
     placeholderData: keepPreviousData,
   });
 
-  const handleSelectType = (documentType: string, direction: string, label: string, groupId: string | null) => {
+  const handleSelectType = (
+    documentType: string,
+    direction: string,
+    label: string,
+    groupId: string | null,
+  ) => {
     setSelection({ kind: "type", documentType, direction, groupId });
     setSubCrumb(label);
     gridState.setPage(1);
@@ -431,7 +540,12 @@ function DocumentsModule() {
     });
   };
 
-  const handleSelectGroup = (groupId: string, documentType: string, direction: string, label: string) => {
+  const handleSelectGroup = (
+    groupId: string,
+    documentType: string,
+    direction: string,
+    label: string,
+  ) => {
     setSelection({ kind: "group", groupId, documentType, direction });
     setSubCrumb(label);
     gridState.setPage(1);
@@ -466,7 +580,13 @@ function DocumentsModule() {
       handler: () => {
         const sel = selectionRef.current;
         documentRestoreIdRef.current = undefined;
-        setEditorGroupId(sel.kind === "group" ? sel.groupId : sel.kind === "type" ? sel.groupId ?? undefined : undefined);
+        setEditorGroupId(
+          sel.kind === "group"
+            ? sel.groupId
+            : sel.kind === "type"
+              ? (sel.groupId ?? undefined)
+              : undefined,
+        );
         setEditorDocId("__new__");
       },
     });
@@ -564,7 +684,7 @@ function DocumentsModule() {
           toast.error(message || t("document.duplicate.noTargets"));
           return;
         }
-        const data = await res.json() as { candidates?: DocumentTargetGroupCandidate[] };
+        const data = (await res.json()) as { candidates?: DocumentTargetGroupCandidate[] };
         const candidates = data.candidates ?? [];
         if (candidates.length === 0) {
           toast.error(t("document.duplicate.noTargets"));
@@ -611,7 +731,16 @@ function DocumentsModule() {
         queryClient.invalidateQueries({ queryKey: ["data", "documentLine"] });
       },
     });
-    return () => { unregF3(); unregEdit(); unregF9(); unregF7(); unregF4(); unregDup(); unregPrint(); unregPost(); };
+    return () => {
+      unregF3();
+      unregEdit();
+      unregF9();
+      unregF7();
+      unregF4();
+      unregDup();
+      unregPrint();
+      unregPost();
+    };
   }, [registerCommand, t, queryClient, editorDocId]);
 
   // Tree keyboard navigation
@@ -619,8 +748,10 @@ function DocumentsModule() {
     const flatNodes = buildFlatNodes(treeSections, expandedDirections, getTypeLabel);
 
     const currentIdx = flatNodes.findIndex((n) => {
-      if (selection.kind === "type") return n.kind === "type" && n.documentType === selection.documentType;
-      if (selection.kind === "group") return n.kind === "group" && (n as any).groupId === selection.groupId;
+      if (selection.kind === "type")
+        return n.kind === "type" && n.documentType === selection.documentType;
+      if (selection.kind === "group")
+        return n.kind === "group" && (n as any).groupId === selection.groupId;
       return false;
     });
 
@@ -631,16 +762,25 @@ function DocumentsModule() {
       const node = flatNodes[idx];
       if (!node) return;
       if (node.kind === "type") {
-        setSelection({ kind: "type", documentType: node.documentType, direction: node.direction, groupId: node.groupId });
+        setSelection({
+          kind: "type",
+          documentType: node.documentType,
+          direction: node.direction,
+          groupId: node.groupId,
+        });
         setSubCrumb(node.label);
       } else {
-        setSelection({ kind: "group", groupId: (node as any).groupId, documentType: node.documentType, direction: node.direction });
+        setSelection({
+          kind: "group",
+          groupId: (node as any).groupId,
+          documentType: node.documentType,
+          direction: node.direction,
+        });
         setSubCrumb(node.label);
       }
     };
 
-    const getCurrentDirection = () =>
-      selection.kind === "all" ? null : selection.direction;
+    const getCurrentDirection = () => (selection.kind === "all" ? null : selection.direction);
 
     const unregDown = registerCommand({
       id: "tree-nav-down",
@@ -689,76 +829,140 @@ function DocumentsModule() {
       },
     });
 
-    return () => { unregDown(); unregUp(); unregRight(); unregLeft(); };
-  }, [registerCommand, treeSections, expandedDirections, selection, setSubCrumb, editorDocId, getTypeLabel]);
+    return () => {
+      unregDown();
+      unregUp();
+      unregRight();
+      unregLeft();
+    };
+  }, [
+    registerCommand,
+    treeSections,
+    expandedDirections,
+    selection,
+    setSubCrumb,
+    editorDocId,
+    getTypeLabel,
+  ]);
 
   const selectedDocument = documents.find((d: any) => d.documentId === activeDocumentId);
 
-  const dependentTabs = [
-    {
-      id: "lines",
-      label: "Document Lines",
-      count: lines.length || undefined,
-      content: (
-        <DataGrid
-          entityName="documentLine"
-          panelId="lines-grid"
-          data={lines}
-          keyExtractor={(row: any) => row.documentLineId || row.lineId || row.id}
-          title="Lines"
-          toolbar={false}
-          emptyTitle="No lines yet."
-          emptySubtitle="Open the document editor to add lines."
-          className="h-full border-none rounded-none"
-          columns={[
-            { key: "lineNo", header: "Pos.", isNumeric: true, render: (r: any) => <span className="font-mono tabular-nums">{String(r.lineNo ?? 0).padStart(3, "0")}</span> },
-            { key: "articleId", header: "Article", render: (r: any) => <span className="font-mono text-[12px]">{r.articleId}</span> },
-            { key: "articleTextSnapshot", header: "Description" },
-            { key: "quantity", header: "Qty", isNumeric: true, render: (r: any) => <span className="tabular-nums">{r.quantity} {r.unit}</span> },
-            { key: "netPrice", header: "Unit Price", isNumeric: true, render: (r: any) => <span className="tabular-nums">{formatMoney(r.netPrice ?? 0)}</span> },
-            { key: "discountPercentage", header: "Disc.", isNumeric: true, render: (r: any) => <span className="tabular-nums">{r.discountPercentage ?? 0}%</span> },
-            { key: "lineTotalNet", header: "Total", isNumeric: true, render: (r: any) => <span className="tabular-nums">{formatMoney(r.lineTotalNet ?? 0)}</span> },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "header",
-      label: "Header Details",
-      content: (
-        <InspectorPanel
-          title={selectedDocument?.documentNo ?? "Document"}
-          recordId={activeDocumentId ?? undefined}
-          sections={[
-            {
-              title: "Document",
-              fields: [
-                { label: "No.", value: <span className="font-mono tabular-nums">{selectedDocument?.documentNo}</span> },
-                { label: "Type", value: selectedDocument?.documentTypeId },
-                { label: "Date", value: selectedDocument?.documentDate },
-                { label: "Status", value: selectedDocument?.status },
-              ],
-            },
-            {
-              title: "Parties",
-              fields: [
-                { label: "Customer", value: selectedDocument?.customerId },
-                { label: "Currency", value: selectedDocument?.currencyId },
-              ],
-            },
-            {
-              title: "Totals",
-              fields: [
-                { label: "Net", value: selectedDocument?.totalNet },
-                { label: "Tax", value: selectedDocument?.totalTax },
-                { label: "Gross", value: selectedDocument?.totalGross },
-              ],
-            },
-          ]}
-        />
-      ),
-    },
-  ];
+  const dependentTabs = useMemo(
+    () => [
+      {
+        id: "lines",
+        label: "Document Lines",
+        count: lines.length || undefined,
+        content: (
+          <DataGrid
+            entityName="documentLine"
+            panelId="lines-grid"
+            data={lines}
+            keyExtractor={(row: any) => row.documentLineId || row.lineId || row.id}
+            title="Lines"
+            toolbar={false}
+            emptyTitle="No lines yet."
+            emptySubtitle="Open the document editor to add lines."
+            className="h-full rounded-none border-none"
+            columns={[
+              {
+                key: "lineNo",
+                header: "Pos.",
+                isNumeric: true,
+                render: (r: any) => (
+                  <span className="font-mono tabular-nums">
+                    {String(r.lineNo ?? 0).padStart(3, "0")}
+                  </span>
+                ),
+              },
+              {
+                key: "articleId",
+                header: "Article",
+                render: (r: any) => <span className="font-mono text-[12px]">{r.articleId}</span>,
+              },
+              { key: "articleTextSnapshot", header: "Description" },
+              {
+                key: "quantity",
+                header: "Qty",
+                isNumeric: true,
+                render: (r: any) => (
+                  <span className="tabular-nums">
+                    {r.quantity} {r.unit}
+                  </span>
+                ),
+              },
+              {
+                key: "netPrice",
+                header: "Unit Price",
+                isNumeric: true,
+                render: (r: any) => (
+                  <span className="tabular-nums">{formatMoney(r.netPrice ?? 0)}</span>
+                ),
+              },
+              {
+                key: "discountPercentage",
+                header: "Disc.",
+                isNumeric: true,
+                render: (r: any) => (
+                  <span className="tabular-nums">{r.discountPercentage ?? 0}%</span>
+                ),
+              },
+              {
+                key: "lineTotalNet",
+                header: "Total",
+                isNumeric: true,
+                render: (r: any) => (
+                  <span className="tabular-nums">{formatMoney(r.lineTotalNet ?? 0)}</span>
+                ),
+              },
+            ]}
+          />
+        ),
+      },
+      {
+        id: "header",
+        label: "Header Details",
+        content: (
+          <InspectorPanel
+            title={selectedDocument?.documentNo ?? "Document"}
+            recordId={activeDocumentId ?? undefined}
+            sections={[
+              {
+                title: "Document",
+                fields: [
+                  {
+                    label: "No.",
+                    value: (
+                      <span className="font-mono tabular-nums">{selectedDocument?.documentNo}</span>
+                    ),
+                  },
+                  { label: "Type", value: selectedDocument?.documentTypeId },
+                  { label: "Date", value: selectedDocument?.documentDate },
+                  { label: "Status", value: selectedDocument?.status },
+                ],
+              },
+              {
+                title: "Parties",
+                fields: [
+                  { label: "Customer", value: selectedDocument?.customerId },
+                  { label: "Currency", value: selectedDocument?.currencyId },
+                ],
+              },
+              {
+                title: "Totals",
+                fields: [
+                  { label: "Net", value: selectedDocument?.totalNet },
+                  { label: "Tax", value: selectedDocument?.totalTax },
+                  { label: "Gross", value: selectedDocument?.totalGross },
+                ],
+              },
+            ]}
+          />
+        ),
+      },
+    ],
+    [lines, selectedDocument, activeDocumentId],
+  );
 
   return (
     <>
@@ -780,7 +984,7 @@ function DocumentsModule() {
         }
         primaryGrid={
           editorDocId ? (
-          <DocumentEditor
+            <DocumentEditor
               documentId={editorDocId}
               documentGroupId={editorGroupId}
               onCreateNewDocument={(groupId) => {
@@ -806,16 +1010,78 @@ function DocumentsModule() {
               keyExtractor={(row: any) => row.documentId}
               title={t("nav.documents")}
               columns={[
-                { key: "documentNo", header: "Beleg-Nr.", sortable: true, render: (r: any) => <span className="font-mono tabular-nums">{r.documentNo}</span> },
-                { key: "documentType", header: "Typ", render: (r: any) => <span className="font-mono text-[11px]" title={DOC_TYPE_LABELS[r.documentType]}>{r.documentType}</span> },
-                { key: "documentGroupId", header: "Gruppe", render: (r: any) => <span>{groupMap.get(r.documentGroupId)?.name ?? ""}</span> },
-                { key: "documentDate", header: "Datum", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{formatDate(r.documentDate)}</span> },
-                { key: "customerId", header: "Adresse", render: (r: any) => <span>{addressDisplayName(addressMap.get(r.customerId))}</span> },
-                { key: "warehouseId", header: "Lager", render: (r: any) => <span>{warehouseMap.get(r.warehouseId)?.name ?? ""}</span> },
+                {
+                  key: "documentNo",
+                  header: "Beleg-Nr.",
+                  sortable: true,
+                  render: (r: any) => (
+                    <span className="font-mono tabular-nums">{r.documentNo}</span>
+                  ),
+                },
+                {
+                  key: "documentType",
+                  header: "Typ",
+                  render: (r: any) => (
+                    <span className="font-mono text-[11px]" title={DOC_TYPE_LABELS[r.documentType]}>
+                      {r.documentType}
+                    </span>
+                  ),
+                },
+                {
+                  key: "documentGroupId",
+                  header: "Gruppe",
+                  render: (r: any) => <span>{groupMap.get(r.documentGroupId)?.name ?? ""}</span>,
+                },
+                {
+                  key: "documentDate",
+                  header: "Datum",
+                  isNumeric: true,
+                  sortable: true,
+                  render: (r: any) => (
+                    <span className="tabular-nums">{formatDate(r.documentDate)}</span>
+                  ),
+                },
+                {
+                  key: "customerId",
+                  header: "Adresse",
+                  render: (r: any) => (
+                    <span>{addressDisplayName(addressMap.get(r.customerId))}</span>
+                  ),
+                },
+                {
+                  key: "warehouseId",
+                  header: "Lager",
+                  render: (r: any) => <span>{warehouseMap.get(r.warehouseId)?.name ?? ""}</span>,
+                },
                 { key: "currencyId", header: "Währung" },
-                { key: "totalNet", header: "Netto", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{r.totalNet != null ? formatMoney(r.totalNet) : ""}</span> },
-                { key: "totalGross", header: "Gesamt", isNumeric: true, sortable: true, render: (r: any) => <span className="tabular-nums">{r.totalGross != null ? formatMoney(r.totalGross) : ""}</span> },
-                { key: "status", header: "Status", sortable: true, render: (r: any) => <StatusDot status={r.status ?? "draft"} /> },
+                {
+                  key: "totalNet",
+                  header: "Netto",
+                  isNumeric: true,
+                  sortable: true,
+                  render: (r: any) => (
+                    <span className="tabular-nums">
+                      {r.totalNet != null ? formatMoney(r.totalNet) : ""}
+                    </span>
+                  ),
+                },
+                {
+                  key: "totalGross",
+                  header: "Gesamt",
+                  isNumeric: true,
+                  sortable: true,
+                  render: (r: any) => (
+                    <span className="tabular-nums">
+                      {r.totalGross != null ? formatMoney(r.totalGross) : ""}
+                    </span>
+                  ),
+                },
+                {
+                  key: "status",
+                  header: "Status",
+                  sortable: true,
+                  render: (r: any) => <StatusDot status={r.status ?? "draft"} />,
+                },
               ]}
               totalCount={documentData?.total}
               page={gridState.page}
@@ -829,20 +1095,24 @@ function DocumentsModule() {
               filters={gridState.filters}
               onFiltersChange={gridState.setFilters}
               selectable
-              bulkActions={[{
-                label: "Archive",
-                variant: "destructive" as const,
-                onClick: async (keys: string[]) => {
-                  await Promise.all(keys.map(id =>
-                    fetch(`/api/data/document/${id}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ archived: true }),
-                    })
-                  ));
-                  queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+              bulkActions={[
+                {
+                  label: "Archive",
+                  variant: "destructive" as const,
+                  onClick: async (keys: string[]) => {
+                    await Promise.all(
+                      keys.map((id) =>
+                        fetch(`/api/data/document/${id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ archived: true }),
+                        }),
+                      ),
+                    );
+                    queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+                  },
                 },
-              }]}
+              ]}
               onRowOpen={(row: any) => {
                 documentRestoreIdRef.current = undefined;
                 setEditorGroupId(undefined);
@@ -856,11 +1126,17 @@ function DocumentsModule() {
                 onClick: () => {
                   const sel = selectionRef.current;
                   documentRestoreIdRef.current = undefined;
-                  setEditorGroupId(sel.kind === "group" ? sel.groupId : sel.kind === "type" ? sel.groupId ?? undefined : undefined);
+                  setEditorGroupId(
+                    sel.kind === "group"
+                      ? sel.groupId
+                      : sel.kind === "type"
+                        ? (sel.groupId ?? undefined)
+                        : undefined,
+                  );
                   setEditorDocId("__new__");
                 },
               }}
-              className="h-full border-none rounded-none"
+              className="h-full rounded-none border-none"
             />
           )
         }
@@ -877,9 +1153,12 @@ function DocumentsModule() {
         confirmLabel="Duplizieren"
         confirmPendingLabel="Dupliziere..."
         isPending={duplicateDialog.isPending}
-        onSelectGroupId={(groupId) => setDuplicateDialog((p) => ({ ...p, selectedGroupId: groupId }))}
+        onSelectGroupId={(groupId) =>
+          setDuplicateDialog((p) => ({ ...p, selectedGroupId: groupId }))
+        }
         onConfirm={async () => {
-          const targetGroupId = duplicateDialog.selectedGroupId ?? duplicateDialog.candidates[0]?.documentGroupId;
+          const targetGroupId =
+            duplicateDialog.selectedGroupId ?? duplicateDialog.candidates[0]?.documentGroupId;
           if (!duplicateDialog.recordId || !targetGroupId) return;
           setDuplicateDialog((p) => ({ ...p, isPending: true }));
           try {
@@ -889,7 +1168,13 @@ function DocumentsModule() {
               body: JSON.stringify({ targetGroupId }),
             });
             if (res.ok) {
-              setDuplicateDialog({ open: false, recordId: null, candidates: [], selectedGroupId: null, isPending: false });
+              setDuplicateDialog({
+                open: false,
+                recordId: null,
+                candidates: [],
+                selectedGroupId: null,
+                isPending: false,
+              });
               queryClient.invalidateQueries({ queryKey: ["data", "document"] });
               toast.success("Document duplicated");
             } else {
@@ -905,10 +1190,10 @@ function DocumentsModule() {
         open={conversionDialog.open}
         onOpenChange={(open) => setConversionDialog((p) => ({ ...p, open }))}
       >
-        <DialogContent className="max-w-sm p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-hairline">
+        <DialogContent className="max-w-sm overflow-hidden p-0">
+          <div className="border-b border-hairline px-5 py-4">
             <h3 className="text-[15px] font-medium text-ink">Zielgruppe wählen</h3>
-            <p className="text-[13px] text-ink-mute mt-0.5">
+            <p className="mt-0.5 text-[13px] text-ink-mute">
               Mehrere Gruppen verfügbar. Bitte eine Zielgruppe auswählen.
             </p>
           </div>
@@ -917,24 +1202,22 @@ function DocumentsModule() {
               <button
                 key={c.documentGroupId}
                 type="button"
-                className="h-9 px-5 text-left text-[13px] hover:bg-canvas-soft transition-colors"
+                className="h-9 px-5 text-left text-[13px] transition-colors hover:bg-canvas-soft"
                 onClick={async () => {
                   setConversionDialog((p) => ({ ...p, open: false }));
-                  const res = await fetch(
-                    `/api/documents/${conversionDialog.recordId}/convert`,
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ targetGroupId: c.documentGroupId }),
-                    },
-                  );
+                  const res = await fetch(`/api/documents/${conversionDialog.recordId}/convert`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ targetGroupId: c.documentGroupId }),
+                  });
                   if (res.ok) {
                     queryClient.invalidateQueries({ queryKey: ["data", "document"] });
                   }
                 }}
               >
-                <span className="font-mono text-[12px] text-ink-secondary mr-2">
-                  {c.documentType}{String(c.groupNumber).padStart(2, "0")}
+                <span className="mr-2 font-mono text-[12px] text-ink-secondary">
+                  {c.documentType}
+                  {String(c.groupNumber).padStart(2, "0")}
                 </span>
                 {c.name}
               </button>

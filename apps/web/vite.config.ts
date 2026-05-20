@@ -61,5 +61,5 @@ export default defineConfig({
         })
       : null,
     tailwindcss(),
-  ].filter(Boolean),
+  ].filter(Boolean) as any,
 });

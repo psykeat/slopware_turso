@@ -404,28 +404,28 @@ function resolveInventoryBalanceSet(
     return {
       onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
       reservedQty: sql`${inventoryBalance.reservedQty} - ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - (${inventoryBalance.reservedQty} - ${qty})`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - (${inventoryBalance.reservedQty} - ${qty}) + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "A") {
     return {
       reservedQty: sql`${inventoryBalance.reservedQty} + ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - (${inventoryBalance.reservedQty} + ${qty})`,
+      availableQty: sql`${inventoryBalance.onHandQty} - (${inventoryBalance.reservedQty} + ${qty}) + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "R") {
     return {
       onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "G") {
     return {
       onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
@@ -447,9 +447,10 @@ function resolveInventoryBalanceSet(
   if (movementType === "r") {
     return {
       onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
+      expectedPurchaseQty: sql`GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty} + GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
       gldPurchase: sql`CASE WHEN (${inventoryBalance.onHandQty} + ${qty}) = 0 THEN 0
-        ELSE (COALESCE(${inventoryBalance.gldPurchase}, 0) * ${inventoryBalance.onHandQty} + ${lineNetPrice} * ${qty}) / (${inventoryBalance.onHandQty} + ${qty})
+        ELSE (COALESCE(${inventoryBalance.gldPurchase}, 0) * ${inventoryBalance.onHandQty} + ${lineNetPrice} * ${qty}) / NULLIF(${inventoryBalance.onHandQty} + ${qty}, 0)
         END`,
     };
   }
@@ -457,35 +458,38 @@ function resolveInventoryBalanceSet(
   if (movementType === "g") {
     return {
       onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "Z") {
     return {
       onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "E") {
     return {
       onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "V") {
     return {
       onHandQty: String(qty),
-      availableQty: sql`${qty} - ${inventoryBalance.reservedQty}`,
+      availableQty: sql`${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   return {};
 }
 
-function resolveInventorySeedValues(movementType: string, qty: number): {
+function resolveInventorySeedValues(
+  movementType: string,
+  qty: number,
+): {
   onHandQty: string;
   reservedQty: string;
   availableQty: string;
@@ -518,7 +522,12 @@ async function loadLineTrackingRows(
       batchNo: documentLineTracking.batchNo,
     })
     .from(documentLineTracking)
-    .where(and(eq(documentLineTracking.tenantId, tenantId), eq(documentLineTracking.documentLineId, documentLineId)))
+    .where(
+      and(
+        eq(documentLineTracking.tenantId, tenantId),
+        eq(documentLineTracking.documentLineId, documentLineId),
+      ),
+    )
     .orderBy(asc(documentLineTracking.createdAt), asc(documentLineTracking.trackingId));
 }
 
@@ -606,7 +615,9 @@ async function getDocumentGroupAccountFallback(
       defaultCostAccountId: documentGroup.defaultCostAccountId,
     })
     .from(documentGroup)
-    .where(and(eq(documentGroup.documentGroupId, documentGroupId), eq(documentGroup.tenantId, tenantId)))
+    .where(
+      and(eq(documentGroup.documentGroupId, documentGroupId), eq(documentGroup.tenantId, tenantId)),
+    )
     .limit(1);
 
   return docGroup ?? null;
@@ -1096,9 +1107,10 @@ async function postStandardDocumentLine(
     const newAvgCost = Number(balances[0]?.gldPurchase ?? 0);
     const lineQty = qty;
     const linePrice = lineNetPrice;
-    const avgCostBefore = currentQty > lineQty
-      ? (currentQty * newAvgCost - lineQty * linePrice) / (currentQty - lineQty)
-      : newAvgCost;
+    const avgCostBefore =
+      currentQty > lineQty
+        ? (currentQty * newAvgCost - lineQty * linePrice) / (currentQty - lineQty)
+        : newAvgCost;
 
     await tx
       .update(inventoryBalance)
@@ -1221,16 +1233,40 @@ async function postDocumentLine(
   if (movementType === "N" || movementType === "p") return;
 
   if (movementType === "q") {
-    await postProductionDocumentLine(tx, tenantId, doc, line as DocumentPostingLineWithArticle, movementType, now, txId);
+    await postProductionDocumentLine(
+      tx,
+      tenantId,
+      doc,
+      line as DocumentPostingLineWithArticle,
+      movementType,
+      now,
+      txId,
+    );
     return;
   }
 
   if (movementType === "U") {
-    await postTransferDocumentLine(tx, tenantId, doc, line as DocumentPostingLineWithArticle, movementType, now, txId);
+    await postTransferDocumentLine(
+      tx,
+      tenantId,
+      doc,
+      line as DocumentPostingLineWithArticle,
+      movementType,
+      now,
+      txId,
+    );
     return;
   }
 
-  await postStandardDocumentLine(tx, tenantId, doc, line as DocumentPostingLineWithArticle, movementType, now, txId);
+  await postStandardDocumentLine(
+    tx,
+    tenantId,
+    doc,
+    line as DocumentPostingLineWithArticle,
+    movementType,
+    now,
+    txId,
+  );
 }
 
 export class DocumentService {
@@ -1406,17 +1442,33 @@ export class DocumentService {
       const lines = (await tx
         .select()
         .from(documentLine)
-        .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)))) as DocumentPostingLine[];
+        .where(
+          and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)),
+        )) as DocumentPostingLine[];
 
       const movementType = doc.documentType;
       const now = new Date();
       const txId = crypto.randomUUID();
 
       for (const line of lines) {
-        await postDocumentLine(tx, tenantId, doc as DocumentPostingDoc, line as DocumentPostingLine, movementType, now, txId);
+        await postDocumentLine(
+          tx,
+          tenantId,
+          doc as DocumentPostingDoc,
+          line as DocumentPostingLine,
+          movementType,
+          now,
+          txId,
+        );
       }
 
-      await postFinancialJournalEntries(tx, tenantId, doc as DocumentPostingDoc, movementType, lines as DocumentPostingLine[]);
+      await postFinancialJournalEntries(
+        tx,
+        tenantId,
+        doc as DocumentPostingDoc,
+        movementType,
+        lines as DocumentPostingLine[],
+      );
 
       const [updated] = await tx
         .update(document)

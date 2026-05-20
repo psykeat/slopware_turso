@@ -1,30 +1,33 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, useRef, useCallback } from "react";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useGridUrlState } from "#/hooks/use-grid-url-state";
-import { useTranslation } from "react-i18next";
-import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
-import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
-import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
+import { BatchInventoryTable } from "@repo/ui/components/batch-inventory-table";
+import { BomEditor } from "@repo/ui/components/bom-editor";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
+import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
+import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { EntityMask } from "@repo/ui/components/entity-mask";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
 import { InventoryBalanceTable } from "@repo/ui/components/inventory-balance-table";
-import { StockLedgerTable } from "@repo/ui/components/stock-ledger-table";
+import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
 import { SerialInventoryTable } from "@repo/ui/components/serial-inventory-table";
-import { BatchInventoryTable } from "@repo/ui/components/batch-inventory-table";
-import { BomEditor } from "@repo/ui/components/bom-editor";
+import { StockLedgerTable } from "@repo/ui/components/stock-ledger-table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/components/tabs";
+import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
 import { formatDate } from "@repo/ui/lib/formatters";
-import { Dialog, DialogContent } from "@repo/ui/components/dialog";
-import { useFocus } from "@repo/ui/platform/focus-manager";
-import { useCommands } from "@repo/ui/platform/command-registry";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { useCommands } from "@repo/ui/platform/command-registry";
+import { useFocus } from "@repo/ui/platform/focus-manager";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+
+import { useGridUrlState } from "#/hooks/use-grid-url-state";
 
 export const Route = createFileRoute("/_auth/app/articles")({
   component: ArticlesModule,
 });
+
+const EMPTY_ARRAY: any[] = [];
 
 const ARTICLE_FIELD_OVERRIDES = [
   {
@@ -48,7 +51,7 @@ const ARTICLE_FIELD_OVERRIDES = [
 ];
 
 function ArticlesModule() {
-  const { state: focusState, setFocus } = useFocus();
+  const { state: focusState } = useFocus();
   const { registerCommand } = useCommands();
   const { setSubCrumb } = useActionBar();
   const { t } = useTranslation("ui");
@@ -59,7 +62,23 @@ function ArticlesModule() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const activeArticleId = focusState.entity === "article" ? focusState.recordId : null;
+
+  const [activeArticleId, setActiveArticleId] = useState<string | null>(
+    focusState.entity === "article" ? focusState.recordId : null,
+  );
+  const lastSyncIdRef = useRef<string | null>(activeArticleId);
+
+  useEffect(() => {
+    if (
+      focusState.entity === "article" &&
+      focusState.recordId &&
+      focusState.recordId !== lastSyncIdRef.current
+    ) {
+      lastSyncIdRef.current = focusState.recordId;
+      setActiveArticleId(focusState.recordId);
+    }
+  }, [focusState.entity, focusState.recordId]);
+
   const gridState = useGridUrlState({ defaultPageSize: 50 });
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
@@ -100,35 +119,41 @@ function ArticlesModule() {
     },
   });
 
-  const articles = useMemo(() => articleData?.data ?? [], [articleData]);
+  const articles = useMemo(() => articleData?.data ?? EMPTY_ARRAY, [articleData]);
 
   // Fetch article groups
-  const { data: groups = [], isLoading: isTreeLoading } = useQuery({
+  const { data: groups = EMPTY_ARRAY, isLoading: isTreeLoading } = useQuery({
     queryKey: ["data", "articleGroup"],
     queryFn: async () => {
       const res = await fetch("/api/data/articleGroup");
       if (!res.ok) throw new Error("Failed to fetch article groups");
-      const data = await res.json();
-      return data.map(
-        (g: any): TreeNode => ({
-          id: g.articleGroupId,
-          label: g.name || "Unnamed Group",
-        }),
-      );
+      return res.json();
     },
+    select: useCallback(
+      (data: any[]) =>
+        data.map(
+          (g: any): TreeNode => ({
+            id: g.articleGroupId,
+            label: g.name || "Unnamed Group",
+          }),
+        ),
+      [],
+    ),
+    placeholderData: keepPreviousData,
   });
 
-  const { data: units = [] } = useQuery({
+  const { data: units = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "unit"],
     queryFn: async () => {
       const res = await fetch("/api/data/unit");
       if (!res.ok) throw new Error("Failed to fetch units");
       return res.json();
     },
+    placeholderData: keepPreviousData,
   });
 
   const groupMap = useMemo(
-    () => new Map<string, string>(groups.map((g: TreeNode) => [g.id, g.label])),
+    () => new Map<string, string>((groups || EMPTY_ARRAY).map((g: TreeNode) => [g.id, g.label])),
     [groups],
   );
 
@@ -138,12 +163,12 @@ function ArticlesModule() {
   );
 
   const unitMap = useMemo(
-    () => new Map<string, string>(units.map((u: any) => [u.unitId, u.code])),
+    () => new Map<string, string>((units || EMPTY_ARRAY).map((u: any) => [u.unitId, u.code])),
     [units],
   );
 
   // Fetch inventory movements for selected article (server-side FK filter)
-  const { data: movements = [] } = useQuery({
+  const { data: movements = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "inventoryMovement", activeArticleId],
     queryFn: async () => {
       const res = await fetch(`/api/data/inventoryMovement?articleId=${activeArticleId}`);
@@ -235,24 +260,228 @@ function ArticlesModule() {
     };
   }, [registerCommand, t, queryClient]);
 
-  const selectedArticle = articles.find((a: any) => a.articleId === activeArticleId);
+  const selectedArticle = useMemo(
+    () => articles.find((a: any) => a.articleId === activeArticleId),
+    [articles, activeArticleId],
+  );
   const modalOpen = showCreate || showEdit || deleteConfirm;
 
   const selectTreeNode = useCallback(
     (id: string) => {
       const node = treeNodes.find((item) => item.id === id);
       setSubCrumb(node?.label);
-      setSelectedGroupId(node?.id === "ALL" ? null : node?.id ?? null);
-      setFocus({
-        area: "tree",
-        treeEntity: "articleGroup",
-        treePanel: "article-tree",
-        treeRecordId: node?.id ?? null,
-        panel: "article-tree",
-      });
+      setSelectedGroupId(node?.id === "ALL" ? null : (node?.id ?? null));
       gridState.setPage(1);
     },
-    [gridState, setFocus, setSubCrumb, treeNodes],
+    [gridState, setSubCrumb, treeNodes],
+  );
+
+  const articleGridColumns = useMemo(
+    () => [
+      {
+        key: "articleNo",
+        header: "No.",
+        sortable: true,
+        render: (r: any) => (
+          <span className="font-mono text-ink-mute tabular-nums">{r.articleNo}</span>
+        ),
+      },
+      { key: "name", header: "Name", sortable: true },
+      {
+        key: "baseUnitId",
+        header: "Unit",
+        render: (r: any) => <span>{unitMap.get(r.baseUnitId) ?? "—"}</span>,
+      },
+      {
+        key: "articleGroupId",
+        header: "Group",
+        render: (r: any) => <span>{groupMap.get(r.articleGroupId) ?? "—"}</span>,
+      },
+      {
+        key: "trackingMode",
+        header: "Tracking",
+        render: (r: any) => (
+          <span className="font-mono text-[11px] text-ink-mute">{r.trackingMode ?? "—"}</span>
+        ),
+      },
+      {
+        key: "bomType",
+        header: "BOM",
+        render: (r: any) => (
+          <span className="font-mono text-[11px] text-ink-mute">{r.bomType ?? "—"}</span>
+        ),
+      },
+    ],
+    [unitMap, groupMap],
+  );
+
+  const movementGridColumns = useMemo(
+    () => [
+      {
+        key: "movementDate",
+        header: "Date",
+        render: (r: any) => <span className="tabular-nums">{formatDate(r.movementDate)}</span>,
+      },
+      {
+        key: "movementType",
+        header: "Type",
+        render: (r: any) => <span className="font-mono">{r.movementType}</span>,
+      },
+      {
+        key: "qtyDelta",
+        header: "Qty",
+        isNumeric: true,
+        render: (r: any) => <span className="tabular-nums">{r.qtyDelta}</span>,
+      },
+      { key: "referenceText", header: "Reference" },
+      {
+        key: "batchNo",
+        header: "Batch",
+        render: (r: any) => <span className="font-mono text-[12px]">{r.batchNo ?? "—"}</span>,
+      },
+    ],
+    [],
+  );
+
+  const dependentTabs = useMemo(
+    () => [
+      {
+        id: "details",
+        label: "Details",
+        content: (
+          <InspectorPanel
+            title={selectedArticle?.name ?? "Article"}
+            recordId={activeArticleId ?? undefined}
+            sections={[
+              {
+                title: "Identification",
+                fields: [
+                  {
+                    label: "No.",
+                    value: (
+                      <span className="font-mono tabular-nums">{selectedArticle?.articleNo}</span>
+                    ),
+                  },
+                  { label: "Name", value: selectedArticle?.name },
+                  {
+                    label: "Unit",
+                    value: selectedArticle?.baseUnitId
+                      ? (unitMap.get(selectedArticle.baseUnitId) ?? selectedArticle.baseUnitId)
+                      : "—",
+                  },
+                ],
+              },
+              {
+                title: "Inventory",
+                fields: [
+                  {
+                    label: "Article Group",
+                    value: selectedArticle?.articleGroupId
+                      ? (groupMap.get(selectedArticle.articleGroupId) ??
+                        selectedArticle.articleGroupId)
+                      : "—",
+                  },
+                  { label: "Warehouse", value: selectedArticle?.defaultWarehouseId },
+                  { label: "Tracking", value: selectedArticle?.trackingMode },
+                ],
+              },
+            ]}
+          />
+        ),
+      },
+      {
+        id: "inventory",
+        label: "Inventory",
+        count: movements.length || undefined,
+        content: (
+          <DataGrid
+            entityName="inventoryMovement"
+            panelId="inventory-grid"
+            data={movements}
+            keyExtractor={(row: any) => row.inventoryMovementId || row.id}
+            title="Inventory Movements"
+            toolbar={false}
+            columns={movementGridColumns}
+            emptyTitle="No movements recorded."
+            emptySubtitle="Inventory movements appear here when stock changes."
+            className="h-full rounded-none border-none"
+          />
+        ),
+      },
+      {
+        id: "statistics",
+        label: t("stats.revenue"),
+        content: (
+          <div className="h-full overflow-auto">
+            {!articleStats || articleStats.revenueByPeriod.length === 0 ? (
+              <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
+                {t("empty.title")}
+              </div>
+            ) : (
+              <table className="w-full table-fixed border-collapse">
+                <thead>
+                  <tr className="h-8 border-b border-hairline">
+                    <th className="px-3 py-0 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                      {t("stats.fiscalYear")}
+                    </th>
+                    <th className="px-3 py-0 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                      {t("stats.period")}
+                    </th>
+                    <th className="px-3 py-0 text-right text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                      {t("stats.revenue")}
+                    </th>
+                    <th className="px-3 py-0 text-right text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                      Menge
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {articleStats.revenueByPeriod.map((row) => (
+                    <tr
+                      key={`${row.fiscal_year}-${row.period_no}`}
+                      className="h-9 border-b border-hairline last:border-0"
+                    >
+                      <td className="px-3 text-[13px] tabular-nums">{row.fiscal_year}</td>
+                      <td className="px-3 text-[13px] tabular-nums">{row.period_no}</td>
+                      <td className="px-3 text-right font-mono text-[13px] tabular-nums">
+                        {new Intl.NumberFormat("de-DE", {
+                          style: "currency",
+                          currency: "EUR",
+                        }).format(Number(row.total_amount_net))}
+                      </td>
+                      <td className="px-3 text-right font-mono text-[13px] tabular-nums">
+                        {Number(row.total_qty).toFixed(3)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: "stock-ledger",
+        label: t("stats.stockLedger"),
+        content: activeArticleId ? (
+          <StockLedgerTable articleId={activeArticleId} />
+        ) : (
+          <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
+            {t("empty.title")}
+          </div>
+        ),
+      },
+    ],
+    [
+      selectedArticle,
+      activeArticleId,
+      unitMap,
+      groupMap,
+      movements,
+      movementGridColumns,
+      t,
+      articleStats,
+    ],
   );
 
   useEffect(() => {
@@ -291,161 +520,61 @@ function ArticlesModule() {
       unregDown();
       unregUp();
     };
-  }, [modalOpen, registerCommand, restoreArticleGrid, selectTreeNode, selectedGroupId, treeNodes]);
+  }, [
+    modalOpen,
+    registerCommand,
+    restoreArticleGrid,
+    selectTreeNode,
+    selectedGroupId,
+    treeNodes.length,
+  ]);
 
-  const dependentTabs = [
-    {
-      id: "details",
-      label: "Details",
-      content: (
-        <InspectorPanel
-          title={selectedArticle?.name ?? "Article"}
-          recordId={activeArticleId ?? undefined}
-          sections={[
-            {
-              title: "Identification",
-              fields: [
-                {
-                  label: "No.",
-                  value: (
-                    <span className="font-mono tabular-nums">{selectedArticle?.articleNo}</span>
-                  ),
-                },
-                { label: "Name", value: selectedArticle?.name },
-                {
-                  label: "Unit",
-                  value: selectedArticle?.baseUnitId
-                    ? unitMap.get(selectedArticle.baseUnitId) ?? selectedArticle.baseUnitId
-                    : "—",
-                },
-              ],
-            },
-            {
-              title: "Inventory",
-              fields: [
-                {
-                  label: "Article Group",
-                  value: selectedArticle?.articleGroupId
-                    ? groupMap.get(selectedArticle.articleGroupId) ??
-                      selectedArticle.articleGroupId
-                    : "—",
-                },
-                { label: "Warehouse", value: selectedArticle?.defaultWarehouseId },
-                { label: "Tracking", value: selectedArticle?.trackingMode },
-              ],
-            },
-          ]}
-        />
-      ),
+  const handleCreateFieldChange = useCallback(
+    async (key: string, value: any, _formData: any, setFormData: any) => {
+      if (key !== "articleGroupId" || !value) return;
+      const res = await fetch(`/api/data/articleGroup/${value}`);
+      if (!res.ok) return;
+      const groupData = await res.json();
+      const group = Array.isArray(groupData) ? (groupData[0] ?? {}) : (groupData ?? {});
+      const isBlank = (next: unknown) => next === undefined || next === null || next === "";
+      setFormData((curr: any) => {
+        const next = { ...curr };
+        const fieldMap = {
+          taxClassId: group.taxClassId,
+          baseUnitId: group.baseUnitId,
+          salesUnitId: group.salesUnitId,
+          purchaseUnitId: group.purchaseUnitId,
+          trackingMode: group.trackingMode === "none" ? null : group.trackingMode,
+          bomType: group.bomType,
+        } as const;
+        for (const [field, defaultValue] of Object.entries(fieldMap)) {
+          if (isBlank(curr[field]) && !isBlank(defaultValue)) {
+            next[field] = defaultValue;
+          }
+        }
+        return next;
+      });
     },
-    {
-      id: "inventory",
-      label: "Inventory",
-      count: movements.length || undefined,
-      content: (
-        <DataGrid
-          entityName="inventoryMovement"
-          panelId="inventory-grid"
-          data={movements}
-          keyExtractor={(row: any) => row.inventoryMovementId || row.id}
-          title="Inventory Movements"
-          toolbar={false}
-          columns={[
-            {
-              key: "movementDate",
-              header: "Date",
-              render: (r: any) => (
-                <span className="tabular-nums">{formatDate(r.movementDate)}</span>
-              ),
-            },
-            {
-              key: "movementType",
-              header: "Type",
-              render: (r: any) => <span className="font-mono">{r.movementType}</span>,
-            },
-            {
-              key: "qtyDelta",
-              header: "Qty",
-              isNumeric: true,
-              render: (r: any) => <span className="tabular-nums">{r.qtyDelta}</span>,
-            },
-            { key: "referenceText", header: "Reference" },
-            {
-              key: "batchNo",
-              header: "Batch",
-              render: (r: any) => <span className="font-mono text-[12px]">{r.batchNo ?? "—"}</span>,
-            },
-          ]}
-          emptyTitle="No movements recorded."
-          emptySubtitle="Inventory movements appear here when stock changes."
-          className="h-full rounded-none border-none"
-        />
-      ),
+    [],
+  );
+
+  const handleCreateSaved = useCallback(
+    (record: any) => {
+      setShowCreate(false);
+      queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+      restoreArticleGrid(record?.articleId ?? record?.id ?? null);
     },
-    {
-      id: "statistics",
-      label: t("stats.revenue"),
-      content: (
-        <div className="h-full overflow-auto">
-          {!articleStats || articleStats.revenueByPeriod.length === 0 ? (
-            <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
-              {t("empty.title")}
-            </div>
-          ) : (
-            <table className="w-full table-fixed border-collapse">
-              <thead>
-                <tr className="h-8 border-b border-hairline">
-                  <th className="px-3 py-0 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    {t("stats.fiscalYear")}
-                  </th>
-                  <th className="px-3 py-0 text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    {t("stats.period")}
-                  </th>
-                  <th className="px-3 py-0 text-right text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    {t("stats.revenue")}
-                  </th>
-                  <th className="px-3 py-0 text-right text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    Menge
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {articleStats.revenueByPeriod.map((row) => (
-                  <tr
-                    key={`${row.fiscal_year}-${row.period_no}`}
-                    className="h-9 border-b border-hairline last:border-0"
-                  >
-                    <td className="px-3 text-[13px] tabular-nums">{row.fiscal_year}</td>
-                    <td className="px-3 text-[13px] tabular-nums">{row.period_no}</td>
-                    <td className="px-3 text-right font-mono text-[13px] tabular-nums">
-                      {new Intl.NumberFormat("de-DE", {
-                        style: "currency",
-                        currency: "EUR",
-                      }).format(Number(row.total_amount_net))}
-                    </td>
-                    <td className="px-3 text-right font-mono text-[13px] tabular-nums">
-                      {Number(row.total_qty).toFixed(3)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      ),
+    [queryClient, restoreArticleGrid],
+  );
+
+  const handleEditSaved = useCallback(
+    (record: any) => {
+      setShowEdit(false);
+      queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+      restoreArticleGrid(record?.articleId ?? record?.id ?? activeArticleId);
     },
-    {
-      id: "stock-ledger",
-      label: t("stats.stockLedger"),
-      content: activeArticleId ? (
-        <StockLedgerTable articleId={activeArticleId} />
-      ) : (
-        <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
-          {t("empty.title")}
-        </div>
-      ),
-    },
-  ];
+    [activeArticleId, queryClient, restoreArticleGrid],
+  );
 
   return (
     <>
@@ -470,43 +599,7 @@ function ArticlesModule() {
             isLoading={isDataLoading}
             keyExtractor={(row: any) => row.articleId}
             title={t("nav.articles")}
-            columns={[
-              {
-                key: "articleNo",
-                header: "No.",
-                sortable: true,
-                render: (r: any) => (
-                  <span className="font-mono text-ink-mute tabular-nums">{r.articleNo}</span>
-                ),
-              },
-              { key: "name", header: "Name", sortable: true },
-              {
-                key: "baseUnitId",
-                header: "Unit",
-                render: (r: any) => <span>{unitMap.get(r.baseUnitId) ?? "—"}</span>,
-              },
-              {
-                key: "articleGroupId",
-                header: "Group",
-                render: (r: any) => <span>{groupMap.get(r.articleGroupId) ?? "—"}</span>,
-              },
-              {
-                key: "trackingMode",
-                header: "Tracking",
-                render: (r: any) => (
-                  <span className="font-mono text-[11px] text-ink-mute">
-                    {r.trackingMode ?? "—"}
-                  </span>
-                ),
-              },
-              {
-                key: "bomType",
-                header: "BOM",
-                render: (r: any) => (
-                  <span className="font-mono text-[11px] text-ink-mute">{r.bomType ?? "—"}</span>
-                ),
-              },
-            ]}
+            columns={articleGridColumns}
             totalCount={articleData?.total}
             page={gridState.page}
             pageSize={gridState.pageSize}
@@ -519,20 +612,24 @@ function ArticlesModule() {
             filters={gridState.filters}
             onFiltersChange={gridState.setFilters}
             selectable
-            bulkActions={[{
-              label: "Archive",
-              variant: "destructive" as const,
-              onClick: async (keys: string[]) => {
-                await Promise.all(keys.map(id =>
-                  fetch(`/api/data/article/${id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ archived: true }),
-                  })
-                ));
-                queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+            bulkActions={[
+              {
+                label: "Archive",
+                variant: "destructive" as const,
+                onClick: async (keys: string[]) => {
+                  await Promise.all(
+                    keys.map((id) =>
+                      fetch(`/api/data/article/${id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ archived: true }),
+                      }),
+                    ),
+                  );
+                  queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+                },
               },
-            }]}
+            ]}
             onRowOpen={() => setShowEdit(true)}
             emptyTitle="No articles yet."
             emptySubtitle="Create the first article in this group."
@@ -541,7 +638,7 @@ function ArticlesModule() {
               kbd: "F3",
               onClick: () => setShowCreate(true),
             }}
-            className="h-full border-none rounded-none"
+            className="h-full rounded-none border-none"
           />
         }
         dependentContext={<ContextTabs tabs={dependentTabs} />}
@@ -550,22 +647,22 @@ function ArticlesModule() {
       {/* Delete confirm dialog */}
       <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
         <DialogContent className="max-w-sm">
-          <div className="p-6 flex flex-col gap-5">
+          <div className="flex flex-col gap-5 p-6">
             <div>
               <h3 className="text-[15px] font-medium text-ink">{t("form.deleteConfirmTitle")}</h3>
-              <p className="text-[13px] text-ink-mute mt-1">{t("form.deleteConfirmBody")}</p>
+              <p className="mt-1 text-[13px] text-ink-mute">{t("form.deleteConfirmBody")}</p>
             </div>
-            <div className="flex justify-end gap-2 flex-wrap">
+            <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                className="h-8 px-4 rounded text-[13px] border border-hairline hover:bg-canvas-soft"
+                className="h-8 rounded border border-hairline px-4 text-[13px] hover:bg-canvas-soft"
                 onClick={() => setDeleteConfirm(false)}
               >
                 {t("actions.cancel")}
               </button>
               <button
                 type="button"
-                className="h-8 px-4 rounded text-[13px] bg-destructive text-white hover:opacity-90"
+                className="h-8 rounded bg-destructive px-4 text-[13px] text-white hover:opacity-90"
                 onClick={async () => {
                   if (!deleteId) return;
                   await fetch(`/api/data/article/${deleteId}`, {
@@ -594,36 +691,8 @@ function ArticlesModule() {
             title="New Article"
             fieldOverrides={ARTICLE_FIELD_OVERRIDES}
             onCancel={() => setShowCreate(false)}
-            onFieldChange={async (key, value, _formData, setFormData) => {
-              if (key !== "articleGroupId" || !value) return;
-              const res = await fetch(`/api/data/articleGroup/${value}`);
-              if (!res.ok) return;
-              const groupData = await res.json();
-              const group = Array.isArray(groupData) ? groupData[0] ?? {} : groupData ?? {};
-              const isBlank = (next: unknown) => next === undefined || next === null || next === "";
-              setFormData((curr) => {
-                const next = { ...curr };
-                const fieldMap = {
-                  taxClassId: group.taxClassId,
-                  baseUnitId: group.baseUnitId,
-                  salesUnitId: group.salesUnitId,
-                  purchaseUnitId: group.purchaseUnitId,
-                  trackingMode: group.trackingMode === "none" ? null : group.trackingMode,
-                  bomType: group.bomType,
-                } as const;
-                for (const [field, defaultValue] of Object.entries(fieldMap)) {
-                  if (isBlank(curr[field]) && !isBlank(defaultValue)) {
-                    next[field] = defaultValue;
-                  }
-                }
-                return next;
-              });
-            }}
-            onSaved={(record) => {
-              setShowCreate(false);
-              queryClient.invalidateQueries({ queryKey: ["data", "article"] });
-              restoreArticleGrid((record as any)?.articleId ?? (record as any)?.id ?? null);
-            }}
+            onFieldChange={handleCreateFieldChange}
+            onSaved={handleCreateSaved}
             className="rounded-none border-none shadow-none"
           />
         </DialogContent>
@@ -631,7 +700,7 @@ function ArticlesModule() {
 
       {/* Edit dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent className="max-w-7xl h-[85vh] p-0 overflow-hidden">
+        <DialogContent className="h-[85vh] max-w-7xl overflow-hidden p-0">
           <EntityMask
             entityName="article"
             mode="edit"
@@ -639,22 +708,27 @@ function ArticlesModule() {
             recordId={activeArticleId ?? undefined}
             fieldOverrides={ARTICLE_FIELD_OVERRIDES}
             onCancel={() => setShowEdit(false)}
-            onSaved={(record) => {
-              setShowEdit(false);
-              queryClient.invalidateQueries({ queryKey: ["data", "article"] });
-              restoreArticleGrid((record as any)?.articleId ?? (record as any)?.id ?? activeArticleId);
-            }}
+            onSaved={handleEditSaved}
             embedded
             childLayout="side"
             childSection={(record) => (
               <div className="flex flex-col gap-6">
                 <div>
-                  <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Lagerbewegungen</div>
-                  <div className="border border-hairline rounded-md overflow-hidden bg-canvas">
+                  <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                    Lagerbewegungen
+                  </div>
+                  <div className="overflow-hidden rounded-md border border-hairline bg-canvas">
                     <Tabs defaultValue="bestand">
-                      <TabsList variant="line" className="px-2 border-b border-hairline rounded-none w-full justify-start h-8">
-                        <TabsTrigger value="bestand" className="text-[12px] h-7">Bestand</TabsTrigger>
-                        <TabsTrigger value="journal" className="text-[12px] h-7">Journal</TabsTrigger>
+                      <TabsList
+                        variant="line"
+                        className="h-8 w-full justify-start rounded-none border-b border-hairline px-2"
+                      >
+                        <TabsTrigger value="bestand" className="h-7 text-[12px]">
+                          Bestand
+                        </TabsTrigger>
+                        <TabsTrigger value="journal" className="h-7 text-[12px]">
+                          Journal
+                        </TabsTrigger>
                       </TabsList>
                       <TabsContent value="bestand" className="p-0">
                         <InventoryBalanceTable articleId={record.articleId as string} />
@@ -668,8 +742,10 @@ function ArticlesModule() {
 
                 {record.trackingMode === "serial" && (
                   <div>
-                    <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Seriennummern Inventory</div>
-                    <div className="border border-hairline rounded-md overflow-hidden bg-canvas">
+                    <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                      Seriennummern Inventory
+                    </div>
+                    <div className="overflow-hidden rounded-md border border-hairline bg-canvas">
                       <SerialInventoryTable articleId={record.articleId as string} />
                     </div>
                   </div>
@@ -677,8 +753,10 @@ function ArticlesModule() {
 
                 {record.trackingMode === "batch" && (
                   <div>
-                    <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Batch Inventory</div>
-                    <div className="border border-hairline rounded-md overflow-hidden bg-canvas">
+                    <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                      Batch Inventory
+                    </div>
+                    <div className="overflow-hidden rounded-md border border-hairline bg-canvas">
                       <BatchInventoryTable articleId={record.articleId as string} />
                     </div>
                   </div>
@@ -686,10 +764,12 @@ function ArticlesModule() {
 
                 {(record.bomType === "sales" || record.bomType === "production") && (
                   <div>
-                    <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">
-                      {record.bomType === "sales" ? "Handelsstücklisteneditor" : "Produktionsstücklisteneditor"}
+                    <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                      {record.bomType === "sales"
+                        ? "Handelsstücklisteneditor"
+                        : "Produktionsstücklisteneditor"}
                     </div>
-                    <div className="border border-hairline rounded-md overflow-visible bg-canvas min-h-[300px]">
+                    <div className="min-h-[300px] overflow-visible rounded-md border border-hairline bg-canvas">
                       <BomEditor articleId={record.articleId as string} />
                     </div>
                   </div>

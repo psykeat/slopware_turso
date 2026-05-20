@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircleIcon } from "lucide-react";
-import React, { useState, useEffect, useRef } from "react";
+import { AlertCircleIcon, GripVerticalIcon } from "lucide-react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { cn } from "../lib/utils";
+import { useDesigner } from "../platform/designer-context";
 import { LookupField, buildLookupConfigFromField, createRemoteLookupSource } from "./lookup-field";
 import { Skeleton } from "./skeleton";
 
@@ -187,6 +188,7 @@ export function EntityMask({
   const queryClient = useQueryClient();
   const formRef = useRef<HTMLDivElement>(null);
   const didAutoFocusRef = useRef(false);
+  const { isDesignMode, delta, initFields } = useDesigner();
 
   const [metaFields, setMetaFields] = useState<FieldDef[]>([]);
   const [loading, setLoading] = useState(!propFields && !!entityName);
@@ -265,6 +267,15 @@ export function EntityMask({
             lookupIsI18n: f.lookupIsI18n,
           }));
         setMetaFields(mappedFields);
+        // Seed designer delta with resolved fields (no-op if already initialized)
+        initFields(
+          mappedFields.map((f) => ({
+            key: f.key,
+            visible: true,
+            labelEn: f.label,
+            labelDe: f.labelDe,
+          })),
+        );
         setLoading(false);
       })
       .catch((err) => {
@@ -280,10 +291,22 @@ export function EntityMask({
     };
   }, [entityName, propFields, i18n.language]);
 
-  const fields = (propFields ?? metaFields).map((f) => {
-    const ov = fieldOverrides?.find((o) => o.key === f.key);
-    return ov ? { ...f, ...ov } : f;
-  });
+  const fields = useMemo(() => {
+    const base = (propFields ?? metaFields).map((f) => {
+      const ov = fieldOverrides?.find((o) => o.key === f.key);
+      return ov ? { ...f, ...ov } : f;
+    });
+
+    if (!isDesignMode || delta.fieldConfigs.length === 0) return base;
+
+    // Apply designer order and visibility
+    const orderedKeys = delta.fieldConfigs
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .filter((f) => f.visible)
+      .map((f) => f.key);
+    return orderedKeys.map((k) => base.find((f) => f.key === k)).filter(Boolean) as typeof base;
+  }, [propFields, metaFields, fieldOverrides, isDesignMode, delta.fieldConfigs]);
 
   useEffect(() => {
     didAutoFocusRef.current = false;
@@ -468,8 +491,16 @@ export function EntityMask({
               className={cn(
                 "flex min-w-0 flex-col gap-1.5",
                 field.fullWidth && !isSingleColumn && "col-span-2",
+                isDesignMode &&
+                  "rounded-md p-1 ring-1 ring-primary/20 transition-all ring-inset hover:ring-primary/50",
               )}
             >
+              {isDesignMode && (
+                <div className="mb-0.5 flex items-center gap-1">
+                  <GripVerticalIcon className="size-3 text-primary/40" />
+                  <span className="font-mono text-[10px] text-primary/60">{field.key}</span>
+                </div>
+              )}
               {field.type !== "boolean" && (
                 <label className="flex items-center gap-1 text-[12px] font-medium text-ink-secondary select-none">
                   <span className="truncate">{fieldLabel(field)}</span>

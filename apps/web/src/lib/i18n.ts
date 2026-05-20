@@ -5,7 +5,11 @@ import de from "../locales/de.json";
 import en from "../locales/en.json";
 
 const storedLang =
-  typeof localStorage !== "undefined" ? (localStorage.getItem("lang") ?? "en") : "en";
+  typeof window !== "undefined" &&
+  typeof localStorage !== "undefined" &&
+  typeof localStorage.getItem === "function"
+    ? (localStorage.getItem("lang") ?? "en")
+    : "en";
 
 i18next.use(initReactI18next).init({
   lng: storedLang,

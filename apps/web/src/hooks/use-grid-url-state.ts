@@ -1,5 +1,5 @@
 import type { GridSort, GridState, FilterRule } from "@repo/ui/types/grid";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 
 function pk(prefix: string, key: string) {
   return prefix ? `${prefix}_${key}` : key;
@@ -70,23 +70,35 @@ export function useGridUrlState(options?: {
     );
   }, [page, pageSize, sort, search, filters, prefix, defaultSize]);
 
-  const setPage = (p: number) => setPage_(p);
-  const setPageSize = (s: number) => {
-    setPageSize_(s);
-    setPage_(1);
-  };
-  const setSort = (s: GridSort | null) => {
-    setSort_(s);
-    setPage_(1);
-  };
-  const setSearch = (s: string) => {
-    setSearch_(s);
-    setPage_(1);
-  };
-  const setFilters = (f: FilterRule[]) => {
-    setFilters_(f);
-    setPage_(1);
-  };
+  const setPage = useCallback((p: number) => setPage_(p), []);
+  const setPageSize = useCallback(
+    (s: number) => {
+      setPageSize_(s);
+      setPage_(1);
+    },
+    [setPage],
+  );
+  const setSort = useCallback(
+    (s: GridSort | null) => {
+      setSort_(s);
+      setPage_(1);
+    },
+    [setPage],
+  );
+  const setSearch = useCallback(
+    (s: string) => {
+      setSearch_(s);
+      setPage_(1);
+    },
+    [setPage],
+  );
+  const setFilters = useCallback(
+    (f: FilterRule[]) => {
+      setFilters_(f);
+      setPage_(1);
+    },
+    [setPage],
+  );
 
   const queryParams = useMemo(
     () => ({
@@ -99,17 +111,32 @@ export function useGridUrlState(options?: {
     [page, pageSize, sort, search, filters],
   );
 
-  return {
-    page,
-    pageSize,
-    sort,
-    search,
-    filters,
-    setPage,
-    setPageSize,
-    setSort,
-    setSearch,
-    setFilters,
-    queryParams,
-  };
+  return useMemo(
+    () => ({
+      page,
+      pageSize,
+      sort,
+      search,
+      filters,
+      setPage,
+      setPageSize,
+      setSort,
+      setSearch,
+      setFilters,
+      queryParams,
+    }),
+    [
+      page,
+      pageSize,
+      sort,
+      search,
+      filters,
+      setPage,
+      setPageSize,
+      setSort,
+      setSearch,
+      setFilters,
+      queryParams,
+    ],
+  );
 }

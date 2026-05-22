@@ -15,16 +15,27 @@ export const Route = createFileRoute("/api/admin/data/$")({
         }
 
         const url = new URL(request.url);
-        const entityName = url.pathname.split("/").pop();
+        const segments = url.pathname.split("/").filter(Boolean);
+        const entityName = segments[3];
+        const id = segments[4];
         if (!entityName) return new Response("Bad Request", { status: 400 });
 
         const table = (schema as any)[entityName];
         if (!table) return new Response("Not Found", { status: 404 });
 
         try {
+          if (id) {
+            const service = new DataService("", true);
+            const result = await service.get(entityName, id);
+            if (!result) return new Response("Not Found", { status: 404 });
+            return new Response(JSON.stringify(result), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+
           const paginated = url.searchParams.get("paginated") === "true";
+          const service = new DataService("", true);
           if (paginated) {
-            // ... (keep existing pagination logic)
             const limit = Math.max(1, Number(url.searchParams.get("limit") ?? "50"));
             const page = Math.max(1, Number(url.searchParams.get("page") ?? "1"));
             const offset = (page - 1) * limit;
@@ -39,7 +50,6 @@ export const Route = createFileRoute("/api/admin/data/$")({
                 /* ignore */
               }
             }
-            const service = new DataService("", true);
             const result = (await service.list(
               entityName,
               {},
@@ -50,7 +60,6 @@ export const Route = createFileRoute("/api/admin/data/$")({
             });
           }
 
-          // Specialized joins for Admin visibility
           if (entityName === "userTenant") {
             const results = await db
               .select({
@@ -70,8 +79,7 @@ export const Route = createFileRoute("/api/admin/data/$")({
             });
           }
 
-          // System admin can see all records without tenant filter
-          const data = await db.select().from(table);
+          const data = (await service.list(entityName, {}, {})) as any[];
           return new Response(JSON.stringify(data), {
             headers: { "content-type": "application/json" },
           });
@@ -86,7 +94,8 @@ export const Route = createFileRoute("/api/admin/data/$")({
         }
 
         const url = new URL(request.url);
-        const entityName = url.pathname.split("/").pop();
+        const segments = url.pathname.split("/").filter(Boolean);
+        const entityName = segments[3];
         if (!entityName) return new Response("Bad Request", { status: 400 });
 
         const table = (schema as any)[entityName];
@@ -123,9 +132,9 @@ export const Route = createFileRoute("/api/admin/data/$")({
         }
 
         const url = new URL(request.url);
-        const segments = url.pathname.split("/");
-        const id = segments.pop();
-        const entityName = segments.pop();
+        const segments = url.pathname.split("/").filter(Boolean);
+        const entityName = segments[3];
+        const id = segments[4];
 
         if (!entityName || !id) return new Response("Bad Request", { status: 400 });
 
@@ -141,6 +150,39 @@ export const Route = createFileRoute("/api/admin/data/$")({
             headers: { "content-type": "application/json" },
           });
         } catch (err: any) {
+          return new Response(err.message, { status: 500 });
+        }
+      },
+      DELETE: async ({ request }) => {
+        const session = await auth.api.getSession({ headers: request.headers });
+        if (!session || !session.user || !(session.user as any)?.isSystemAdmin) {
+          return new Response("Unauthorized", { status: 401 });
+        }
+
+        const url = new URL(request.url);
+        const segments = url.pathname.split("/").filter(Boolean);
+        const entityName = segments[3];
+        const id = segments[4];
+
+        if (!entityName || !id) return new Response("Bad Request", { status: 400 });
+
+        const table = (schema as any)[entityName];
+        if (!table) return new Response("Not Found", { status: 404 });
+
+        const pkColumn = table[Object.keys(table).find((k) => k.endsWith("Id")) || "id"];
+
+        try {
+          const result = await db.delete(table).where(eq(pkColumn, id)).returning({ id: pkColumn });
+          return new Response(JSON.stringify({ deleted: result.length > 0 }), {
+            headers: { "content-type": "application/json" },
+          });
+        } catch (err: any) {
+          if (err.code === "23503") {
+            return new Response(JSON.stringify({ fkViolation: true }), {
+              status: 409,
+              headers: { "content-type": "application/json" },
+            });
+          }
           return new Response(err.message, { status: 500 });
         }
       },

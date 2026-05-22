@@ -22,7 +22,10 @@ import { Route as AuthAppIndexRouteImport } from './routes/_auth/app/index'
 import { Route as ApiStatsDashboardRouteImport } from './routes/api/stats/dashboard'
 import { Route as ApiStatsArticlesRouteImport } from './routes/api/stats/articles'
 import { Route as ApiStatsAddressesRouteImport } from './routes/api/stats/addresses'
+import { Route as ApiSetupYearEndRouteImport } from './routes/api/setup/year-end'
+import { Route as ApiSetupInitializeRouteImport } from './routes/api/setup/initialize'
 import { Route as ApiMetadataSplatRouteImport } from './routes/api/metadata/$'
+import { Route as ApiMeCompanyRouteImport } from './routes/api/me/company'
 import { Route as ApiImportUploadRouteImport } from './routes/api/import/upload'
 import { Route as ApiImportProfilesRouteImport } from './routes/api/import/profiles'
 import { Route as ApiImportConnectorsRouteImport } from './routes/api/import/connectors'
@@ -146,10 +149,25 @@ const ApiStatsAddressesRoute = ApiStatsAddressesRouteImport.update({
   path: '/api/stats/addresses',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSetupYearEndRoute = ApiSetupYearEndRouteImport.update({
+  id: '/api/setup/year-end',
+  path: '/api/setup/year-end',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSetupInitializeRoute = ApiSetupInitializeRouteImport.update({
+  id: '/api/setup/initialize',
+  path: '/api/setup/initialize',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMetadataSplatRoute = ApiMetadataSplatRouteImport.update({
   id: '/api/metadata/$',
   path: '/api/metadata/$',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMeCompanyRoute = ApiMeCompanyRouteImport.update({
+  id: '/company',
+  path: '/company',
+  getParentRoute: () => ApiMeRoute,
 } as any)
 const ApiImportUploadRoute = ApiImportUploadRouteImport.update({
   id: '/api/import/upload',
@@ -485,7 +503,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof GuestLoginRoute
   '/signup': typeof GuestSignupRoute
   '/api/active-tenant': typeof ApiActiveTenantRoute
-  '/api/me': typeof ApiMeRoute
+  '/api/me': typeof ApiMeRouteWithChildren
   '/api/tenants': typeof ApiTenantsRoute
   '/app/admin': typeof AuthAppAdminRouteRouteWithChildren
   '/app/accounting': typeof AuthAppAccountingRoute
@@ -509,7 +527,10 @@ export interface FileRoutesByFullPath {
   '/api/import/connectors': typeof ApiImportConnectorsRoute
   '/api/import/profiles': typeof ApiImportProfilesRouteWithChildren
   '/api/import/upload': typeof ApiImportUploadRoute
+  '/api/me/company': typeof ApiMeCompanyRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
+  '/api/setup/initialize': typeof ApiSetupInitializeRoute
+  '/api/setup/year-end': typeof ApiSetupYearEndRoute
   '/api/stats/addresses': typeof ApiStatsAddressesRoute
   '/api/stats/articles': typeof ApiStatsArticlesRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
@@ -557,7 +578,7 @@ export interface FileRoutesByTo {
   '/login': typeof GuestLoginRoute
   '/signup': typeof GuestSignupRoute
   '/api/active-tenant': typeof ApiActiveTenantRoute
-  '/api/me': typeof ApiMeRoute
+  '/api/me': typeof ApiMeRouteWithChildren
   '/api/tenants': typeof ApiTenantsRoute
   '/app/accounting': typeof AuthAppAccountingRoute
   '/app/addresses': typeof AuthAppAddressesRoute
@@ -580,7 +601,10 @@ export interface FileRoutesByTo {
   '/api/import/connectors': typeof ApiImportConnectorsRoute
   '/api/import/profiles': typeof ApiImportProfilesRouteWithChildren
   '/api/import/upload': typeof ApiImportUploadRoute
+  '/api/me/company': typeof ApiMeCompanyRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
+  '/api/setup/initialize': typeof ApiSetupInitializeRoute
+  '/api/setup/year-end': typeof ApiSetupYearEndRoute
   '/api/stats/addresses': typeof ApiStatsAddressesRoute
   '/api/stats/articles': typeof ApiStatsArticlesRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
@@ -632,7 +656,7 @@ export interface FileRoutesById {
   '/_guest/login': typeof GuestLoginRoute
   '/_guest/signup': typeof GuestSignupRoute
   '/api/active-tenant': typeof ApiActiveTenantRoute
-  '/api/me': typeof ApiMeRoute
+  '/api/me': typeof ApiMeRouteWithChildren
   '/api/tenants': typeof ApiTenantsRoute
   '/_auth/app/admin': typeof AuthAppAdminRouteRouteWithChildren
   '/_auth/app/accounting': typeof AuthAppAccountingRoute
@@ -656,7 +680,10 @@ export interface FileRoutesById {
   '/api/import/connectors': typeof ApiImportConnectorsRoute
   '/api/import/profiles': typeof ApiImportProfilesRouteWithChildren
   '/api/import/upload': typeof ApiImportUploadRoute
+  '/api/me/company': typeof ApiMeCompanyRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
+  '/api/setup/initialize': typeof ApiSetupInitializeRoute
+  '/api/setup/year-end': typeof ApiSetupYearEndRoute
   '/api/stats/addresses': typeof ApiStatsAddressesRoute
   '/api/stats/articles': typeof ApiStatsArticlesRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
@@ -731,7 +758,10 @@ export interface FileRouteTypes {
     | '/api/import/connectors'
     | '/api/import/profiles'
     | '/api/import/upload'
+    | '/api/me/company'
     | '/api/metadata/$'
+    | '/api/setup/initialize'
+    | '/api/setup/year-end'
     | '/api/stats/addresses'
     | '/api/stats/articles'
     | '/api/stats/dashboard'
@@ -802,7 +832,10 @@ export interface FileRouteTypes {
     | '/api/import/connectors'
     | '/api/import/profiles'
     | '/api/import/upload'
+    | '/api/me/company'
     | '/api/metadata/$'
+    | '/api/setup/initialize'
+    | '/api/setup/year-end'
     | '/api/stats/addresses'
     | '/api/stats/articles'
     | '/api/stats/dashboard'
@@ -877,7 +910,10 @@ export interface FileRouteTypes {
     | '/api/import/connectors'
     | '/api/import/profiles'
     | '/api/import/upload'
+    | '/api/me/company'
     | '/api/metadata/$'
+    | '/api/setup/initialize'
+    | '/api/setup/year-end'
     | '/api/stats/addresses'
     | '/api/stats/articles'
     | '/api/stats/dashboard'
@@ -926,7 +962,7 @@ export interface RootRouteChildren {
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
   ApiActiveTenantRoute: typeof ApiActiveTenantRoute
-  ApiMeRoute: typeof ApiMeRoute
+  ApiMeRoute: typeof ApiMeRouteWithChildren
   ApiTenantsRoute: typeof ApiTenantsRoute
   ApiAccountingBatchesRoute: typeof ApiAccountingBatchesRouteWithChildren
   ApiAddressesSearchRoute: typeof ApiAddressesSearchRoute
@@ -945,6 +981,8 @@ export interface RootRouteChildren {
   ApiImportProfilesRoute: typeof ApiImportProfilesRouteWithChildren
   ApiImportUploadRoute: typeof ApiImportUploadRoute
   ApiMetadataSplatRoute: typeof ApiMetadataSplatRoute
+  ApiSetupInitializeRoute: typeof ApiSetupInitializeRoute
+  ApiSetupYearEndRoute: typeof ApiSetupYearEndRoute
   ApiStatsAddressesRoute: typeof ApiStatsAddressesRoute
   ApiStatsArticlesRoute: typeof ApiStatsArticlesRoute
   ApiStatsDashboardRoute: typeof ApiStatsDashboardRoute
@@ -1062,12 +1100,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStatsAddressesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/setup/year-end': {
+      id: '/api/setup/year-end'
+      path: '/api/setup/year-end'
+      fullPath: '/api/setup/year-end'
+      preLoaderRoute: typeof ApiSetupYearEndRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/setup/initialize': {
+      id: '/api/setup/initialize'
+      path: '/api/setup/initialize'
+      fullPath: '/api/setup/initialize'
+      preLoaderRoute: typeof ApiSetupInitializeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/metadata/$': {
       id: '/api/metadata/$'
       path: '/api/metadata/$'
       fullPath: '/api/metadata/$'
       preLoaderRoute: typeof ApiMetadataSplatRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/me/company': {
+      id: '/api/me/company'
+      path: '/company'
+      fullPath: '/api/me/company'
+      preLoaderRoute: typeof ApiMeCompanyRouteImport
+      parentRoute: typeof ApiMeRoute
     }
     '/api/import/upload': {
       id: '/api/import/upload'
@@ -1554,6 +1613,16 @@ const GuestRouteRouteWithChildren = GuestRouteRoute._addFileChildren(
   GuestRouteRouteChildren,
 )
 
+interface ApiMeRouteChildren {
+  ApiMeCompanyRoute: typeof ApiMeCompanyRoute
+}
+
+const ApiMeRouteChildren: ApiMeRouteChildren = {
+  ApiMeCompanyRoute: ApiMeCompanyRoute,
+}
+
+const ApiMeRouteWithChildren = ApiMeRoute._addFileChildren(ApiMeRouteChildren)
+
 interface ApiAccountingBatchesBatchIdRouteChildren {
   ApiAccountingBatchesBatchIdBuildRoute: typeof ApiAccountingBatchesBatchIdBuildRoute
   ApiAccountingBatchesBatchIdCsvRoute: typeof ApiAccountingBatchesBatchIdCsvRoute
@@ -1679,7 +1748,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
   GuestRouteRoute: GuestRouteRouteWithChildren,
   ApiActiveTenantRoute: ApiActiveTenantRoute,
-  ApiMeRoute: ApiMeRoute,
+  ApiMeRoute: ApiMeRouteWithChildren,
   ApiTenantsRoute: ApiTenantsRoute,
   ApiAccountingBatchesRoute: ApiAccountingBatchesRouteWithChildren,
   ApiAddressesSearchRoute: ApiAddressesSearchRoute,
@@ -1699,6 +1768,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiImportProfilesRoute: ApiImportProfilesRouteWithChildren,
   ApiImportUploadRoute: ApiImportUploadRoute,
   ApiMetadataSplatRoute: ApiMetadataSplatRoute,
+  ApiSetupInitializeRoute: ApiSetupInitializeRoute,
+  ApiSetupYearEndRoute: ApiSetupYearEndRoute,
   ApiStatsAddressesRoute: ApiStatsAddressesRoute,
   ApiStatsArticlesRoute: ApiStatsArticlesRoute,
   ApiStatsDashboardRoute: ApiStatsDashboardRoute,

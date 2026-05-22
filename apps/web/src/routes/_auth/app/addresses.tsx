@@ -566,19 +566,26 @@ function AddressesModule() {
             selectable
             bulkActions={[
               {
-                label: "Archive",
+                label: "Delete",
                 variant: "destructive" as const,
                 onClick: async (keys: string[]) => {
-                  await Promise.all(
-                    keys.map((id) =>
-                      fetch(`/api/data/address/${id}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ archived: true }),
+                  try {
+                    await Promise.all(
+                      keys.map(async (id) => {
+                        const res = await fetch(`/api/data/address/${id}`, {
+                          method: "DELETE",
+                        });
+                        if (!res.ok) throw new Error(await res.text());
                       }),
-                    ),
-                  );
-                  queryClient.invalidateQueries({ queryKey: ["data", "address"] });
+                    );
+                    queryClient.invalidateQueries({ queryKey: ["data", "address"] });
+                  } catch (err) {
+                    toast.error(
+                      err instanceof Error && err.message
+                        ? err.message
+                        : t("form.fkViolationError"),
+                    );
+                  }
                 },
               },
             ]}
@@ -632,18 +639,21 @@ function AddressesModule() {
                 className="h-8 rounded bg-destructive px-4 text-[13px] text-white hover:opacity-90"
                 onClick={async () => {
                   if (!deleteId) return;
-                  await fetch(`/api/data/address/${deleteId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ archived: true }),
+                  const res = await fetch(`/api/data/address/${deleteId}`, {
+                    method: "DELETE",
                   });
+                  if (!res.ok) {
+                    const message = await res.text();
+                    toast.error(message || t("form.fkViolationError"));
+                    return;
+                  }
                   setDeleteConfirm(false);
                   setDeleteId(null);
                   queryClient.invalidateQueries({ queryKey: ["data", "address"] });
-                  toast.success(t("form.archiveSuccess"));
+                  toast.success(t("form.deleteSuccess"));
                 }}
               >
-                {t("actions.archive")}
+                {t("actions.delete")}
               </button>
             </div>
           </div>

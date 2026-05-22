@@ -54,9 +54,7 @@ function UserAssignmentTool({ userId }: UserAssignmentToolProps) {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/admin/data/userTenant/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archived: true }),
+        method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to remove assignment");
     },

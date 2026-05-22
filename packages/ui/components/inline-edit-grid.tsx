@@ -68,14 +68,12 @@ export function InlineEditGrid({
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const archiveMutation = useMutation({
+  const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/data/${entityName}/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archived: true }),
+        method: "DELETE",
       });
-      if (!res.ok) throw new Error(`Archive failed: ${res.status}`);
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["data", entityName] }),
@@ -236,9 +234,9 @@ export function InlineEditGrid({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            archiveMutation.mutate(id);
+                            deleteMutation.mutate(id);
                           }}
-                          disabled={archiveMutation.isPending}
+                          disabled={deleteMutation.isPending}
                           className="flex size-6 items-center justify-center rounded text-ink-mute transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                           title="Delete"
                         >

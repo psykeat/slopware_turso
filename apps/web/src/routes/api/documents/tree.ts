@@ -21,7 +21,8 @@ export const Route = createFileRoute("/api/documents/tree")({
 
         try {
           const svc = new DocumentService();
-          const tree = await svc.getDocumentTree(context.tenantId);
+          const companyId = new URL(request.url).searchParams.get("companyId") ?? undefined;
+          const tree = await svc.getDocumentTree(context.tenantId, companyId);
           console.log(
             "[Tree API] tenantId:",
             context.tenantId,

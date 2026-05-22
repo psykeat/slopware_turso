@@ -288,14 +288,17 @@ async function seed() {
     { movementType: "U", prefix: "UMB-" },
   ];
 
+  const currentYear = new Date().getFullYear();
+
   for (const seq of NUMBER_SEQUENCES) {
-    // Upsert the number sequence (conflict on tenantId + companyId + prefix)
+    // Upsert the number sequence (conflict on tenantId + companyId + prefix + fiscalYear)
     const [inserted] = await db
       .insert(schema.numberSequence)
       .values({
         tenantId: baseTenant.tenantId,
         companyId: baseCompany.companyId,
         prefix: seq.prefix,
+        fiscalYear: currentYear,
         nextValue: 1,
         padding: 6,
       })
@@ -304,6 +307,7 @@ async function seed() {
           schema.numberSequence.tenantId,
           schema.numberSequence.companyId,
           schema.numberSequence.prefix,
+          schema.numberSequence.fiscalYear,
         ],
         set: { padding: 6 },
       })
@@ -422,95 +426,10 @@ async function seed() {
   }
   console.log("Sample articles seeded.");
 
-  // ── 12. Demo org + tenant ──────────────────────────────────────────────
-  let demoOrg: typeof schema.organization.$inferSelect;
-  const [existingDemoOrg] = await db
-    .select()
-    .from(schema.organization)
-    .where(eq(schema.organization.slug, "demo"))
-    .limit(1);
-
-  if (existingDemoOrg) {
-    demoOrg = existingDemoOrg;
-    console.log(`Demo org exists: ${demoOrg.organizationId}`);
-  } else {
-    [demoOrg] = await db
-      .insert(schema.organization)
-      .values({ name: "Demo Organization", slug: "demo" })
-      .returning();
-    console.log(`Created demo org: ${demoOrg.organizationId}`);
-  }
-
-  const [existingDemoTenant] = await db
-    .select()
-    .from(schema.tenant)
-    .where(eq(schema.tenant.slug, "demo"))
-    .limit(1);
-
-  if (!existingDemoTenant) {
-    const [demoTenant] = await db
-      .insert(schema.tenant)
-      .values({
-        organizationId: demoOrg.organizationId,
-        name: "Demo Tenant",
-        slug: "demo",
-        isBase: false,
-      })
-      .returning();
-
-    const [demoCompany] = await db
-      .insert(schema.company)
-      .values({
-        tenantId: demoTenant.tenantId,
-        companyNo: "1000",
-        name: "Demo Company GmbH",
-        countryCode: "DE",
-        currencyId: "EUR",
-      })
-      .returning();
-
-    // Seed minimal reference data for demo tenant
-    await db
-      .insert(schema.addressCategory)
-      .values([
-        { tenantId: demoTenant.tenantId, name: { en: "Customers", de: "Kunden" } },
-        { tenantId: demoTenant.tenantId, name: { en: "Suppliers", de: "Lieferanten" } },
-      ])
-      .onConflictDoNothing();
-
-    await db
-      .insert(schema.articleGroup)
-      .values({ tenantId: demoTenant.tenantId, code: "PRD", name: "Products" })
-      .onConflictDoNothing();
-
-    await db
-      .insert(schema.documentType)
-      .values({
-        tenantId: demoTenant.tenantId,
-        code: "R",
-        name: "Rechnung",
-        movementType: "R",
-        sortOrder: 40,
-      })
-      .onConflictDoNothing();
-
-    await db
-      .insert(schema.documentGroup)
-      .values({
-        tenantId: demoTenant.tenantId,
-        companyId: demoCompany.companyId,
-        name: "Standard Invoices",
-        documentType: "L",
-        groupNumber: 1,
-        requireSerialTracking: false,
-        requireBatchTracking: false,
-      })
-      .onConflictDoNothing();
-
-    console.log(`Created demo tenant: ${demoTenant.tenantId}`);
-  } else {
-    console.log(`Demo tenant exists: ${existingDemoTenant.tenantId}`);
-  }
+  // ── 12. (reserved) ────────────────────────────────────────────────────
+  // Demo tenant seeding was removed. seed.ts only touches the base tenant.
+  // If you need a demo/test tenant, create it manually via the UI or a
+  // dedicated seed-demo.ts script scoped to that purpose.
 
   console.log("\nSeed complete.");
   process.exit(0);

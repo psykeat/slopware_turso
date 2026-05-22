@@ -12,6 +12,7 @@ import {
   documentGroup,
   unit,
 } from "../schema/app.schema";
+import { user } from "../schema/auth.schema";
 
 export async function initializeDefaultTenant(userId: string, name: string) {
   return await db.transaction(async (tx) => {
@@ -127,10 +128,12 @@ export async function getUserTenantInfo(userId: string) {
       tenantName: tenant.name,
       organizationId: tenant.organizationId,
       orgName: organization.name,
+      lastCompanyId: user.lastCompanyId,
     })
     .from(userTenant)
     .innerJoin(tenant, eq(userTenant.tenantId, tenant.tenantId))
     .innerJoin(organization, eq(tenant.organizationId, organization.organizationId))
+    .innerJoin(user, eq(userTenant.userId, user.id))
     .where(and(eq(userTenant.userId, userId), eq(tenant.isActive, true)))
     .limit(1);
 

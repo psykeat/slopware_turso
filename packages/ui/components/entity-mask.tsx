@@ -46,6 +46,7 @@ export interface EntityMaskProps {
   layout?: "single" | "two-column";
   onCancel?: () => void;
   onSaved?: (record: unknown) => void;
+  initialValues?: Record<string, any>;
   onFieldChange?: (
     key: string,
     value: any,
@@ -177,6 +178,7 @@ export function EntityMask({
   layout: _layout = "two-column",
   onCancel,
   onSaved,
+  initialValues,
   onFieldChange,
   apiBase = "/api/data",
   embedded = false,
@@ -197,7 +199,10 @@ export function EntityMask({
 
   // Reset form and fetch data when record changes
   useEffect(() => {
-    const resetTimer = setTimeout(() => setFormData({}), 0);
+    const resetTimer = setTimeout(
+      () => setFormData(mode === "create" ? (initialValues ?? {}) : {}),
+      0,
+    );
     if (recordId && (mode === "edit" || !mode)) {
       fetch(`${apiBase}/${entityName}/${recordId}`)
         .then((res) => res.json())
@@ -222,7 +227,7 @@ export function EntityMask({
         .catch((err) => console.error("EntityMask: failed to fetch record", err));
     }
     return () => clearTimeout(resetTimer);
-  }, [recordId, entityName, mode, apiBase]);
+  }, [recordId, entityName, mode, apiBase, initialValues]);
 
   // Load metadata when no fields prop provided
   useEffect(() => {

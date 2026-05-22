@@ -20,7 +20,7 @@ import {
 } from "drizzle-orm";
 
 import { db } from "../index";
-import * as schema from "../schema/app.schema";
+import * as schema from "../schema";
 
 export class DataService {
   private tenantId: string;
@@ -86,7 +86,7 @@ export class DataService {
       .map(([key, value]) => eq((table as any)[key], value));
 
     // Tenant isolation
-    if ("tenantId" in table) {
+    if ("tenantId" in table && !this.isSystemAdmin) {
       conditions.push(eq(table.tenantId, this.tenantId));
     }
 
@@ -214,7 +214,7 @@ export class DataService {
     const hasTenantId = "tenantId" in table;
 
     const conditions = [eq(pkColumn, id)];
-    if (hasTenantId) {
+    if (hasTenantId && !this.isSystemAdmin) {
       conditions.push(eq(table.tenantId, this.tenantId));
     }
 
@@ -230,7 +230,10 @@ export class DataService {
     const table = this.getTable(entityName);
     const hasTenantId = "tenantId" in table;
     const lifecycleValues = this.normalizeLifecyclePayload(table, data);
-    const values = hasTenantId ? { ...lifecycleValues, tenantId: this.tenantId } : lifecycleValues;
+    const values =
+      hasTenantId && !this.isSystemAdmin
+        ? { ...lifecycleValues, tenantId: this.tenantId }
+        : lifecycleValues;
 
     return await db.insert(table).values(values).returning();
   }
@@ -251,7 +254,7 @@ export class DataService {
     const normalizedUpdateData = this.normalizeLifecyclePayload(table, updateData);
 
     const conditions = [eq(pkColumn, id)];
-    if (hasTenantId) {
+    if (hasTenantId && !this.isSystemAdmin) {
       conditions.push(eq(table.tenantId, this.tenantId));
     }
 
@@ -272,7 +275,7 @@ export class DataService {
     const hasTenantId = "tenantId" in table;
 
     const conditions = [eq(pkColumn, id)];
-    if (hasTenantId) conditions.push(eq(table.tenantId, this.tenantId));
+    if (hasTenantId && !this.isSystemAdmin) conditions.push(eq(table.tenantId, this.tenantId));
 
     try {
       const result = await db

@@ -1,4 +1,4 @@
-import { eq, and, or, sql, inArray, asc } from "drizzle-orm";
+import { eq, and, or, sql, inArray, asc, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "../index";
@@ -239,19 +239,64 @@ function parseQty(value: string | number | null | undefined): number {
   return Number(value ?? 0);
 }
 
-async function copyDocumentLineTrackingRows(
+type DraftDocumentLineInput = {
+  documentLineId?: string | null;
+  lineNo: number;
+  articleId?: string | null;
+  articleTextSnapshot?: string | null;
+  quantity: string | number;
+  unit?: string | null;
+  netPrice: string | number;
+  discountPercentage?: string | number | null;
+  taxCodeId?: string | null;
+  taxAmount?: string | number | null;
+  lineTotalNet?: string | number | null;
+  warehouseId?: string | null;
+  costCenterId?: string | null;
+  movementType?: string | null;
+  lineType?: string | null;
+  bomGroupId?: string | null;
+  archived?: boolean;
+};
+
+type SaveDocumentDraftInput = {
+  documentId?: string | null;
+  documentGroupId?: string | null;
+  documentType?: string | null;
+  documentDirection?: string | null;
+  documentDate?: string | null;
+  customerId?: string | null;
+  billingAddress?: unknown;
+  deliveryAddress?: unknown;
+  deliveryAddressId?: string | null;
+  customAttributes?: unknown;
+  currencyId?: string | null;
+  warehouseId?: string | null;
+  paymentTermId?: string | null;
+  shippingMethodId?: string | null;
+  lines: DraftDocumentLineInput[];
+};
+
+type TrackingRowLike = {
+  trackingId: string;
+  documentLineId: string;
+  serialNumberId: string | null;
+  serialNo: string | null;
+  batchNo: string | null;
+  qty: string;
+};
+
+async function copyDocumentLineTrackingRowsBulk(
   tx: any,
   tenantId: string,
-  sourceLineId: string,
-  targetLineId: string,
+  linePairs: Array<{ sourceLineId: string; targetLineId: string }>,
 ) {
-  const trackingRows: Array<{
-    serialNumberId: string | null;
-    serialNo: string | null;
-    batchNo: string | null;
-    qty: string;
-  }> = await tx
+  if (linePairs.length === 0) return;
+
+  const sourceLineIds = [...new Set(linePairs.map((pair) => pair.sourceLineId))];
+  const trackingRows = await tx
     .select({
+      documentLineId: documentLineTracking.documentLineId,
       serialNumberId: documentLineTracking.serialNumberId,
       serialNo: documentLineTracking.serialNo,
       batchNo: documentLineTracking.batchNo,
@@ -261,23 +306,50 @@ async function copyDocumentLineTrackingRows(
     .where(
       and(
         eq(documentLineTracking.tenantId, tenantId),
-        eq(documentLineTracking.documentLineId, sourceLineId),
+        inArray(documentLineTracking.documentLineId, sourceLineIds),
       ),
     )
-    .orderBy(asc(documentLineTracking.createdAt), asc(documentLineTracking.trackingId));
+    .orderBy(
+      asc(documentLineTracking.documentLineId),
+      asc(documentLineTracking.createdAt),
+      asc(documentLineTracking.trackingId),
+    );
 
   if (trackingRows.length === 0) return;
 
-  await tx.insert(documentLineTracking).values(
-    trackingRows.map((row) => ({
-      tenantId,
-      documentLineId: targetLineId,
-      serialNumberId: row.serialNumberId ?? null,
-      serialNo: row.serialNo ?? null,
-      batchNo: row.batchNo ?? null,
-      qty: row.qty,
-    })),
-  );
+  const trackingBySource = new Map<string, typeof trackingRows>();
+  for (const row of trackingRows) {
+    const rows = trackingBySource.get(row.documentLineId) ?? [];
+    rows.push(row);
+    trackingBySource.set(row.documentLineId, rows);
+  }
+
+  const values: Array<{
+    tenantId: string;
+    documentLineId: string;
+    serialNumberId: string | null;
+    serialNo: string | null;
+    batchNo: string | null;
+    qty: string;
+  }> = [];
+
+  for (const pair of linePairs) {
+    const rows = trackingBySource.get(pair.sourceLineId) ?? [];
+    for (const row of rows) {
+      values.push({
+        tenantId,
+        documentLineId: pair.targetLineId,
+        serialNumberId: row.serialNumberId ?? null,
+        serialNo: row.serialNo ?? null,
+        batchNo: row.batchNo ?? null,
+        qty: row.qty,
+      });
+    }
+  }
+
+  if (values.length > 0) {
+    await tx.insert(documentLineTracking).values(values);
+  }
 }
 
 type AuditRowLike = {
@@ -400,79 +472,82 @@ function resolveInventoryBalanceSet(
   qty: number,
   lineNetPrice: number,
 ): Record<string, unknown> {
+  const qtyExpr = sql`${qty}::numeric`;
+  const lineNetPriceExpr = sql`${lineNetPrice}::numeric`;
+
   if (movementType === "L") {
     return {
-      onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-      reservedQty: sql`${inventoryBalance.reservedQty} - ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - (${inventoryBalance.reservedQty} - ${qty}) + ${inventoryBalance.expectedPurchaseQty}`,
+      onHandQty: sql`${inventoryBalance.onHandQty} - ${qtyExpr}`,
+      reservedQty: sql`${inventoryBalance.reservedQty} - ${qtyExpr}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qtyExpr} - (${inventoryBalance.reservedQty} - ${qtyExpr}) + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "A") {
     return {
-      reservedQty: sql`${inventoryBalance.reservedQty} + ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - (${inventoryBalance.reservedQty} + ${qty}) + ${inventoryBalance.expectedPurchaseQty}`,
+      reservedQty: sql`${inventoryBalance.reservedQty} + ${qtyExpr}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - (${inventoryBalance.reservedQty} + ${qtyExpr}) + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "R") {
     return {
-      onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
+      onHandQty: sql`${inventoryBalance.onHandQty} - ${qtyExpr}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qtyExpr} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "G") {
     return {
-      onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
+      onHandQty: sql`${inventoryBalance.onHandQty} + ${qtyExpr}`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qtyExpr} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "b") {
     return {
-      expectedPurchaseQty: sql`${inventoryBalance.expectedPurchaseQty} + ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - ${inventoryBalance.reservedQty} + (${inventoryBalance.expectedPurchaseQty} + ${qty})`,
+      expectedPurchaseQty: sql`${inventoryBalance.expectedPurchaseQty} + ${qtyExpr}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${inventoryBalance.reservedQty} + (${inventoryBalance.expectedPurchaseQty} + ${qtyExpr})`,
     };
   }
 
   if (movementType === "l") {
     return {
-      onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-      expectedPurchaseQty: sql`GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
-      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty} + GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
+      onHandQty: sql`${inventoryBalance.onHandQty} + ${qtyExpr}`,
+      expectedPurchaseQty: sql`GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qtyExpr}, 0)`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qtyExpr} - ${inventoryBalance.reservedQty} + GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qtyExpr}, 0)`,
     };
   }
 
   if (movementType === "r") {
     return {
-      onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-      expectedPurchaseQty: sql`GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
-      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty} + GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qty}, 0)`,
-      gldPurchase: sql`CASE WHEN (${inventoryBalance.onHandQty} + ${qty}) = 0 THEN 0
-        ELSE (COALESCE(${inventoryBalance.gldPurchase}, 0) * ${inventoryBalance.onHandQty} + ${lineNetPrice} * ${qty}) / NULLIF(${inventoryBalance.onHandQty} + ${qty}, 0)
+      onHandQty: sql`${inventoryBalance.onHandQty} + ${qtyExpr}`,
+      expectedPurchaseQty: sql`GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qtyExpr}, 0)`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qtyExpr} - ${inventoryBalance.reservedQty} + GREATEST(${inventoryBalance.expectedPurchaseQty} - ${qtyExpr}, 0)`,
+      gldPurchase: sql`CASE WHEN (${inventoryBalance.onHandQty} + ${qtyExpr}) = 0 THEN 0
+        ELSE (COALESCE(${inventoryBalance.gldPurchase}, 0) * ${inventoryBalance.onHandQty} + ${lineNetPriceExpr} * ${qtyExpr}) / NULLIF(${inventoryBalance.onHandQty} + ${qtyExpr}, 0)
         END`,
     };
   }
 
   if (movementType === "g") {
     return {
-      onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
+      onHandQty: sql`${inventoryBalance.onHandQty} - ${qtyExpr}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qtyExpr} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "Z") {
     return {
-      onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
+      onHandQty: sql`${inventoryBalance.onHandQty} + ${qtyExpr}`,
+      availableQty: sql`${inventoryBalance.onHandQty} + ${qtyExpr} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
   if (movementType === "E") {
     return {
-      onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
-      availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
+      onHandQty: sql`${inventoryBalance.onHandQty} - ${qtyExpr}`,
+      availableQty: sql`${inventoryBalance.onHandQty} - ${qtyExpr} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty}`,
     };
   }
 
@@ -509,17 +584,21 @@ async function loadLineTrackingRows(
 ): Promise<
   Array<{
     trackingId: string;
+    documentLineId: string;
     serialNumberId: string | null;
     serialNo: string | null;
     batchNo: string | null;
+    qty: string;
   }>
 > {
   return await tx
     .select({
       trackingId: documentLineTracking.trackingId,
+      documentLineId: documentLineTracking.documentLineId,
       serialNumberId: documentLineTracking.serialNumberId,
       serialNo: documentLineTracking.serialNo,
       batchNo: documentLineTracking.batchNo,
+      qty: documentLineTracking.qty,
     })
     .from(documentLineTracking)
     .where(
@@ -531,14 +610,78 @@ async function loadLineTrackingRows(
     .orderBy(asc(documentLineTracking.createdAt), asc(documentLineTracking.trackingId));
 }
 
-async function applyTrackingForMovement(
+async function loadTrackingRowsByLineIds(
+  tx: any,
+  tenantId: string,
+  documentLineIds: string[],
+): Promise<Map<string, TrackingRowLike[]>> {
+  if (documentLineIds.length === 0) return new Map();
+
+  const rows = await tx
+    .select({
+      trackingId: documentLineTracking.trackingId,
+      documentLineId: documentLineTracking.documentLineId,
+      serialNumberId: documentLineTracking.serialNumberId,
+      serialNo: documentLineTracking.serialNo,
+      batchNo: documentLineTracking.batchNo,
+      qty: documentLineTracking.qty,
+    })
+    .from(documentLineTracking)
+    .where(
+      and(
+        eq(documentLineTracking.tenantId, tenantId),
+        inArray(documentLineTracking.documentLineId, documentLineIds),
+      ),
+    )
+    .orderBy(
+      asc(documentLineTracking.documentLineId),
+      asc(documentLineTracking.createdAt),
+      asc(documentLineTracking.trackingId),
+    );
+
+  const byLine = new Map<string, TrackingRowLike[]>();
+  for (const row of rows) {
+    const current = byLine.get(row.documentLineId) ?? [];
+    current.push(row);
+    byLine.set(row.documentLineId, current);
+  }
+
+  return byLine;
+}
+
+async function loadActiveDocumentLines(
+  tx: any,
+  tenantId: string,
+  documentId: string,
+): Promise<any[]> {
+  return await tx
+    .select()
+    .from(documentLine)
+    .where(
+      and(
+        eq(documentLine.documentId, documentId),
+        eq(documentLine.tenantId, tenantId),
+        isNull(documentLine.archivedAt),
+      ),
+    )
+    .orderBy(asc(documentLine.lineNo));
+}
+
+async function applyTrackingForMovementFromRows(
   tx: any,
   tenantId: string,
   movementId: string,
   line: Pick<DocumentPostingLineWithArticle, "documentLineId" | "articleId" | "lineType">,
   docMovementType: string,
+  trackingRows: Array<{
+    trackingId: string;
+    documentLineId: string;
+    serialNumberId: string | null;
+    serialNo: string | null;
+    batchNo: string | null;
+    qty: string;
+  }>,
 ) {
-  const trackingRows = await loadLineTrackingRows(tx, tenantId, line.documentLineId);
   if (trackingRows.length === 0) return;
 
   const tracking = trackingRows[0];
@@ -682,22 +825,6 @@ async function resolveJournalGlAccount(
   }
 }
 
-async function getArticleGroupId(
-  tx: any,
-  tenantId: string,
-  articleId: string | null,
-): Promise<string | null> {
-  if (!articleId) return null;
-
-  const [art] = await tx
-    .select({ articleGroupId: article.articleGroupId })
-    .from(article)
-    .where(and(eq(article.articleId, articleId), eq(article.tenantId, tenantId)))
-    .limit(1);
-
-  return art?.articleGroupId ?? null;
-}
-
 async function postFinancialJournalEntries(
   tx: any,
   tenantId: string,
@@ -709,6 +836,25 @@ async function postFinancialJournalEntries(
   if (!journalContexts) return;
 
   const docGroup = await getDocumentGroupAccountFallback(tx, tenantId, doc.documentGroupId);
+  const articleIds = [
+    ...new Set(lines.map((line) => line.articleId).filter((id): id is string => !!id)),
+  ];
+  const articleGroupRows = articleIds.length
+    ? await tx
+        .select({
+          articleId: article.articleId,
+          articleGroupId: article.articleGroupId,
+        })
+        .from(article)
+        .where(and(eq(article.tenantId, tenantId), inArray(article.articleId, articleIds)))
+    : [];
+  const articleGroupById = new Map<string, string | null>(
+    (articleGroupRows as Array<{ articleId: string; articleGroupId: string | null }>).map((row) => [
+      row.articleId,
+      row.articleGroupId ?? null,
+    ]),
+  );
+  const accountCache = new Map<string, string | null>();
   const counterGlAccountId = await resolveJournalGlAccount(
     tx,
     tenantId,
@@ -732,16 +878,21 @@ async function postFinancialJournalEntries(
     if (!amount) continue;
 
     const absAmount = Math.abs(amount);
-    const articleGroupId = await getArticleGroupId(tx, tenantId, line.articleId);
-    const lineGlAccountId = await resolveJournalGlAccount(
-      tx,
-      tenantId,
-      journalContexts.lineContext,
-      articleGroupId,
-      line.taxCodeId ?? null,
-      docGroup,
-      movementType,
-    );
+    const articleGroupId = line.articleId ? (articleGroupById.get(line.articleId) ?? null) : null;
+    const cacheKey = `${journalContexts.lineContext}|${articleGroupId ?? ""}|${line.taxCodeId ?? ""}|${movementType}`;
+    let lineGlAccountId = accountCache.get(cacheKey) ?? null;
+    if (!accountCache.has(cacheKey)) {
+      lineGlAccountId = await resolveJournalGlAccount(
+        tx,
+        tenantId,
+        journalContexts.lineContext,
+        articleGroupId,
+        line.taxCodeId ?? null,
+        docGroup,
+        movementType,
+      );
+      accountCache.set(cacheKey, lineGlAccountId);
+    }
 
     if (!lineGlAccountId) continue;
 
@@ -801,6 +952,7 @@ async function postProductionDocumentLine(
   movementType: string,
   now: Date,
   txId: string,
+  trackingRows: TrackingRowLike[],
 ) {
   const warehouseId = line.warehouseId ?? doc.warehouseId;
   if (!warehouseId) return;
@@ -846,7 +998,14 @@ async function postProductionDocumentLine(
     .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
 
   if (movement?.inventoryMovementId) {
-    await applyTrackingForMovement(tx, tenantId, movement.inventoryMovementId, line, movementType);
+    await applyTrackingForMovementFromRows(
+      tx,
+      tenantId,
+      movement.inventoryMovementId,
+      line,
+      movementType,
+      trackingRows,
+    );
   }
 }
 
@@ -858,6 +1017,7 @@ async function postTransferDocumentLine(
   movementType: string,
   now: Date,
   txId: string,
+  trackingRows: TrackingRowLike[],
 ) {
   const sourceWh = doc.warehouseId;
   const targetWh = doc.targetWarehouseId;
@@ -949,10 +1109,13 @@ async function postTransferDocumentLine(
     .orderBy(asc(inventoryMovement.createdAt))
     .limit(1);
 
-  const transferTrackingRows = await loadLineTrackingRows(tx, tenantId, line.documentLineId);
-  if (transferTrackingRows.length === 0) return;
+  const resolvedTrackingRows =
+    trackingRows.length > 0
+      ? trackingRows
+      : await loadLineTrackingRows(tx, tenantId, line.documentLineId);
+  if (resolvedTrackingRows.length === 0) return;
 
-  const tracking = transferTrackingRows[0];
+  const tracking = resolvedTrackingRows[0];
   const serialUpdate: Record<string, unknown> = {};
   if (tracking.batchNo) {
     serialUpdate.batchNo = tracking.batchNo;
@@ -1015,6 +1178,7 @@ async function postStandardDocumentLine(
   movementType: string,
   now: Date,
   txId: string,
+  trackingRows: TrackingRowLike[],
 ) {
   const warehouseId = line.warehouseId ?? doc.warehouseId;
   if (!warehouseId) return;
@@ -1084,7 +1248,14 @@ async function postStandardDocumentLine(
     .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
 
   if (movement?.inventoryMovementId) {
-    await applyTrackingForMovement(tx, tenantId, movement.inventoryMovementId, line, movementType);
+    await applyTrackingForMovementFromRows(
+      tx,
+      tenantId,
+      movement.inventoryMovementId,
+      line,
+      movementType,
+      trackingRows,
+    );
   }
 
   if (movementType === "r") {
@@ -1227,6 +1398,7 @@ async function postDocumentLine(
   movementType: string,
   now: Date,
   txId: string,
+  trackingRows: TrackingRowLike[],
 ) {
   if (!line.articleId) return;
   if (line.lineType === "sales_bom_header") return;
@@ -1241,6 +1413,7 @@ async function postDocumentLine(
       movementType,
       now,
       txId,
+      trackingRows,
     );
     return;
   }
@@ -1254,6 +1427,7 @@ async function postDocumentLine(
       movementType,
       now,
       txId,
+      trackingRows,
     );
     return;
   }
@@ -1266,6 +1440,7 @@ async function postDocumentLine(
     movementType,
     now,
     txId,
+    trackingRows,
   );
 }
 
@@ -1434,23 +1609,84 @@ export class DocumentService {
         .select()
         .from(document)
         .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
-        .limit(1);
+        .limit(1)
+        .for("update");
 
       if (!doc) throw new Error("Document not found");
       if (doc.status !== "draft") throw new Error("Document must be in draft status to post");
 
-      const lines = (await tx
-        .select()
-        .from(documentLine)
-        .where(
-          and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)),
-        )) as DocumentPostingLine[];
+      const lines = (await loadActiveDocumentLines(
+        tx,
+        tenantId,
+        documentId,
+      )) as DocumentPostingLine[];
+      const lineIds = lines.map((line) => line.documentLineId);
+      const trackingByLine = await loadTrackingRowsByLineIds(tx, tenantId, lineIds);
+      const articleIds = [
+        ...new Set(lines.map((line) => line.articleId).filter((id): id is string => !!id)),
+      ];
+      const articleRows = articleIds.length
+        ? await tx
+            .select({
+              articleId: article.articleId,
+              trackingMode: article.trackingMode,
+            })
+            .from(article)
+            .where(and(eq(article.tenantId, tenantId), inArray(article.articleId, articleIds)))
+        : [];
+      const articleTrackingModeById = new Map(
+        articleRows.map((row) => [row.articleId, row.trackingMode ?? null]),
+      );
+      const [docGroup] = doc.documentGroupId
+        ? await tx
+            .select({
+              requireSerialTracking: documentGroup.requireSerialTracking,
+              requireBatchTracking: documentGroup.requireBatchTracking,
+            })
+            .from(documentGroup)
+            .where(
+              and(
+                eq(documentGroup.documentGroupId, doc.documentGroupId),
+                eq(documentGroup.tenantId, tenantId),
+              ),
+            )
+            .limit(1)
+        : [null];
+
+      if (docGroup?.requireSerialTracking || docGroup?.requireBatchTracking) {
+        for (const line of lines) {
+          if (!line.articleId || line.lineType === "comment") continue;
+          const trackingMode = articleTrackingModeById.get(line.articleId) ?? null;
+          if (!trackingMode) continue;
+
+          const trackingRows = trackingByLine.get(line.documentLineId) ?? [];
+          const trackingQty = trackingRows.reduce((sum, row) => sum + Number(row.qty ?? 0), 0);
+          const expectedQty = Number(line.quantity ?? 0);
+
+          if (
+            docGroup.requireSerialTracking &&
+            trackingMode === "serial" &&
+            trackingQty !== expectedQty
+          ) {
+            throw new Error(`Line ${line.documentLineId} requires serial tracking before posting`);
+          }
+
+          if (
+            docGroup.requireBatchTracking &&
+            trackingMode === "batch" &&
+            trackingQty !== expectedQty
+          ) {
+            throw new Error(`Line ${line.documentLineId} requires batch tracking before posting`);
+          }
+        }
+      }
 
       const movementType = doc.documentType;
       const now = new Date();
       const txId = crypto.randomUUID();
 
       for (const line of lines) {
+        const trackingRows = trackingByLine.get(line.documentLineId) ?? [];
         await postDocumentLine(
           tx,
           tenantId,
@@ -1459,6 +1695,7 @@ export class DocumentService {
           movementType,
           now,
           txId,
+          trackingRows,
         );
       }
 
@@ -1484,11 +1721,9 @@ export class DocumentService {
       return { success: true, document: updated };
     });
 
-    try {
-      await refreshStatisticsMVs(tenantId);
-    } catch (error) {
+    void refreshStatisticsMVs(tenantId).catch((error) => {
       console.error("Failed to refresh statistics materialized views", error);
-    }
+    });
 
     return result;
   }
@@ -1511,12 +1746,6 @@ export class DocumentService {
     }
     if (doc.stornoDocumentId) throw new Error("This document has already been reversed");
 
-    const lines = await db
-      .select()
-      .from(documentLine)
-      .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)))
-      .orderBy(asc(documentLine.lineNo));
-
     const [newDoc] = await db.transaction(async (tx) => {
       const reversalTypeMap: Record<string, string> = {
         R: "G",
@@ -1524,6 +1753,7 @@ export class DocumentService {
       };
       const reversalType = reversalTypeMap[doc.documentType] ?? doc.documentType;
       const now = new Date();
+      const lines = await loadActiveDocumentLines(tx, tenantId, documentId);
 
       let documentNo = `STORNO-${doc.documentNo}`;
       if (doc.documentGroupId) {
@@ -1582,40 +1812,43 @@ export class DocumentService {
         })
         .returning();
 
+      const insertedLinePairs: Array<{ sourceLineId: string; targetLineId: string }> = [];
+
       for (const line of lines) {
+        const l = line as any;
         const [insertedLine] = await tx
           .insert(documentLine)
           .values({
             tenantId,
             documentId: createdDoc.documentId,
-            lineNo: line.lineNo,
-            articleId: line.articleId,
-            articleTextSnapshot: line.articleTextSnapshot,
-            quantity: line.quantity,
-            unit: line.unit,
-            netPrice: line.netPrice,
-            discountPercentage: line.discountPercentage,
-            taxCodeId: line.taxCodeId,
-            taxAmount: line.taxAmount,
-            lineTotalNet: line.lineTotalNet,
-            warehouseId: line.warehouseId,
-            costCenterId: line.costCenterId,
+            lineNo: l.lineNo,
+            articleId: l.articleId,
+            articleTextSnapshot: l.articleTextSnapshot,
+            quantity: l.quantity,
+            unit: l.unit,
+            netPrice: l.netPrice,
+            discountPercentage: l.discountPercentage,
+            taxCodeId: l.taxCodeId,
+            taxAmount: l.taxAmount,
+            lineTotalNet: l.lineTotalNet,
+            warehouseId: l.warehouseId,
+            costCenterId: l.costCenterId,
             movementType: reversalType,
-            lineType: line.lineType,
-            bomGroupId: line.bomGroupId ?? null,
+            lineType: l.lineType,
+            bomGroupId: l.bomGroupId ?? null,
             transactionId: doc.transactionId,
           })
           .returning({ documentLineId: documentLine.documentLineId });
 
         if (insertedLine?.documentLineId) {
-          await copyDocumentLineTrackingRows(
-            tx,
-            tenantId,
-            line.documentLineId,
-            insertedLine.documentLineId,
-          );
+          insertedLinePairs.push({
+            sourceLineId: line.documentLineId,
+            targetLineId: insertedLine.documentLineId,
+          });
         }
       }
+
+      await copyDocumentLineTrackingRowsBulk(tx, tenantId, insertedLinePairs);
 
       await tx
         .update(document)
@@ -1790,13 +2023,9 @@ export class DocumentService {
 
     if (!targetGroup) throw new Error("Target document group not found");
 
-    const lines = await db
-      .select()
-      .from(documentLine)
-      .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)))
-      .orderBy(asc(documentLine.lineNo));
-
     return await db.transaction(async (tx) => {
+      const lines = await loadActiveDocumentLines(tx, tenantId, documentId);
+      const sourceLineById = new Map(lines.map((line) => [line.documentLineId, line]));
       let documentNo = `DRAFT-${Date.now()}`;
       const now = new Date();
 
@@ -1910,27 +2139,32 @@ export class DocumentService {
         }
       }
 
-      for (const pair of insertedLines) {
-        const sourceLine = lines.find((l) => l.documentLineId === pair.sourceLineId)!;
-        if (sourceLine.lineType !== "comment") {
-          const sourceQty = parseQty(sourceLine.quantity);
-          const allocatedQty = allocationTotals.get(sourceLine.documentLineId) ?? 0;
-          const remainingQty = Math.max(sourceQty - allocatedQty, 0);
-          await tx.insert(documentLineAllocation).values({
-            tenantId,
-            sourceDocumentLineId: sourceLine.documentLineId,
-            targetDocumentLineId: pair.targetLineId,
-            allocatedQty: String(remainingQty),
-          });
-        }
+      const allocationInserts: Array<{
+        tenantId: string;
+        sourceDocumentLineId: string;
+        targetDocumentLineId: string;
+        allocatedQty: string;
+      }> = [];
 
-        await copyDocumentLineTrackingRows(
-          tx,
+      for (const pair of insertedLines) {
+        const sourceLine = sourceLineById.get(pair.sourceLineId);
+        if (!sourceLine || sourceLine.lineType === "comment") continue;
+        const sourceQty = parseQty(sourceLine.quantity);
+        const allocatedQty = allocationTotals.get(sourceLine.documentLineId) ?? 0;
+        const remainingQty = Math.max(sourceQty - allocatedQty, 0);
+        allocationInserts.push({
           tenantId,
-          sourceLine.documentLineId,
-          pair.targetLineId,
-        );
+          sourceDocumentLineId: sourceLine.documentLineId,
+          targetDocumentLineId: pair.targetLineId,
+          allocatedQty: String(remainingQty),
+        });
       }
+
+      if (allocationInserts.length > 0) {
+        await tx.insert(documentLineAllocation).values(allocationInserts);
+      }
+
+      await copyDocumentLineTrackingRowsBulk(tx, tenantId, insertedLines);
 
       await tx
         .update(document)
@@ -1945,11 +2179,14 @@ export class DocumentService {
     });
   }
 
-  async getDocumentTree(tenantId: string): Promise<TreeSection[]> {
+  async getDocumentTree(tenantId: string, companyId?: string): Promise<TreeSection[]> {
+    const conditions = [eq(documentGroup.tenantId, tenantId)];
+    if (companyId) conditions.push(eq(documentGroup.companyId, companyId));
+
     const groups = await db
       .select()
       .from(documentGroup)
-      .where(eq(documentGroup.tenantId, tenantId));
+      .where(and(...conditions));
 
     // direction → documentType → groups[]
     const byDirection = new Map<string, Map<string, typeof groups>>();
@@ -2324,6 +2561,352 @@ export class DocumentService {
     });
   }
 
+  async saveDocumentDraft(
+    tenantId: string,
+    _userId: string,
+    data: SaveDocumentDraftInput,
+  ): Promise<{ success: boolean; documentId: string; documentNo: string }> {
+    return await db.transaction(async (tx) => {
+      const now = new Date();
+      const existingDocId = data.documentId ?? null;
+      const providedLines = data.lines ?? [];
+
+      let docRecord: {
+        documentId: string;
+        documentNo: string;
+        companyId: string;
+        documentGroupId: string | null;
+        documentType: string;
+        documentDirection: string;
+        transactionId: string;
+        status: string;
+        parentDocumentId: string | null;
+      } | null = null;
+
+      if (existingDocId) {
+        const [lockedDoc] = await tx
+          .select()
+          .from(document)
+          .where(and(eq(document.documentId, existingDocId), eq(document.tenantId, tenantId)))
+          .limit(1)
+          .for("update");
+
+        if (!lockedDoc) throw new Error("Document not found");
+        if (lockedDoc.status !== "draft")
+          throw new Error("Document must be in draft status to save");
+
+        docRecord = lockedDoc;
+
+        const archivedLineIds = providedLines
+          .filter((line) => line.archived)
+          .map((line) => line.documentLineId)
+          .filter((lineId): lineId is string => !!lineId);
+
+        const activeLinePayload = providedLines.filter((line) => !line.archived);
+        const activePayloadLineIds = activeLinePayload
+          .map((line) => line.documentLineId)
+          .filter((lineId): lineId is string => !!lineId);
+
+        const existingLines = await tx
+          .select({
+            documentLineId: documentLine.documentLineId,
+            lineNo: documentLine.lineNo,
+            articleId: documentLine.articleId,
+            lineType: documentLine.lineType,
+          })
+          .from(documentLine)
+          .where(
+            and(
+              eq(documentLine.documentId, existingDocId),
+              eq(documentLine.tenantId, tenantId),
+              isNull(documentLine.archivedAt),
+            ),
+          );
+
+        const existingLineIds = existingLines.map((line) => line.documentLineId);
+        const linesToArchive = new Set<string>(
+          [...existingLineIds, ...archivedLineIds].filter(Boolean),
+        );
+        for (const lineId of activePayloadLineIds) {
+          linesToArchive.delete(lineId);
+        }
+
+        if (linesToArchive.size > 0) {
+          await tx
+            .update(documentLine)
+            .set({ archivedAt: now })
+            .where(
+              and(
+                eq(documentLine.tenantId, tenantId),
+                eq(documentLine.documentId, existingDocId),
+                inArray(documentLine.documentLineId, [...linesToArchive]),
+              ),
+            );
+        }
+
+        const existingLineById = new Map(existingLines.map((line) => [line.documentLineId, line]));
+
+        const updateValues: Array<{
+          documentLineId: string;
+          lineNo: number;
+          articleId: string | null;
+          articleTextSnapshot: string | null;
+          quantity: string;
+          unit: string | null;
+          netPrice: string;
+          discountPercentage: string | null;
+          taxCodeId: string | null;
+          taxAmount: string | null;
+          lineTotalNet: string | null;
+          warehouseId: string | null;
+          costCenterId: string | null;
+          movementType: string | null;
+          lineType: string;
+          bomGroupId: string | null;
+        }> = [];
+
+        const insertValues: Array<{
+          tenantId: string;
+          documentId: string;
+          lineNo: number;
+          articleId: string | null;
+          articleTextSnapshot: string | null;
+          quantity: string;
+          unit: string | null;
+          netPrice: string;
+          discountPercentage: string | null;
+          taxCodeId: string | null;
+          taxAmount: string | null;
+          lineTotalNet: string | null;
+          warehouseId: string | null;
+          costCenterId: string | null;
+          movementType: string | null;
+          lineType: string;
+          bomGroupId: string | null;
+          transactionId: string;
+        }> = [];
+
+        for (const line of activeLinePayload) {
+          const normalized = {
+            lineNo: Number(line.lineNo),
+            articleId: line.articleId ?? null,
+            articleTextSnapshot: line.articleTextSnapshot ?? null,
+            quantity: String(line.quantity),
+            unit: line.unit ?? null,
+            netPrice: String(line.netPrice),
+            discountPercentage:
+              line.discountPercentage != null ? String(line.discountPercentage) : null,
+            taxCodeId: line.taxCodeId ?? null,
+            taxAmount: line.taxAmount != null ? String(line.taxAmount) : null,
+            lineTotalNet: line.lineTotalNet != null ? String(line.lineTotalNet) : null,
+            warehouseId: line.warehouseId ?? null,
+            costCenterId: line.costCenterId ?? null,
+            movementType: line.movementType ?? docRecord.documentType,
+            lineType: line.lineType ?? "article",
+            bomGroupId: line.bomGroupId ?? null,
+          };
+
+          if (line.documentLineId && existingLineById.has(line.documentLineId)) {
+            updateValues.push({ documentLineId: line.documentLineId, ...normalized });
+          } else {
+            insertValues.push({
+              tenantId,
+              documentId: existingDocId,
+              transactionId: docRecord.transactionId,
+              ...normalized,
+            });
+          }
+        }
+
+        for (const row of updateValues) {
+          await tx
+            .update(documentLine)
+            .set({
+              lineNo: row.lineNo,
+              articleId: row.articleId,
+              articleTextSnapshot: row.articleTextSnapshot,
+              quantity: row.quantity,
+              unit: row.unit,
+              netPrice: row.netPrice,
+              discountPercentage: row.discountPercentage,
+              taxCodeId: row.taxCodeId,
+              taxAmount: row.taxAmount,
+              lineTotalNet: row.lineTotalNet,
+              warehouseId: row.warehouseId,
+              costCenterId: row.costCenterId,
+              movementType: row.movementType,
+              lineType: row.lineType,
+              bomGroupId: row.bomGroupId,
+              archivedAt: null,
+            })
+            .where(
+              and(
+                eq(documentLine.tenantId, tenantId),
+                eq(documentLine.documentLineId, row.documentLineId),
+              ),
+            );
+        }
+
+        if (insertValues.length > 0) {
+          await tx.insert(documentLine).values(insertValues);
+        }
+
+        const [updatedDoc] = await tx
+          .update(document)
+          .set({
+            documentGroupId: data.documentGroupId ?? lockedDoc.documentGroupId,
+            documentType: data.documentType ?? lockedDoc.documentType,
+            documentDirection: data.documentDirection ?? lockedDoc.documentDirection,
+            documentDate: data.documentDate ?? lockedDoc.documentDate,
+            customerId: data.customerId ?? null,
+            billingAddress: data.billingAddress ?? null,
+            deliveryAddress: data.deliveryAddress ?? null,
+            deliveryAddressId: data.deliveryAddressId ?? null,
+            customAttributes: data.customAttributes ?? null,
+            currencyId: await resolveCurrencyCode(tx, data.currencyId ?? null),
+            warehouseId: data.warehouseId ?? lockedDoc.warehouseId,
+            paymentTermId: data.paymentTermId ?? null,
+            shippingMethodId: data.shippingMethodId ?? null,
+            updatedAt: now,
+          })
+          .where(and(eq(document.documentId, existingDocId), eq(document.tenantId, tenantId)))
+          .returning({ documentId: document.documentId, documentNo: document.documentNo });
+
+        if (!updatedDoc) throw new Error("Document update failed");
+
+        return {
+          success: true,
+          documentId: updatedDoc.documentId,
+          documentNo: updatedDoc.documentNo,
+        };
+      }
+
+      const [group] = await tx
+        .select()
+        .from(documentGroup)
+        .where(
+          and(
+            eq(documentGroup.documentGroupId, data.documentGroupId ?? ""),
+            eq(documentGroup.tenantId, tenantId),
+          ),
+        )
+        .limit(1);
+
+      if (!group) throw new Error("Document group not found");
+
+      let companyId = group.companyId;
+      let resolvedWarehouseId = data.warehouseId ?? group.defaultWarehouseId ?? null;
+      let resolvedCurrencyId: string | null = null;
+
+      if (!companyId) {
+        const [co] = await tx
+          .select({
+            companyId: company.companyId,
+            defaultWarehouseId: company.defaultWarehouseId,
+            currencyId: company.currencyId,
+          })
+          .from(company)
+          .where(eq(company.tenantId, tenantId))
+          .limit(1);
+        if (!co) throw new Error("No company found for tenant");
+        companyId = co.companyId;
+        resolvedCurrencyId = co.currencyId;
+        if (!resolvedWarehouseId) resolvedWarehouseId = co.defaultWarehouseId ?? null;
+      } else {
+        const [co] = await tx
+          .select({
+            defaultWarehouseId: company.defaultWarehouseId,
+            currencyId: company.currencyId,
+          })
+          .from(company)
+          .where(eq(company.companyId, companyId))
+          .limit(1);
+        if (co) {
+          resolvedCurrencyId = co.currencyId;
+          if (!resolvedWarehouseId) resolvedWarehouseId = co.defaultWarehouseId ?? null;
+        }
+      }
+
+      let documentNo = `DRAFT-${Date.now()}`;
+      if (group.numberSequenceId) {
+        const [seq] = await tx
+          .select()
+          .from(numberSequence)
+          .where(eq(numberSequence.numberSequenceId, group.numberSequenceId))
+          .limit(1)
+          .for("update");
+
+        if (seq) {
+          documentNo = generateDocumentNo(seq.prefix, seq.nextValue, seq.padding);
+          await tx
+            .update(numberSequence)
+            .set({ nextValue: seq.nextValue + 1, updatedAt: now })
+            .where(eq(numberSequence.numberSequenceId, seq.numberSequenceId));
+        }
+      }
+
+      const [newDoc] = await tx
+        .insert(document)
+        .values({
+          tenantId,
+          companyId,
+          documentType: data.documentType ?? group.documentType,
+          documentDirection: data.documentDirection ?? group.direction ?? "OUTBOUND",
+          documentGroupId: group.documentGroupId,
+          documentNo,
+          status: "draft",
+          documentDate: data.documentDate ?? new Date().toISOString().slice(0, 10),
+          customerId: data.customerId ?? null,
+          billingAddress: data.billingAddress ?? null,
+          deliveryAddress: data.deliveryAddress ?? null,
+          deliveryAddressId: data.deliveryAddressId ?? null,
+          customAttributes: data.customAttributes ?? null,
+          currencyId: await resolveCurrencyCode(tx, data.currencyId ?? resolvedCurrencyId ?? null),
+          warehouseId: resolvedWarehouseId,
+          paymentTermId: data.paymentTermId ?? group.defaultPaymentTermId ?? null,
+          shippingMethodId: data.shippingMethodId ?? group.defaultShippingMethodId ?? null,
+          transactionId: crypto.randomUUID(),
+        })
+        .returning({
+          documentId: document.documentId,
+          documentNo: document.documentNo,
+          transactionId: document.transactionId,
+        });
+
+      if (!newDoc) throw new Error("Document creation failed");
+
+      const insertValues = providedLines
+        .filter((line) => !line.archived)
+        .map((line) => ({
+          tenantId,
+          documentId: newDoc.documentId,
+          lineNo: Number(line.lineNo),
+          articleId: line.articleId ?? null,
+          articleTextSnapshot: line.articleTextSnapshot ?? null,
+          quantity: String(line.quantity),
+          unit: line.unit ?? null,
+          netPrice: String(line.netPrice),
+          discountPercentage:
+            line.discountPercentage != null ? String(line.discountPercentage) : null,
+          taxCodeId: line.taxCodeId ?? null,
+          taxAmount: line.taxAmount != null ? String(line.taxAmount) : null,
+          lineTotalNet: line.lineTotalNet != null ? String(line.lineTotalNet) : null,
+          warehouseId: line.warehouseId ?? resolvedWarehouseId,
+          costCenterId: line.costCenterId ?? null,
+          movementType: line.movementType ?? group.documentType,
+          lineType: line.lineType ?? "article",
+          bomGroupId: line.bomGroupId ?? null,
+          transactionId: newDoc.transactionId,
+        }));
+
+      if (insertValues.length > 0) {
+        await tx.insert(documentLine).values(insertValues);
+      }
+
+      return { success: true, documentId: newDoc.documentId, documentNo: newDoc.documentNo };
+    });
+  }
+
   async createDocument(
     tenantId: string,
     data: {
@@ -2481,34 +3064,22 @@ export class DocumentService {
       src.documentDirection;
     const targetDirection = targetGroup.direction ?? sourceDirection;
 
-    const lines = await db
-      .select()
-      .from(documentLine)
-      .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)))
-      .orderBy(asc(documentLine.lineNo));
-
     return await db.transaction(async (tx) => {
+      const lines = await loadActiveDocumentLines(tx, tenantId, documentId);
       let newDocumentNo = `COPY-${Date.now()}`;
-      if (src.documentGroupId) {
-        const [grp] = await tx
+      if (targetGroup.numberSequenceId) {
+        const [seq] = await tx
           .select()
-          .from(documentGroup)
-          .where(eq(documentGroup.documentGroupId, src.documentGroupId))
-          .limit(1);
-        if (grp?.numberSequenceId) {
-          const [seq] = await tx
-            .select()
-            .from(numberSequence)
-            .where(eq(numberSequence.numberSequenceId, grp.numberSequenceId))
-            .limit(1)
-            .for("update");
-          if (seq) {
-            newDocumentNo = generateDocumentNo(seq.prefix, seq.nextValue, seq.padding);
-            await tx
-              .update(numberSequence)
-              .set({ nextValue: seq.nextValue + 1, updatedAt: new Date() })
-              .where(eq(numberSequence.numberSequenceId, seq.numberSequenceId));
-          }
+          .from(numberSequence)
+          .where(eq(numberSequence.numberSequenceId, targetGroup.numberSequenceId))
+          .limit(1)
+          .for("update");
+        if (seq) {
+          newDocumentNo = generateDocumentNo(seq.prefix, seq.nextValue, seq.padding);
+          await tx
+            .update(numberSequence)
+            .set({ nextValue: seq.nextValue + 1, updatedAt: new Date() })
+            .where(eq(numberSequence.numberSequenceId, seq.numberSequenceId));
         }
       }
 
@@ -2517,7 +3088,7 @@ export class DocumentService {
         .values({
           tenantId: src.tenantId,
           companyId: src.companyId,
-          documentType: src.documentType,
+          documentType: targetGroup.documentType,
           documentDirection: targetDirection,
           documentGroupId: targetGroup.documentGroupId,
           documentNo: newDocumentNo,
@@ -2536,6 +3107,8 @@ export class DocumentService {
           transactionId: crypto.randomUUID(),
         })
         .returning();
+
+      const insertedLinePairs: Array<{ sourceLineId: string; targetLineId: string }> = [];
 
       if (lines.length > 0) {
         await tx.insert(documentLine).values(
@@ -2559,6 +3132,35 @@ export class DocumentService {
             movementType: targetGroup.documentType,
           })),
         );
+
+        const insertedRows = await tx
+          .select({
+            documentLineId: documentLine.documentLineId,
+            lineNo: documentLine.lineNo,
+            articleId: documentLine.articleId,
+          })
+          .from(documentLine)
+          .where(
+            and(
+              eq(documentLine.tenantId, tenantId),
+              eq(documentLine.documentId, newDoc.documentId),
+            ),
+          );
+
+        const insertedLineByKey = new Map(
+          insertedRows.map((row) => [String(row.lineNo), row.documentLineId]),
+        );
+
+        for (const line of lines) {
+          const targetLineId = insertedLineByKey.get(String(line.lineNo));
+          if (!targetLineId) continue;
+          insertedLinePairs.push({
+            sourceLineId: line.documentLineId,
+            targetLineId,
+          });
+        }
+
+        await copyDocumentLineTrackingRowsBulk(tx, tenantId, insertedLinePairs);
       }
 
       return { documentId: newDoc.documentId, documentNo: newDoc.documentNo };

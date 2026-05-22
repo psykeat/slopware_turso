@@ -13,3 +13,5 @@ export const db = drizzle({
   // https://orm.drizzle.team/docs/relations-v2#relations-parts
   relations: { ...authRelations, ...relations },
 });
+
+export { eq, sql, and, or } from "drizzle-orm";

@@ -1,23 +1,43 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDownIcon, ChevronRightIcon, CornerDownRightIcon, PlusIcon, SlidersHorizontalIcon, Trash2Icon } from "lucide-react";
-import { toast } from "sonner";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CornerDownRightIcon,
+  PlusIcon,
+  SlidersHorizontalIcon,
+  Trash2Icon,
+} from "lucide-react";
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { AddressPickerField } from "./address-picker-field";
-import type { AddressSnapshot } from "./address-picker-field";
-import { DeliveryAddressPickerField } from "./delivery-address-picker-field";
-import { TrackingEditor } from "./tracking-editor";
+import { toast } from "sonner";
+
 import { formatDate, formatMoney, StatusDot } from "../lib/formatters";
 import { cn } from "../lib/utils";
 import { useCommands } from "../platform/command-registry";
 import { useFocus } from "../platform/focus-manager";
-import { DocumentTargetGroupDialog, type DocumentTargetGroupCandidate } from "./document-target-group-dialog";
+import { AddressPickerField } from "./address-picker-field";
+import type { AddressSnapshot } from "./address-picker-field";
+import { DeliveryAddressPickerField } from "./delivery-address-picker-field";
 import { Dialog, DialogContent } from "./dialog";
+import {
+  DocumentTargetGroupDialog,
+  type DocumentTargetGroupCandidate,
+} from "./document-target-group-dialog";
 import { LookupField, createStaticLookupSource, type LookupSource } from "./lookup-field";
+import { TrackingEditor } from "./tracking-editor";
 
 export interface DocumentEditorProps {
   documentId: string;
   documentGroupId?: string;
+  companyId?: string;
   onClose: () => void;
   onCreateNewDocument: (groupId?: string) => void;
   onSaved?: (savedId: string) => void;
@@ -238,15 +258,17 @@ function emptyLine(parentId: string, lineNo: number): LineRow {
 }
 
 function isBlankDraftLine(line: LineRow): boolean {
-  return !!line.isNew
-    && !line.articleId
-    && !line.articleTextSnapshot
-    && (line.lineType == null || line.lineType === "article")
-    && Number(line.quantity ?? 1) === 1
-    && Number(line.netPrice ?? 0) === 0
-    && (line.discountPercentage == null || Number(line.discountPercentage) === 0)
-    && !line.taxCodeId
-    && !line.unit;
+  return (
+    !!line.isNew &&
+    !line.articleId &&
+    !line.articleTextSnapshot &&
+    (line.lineType == null || line.lineType === "article") &&
+    Number(line.quantity ?? 1) === 1 &&
+    Number(line.netPrice ?? 0) === 0 &&
+    (line.discountPercentage == null || Number(line.discountPercentage) === 0) &&
+    !line.taxCodeId &&
+    !line.unit
+  );
 }
 
 function normalizeLineForSave(line: LineRow) {
@@ -265,7 +287,9 @@ function normalizeLineForSave(line: LineRow) {
 }
 
 function serializeLines(lines: LineRow[]) {
-  return JSON.stringify(lines.filter((line) => !line.isDeleted && !isBlankDraftLine(line)).map(normalizeLineForSave));
+  return JSON.stringify(
+    lines.filter((line) => !line.isDeleted && !isBlankDraftLine(line)).map(normalizeLineForSave),
+  );
 }
 
 function getPersistableLines(lines: LineRow[]) {
@@ -290,7 +314,8 @@ function normalizeHeaderForSave(header: DocHeader, hidePartyFields: boolean) {
 }
 
 function getAddressLocks(customAttributes: DocHeader["customAttributes"]): AddressLockState {
-  const addressLocks = (customAttributes as { addressLocks?: AddressLockState } | null | undefined)?.addressLocks;
+  const addressLocks = (customAttributes as { addressLocks?: AddressLockState } | null | undefined)
+    ?.addressLocks;
   return addressLocks ?? {};
 }
 
@@ -320,28 +345,38 @@ function normalizeCurrencyId(
 }
 
 function resolveArticleLabel(line: LineRow, articleMeta?: ArticleMetaRow | null) {
-  return line.articleNo
-    ?? articleMeta?.articleNo
-    ?? line.articleTextSnapshot
-    ?? line.articleId?.slice(0, 8)
-    ?? "—";
+  return (
+    line.articleNo ??
+    articleMeta?.articleNo ??
+    line.articleTextSnapshot ??
+    line.articleId?.slice(0, 8) ??
+    "—"
+  );
 }
 
 function isBomHeaderLineType(lineType?: string | null) {
   return lineType === "sales_bom_header" || lineType === "production_output";
 }
 
-function shouldExpandBom(articleMeta: ArticleMetaRow | null | undefined, documentType?: string | null) {
+function shouldExpandBom(
+  articleMeta: ArticleMetaRow | null | undefined,
+  documentType?: string | null,
+) {
   if (!articleMeta?.articleId || !documentType) return false;
   if (articleMeta.bomType === "sales") return BOM_SALES_DOC_TYPES.has(documentType);
   if (articleMeta.bomType === "production") return BOM_PRODUCTION_DOC_TYPES.has(documentType);
   return false;
 }
 
-function resolveBomHeaderLineType(articleMeta: ArticleMetaRow | null | undefined, documentType?: string | null) {
+function resolveBomHeaderLineType(
+  articleMeta: ArticleMetaRow | null | undefined,
+  documentType?: string | null,
+) {
   if (!articleMeta || !documentType) return "article";
-  if (articleMeta.bomType === "sales" && BOM_SALES_DOC_TYPES.has(documentType)) return "sales_bom_header";
-  if (articleMeta.bomType === "production" && BOM_PRODUCTION_DOC_TYPES.has(documentType)) return "production_output";
+  if (articleMeta.bomType === "sales" && BOM_SALES_DOC_TYPES.has(documentType))
+    return "sales_bom_header";
+  if (articleMeta.bomType === "production" && BOM_PRODUCTION_DOC_TYPES.has(documentType))
+    return "production_output";
   return "article";
 }
 
@@ -508,15 +543,18 @@ function ArticleSearchCell({
         }
         if (!next) return;
         const articleNo = item?.label?.split(" — ")[0] ?? next;
-        onSelect({
-          articleId: next,
-          articleNo,
-          name: item?.label ?? next,
-          baseUnit: null,
-          taxClassId: null,
-          bomType: null,
-          trackingMode: null,
-        }, rowIndex);
+        onSelect(
+          {
+            articleId: next,
+            articleNo,
+            name: item?.label ?? next,
+            baseUnit: null,
+            taxClassId: null,
+            bomType: null,
+            trackingMode: null,
+          },
+          rowIndex,
+        );
       }}
     />
   );
@@ -531,21 +569,37 @@ interface DocumentLinesEditorHandle {
   deleteCurrentLine: () => void;
   duplicateCurrentLine: () => void;
   getLines: () => LineRow[];
+  getDraftLines: () => LineRow[];
   isDirty: () => boolean;
   getPersistableLines: () => LineRow[];
 }
 
-const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
-  documentId: string | null;
-  documentType?: string | null;
-  warehouseId?: string | null;
-  customerId: string | null;
-  documentDate: string | null;
-  status?: string;
-  onLinesChange?: (lines: LineRow[]) => void;
-  onDirtyChange?: (dirty: boolean) => void;
-}>(function DocumentLinesEditor({ documentId, documentType, warehouseId, customerId, documentDate, status, onLinesChange, onDirtyChange }, ref) {
-  const { t } = useTranslation('ui');
+const DocumentLinesEditor = forwardRef<
+  DocumentLinesEditorHandle,
+  {
+    documentId: string | null;
+    documentType?: string | null;
+    warehouseId?: string | null;
+    customerId: string | null;
+    documentDate: string | null;
+    status?: string;
+    onLinesChange?: (lines: LineRow[]) => void;
+    onDirtyChange?: (dirty: boolean) => void;
+  }
+>(function DocumentLinesEditor(
+  {
+    documentId,
+    documentType,
+    warehouseId,
+    customerId,
+    documentDate,
+    status,
+    onLinesChange,
+    onDirtyChange,
+  },
+  ref,
+) {
+  const { t } = useTranslation("ui");
   const { setFocus } = useFocus();
   const isPosted = status === "posted";
   const queryClient = useQueryClient();
@@ -580,18 +634,21 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     setTrackingFocus(null);
   }, [documentId, onDirtyChange]);
 
-  const pushGridFocus = useCallback((field: string | null, row: number | null) => {
-    setFocus({
-      workspace: "documents",
-      panel: "document-editor",
-      entity: "document",
-      recordId: documentId,
-      area: "grid",
-      field,
-      row,
-      mode: isPosted ? "view" : "edit",
-    });
-  }, [documentId, isPosted, setFocus]);
+  const pushGridFocus = useCallback(
+    (field: string | null, row: number | null) => {
+      setFocus({
+        workspace: "documents",
+        panel: "document-editor",
+        entity: "document",
+        recordId: documentId,
+        area: "grid",
+        field,
+        row,
+        mode: isPosted ? "view" : "edit",
+      });
+    },
+    [documentId, isPosted, setFocus],
+  );
 
   const korrMutation = useMutation({
     mutationFn: async ({ lineId, qtyDelta }: { lineId: string; qtyDelta: number }) => {
@@ -607,9 +664,9 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
       queryClient.invalidateQueries({ queryKey: ["data", "documentLine", documentId] });
       setKorrLineId(null);
       setKorrDelta("");
-      toast.success(t('document.lines.korrekturPosted'));
+      toast.success(t("document.lines.korrekturPosted"));
     },
-    onError: (err: any) => toast.error(err.message ?? t('document.lines.korrekturError')),
+    onError: (err: any) => toast.error(err.message ?? t("document.lines.korrekturError")),
   });
 
   const articleInputRef = useRef<HTMLInputElement>(null);
@@ -648,7 +705,14 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
   }, [taxCodes]);
 
   const articleIds = useMemo(
-    () => Array.from(new Set(lines.map((line) => line.articleId).filter((articleId): articleId is string => !!articleId))),
+    () =>
+      Array.from(
+        new Set(
+          lines
+            .map((line) => line.articleId)
+            .filter((articleId): articleId is string => !!articleId),
+        ),
+      ),
     [lines],
   );
   const articleQueries = useQueries({
@@ -703,10 +767,13 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     const next = [...source];
     for (const row of persisted.map(lineFromPersistedRow)) {
       const matchIndex = next.findIndex((line) => {
-        if (line.documentLineId && row.documentLineId && line.documentLineId === row.documentLineId) return true;
-        return line.lineNo === row.lineNo
-          && line.lineType === row.lineType
-          && line.articleId === row.articleId;
+        if (line.documentLineId && row.documentLineId && line.documentLineId === row.documentLineId)
+          return true;
+        return (
+          line.lineNo === row.lineNo &&
+          line.lineType === row.lineType &&
+          line.articleId === row.articleId
+        );
       });
 
       if (matchIndex >= 0) {
@@ -729,21 +796,23 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
   }
 
   useEffect(() => {
-    const mapped: LineRow[] = assignBomGroups(((existingLines as any[]) ?? []).map((l: any) => ({
-      _id: l.documentLineId,
-      documentLineId: l.documentLineId,
-      lineNo: l.lineNo,
-      articleId: l.articleId ?? null,
-      articleNo: l.articleNo ?? null,
-      articleTextSnapshot: l.articleTextSnapshot ?? null,
-      lineType: l.lineType ?? "article",
-      quantity: Number(l.quantity ?? 1),
-      unit: l.unit ?? null,
-      netPrice: Number(l.netPrice ?? 0),
-      discountPercentage: l.discountPercentage != null ? Number(l.discountPercentage) : null,
-      taxCodeId: l.taxCodeId ?? null,
-      taxRate: l.taxCodeId ? (taxRateMap[l.taxCodeId] ?? null) : null,
-    })));
+    const mapped: LineRow[] = assignBomGroups(
+      ((existingLines as any[]) ?? []).map((l: any) => ({
+        _id: l.documentLineId,
+        documentLineId: l.documentLineId,
+        lineNo: l.lineNo,
+        articleId: l.articleId ?? null,
+        articleNo: l.articleNo ?? null,
+        articleTextSnapshot: l.articleTextSnapshot ?? null,
+        lineType: l.lineType ?? "article",
+        quantity: Number(l.quantity ?? 1),
+        unit: l.unit ?? null,
+        netPrice: Number(l.netPrice ?? 0),
+        discountPercentage: l.discountPercentage != null ? Number(l.discountPercentage) : null,
+        taxCodeId: l.taxCodeId ?? null,
+        taxRate: l.taxCodeId ? (taxRateMap[l.taxCodeId] ?? null) : null,
+      })),
+    );
     // Hydrate the editable line draft from async query data.
     // eslint-disable-next-line react-hooks-js/set-state-in-effect
     replaceLines(mapped);
@@ -768,7 +837,13 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
   }, [documentId, pushGridFocus, replaceLines]);
 
   useEffect(() => {
-    if (!isLoading && documentId && (existingLines as any[]).length === 0 && linesRef.current.length === 0 && editingId === null) {
+    if (
+      !isLoading &&
+      documentId &&
+      (existingLines as any[]).length === 0 &&
+      linesRef.current.length === 0 &&
+      editingId === null
+    ) {
       addLine();
     }
   }, [addLine, editingId, existingLines, documentId, isLoading]);
@@ -799,7 +874,10 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
 
     let cancelled = false;
     void (async () => {
-      const next = await syncBomExplosion(draft, editingArticleMeta ?? articleMetaById.get(draftArticleId) ?? null);
+      const next = await syncBomExplosion(
+        draft,
+        editingArticleMeta ?? articleMetaById.get(draftArticleId) ?? null,
+      );
       if (cancelled) return;
       replaceLines(assignBomGroups(next));
     })();
@@ -807,8 +885,15 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [articleMetaById, documentType, editVals.articleId, editVals.quantity, editingArticleMeta, editingId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    articleMetaById,
+    documentType,
+    editVals.articleId,
+    editVals.quantity,
+    editingArticleMeta,
+    editingId,
+  ]);
 
   useEffect(() => {
     if (korrLineId) {
@@ -823,7 +908,10 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     focusFirstLine: () => {
       const firstVisible = lines.find((l) => !l.isDeleted && l.lineType !== "bom_component");
       if (firstVisible) {
-        startEdit(firstVisible, lines.findIndex((l) => l._id === firstVisible._id));
+        startEdit(
+          firstVisible,
+          lines.findIndex((l) => l._id === firstVisible._id),
+        );
       } else {
         addLine();
       }
@@ -842,6 +930,7 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
       duplicateLine();
     },
     getLines: () => linesRef.current,
+    getDraftLines: () => linesRef.current.filter((line) => !isBlankDraftLine(line)),
     isDirty: () => isDirty,
     getPersistableLines: () => getPersistableLines(effectiveLines),
   }));
@@ -850,9 +939,7 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     if (line.lineType === "bom_component") return;
     setEditingId(line._id);
     setEditVals({ ...line });
-    setEditingArticleMeta(
-      line.articleId ? articleMetaById.get(line.articleId) ?? null : null,
-    );
+    setEditingArticleMeta(line.articleId ? (articleMetaById.get(line.articleId) ?? null) : null);
     pushGridFocus("articleId", rowIndex ?? linesRef.current.findIndex((l) => l._id === line._id));
   }
 
@@ -877,7 +964,7 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
       return [] as BomComponentRow[];
     }
 
-    const data = await res.json() as { components?: BomComponentRow[] };
+    const data = (await res.json()) as { components?: BomComponentRow[] };
     const components = data.components ?? [];
     bomCacheRef.current[articleId] = components;
     return components;
@@ -915,7 +1002,12 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     });
   }
 
-  function replaceGroupChildren(next: LineRow[], headerIndex: number, headerLine: LineRow, children: LineRow[]) {
+  function replaceGroupChildren(
+    next: LineRow[],
+    headerIndex: number,
+    headerLine: LineRow,
+    children: LineRow[],
+  ) {
     const currentGroupId = headerLine.bomGroupId ?? headerLine.documentLineId ?? headerLine._id;
     let oldCount = 0;
     for (let i = headerIndex + 1; i < next.length; i++) {
@@ -938,8 +1030,13 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     }
   }
 
-  async function syncBomExplosion(nextHeader: LineRow, articleMetaOverride?: ArticleMetaRow | null) {
-    const articleMeta = articleMetaOverride ?? (nextHeader.articleId ? articleMetaById.get(nextHeader.articleId) ?? null : null);
+  async function syncBomExplosion(
+    nextHeader: LineRow,
+    articleMetaOverride?: ArticleMetaRow | null,
+  ) {
+    const articleMeta =
+      articleMetaOverride ??
+      (nextHeader.articleId ? (articleMetaById.get(nextHeader.articleId) ?? null) : null);
     const shouldExplode = shouldExpandBom(articleMeta, documentType);
     const next = [...linesRef.current];
     const headerIndex = next.findIndex((line) => line._id === nextHeader._id);
@@ -968,7 +1065,11 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     const groupId = currentGroupId;
     const components = await fetchBomComponents(nextHeader.articleId!);
     const children = buildBomComponentRows(
-      { ...nextHeader, lineType: resolveBomHeaderLineType(articleMeta, documentType), bomGroupId: groupId },
+      {
+        ...nextHeader,
+        lineType: resolveBomHeaderLineType(articleMeta, documentType),
+        bomGroupId: groupId,
+      },
       components,
       groupId,
       existingChildren,
@@ -1011,7 +1112,11 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
 
     const normalizedHeader = next.find((line) => line._id === nextHeader._id) ?? null;
     if (!normalizedHeader) return null;
-    const articleMeta = editingArticleMeta ?? (normalizedHeader.articleId ? articleMetaById.get(normalizedHeader.articleId) ?? null : null);
+    const articleMeta =
+      editingArticleMeta ??
+      (normalizedHeader.articleId
+        ? (articleMetaById.get(normalizedHeader.articleId) ?? null)
+        : null);
     setEditingArticleMeta(null);
     const resolvedNext = await syncBomExplosion(normalizedHeader, articleMeta);
     replaceLines(assignBomGroups(resolvedNext));
@@ -1034,16 +1139,19 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
       throw new Error(await res.text());
     }
 
-    const persisted = await res.json() as unknown[];
+    const persisted = (await res.json()) as unknown[];
     const merged = mergePersistedDocumentLines(linesRef.current, persisted);
     replaceLines(merged);
 
-    return merged.find((row) =>
-      row.documentLineId != null
-      && row.lineNo === line.lineNo
-      && row.lineType === line.lineType
-      && row.articleId === line.articleId,
-    ) ?? null;
+    return (
+      merged.find(
+        (row) =>
+          row.documentLineId != null &&
+          row.lineNo === line.lineNo &&
+          row.lineType === line.lineType &&
+          row.articleId === line.articleId,
+      ) ?? null
+    );
   }
 
   function advanceToNextLine(currentLineId: string, currentRowIndex: number) {
@@ -1099,7 +1207,7 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     replaceLines(next);
     setEditingId(copy._id);
     setEditVals({ ...copy });
-    setEditingArticleMeta(copy.articleId ? articleMetaById.get(copy.articleId) ?? null : null);
+    setEditingArticleMeta(copy.articleId ? (articleMetaById.get(copy.articleId) ?? null) : null);
     pushGridFocus("articleId", sourceIndex + 1);
     setTimeout(() => articleInputRef.current?.focus(), 30);
   }
@@ -1123,7 +1231,11 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
     }
 
     replaceLines(next.filter((l) => !(l.isDeleted && l.isNew)));
-    if (editingId === id) { setEditingId(null); setEditVals({}); setEditingArticleMeta(null); }
+    if (editingId === id) {
+      setEditingId(null);
+      setEditVals({});
+      setEditingArticleMeta(null);
+    }
   }
 
   async function handleArticleSelect(article: ArticleResult, rowIndex: number) {
@@ -1140,15 +1252,19 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
         price = Number(data.unitPrice ?? 0);
         taxCodeId = data.taxCodeId ?? null;
       }
-    } catch { /* pricing optional */ }
+    } catch {
+      /* pricing optional */
+    }
 
-    const articleMeta = article.articleId ? articleMetaById.get(article.articleId) ?? {
-      articleId: article.articleId,
-      articleNo: article.articleNo,
-      name: article.name,
-      bomType: article.bomType ?? null,
-      trackingMode: article.trackingMode ?? null,
-    } : null;
+    const articleMeta = article.articleId
+      ? (articleMetaById.get(article.articleId) ?? {
+          articleId: article.articleId,
+          articleNo: article.articleNo,
+          name: article.name,
+          bomType: article.bomType ?? null,
+          trackingMode: article.trackingMode ?? null,
+        })
+      : null;
     const resolvedLineType = resolveBomHeaderLineType(articleMeta, documentType);
     setEditingArticleMeta(articleMeta);
 
@@ -1187,9 +1303,13 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
   ) {
     if (e.key === "Tab") {
       e.preventDefault();
-      if (field === "qty") { priceRef.current?.focus(); priceRef.current?.select(); }
-      else if (field === "price") { discRef.current?.focus(); discRef.current?.select(); }
-      else if (field === "disc") {
+      if (field === "qty") {
+        priceRef.current?.focus();
+        priceRef.current?.select();
+      } else if (field === "price") {
+        discRef.current?.focus();
+        discRef.current?.select();
+      } else if (field === "disc") {
         const currentId = editingId;
         if (currentLineTrackingMode && documentId) {
           void (async () => {
@@ -1230,7 +1350,8 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
   const visibleDraftLines = effectiveLines.filter((l) => !l.isDeleted);
 
   const totals = useMemo(() => {
-    let net = 0, tax = 0;
+    let net = 0,
+      tax = 0;
     for (const l of visibleDraftLines) {
       const n = lineNet(l.quantity, l.netPrice, l.discountPercentage);
       net += n;
@@ -1240,21 +1361,39 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
   }, [visibleDraftLines]);
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Table header */}
-      <div className="shrink-0 grid border-b border-hairline bg-canvas-soft text-[11px] font-medium uppercase tracking-wider text-ink-mute" style={{ gridTemplateColumns: "48px 180px 1fr 72px 56px 96px 64px 60px 96px 32px" }}>
-        {[t('document.lines.pos'), t('document.lines.article'), t('document.lines.description'), t('document.lines.qty'), t('document.lines.unit'), t('document.lines.price'), t('document.lines.discount'), t('document.lines.taxRate'), t('document.lines.net'), ""].map((h, i) => (
-          <div key={i} className="px-2 py-1.5">{h}</div>
+      <div
+        className="grid shrink-0 border-b border-hairline bg-canvas-soft text-[11px] font-medium tracking-wider text-ink-mute uppercase"
+        style={{ gridTemplateColumns: "48px 180px 1fr 72px 56px 96px 64px 60px 96px 32px" }}
+      >
+        {[
+          t("document.lines.pos"),
+          t("document.lines.article"),
+          t("document.lines.description"),
+          t("document.lines.qty"),
+          t("document.lines.unit"),
+          t("document.lines.price"),
+          t("document.lines.discount"),
+          t("document.lines.taxRate"),
+          t("document.lines.net"),
+          "",
+        ].map((h, i) => (
+          <div key={i} className="px-2 py-1.5">
+            {h}
+          </div>
         ))}
       </div>
 
       {/* Rows */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center h-16 text-[13px] text-ink-mute">{t('document.loading')}</div>
+          <div className="flex h-16 items-center justify-center text-[13px] text-ink-mute">
+            {t("document.loading")}
+          </div>
         ) : visibleLines.length === 0 ? (
-          <div className="flex items-center justify-center h-16 text-[13px] text-ink-mute">
-            {t('document.lines.empty')}
+          <div className="flex h-16 items-center justify-center text-[13px] text-ink-mute">
+            {t("document.lines.empty")}
           </div>
         ) : (
           visibleLines.map((line, rowIndex) => {
@@ -1265,49 +1404,65 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
             const row = isEditing ? { ...line, ...editVals } : line;
             const net = lineNet(row.quantity, row.netPrice, row.discountPercentage);
             const articleMeta = isEditing
-              ? (editingArticleMeta ?? (row.articleId ? articleMetaById.get(row.articleId) ?? null : null))
-              : (line.articleId ? articleMetaById.get(line.articleId) ?? null : null);
+              ? (editingArticleMeta ??
+                (row.articleId ? (articleMetaById.get(row.articleId) ?? null) : null))
+              : line.articleId
+                ? (articleMetaById.get(line.articleId) ?? null)
+                : null;
             const lineTrackingMode = resolveTrackingMode(articleMeta);
             const ev = editVals;
 
             return (
-                  <div key={line._id} className="border-b border-hairline">
-                      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- row is a keyboard-focusable command surface */}
-                      <div
-                        className={cn(
-                          "grid text-[13px] transition-colors",
-                          canEditRow ? "cursor-pointer" : "cursor-default",
-                          isBomComponent && "bg-canvas-soft/40",
-                          isEditing ? "bg-[color-mix(in_oklab,var(--primary)_4%,var(--canvas))]" : "hover:bg-canvas-soft",
-                          isKorr && "bg-[color-mix(in_oklab,var(--primary)_4%,var(--canvas))]",
-                        )}
-                      role={canEditRow ? "button" : undefined}
-                      tabIndex={canEditRow ? 0 : undefined}
-                      style={{ gridTemplateColumns: "48px 180px 1fr 72px 56px 96px 64px 60px 96px 32px" }}
-                      onClick={() => !isEditing && canEditRow && startEdit(line, rowIndex)}
-                      onKeyDown={(e) => {
-                        if (canEditRow && !isEditing && (e.key === "Enter" || e.key === " ")) {
-                          e.preventDefault();
-                          startEdit(line, rowIndex);
-                        }
-                      }}
-                      onBlurCapture={(e) => {
-                        if (!isEditing || isBomComponent) return;
-                        const nextTarget = e.relatedTarget as Node | null;
-                        if (nextTarget && e.currentTarget.contains(nextTarget)) return;
-                        window.setTimeout(() => { void commitEdit(); }, 0);
-                      }}
-                    >
+              <div key={line._id} className="border-b border-hairline">
+                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- row is a keyboard-focusable command surface */}
+                <div
+                  className={cn(
+                    "grid text-[13px] transition-colors",
+                    canEditRow ? "cursor-pointer" : "cursor-default",
+                    isBomComponent && "bg-canvas-soft/40",
+                    isEditing
+                      ? "bg-[color-mix(in_oklab,var(--primary)_4%,var(--canvas))]"
+                      : "hover:bg-canvas-soft",
+                    isKorr && "bg-[color-mix(in_oklab,var(--primary)_4%,var(--canvas))]",
+                  )}
+                  role={canEditRow ? "button" : undefined}
+                  tabIndex={canEditRow ? 0 : undefined}
+                  style={{
+                    gridTemplateColumns: "48px 180px 1fr 72px 56px 96px 64px 60px 96px 32px",
+                  }}
+                  onClick={() => !isEditing && canEditRow && startEdit(line, rowIndex)}
+                  onKeyDown={(e) => {
+                    if (canEditRow && !isEditing && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      startEdit(line, rowIndex);
+                    }
+                  }}
+                  onBlurCapture={(e) => {
+                    if (!isEditing || isBomComponent) return;
+                    const nextTarget = e.relatedTarget as Node | null;
+                    if (nextTarget && e.currentTarget.contains(nextTarget)) return;
+                    window.setTimeout(() => {
+                      void commitEdit();
+                    }, 0);
+                  }}
+                >
                   {/* Pos */}
-                  <div className={cn("px-2 py-1.5 font-mono text-[12px] tabular-nums self-center", isBomComponent ? "text-ink-secondary" : "text-ink-mute")}>
+                  <div
+                    className={cn(
+                      "self-center px-2 py-1.5 font-mono text-[12px] tabular-nums",
+                      isBomComponent ? "text-ink-secondary" : "text-ink-mute",
+                    )}
+                  >
                     <span className="inline-flex items-center gap-1">
-                      {isBomComponent && <CornerDownRightIcon className="size-3.5 shrink-0 text-ink-mute" />}
+                      {isBomComponent && (
+                        <CornerDownRightIcon className="size-3.5 shrink-0 text-ink-mute" />
+                      )}
                       {String(line.lineNo).padStart(3, "0")}
                     </span>
                   </div>
 
                   {/* Article */}
-                  <div className={cn("px-1.5 py-1 self-center", isBomComponent && "pl-5")}>
+                  <div className={cn("self-center px-1.5 py-1", isBomComponent && "pl-5")}>
                     {isEditing ? (
                       <ArticleSearchCell
                         value={ev.articleId ?? null}
@@ -1317,95 +1472,122 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                         rowIndex={rowIndex}
                       />
                     ) : (
-                      <span className="font-mono text-[12px] text-ink-mute">{resolveArticleLabel(line, articleMeta)}</span>
+                      <span className="font-mono text-[12px] text-ink-mute">
+                        {resolveArticleLabel(line, articleMeta)}
+                      </span>
                     )}
                   </div>
 
                   {/* Description */}
-                  <div className={cn("px-1.5 py-1 self-center min-w-0", isBomComponent && "pl-5")}>
+                  <div className={cn("min-w-0 self-center px-1.5 py-1", isBomComponent && "pl-5")}>
                     {isEditing ? (
                       <input
                         tabIndex={-1}
                         className={cn(inputBase, "text-[12px]")}
                         value={(ev.articleTextSnapshot ?? "") as string}
-                        placeholder={t('document.lines.description')}
-                        onChange={(e) => setEditVals((v) => ({ ...v, articleTextSnapshot: e.target.value }))}
+                        placeholder={t("document.lines.description")}
+                        onChange={(e) =>
+                          setEditVals((v) => ({ ...v, articleTextSnapshot: e.target.value }))
+                        }
                       />
                     ) : (
-                      <span className="truncate block">{line.articleTextSnapshot ?? ""}</span>
+                      <span className="block truncate">{line.articleTextSnapshot ?? ""}</span>
                     )}
                   </div>
 
                   {/* Qty */}
-                  <div className="px-1.5 py-1 self-center">
+                  <div className="self-center px-1.5 py-1">
                     {isEditing ? (
                       <input
                         ref={qtyRef}
-                        className={cn(inputBase, "tabular-nums text-right text-[12px]")}
+                        className={cn(inputBase, "text-right text-[12px] tabular-nums")}
                         type="number"
                         value={(ev.quantity ?? 1) as number}
-                        onChange={(e) => setEditVals((v) => ({ ...v, quantity: Number(e.target.value) }))}
+                        onChange={(e) =>
+                          setEditVals((v) => ({ ...v, quantity: Number(e.target.value) }))
+                        }
                         onFocus={() => pushGridFocus("qty", rowIndex)}
-                        onKeyDown={(e) => handleLineCellKeyDown(e, "qty", lineTrackingMode, rowIndex)}
+                        onKeyDown={(e) =>
+                          handleLineCellKeyDown(e, "qty", lineTrackingMode, rowIndex)
+                        }
                       />
                     ) : (
-                      <span className="tabular-nums text-right block">{line.quantity}</span>
+                      <span className="block text-right tabular-nums">{line.quantity}</span>
                     )}
                   </div>
 
                   {/* Unit */}
-                  <div className="px-2 py-1.5 self-center text-ink-mute text-[12px]">
+                  <div className="self-center px-2 py-1.5 text-[12px] text-ink-mute">
                     {isEditing ? (ev.unit ?? line.unit ?? "") : (line.unit ?? "")}
                   </div>
 
                   {/* Unit price */}
-                  <div className="px-1.5 py-1 self-center">
+                  <div className="self-center px-1.5 py-1">
                     {isEditing ? (
                       <input
                         ref={priceRef}
-                        className={cn(inputBase, "tabular-nums text-right text-[12px]")}
+                        className={cn(inputBase, "text-right text-[12px] tabular-nums")}
                         type="number"
                         step="0.01"
                         value={(ev.netPrice ?? 0) as number}
-                        onChange={(e) => setEditVals((v) => ({ ...v, netPrice: Number(e.target.value) }))}
+                        onChange={(e) =>
+                          setEditVals((v) => ({ ...v, netPrice: Number(e.target.value) }))
+                        }
                         onFocus={() => pushGridFocus("price", rowIndex)}
-                        onKeyDown={(e) => handleLineCellKeyDown(e, "price", lineTrackingMode, rowIndex)}
+                        onKeyDown={(e) =>
+                          handleLineCellKeyDown(e, "price", lineTrackingMode, rowIndex)
+                        }
                       />
                     ) : (
-                      <span className="tabular-nums text-right block">{formatMoney(line.netPrice)}</span>
+                      <span className="block text-right tabular-nums">
+                        {formatMoney(line.netPrice)}
+                      </span>
                     )}
                   </div>
 
                   {/* Discount */}
-                  <div className="px-1.5 py-1 self-center">
+                  <div className="self-center px-1.5 py-1">
                     {isEditing ? (
                       <input
                         ref={discRef}
-                        className={cn(inputBase, "tabular-nums text-right text-[12px]")}
+                        className={cn(inputBase, "text-right text-[12px] tabular-nums")}
                         type="number"
                         step="0.1"
                         min={0}
                         max={100}
                         value={(ev.discountPercentage ?? "") as number | string}
                         placeholder="0"
-                        onChange={(e) => setEditVals((v) => ({ ...v, discountPercentage: e.target.value ? Number(e.target.value) : null }))}
+                        onChange={(e) =>
+                          setEditVals((v) => ({
+                            ...v,
+                            discountPercentage: e.target.value ? Number(e.target.value) : null,
+                          }))
+                        }
                         onFocus={() => pushGridFocus("disc", rowIndex)}
-                        onKeyDown={(e) => handleLineCellKeyDown(e, "disc", lineTrackingMode, rowIndex)}
+                        onKeyDown={(e) =>
+                          handleLineCellKeyDown(e, "disc", lineTrackingMode, rowIndex)
+                        }
                       />
                     ) : (
-                      <span className="tabular-nums text-right block">{line.discountPercentage ? `${line.discountPercentage}%` : ""}</span>
+                      <span className="block text-right tabular-nums">
+                        {line.discountPercentage ? `${line.discountPercentage}%` : ""}
+                      </span>
                     )}
                   </div>
 
                   {/* Tax rate */}
-                  <div className="px-2 py-1.5 self-center text-right tabular-nums text-ink-mute text-[12px]">
+                  <div className="self-center px-2 py-1.5 text-right text-[12px] text-ink-mute tabular-nums">
                     {isEditing
-                      ? (ev.taxCodeId ? `${taxRateMap[ev.taxCodeId as string] ?? 0}%` : "—")
-                      : (line.taxRate != null ? `${line.taxRate}%` : "—")}
+                      ? ev.taxCodeId
+                        ? `${taxRateMap[ev.taxCodeId as string] ?? 0}%`
+                        : "—"
+                      : line.taxRate != null
+                        ? `${line.taxRate}%`
+                        : "—"}
                   </div>
 
                   {/* Line net */}
-                  <div className="px-2 py-1.5 self-center text-right tabular-nums text-[12px]">
+                  <div className="self-center px-2 py-1.5 text-right text-[12px] tabular-nums">
                     {formatMoney(net)}
                   </div>
 
@@ -1437,8 +1619,11 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                     ) : (
                       <button
                         tabIndex={-1}
-                        className="p-0.5 text-ink-mute hover:text-destructive transition-colors"
-                        onClick={(e) => { e.stopPropagation(); deleteLine(line._id); }}
+                        className="p-0.5 text-ink-mute transition-colors hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteLine(line._id);
+                        }}
                       >
                         <Trash2Icon className="size-3.5" />
                       </button>
@@ -1446,8 +1631,9 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                   </div>
                 </div>
 
-                {lineTrackingMode && !isBomComponent && (
-                  line.documentLineId ? (
+                {lineTrackingMode &&
+                  !isBomComponent &&
+                  (line.documentLineId ? (
                     <div className="border-t border-hairline">
                       <TrackingEditor
                         documentId={documentId ?? ""}
@@ -1458,27 +1644,31 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                         articleId={line.articleId ?? ""}
                         warehouseId={warehouseId ?? undefined}
                         isPosted={isPosted}
-                        autoFocusToken={trackingFocus?.lineId === line._id ? trackingFocus.token : null}
+                        autoFocusToken={
+                          trackingFocus?.lineId === line._id ? trackingFocus.token : null
+                        }
                         onAdvance={() => advanceToNextLine(line._id, rowIndex)}
                         onAutoFocusConsumed={clearTrackingFocus}
                       />
                     </div>
                   ) : (
-                    <div className="border-t border-hairline bg-canvas-soft/40 px-4 py-2 ml-6 text-[12px] text-ink-mute">
-                      Serien- oder Chargenerfassung wird nach dem Speichern der Position hier sichtbar.
+                    <div className="ml-6 border-t border-hairline bg-canvas-soft/40 px-4 py-2 text-[12px] text-ink-mute">
+                      Serien- oder Chargenerfassung wird nach dem Speichern der Position hier
+                      sichtbar.
                     </div>
-                  )
-                )}
+                  ))}
 
                 {/* Inline Korrektur panel */}
                 {isKorr && line.documentLineId && (
-                  <div className="flex items-center gap-3 px-3 py-2 bg-[color-mix(in_oklab,var(--primary)_6%,var(--canvas))] border-t border-[color-mix(in_oklab,var(--primary)_20%,transparent)]">
-                    <span className="text-[12px] font-medium text-ink-mute shrink-0">{t('document.lines.qtyDelta')}</span>
+                  <div className="flex items-center gap-3 border-t border-[color-mix(in_oklab,var(--primary)_20%,transparent)] bg-[color-mix(in_oklab,var(--primary)_6%,var(--canvas))] px-3 py-2">
+                    <span className="shrink-0 text-[12px] font-medium text-ink-mute">
+                      {t("document.lines.qtyDelta")}
+                    </span>
                     <input
                       ref={korrInputRef}
                       type="number"
                       step="1"
-                      className={cn(inputBase, "w-24 tabular-nums text-right text-[12px]")}
+                      className={cn(inputBase, "w-24 text-right text-[12px] tabular-nums")}
                       value={korrDelta}
                       placeholder="z.B. -2"
                       onChange={(e) => setKorrDelta(e.target.value)}
@@ -1498,7 +1688,7 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                       }}
                     />
                     <button
-                      className="h-7 px-3 rounded text-[12px] disabled:opacity-40 transition-colors"
+                      className="h-7 rounded px-3 text-[12px] transition-colors disabled:opacity-40"
                       style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
                       disabled={korrMutation.isPending || !korrDelta || Number(korrDelta) === 0}
                       onClick={() => {
@@ -1508,13 +1698,16 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
                         }
                       }}
                     >
-                      {t('document.lines.apply')}
+                      {t("document.lines.apply")}
                     </button>
                     <button
-                      className="h-7 px-3 rounded text-[12px] border border-hairline text-ink-secondary hover:text-ink transition-colors"
-                      onClick={() => { setKorrLineId(null); setKorrDelta(""); }}
+                      className="h-7 rounded border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:text-ink"
+                      onClick={() => {
+                        setKorrLineId(null);
+                        setKorrDelta("");
+                      }}
                     >
-                      {t('document.lines.cancel')}
+                      {t("document.lines.cancel")}
                     </button>
                   </div>
                 )}
@@ -1525,9 +1718,9 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
       </div>
 
       {/* Totals + add */}
-      <div className="shrink-0 border-t border-hairline bg-canvas-soft px-3 py-2 flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-4 border-t border-hairline bg-canvas-soft px-3 py-2">
         <button
-          className="flex items-center gap-1.5 h-7 px-3 rounded border border-hairline text-[13px] text-ink-secondary hover:border-primary hover:text-primary transition-colors"
+          className="flex h-7 items-center gap-1.5 rounded border border-hairline px-3 text-[13px] text-ink-secondary transition-colors hover:border-primary hover:text-primary"
           onClick={addLine}
         >
           <PlusIcon className="size-3.5" />
@@ -1535,9 +1728,18 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
         </button>
         <div className="flex-1" />
         <div className="flex items-center gap-6 text-[13px] tabular-nums">
-          <span className="text-ink-mute">Netto <span className="ml-1 text-ink font-medium">{formatMoney(totals.net)}</span></span>
-          <span className="text-ink-mute">MwSt <span className="ml-1 text-ink font-medium">{formatMoney(totals.tax)}</span></span>
-          <span className="text-ink-mute font-medium">Brutto <span className="ml-1.5 text-[15px] text-ink font-semibold">{formatMoney(totals.gross)}</span></span>
+          <span className="text-ink-mute">
+            Netto <span className="ml-1 font-medium text-ink">{formatMoney(totals.net)}</span>
+          </span>
+          <span className="text-ink-mute">
+            MwSt <span className="ml-1 font-medium text-ink">{formatMoney(totals.tax)}</span>
+          </span>
+          <span className="font-medium text-ink-mute">
+            Brutto{" "}
+            <span className="ml-1.5 text-[15px] font-semibold text-ink">
+              {formatMoney(totals.gross)}
+            </span>
+          </span>
         </div>
       </div>
     </div>
@@ -1546,8 +1748,15 @@ const DocumentLinesEditor = forwardRef<DocumentLinesEditorHandle, {
 
 // ─── Main DocumentEditor ──────────────────────────────────────────────────────
 
-export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateNewDocument, onSaved }: DocumentEditorProps) {
-  const { t } = useTranslation('ui');
+export function DocumentEditor({
+  documentId,
+  documentGroupId,
+  companyId,
+  onClose,
+  onCreateNewDocument,
+  onSaved,
+}: DocumentEditorProps) {
+  const { t } = useTranslation("ui");
   const queryClient = useQueryClient();
   const { registerCommand } = useCommands();
   const { setFocus, resetFocus } = useFocus();
@@ -1620,16 +1829,21 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
   // ── document type + group selectors (new documents only) ──
   const { data: allDocTypes = [] } = useQuery({
     queryKey: ["data", "documentType"],
-    queryFn: async () => { const r = await fetch("/api/data/documentType?limit=100"); return r.ok ? r.json() : []; },
+    queryFn: async () => {
+      const r = await fetch("/api/data/documentType?limit=100");
+      return r.ok ? r.json() : [];
+    },
     enabled: isNew,
     staleTime: 5 * 60 * 1000,
   });
   const selectedDocType = header.documentType ?? null;
   const { data: docGroupsForType = [] } = useQuery({
-    queryKey: ["data", "documentGroup", selectedDocType],
+    queryKey: ["data", "documentGroup", selectedDocType, companyId],
     queryFn: async () => {
       if (!selectedDocType) return [];
-      const r = await fetch(`/api/data/documentGroup?documentType=${selectedDocType}&limit=100`);
+      const params = new URLSearchParams({ documentType: selectedDocType, limit: "100" });
+      if (companyId) params.set("companyId", companyId);
+      const r = await fetch(`/api/data/documentGroup?${params}`);
       return r.ok ? r.json() : [];
     },
     enabled: isNew && !!selectedDocType,
@@ -1637,23 +1851,37 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
 
   // ── lookup tables ──
   const { data: warehouses = [] } = useQuery({
-    queryKey: ["data", "warehouse"],
-    queryFn: async () => { const r = await fetch("/api/data/warehouse?limit=200"); return r.ok ? r.json() : []; },
+    queryKey: ["data", "warehouse", companyId],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: "200" });
+      if (companyId) params.set("companyId", companyId);
+      const r = await fetch(`/api/data/warehouse?${params}`);
+      return r.ok ? r.json() : [];
+    },
     staleTime: 5 * 60 * 1000,
   });
   const { data: paymentTerms = [] } = useQuery({
     queryKey: ["data", "paymentTerm"],
-    queryFn: async () => { const r = await fetch("/api/data/paymentTerm?limit=200"); return r.ok ? r.json() : []; },
+    queryFn: async () => {
+      const r = await fetch("/api/data/paymentTerm?limit=200");
+      return r.ok ? r.json() : [];
+    },
     staleTime: 5 * 60 * 1000,
   });
   const { data: shippingMethods = [] } = useQuery({
     queryKey: ["data", "shippingMethod"],
-    queryFn: async () => { const r = await fetch("/api/data/shippingMethod?limit=200"); return r.ok ? r.json() : []; },
+    queryFn: async () => {
+      const r = await fetch("/api/data/shippingMethod?limit=200");
+      return r.ok ? r.json() : [];
+    },
     staleTime: 5 * 60 * 1000,
   });
   const { data: currencies = [] } = useQuery({
     queryKey: ["data", "currency"],
-    queryFn: async () => { const r = await fetch("/api/data/currency?limit=200"); return r.ok ? r.json() : []; },
+    queryFn: async () => {
+      const r = await fetch("/api/data/currency?limit=200");
+      return r.ok ? r.json() : [];
+    },
     staleTime: 5 * 60 * 1000,
   });
   const { data: auditTrail, isLoading: isAuditLoading } = useQuery<DocumentAuditTrail>({
@@ -1667,12 +1895,16 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
     staleTime: 0,
   });
 
-  const activeDocumentType = header.documentType ?? groupData?.documentType ?? (docData as any)?.documentType ?? null;
+  const activeDocumentType =
+    header.documentType ?? groupData?.documentType ?? (docData as any)?.documentType ?? null;
   const hidePartyFields = !!activeDocumentType && MOVEMENT_DOCUMENT_TYPES.has(activeDocumentType);
   const addressLocks = getAddressLocks(header.customAttributes);
   const billingAddressLocked = !!addressLocks.billingAddress;
   const deliveryAddressLocked = !!addressLocks.deliveryAddress;
-  const headerSnapshot = useMemo(() => JSON.stringify(normalizeHeaderForSave(header, hidePartyFields)), [header, hidePartyFields]);
+  const headerSnapshot = useMemo(
+    () => JSON.stringify(normalizeHeaderForSave(header, hidePartyFields)),
+    [header, hidePartyFields],
+  );
   const isHeaderDirty = headerBaselineSnapshot != null && headerSnapshot !== headerBaselineSnapshot;
 
   // ── initialize header from doc or group defaults ──
@@ -1682,10 +1914,21 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
       // eslint-disable-next-line react-hooks-js/set-state-in-effect
       const hydrated = {
         ...(docData as DocHeader),
-        currencyId: normalizeCurrencyId((docData as DocHeader).currencyId ?? null, currencies as any[]),
+        currencyId: normalizeCurrencyId(
+          (docData as DocHeader).currencyId ?? null,
+          currencies as any[],
+        ),
       };
       setHeader(hydrated);
-      setHeaderBaselineSnapshot(JSON.stringify(normalizeHeaderForSave(hydrated, !!(docData as any)?.documentType && MOVEMENT_DOCUMENT_TYPES.has((docData as any).documentType))));
+      setHeaderBaselineSnapshot(
+        JSON.stringify(
+          normalizeHeaderForSave(
+            hydrated,
+            !!(docData as any)?.documentType &&
+              MOVEMENT_DOCUMENT_TYPES.has((docData as any).documentType),
+          ),
+        ),
+      );
     }
   }, [isNew, docData, currencies]);
 
@@ -1704,17 +1947,25 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
         warehouseId: prev.warehouseId ?? groupData.defaultWarehouseId ?? null,
         paymentTermId: prev.paymentTermId ?? groupData.defaultPaymentTermId ?? null,
         shippingMethodId: prev.shippingMethodId ?? groupData.defaultShippingMethodId ?? null,
-        currencyId: normalizeCurrencyId(prev.currencyId ?? groupData.defaultCurrencyId ?? "EUR", currencies as any[]),
+        currencyId: normalizeCurrencyId(
+          prev.currencyId ?? groupData.defaultCurrencyId ?? "EUR",
+          currencies as any[],
+        ),
         ...prev,
       };
-      setHeaderBaselineSnapshot((current) => (
+      setHeaderBaselineSnapshot((current) =>
         current == null
-          ? JSON.stringify(normalizeHeaderForSave(nextHeader, MOVEMENT_DOCUMENT_TYPES.has(nextHeader.documentType ?? "")))
-          : current
-      ));
+          ? JSON.stringify(
+              normalizeHeaderForSave(
+                nextHeader,
+                MOVEMENT_DOCUMENT_TYPES.has(nextHeader.documentType ?? ""),
+              ),
+            )
+          : current,
+      );
       return nextHeader;
     });
-  // eslint-disable-next-line react-hooks-js/set-state-in-effect
+    // eslint-disable-next-line react-hooks-js/set-state-in-effect
   }, [isNew, groupData, currencies]);
 
   const patchHeader = (fields: Partial<DocHeader>) => {
@@ -1733,126 +1984,74 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
     mutationFn: async () => {
       const editorLines = linesEditorRef.current;
       await Promise.resolve(editorLines?.commitCurrentEdit());
-      const linesToSave = editorLines?.getPersistableLines() ?? getPersistableLines(pendingLines);
-
-      if (isNew) {
-        const resolvedDocumentGroupId = header.documentGroupId ?? documentGroupId ?? groupData?.documentGroupId ?? null;
-        const resolvedDocumentType = header.documentType ?? groupData?.documentType ?? null;
-        if (!resolvedDocumentGroupId || !resolvedDocumentType) {
-          throw new Error("Document group and type are required");
-        }
-        // 1. create header via dedicated endpoint (handles companyId, documentNo, transactionId)
-        const res = await fetch("/api/documents/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            documentGroupId: resolvedDocumentGroupId,
-            documentType: resolvedDocumentType,
-            documentDate: header.documentDate ?? today(),
-            status: "draft",
-            customerId: hidePartyFields ? null : (header.customerId ?? null),
-            billingAddress: hidePartyFields ? null : (header.billingAddress ?? null),
-            deliveryAddress: hidePartyFields ? null : (header.deliveryAddress ?? null),
-            deliveryAddressId: hidePartyFields ? null : (header.deliveryAddressId ?? null),
-            customAttributes: header.customAttributes ?? null,
-            currencyId: normalizeCurrencyId(header.currencyId ?? groupData?.defaultCurrencyId ?? null, currencies as any[]),
+      const linesToSave = editorLines?.getDraftLines() ?? pendingLines;
+      const draftLines = linesToSave
+        .filter((line) => !isBlankDraftLine(line))
+        .map((line) => {
+          const net = lineNet(line.quantity, line.netPrice, line.discountPercentage);
+          return {
+            documentLineId: line.documentLineId ?? null,
+            lineNo: line.lineNo,
+            articleId: line.articleId,
+            articleTextSnapshot: line.articleTextSnapshot,
+            lineType: line.lineType ?? "article",
+            quantity: String(line.quantity),
+            unit: line.unit,
+            netPrice: String(line.netPrice),
+            discountPercentage:
+              line.discountPercentage != null ? String(line.discountPercentage) : null,
+            taxCodeId: line.taxCodeId,
+            taxAmount: String(lineTax(net, line.taxRate)),
+            lineTotalNet: String(net),
             warehouseId: header.warehouseId ?? null,
-            paymentTermId: header.paymentTermId ?? null,
-            shippingMethodId: header.shippingMethodId ?? null,
-          }),
+            costCenterId: null,
+            movementType: activeDocumentType ?? header.documentType ?? null,
+            bomGroupId: line.bomGroupId ?? null,
+            archived: !!line.isDeleted,
+          };
         });
-        if (!res.ok) throw new Error(await res.text());
-        const doc = await res.json();
-        const newId = doc.documentId;
 
-        // 2. save lines
-        for (let i = 0; i < linesToSave.length; i++) {
-          const l = linesToSave[i];
-          await fetch("/api/data/documentLine", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              documentId: newId,
-              lineNo: l.lineNo,
-              articleId: l.articleId,
-              articleTextSnapshot: l.articleTextSnapshot,
-              lineType: l.lineType ?? "article",
-              quantity: String(l.quantity),
-              unit: l.unit,
-              netPrice: String(l.netPrice),
-              discountPercentage: l.discountPercentage != null ? String(l.discountPercentage) : null,
-              taxCodeId: l.taxCodeId,
-            }),
-          });
-        }
-
-        return newId;
-      } else {
-        // patch header if dirty
-        if (isHeaderDirty) {
-          const res = await fetch(`/api/data/document/${documentId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              ...header,
-              currencyId: normalizeCurrencyId(header.currencyId ?? null, currencies as any[]),
-            }),
-          });
-          if (!res.ok) throw new Error(await res.text());
-        }
-
-        // batch save lines
-        for (const l of linesToSave) {
-          if (l.isDeleted && l.documentLineId) {
-            await fetch(`/api/data/documentLine/${l.documentLineId}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ archived: true }),
-            });
-          } else if (l.isNew) {
-            await fetch("/api/data/documentLine", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                documentId,
-                lineNo: l.lineNo,
-                articleId: l.articleId,
-                articleTextSnapshot: l.articleTextSnapshot,
-                lineType: l.lineType ?? "article",
-                quantity: String(l.quantity),
-                unit: l.unit,
-                netPrice: String(l.netPrice),
-                discountPercentage: l.discountPercentage != null ? String(l.discountPercentage) : null,
-                taxCodeId: l.taxCodeId,
-              }),
-            });
-          } else if (l.documentLineId) {
-            await fetch(`/api/data/documentLine/${l.documentLineId}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                lineNo: l.lineNo,
-                articleId: l.articleId,
-                articleTextSnapshot: l.articleTextSnapshot,
-                lineType: l.lineType ?? "article",
-                quantity: String(l.quantity),
-                unit: l.unit,
-                netPrice: String(l.netPrice),
-                discountPercentage: l.discountPercentage != null ? String(l.discountPercentage) : null,
-                taxCodeId: l.taxCodeId,
-              }),
-            });
-          }
-        }
-        return documentId;
+      const resolvedDocumentGroupId =
+        header.documentGroupId ?? documentGroupId ?? groupData?.documentGroupId ?? null;
+      const resolvedDocumentType = header.documentType ?? groupData?.documentType ?? null;
+      if (!resolvedDocumentGroupId || !resolvedDocumentType) {
+        throw new Error("Document group and type are required");
       }
+
+      const res = await fetch("/api/documents/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId: isNew ? null : documentId,
+          documentGroupId: resolvedDocumentGroupId,
+          documentType: resolvedDocumentType,
+          documentDate: header.documentDate ?? today(),
+          documentDirection: activeDocumentType ?? groupData?.documentType ?? null,
+          customerId: hidePartyFields ? null : (header.customerId ?? null),
+          billingAddress: hidePartyFields ? null : (header.billingAddress ?? null),
+          deliveryAddress: hidePartyFields ? null : (header.deliveryAddress ?? null),
+          deliveryAddressId: hidePartyFields ? null : (header.deliveryAddressId ?? null),
+          customAttributes: header.customAttributes ?? null,
+          currencyId: normalizeCurrencyId(
+            header.currencyId ?? groupData?.defaultCurrencyId ?? null,
+            currencies as any[],
+          ),
+          warehouseId: header.warehouseId ?? null,
+          paymentTermId: header.paymentTermId ?? null,
+          shippingMethodId: header.shippingMethodId ?? null,
+          lines: draftLines,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const doc = (await res.json()) as { documentId?: string };
+      return doc.documentId ?? documentId;
     },
     onSuccess: (savedId) => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
       queryClient.invalidateQueries({ queryKey: ["data", "documentLine"] });
       setIsLinesDirty(false);
       setCloseDialogOpen(false);
-      toast.success(t('document.actions.save'));
+      toast.success(t("document.actions.save"));
       onSaved?.(savedId);
       onClose();
     },
@@ -1868,7 +2067,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
       queryClient.invalidateQueries({ queryKey: ["documents", "audit", documentId] });
-      toast.success(t('document.actions.post'));
+      toast.success(t("document.actions.post"));
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -1881,18 +2080,24 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
         body: targetGroupId ? JSON.stringify({ targetGroupId }) : undefined,
       });
       if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<{ candidates?: ConvertCandidate[]; success?: boolean; newDocumentId?: string }>;
+      return res.json() as Promise<{
+        candidates?: ConvertCandidate[];
+        success?: boolean;
+        newDocumentId?: string;
+      }>;
     },
     onSuccess: (data) => {
       if (data.candidates) {
         setConvertCandidates(data.candidates);
-        setSelectedCandidateId(data.candidates.length === 1 ? data.candidates[0].documentGroupId : null);
+        setSelectedCandidateId(
+          data.candidates.length === 1 ? data.candidates[0].documentGroupId : null,
+        );
       } else {
         setConvertCandidates(null);
         setSelectedCandidateId(null);
         queryClient.invalidateQueries({ queryKey: ["data", "document"] });
         queryClient.invalidateQueries({ queryKey: ["documents", "audit", documentId] });
-        toast.success(t('document.actions.convert'));
+        toast.success(t("document.actions.convert"));
         onClose();
       }
     },
@@ -1948,7 +2153,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
       queryClient.invalidateQueries({ queryKey: ["documents", "audit", documentId] });
-      toast.success(t('document.actions.storno'));
+      toast.success(t("document.actions.storno"));
       onClose();
     },
     onError: (err: any) => toast.error(err.message),
@@ -1973,7 +2178,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
       toast.error(message || t("document.duplicate.noTargets"));
       return;
     }
-    const data = await res.json() as { candidates?: DocumentTargetGroupCandidate[] };
+    const data = (await res.json()) as { candidates?: DocumentTargetGroupCandidate[] };
     const candidates = data.candidates ?? [];
     if (candidates.length === 0) {
       toast.error(t("document.duplicate.noTargets"));
@@ -1989,8 +2194,10 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
   }, [documentId, t]);
 
   const docStatus = (header as any).status ?? (isNew ? "draft" : "—");
-  const docNo = isNew ? "wird vergeben" : ((header.documentNo ?? documentId));
-  const groupLabel = groupData ? `${groupData.documentType}${String(groupData.documentGroupId).slice(-2)} · ${groupData.name}` : (documentGroupId ?? "");
+  const docNo = isNew ? "wird vergeben" : (header.documentNo ?? documentId);
+  const groupLabel = groupData
+    ? `${groupData.documentType}${String(groupData.documentGroupId).slice(-2)} · ${groupData.name}`
+    : (documentGroupId ?? "");
   const docType = (header as any).documentType ?? "";
   const stornoDocumentId = (header as any).stornoDocumentId ?? null;
   const activeConvertCandidates = convertCandidates ?? [];
@@ -2040,7 +2247,9 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
   const { mutate: convertDocMutate } = convertMutation;
   const handleConvert = useCallback(() => convertDocMutate(undefined), [convertDocMutate]);
   const handleCreateNewDocument = useCallback(() => {
-    onCreateNewDocument(documentGroupId ?? groupData?.documentGroupId ?? header.documentGroupId ?? undefined);
+    onCreateNewDocument(
+      documentGroupId ?? groupData?.documentGroupId ?? header.documentGroupId ?? undefined,
+    );
   }, [documentGroupId, groupData?.documentGroupId, header.documentGroupId, onCreateNewDocument]);
 
   const commandRefs = useRef({
@@ -2175,7 +2384,11 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
       shortcut: "F7",
       group: "document",
       scope: "local",
-      isEnabled: () => !commandRefs.current.isNew && commandRefs.current.status !== "cancelled" && !commandRefs.current.archived && !["G", "g", "R", "r"].includes(commandRefs.current.type),
+      isEnabled: () =>
+        !commandRefs.current.isNew &&
+        commandRefs.current.status !== "cancelled" &&
+        !commandRefs.current.archived &&
+        !["G", "g", "R", "r"].includes(commandRefs.current.type),
       handler: () => commandRefs.current.handleConvert(),
     });
 
@@ -2204,7 +2417,11 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
       label: { en: "Cancel Document", de: "Beleg stornieren" },
       group: "document",
       scope: "local",
-      isEnabled: () => !commandRefs.current.isNew && commandRefs.current.docStatus === "posted" && ["R", "r"].includes(commandRefs.current.docType) && !commandRefs.current.stornoDocumentId,
+      isEnabled: () =>
+        !commandRefs.current.isNew &&
+        commandRefs.current.docStatus === "posted" &&
+        ["R", "r"].includes(commandRefs.current.docType) &&
+        !commandRefs.current.stornoDocumentId,
       handler: () => commandRefs.current.handleStorno(),
     });
 
@@ -2233,10 +2450,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
       unregStorno();
       unregClose();
     };
-  }, [
-    registerCommand,
-    commandRefs,
-  ]);
+  }, [registerCommand, commandRefs]);
 
   // ── lookup items ──
   const warehouseItems = useMemo(
@@ -2244,30 +2458,42 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
     [warehouses],
   );
   const paymentTermItems = useMemo(
-    () => (paymentTerms as any[]).map((p: any) => ({ id: p.paymentTermId, label: typeof p.name === "object" ? (p.name?.de ?? p.name?.en ?? "") : String(p.name ?? "") })),
+    () =>
+      (paymentTerms as any[]).map((p: any) => ({
+        id: p.paymentTermId,
+        label: typeof p.name === "object" ? (p.name?.de ?? p.name?.en ?? "") : String(p.name ?? ""),
+      })),
     [paymentTerms],
   );
   const shippingItems = useMemo(
-    () => (shippingMethods as any[]).map((s: any) => ({ id: s.shippingMethodId, label: typeof s.name === "object" ? (s.name?.de ?? s.name?.en ?? "") : String(s.name ?? "") })),
+    () =>
+      (shippingMethods as any[]).map((s: any) => ({
+        id: s.shippingMethodId,
+        label: typeof s.name === "object" ? (s.name?.de ?? s.name?.en ?? "") : String(s.name ?? ""),
+      })),
     [shippingMethods],
   );
   const currencyItems = useMemo(
-    () => (currencies as any[]).map((c: any) => ({ id: c.code, label: `${c.code} – ${typeof c.name === "object" ? (c.name?.de ?? c.name?.en ?? "") : String(c.name ?? "")}` })),
+    () =>
+      (currencies as any[]).map((c: any) => ({
+        id: c.code,
+        label: `${c.code} – ${typeof c.name === "object" ? (c.name?.de ?? c.name?.en ?? "") : String(c.name ?? "")}`,
+      })),
     [currencies],
   );
   if (!isNew && isDocLoading) {
     return (
-      <div className="h-full w-full flex items-center justify-center bg-canvas">
-        <span className="text-[13px] text-ink-mute">{t('document.loading')}</span>
+      <div className="flex h-full w-full items-center justify-center bg-canvas">
+        <span className="text-[13px] text-ink-mute">{t("document.loading")}</span>
       </div>
     );
   }
 
   return (
-    <div ref={editorRootRef} className="h-full w-full flex flex-col bg-canvas overflow-hidden">
+    <div ref={editorRootRef} className="flex h-full w-full flex-col overflow-hidden bg-canvas">
       {/* Breadcrumb bar */}
-      <div className="h-9 shrink-0 flex items-center gap-2 px-3 bg-canvas-soft border-b border-hairline">
-        <span className="text-[13px] text-ink-mute">{t('document.breadcrumb')}</span>
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-hairline bg-canvas-soft px-3">
+        <span className="text-[13px] text-ink-mute">{t("document.breadcrumb")}</span>
         {groupLabel && (
           <>
             <ChevronRightIcon className="size-3 text-hairline-input" />
@@ -2275,201 +2501,250 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
           </>
         )}
         <ChevronRightIcon className="size-3 text-hairline-input" />
-        <span className={cn("text-[13px] font-medium", isNew && "text-ink-mute italic")}>{docNo}</span>
+        <span className={cn("text-[13px] font-medium", isNew && "text-ink-mute italic")}>
+          {docNo}
+        </span>
         <StatusDot status={docStatus} />
-        {isDocumentDirty && <span className="text-[11px] text-primary ml-1">●</span>}
+        {isDocumentDirty && <span className="ml-1 text-[11px] text-primary">●</span>}
       </div>
 
-      <div className="flex flex-1 min-h-0 overflow-hidden flex-col xl:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Header form */}
           <div className="shrink-0 border-b border-hairline bg-canvas">
-        {/* DocType + DocGroup selectors — only for new documents without a pre-set group */}
-        {isNew && !documentGroupId && (
-          <div className="grid gap-x-6 px-4 pt-4 pb-2" style={{ gridTemplateColumns: "1fr 1fr 200px 160px" }}>
-            <DocLookupField
-              label={t('document.fields.documentType')}
-              focusField="documentType"
-              tabIndex={0}
-              value={header.documentType ?? null}
-              onChange={(id) => patchHeader({ documentType: id ?? undefined, documentGroupId: undefined })}
-              items={(allDocTypes as any[]).map((dt: any) => ({
-                id: dt.movementType,
-                label: `${dt.movementType} — ${dt.name}`,
-              }))}
-              placeholder={t('document.lookup.selectType')}
-            />
-            <DocLookupField
-              label={t('document.fields.documentGroup')}
-              focusField="documentGroupId"
-              tabIndex={0}
-              value={header.documentGroupId ?? null}
-              onChange={(id) => {
-                const grp = (docGroupsForType as any[]).find((g: any) => g.documentGroupId === id);
-                if (grp) {
-                  patchHeader({
-                    documentGroupId: grp.documentGroupId,
-                    warehouseId: header.warehouseId ?? grp.defaultWarehouseId ?? null,
-                    paymentTermId: header.paymentTermId ?? grp.defaultPaymentTermId ?? null,
-                    shippingMethodId: header.shippingMethodId ?? grp.defaultShippingMethodId ?? null,
-                    currencyId: header.currencyId ?? grp.defaultCurrencyId ?? null,
-                  });
-                } else {
-                  patchHeader({ documentGroupId: id ?? undefined });
-                }
+            {/* DocType + DocGroup selectors — only for new documents without a pre-set group */}
+            {isNew && !documentGroupId && (
+              <div
+                className="grid gap-x-6 px-4 pt-4 pb-2"
+                style={{ gridTemplateColumns: "1fr 1fr 200px 160px" }}
+              >
+                <DocLookupField
+                  label={t("document.fields.documentType")}
+                  focusField="documentType"
+                  tabIndex={0}
+                  value={header.documentType ?? null}
+                  onChange={(id) =>
+                    patchHeader({ documentType: id ?? undefined, documentGroupId: undefined })
+                  }
+                  items={(allDocTypes as any[]).map((dt: any) => ({
+                    id: dt.movementType,
+                    label: `${dt.movementType} — ${dt.name}`,
+                  }))}
+                  placeholder={t("document.lookup.selectType")}
+                />
+                <DocLookupField
+                  label={t("document.fields.documentGroup")}
+                  focusField="documentGroupId"
+                  tabIndex={0}
+                  value={header.documentGroupId ?? null}
+                  onChange={(id) => {
+                    const grp = (docGroupsForType as any[]).find(
+                      (g: any) => g.documentGroupId === id,
+                    );
+                    if (grp) {
+                      patchHeader({
+                        documentGroupId: grp.documentGroupId,
+                        warehouseId: header.warehouseId ?? grp.defaultWarehouseId ?? null,
+                        paymentTermId: header.paymentTermId ?? grp.defaultPaymentTermId ?? null,
+                        shippingMethodId:
+                          header.shippingMethodId ?? grp.defaultShippingMethodId ?? null,
+                        currencyId: header.currencyId ?? grp.defaultCurrencyId ?? null,
+                      });
+                    } else {
+                      patchHeader({ documentGroupId: id ?? undefined });
+                    }
+                  }}
+                  items={(docGroupsForType as any[]).map((g: any) => ({
+                    id: g.documentGroupId,
+                    label: `${String(g.groupNumber ?? "").padStart(2, "0")} — ${g.name}`,
+                  }))}
+                  placeholder={
+                    selectedDocType
+                      ? t("document.lookup.selectGroup")
+                      : t("document.lookup.selectTypeFirst")
+                  }
+                />
+                <div />
+                <div />
+              </div>
+            )}
+            <div
+              className="grid gap-x-6 px-4 py-4"
+              style={{
+                gridTemplateColumns: hidePartyFields
+                  ? "minmax(0,1fr) 160px"
+                  : "1fr 1fr 200px 160px",
               }}
-              items={(docGroupsForType as any[]).map((g: any) => ({
-                id: g.documentGroupId,
-                label: `${String(g.groupNumber ?? "").padStart(2, "0")} — ${g.name}`,
-              }))}
-              placeholder={selectedDocType ? t('document.lookup.selectGroup') : t('document.lookup.selectTypeFirst')}
-            />
-            <div /><div />
-          </div>
-        )}
-        <div
-          className="grid gap-x-6 px-4 py-4"
-          style={{ gridTemplateColumns: hidePartyFields ? "minmax(0,1fr) 160px" : "1fr 1fr 200px 160px" }}
-        >
-          {!hidePartyFields && (
-            <>
-              {/* Col 1: Invoice address */}
-            <AddressPickerField
-              label={t('document.fields.billingAddress')}
-              tabIndex={0}
-              value={header.customerId ?? null}
-              addressData={header.billingAddress ?? null}
-              locked={billingAddressLocked}
-              lockLabel={t("document.actions.lock")}
-              unlockLabel={t("document.actions.unlock")}
-              onToggleLock={() => setAddressFieldLock("billingAddress", !billingAddressLocked)}
-              onChange={(id, json, raw) => {
-                if (billingAddressLocked) return;
-                const update: Partial<DocHeader> = {
-                  customerId: id,
-                  billingAddress: json,
-                };
-                // Auto-fill currency and payment term from address if present
-                if (raw?.currencyId && !header.currencyId) update.currencyId = raw.currencyId;
-                if (raw?.paymentTermId && !header.paymentTermId) update.paymentTermId = raw.paymentTermId;
-                // Auto-fill delivery address from address default
-                if (raw?.defaultDeliveryAddressId && !header.deliveryAddressId && !deliveryAddressLocked) {
-                  update.deliveryAddressId = raw.defaultDeliveryAddressId;
-                }
-                patchHeader(update);
-              }}
-            />
-
-              {/* Col 2: Delivery address */}
-            <DeliveryAddressPickerField
-              label={t('document.fields.deliveryAddress')}
-              tabIndex={0}
-              value={header.deliveryAddressId ?? null}
-              addressId={header.customerId ?? null}
-              addressData={header.deliveryAddress ?? null}
-              locked={deliveryAddressLocked}
-              lockLabel={t("document.actions.lock")}
-              unlockLabel={t("document.actions.unlock")}
-              onToggleLock={() => setAddressFieldLock("deliveryAddress", !deliveryAddressLocked)}
-              onChange={(id, json) => {
-                if (deliveryAddressLocked) return;
-                patchHeader({ deliveryAddressId: id, deliveryAddress: json });
-              }}
-            />
-            </>
-          )}
-
-          {/* Col 3: Logistics */}
-          <div className="flex flex-col gap-3">
-            <DocLookupField
-              label={t('document.fields.warehouse')}
-              focusField="warehouseId"
-              tabIndex={0}
-              value={header.warehouseId ?? null}
-              onChange={(id) => patchHeader({ warehouseId: id })}
-              items={warehouseItems}
-              placeholder="—"
-            />
-            <DocLookupField
-              label={t('document.fields.paymentTerm')}
-              focusField="paymentTermId"
-              tabIndex={0}
-              value={header.paymentTermId ?? null}
-              onChange={(id) => patchHeader({ paymentTermId: id })}
-              items={paymentTermItems}
-              placeholder="—"
-            />
-            <DocLookupField
-              label={t('document.fields.shippingMethod')}
-              focusField="shippingMethodId"
-              tabIndex={0}
-              value={header.shippingMethodId ?? null}
-              onChange={(id) => patchHeader({ shippingMethodId: id })}
-              items={shippingItems}
-              placeholder="—"
-            />
-          </div>
-
-          {/* Col 4: Date + currency */}
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-ink-mute">{t('document.fields.date')}</label>
-              <input
-                tabIndex={0}
-                type="date"
-                className={cn(inputBase, "h-8")}
-                value={header.documentDate ?? ""}
-                onFocus={() => setFocus({
-                  workspace: "documents",
-                  panel: "document-editor",
-                  entity: "document",
-                  recordId: isNew ? null : documentId,
-                  area: "form",
-                  field: "documentDate",
-                  mode: isNew ? "create" : "edit",
-                })}
-                onChange={(e) => patchHeader({ documentDate: e.target.value })}
-              />
-            </div>
-            <DocLookupField
-              label={t('document.fields.currency')}
-              focusField="currencyId"
-              tabIndex={0}
-              value={header.currencyId ?? null}
-              onChange={(id) => patchHeader({ currencyId: id })}
-              items={currencyItems}
-              placeholder="EUR"
-              onTabForward={() => linesEditorRef.current?.focusFirstLine()}
-            />
-          </div>
-        </div>
-
-        {/* Technical info expander */}
-        {!isNew && (
-          <div className="border-t border-hairline px-4 py-1.5">
-            <button
-              className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-ink-mute hover:text-ink transition-colors"
-              onClick={() => setShowTechnical((v) => !v)}
             >
-              {showTechnical ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
-              {t('document.technicalFields')}
-            </button>
-            {showTechnical && (
-              <div className="mt-2 mb-1 grid grid-cols-4 gap-3 rounded bg-canvas-soft p-3">
-                {["documentId", "documentType", "documentGroupId", "documentDirection", "status", "versionNo", "createdAt", "updatedAt"].map((f) => (
-                  <div key={f} className="flex flex-col gap-0.5">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-ink-mute">{f}</span>
-                    <span className="font-mono text-[11px] text-ink truncate">{String((header as any)[f] ?? "—")}</span>
+              {!hidePartyFields && (
+                <>
+                  {/* Col 1: Invoice address */}
+                  <AddressPickerField
+                    label={t("document.fields.billingAddress")}
+                    tabIndex={0}
+                    value={header.customerId ?? null}
+                    addressData={header.billingAddress ?? null}
+                    locked={billingAddressLocked}
+                    lockLabel={t("document.actions.lock")}
+                    unlockLabel={t("document.actions.unlock")}
+                    onToggleLock={() =>
+                      setAddressFieldLock("billingAddress", !billingAddressLocked)
+                    }
+                    onChange={(id, json, raw) => {
+                      if (billingAddressLocked) return;
+                      const update: Partial<DocHeader> = {
+                        customerId: id,
+                        billingAddress: json,
+                      };
+                      // Auto-fill currency and payment term from address if present
+                      if (raw?.currencyId && !header.currencyId) update.currencyId = raw.currencyId;
+                      if (raw?.paymentTermId && !header.paymentTermId)
+                        update.paymentTermId = raw.paymentTermId;
+                      // Auto-fill delivery address from address default
+                      if (
+                        raw?.defaultDeliveryAddressId &&
+                        !header.deliveryAddressId &&
+                        !deliveryAddressLocked
+                      ) {
+                        update.deliveryAddressId = raw.defaultDeliveryAddressId;
+                      }
+                      patchHeader(update);
+                    }}
+                  />
+
+                  {/* Col 2: Delivery address */}
+                  <DeliveryAddressPickerField
+                    label={t("document.fields.deliveryAddress")}
+                    tabIndex={0}
+                    value={header.deliveryAddressId ?? null}
+                    addressId={header.customerId ?? null}
+                    addressData={header.deliveryAddress ?? null}
+                    locked={deliveryAddressLocked}
+                    lockLabel={t("document.actions.lock")}
+                    unlockLabel={t("document.actions.unlock")}
+                    onToggleLock={() =>
+                      setAddressFieldLock("deliveryAddress", !deliveryAddressLocked)
+                    }
+                    onChange={(id, json) => {
+                      if (deliveryAddressLocked) return;
+                      patchHeader({ deliveryAddressId: id, deliveryAddress: json });
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Col 3: Logistics */}
+              <div className="flex flex-col gap-3">
+                <DocLookupField
+                  label={t("document.fields.warehouse")}
+                  focusField="warehouseId"
+                  tabIndex={0}
+                  value={header.warehouseId ?? null}
+                  onChange={(id) => patchHeader({ warehouseId: id })}
+                  items={warehouseItems}
+                  placeholder="—"
+                />
+                <DocLookupField
+                  label={t("document.fields.paymentTerm")}
+                  focusField="paymentTermId"
+                  tabIndex={0}
+                  value={header.paymentTermId ?? null}
+                  onChange={(id) => patchHeader({ paymentTermId: id })}
+                  items={paymentTermItems}
+                  placeholder="—"
+                />
+                <DocLookupField
+                  label={t("document.fields.shippingMethod")}
+                  focusField="shippingMethodId"
+                  tabIndex={0}
+                  value={header.shippingMethodId ?? null}
+                  onChange={(id) => patchHeader({ shippingMethodId: id })}
+                  items={shippingItems}
+                  placeholder="—"
+                />
+              </div>
+
+              {/* Col 4: Date + currency */}
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                    {t("document.fields.date")}
+                  </label>
+                  <input
+                    tabIndex={0}
+                    type="date"
+                    className={cn(inputBase, "h-8")}
+                    value={header.documentDate ?? ""}
+                    onFocus={() =>
+                      setFocus({
+                        workspace: "documents",
+                        panel: "document-editor",
+                        entity: "document",
+                        recordId: isNew ? null : documentId,
+                        area: "form",
+                        field: "documentDate",
+                        mode: isNew ? "create" : "edit",
+                      })
+                    }
+                    onChange={(e) => patchHeader({ documentDate: e.target.value })}
+                  />
+                </div>
+                <DocLookupField
+                  label={t("document.fields.currency")}
+                  focusField="currencyId"
+                  tabIndex={0}
+                  value={header.currencyId ?? null}
+                  onChange={(id) => patchHeader({ currencyId: id })}
+                  items={currencyItems}
+                  placeholder="EUR"
+                  onTabForward={() => linesEditorRef.current?.focusFirstLine()}
+                />
+              </div>
+            </div>
+
+            {/* Technical info expander */}
+            {!isNew && (
+              <div className="border-t border-hairline px-4 py-1.5">
+                <button
+                  className="flex items-center gap-1 text-[10px] font-medium tracking-wider text-ink-mute uppercase transition-colors hover:text-ink"
+                  onClick={() => setShowTechnical((v) => !v)}
+                >
+                  {showTechnical ? (
+                    <ChevronDownIcon className="size-3" />
+                  ) : (
+                    <ChevronRightIcon className="size-3" />
+                  )}
+                  {t("document.technicalFields")}
+                </button>
+                {showTechnical && (
+                  <div className="mt-2 mb-1 grid grid-cols-4 gap-3 rounded bg-canvas-soft p-3">
+                    {[
+                      "documentId",
+                      "documentType",
+                      "documentGroupId",
+                      "documentDirection",
+                      "status",
+                      "versionNo",
+                      "createdAt",
+                      "updatedAt",
+                    ].map((f) => (
+                      <div key={f} className="flex flex-col gap-0.5">
+                        <span className="text-[9px] font-bold tracking-wider text-ink-mute uppercase">
+                          {f}
+                        </span>
+                        <span className="truncate font-mono text-[11px] text-ink">
+                          {String((header as any)[f] ?? "—")}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
-        )}
-      </div>
 
           {/* Lines */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <DocumentLinesEditor
               ref={linesEditorRef}
               documentId={isNew ? null : documentId}
@@ -2484,27 +2759,31 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
           </div>
         </div>
 
-        <aside className="shrink-0 border-t border-hairline bg-canvas-soft/60 xl:border-t-0 xl:border-l xl:w-80 max-h-72 xl:max-h-none overflow-hidden">
+        <aside className="max-h-72 shrink-0 overflow-hidden border-t border-hairline bg-canvas-soft/60 xl:max-h-none xl:w-80 xl:border-t-0 xl:border-l">
           <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 border-b border-hairline px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-mute">
+              <div className="text-[11px] font-semibold tracking-[0.18em] text-ink-mute uppercase">
                 {t("document.audit.title", { defaultValue: "Audit-Verlauf" })}
               </div>
               <div className="mt-1 text-[12px] text-ink-mute">
                 {t("document.audit.transaction", { defaultValue: "Transaction" })}:{" "}
-                <span className="font-mono text-[11px] text-ink">{auditTrail?.transactionId ?? "—"}</span>
+                <span className="font-mono text-[11px] text-ink">
+                  {auditTrail?.transactionId ?? "—"}
+                </span>
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
               {isNew ? (
                 <div className="rounded border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
-                  {t("document.audit.noDraft", { defaultValue: "Audit is available after the document is created." })}
+                  {t("document.audit.noDraft", {
+                    defaultValue: "Audit is available after the document is created.",
+                  })}
                 </div>
               ) : isAuditLoading ? (
                 <div className="space-y-2">
-                  <div className="h-16 rounded border border-hairline bg-canvas animate-pulse" />
-                  <div className="h-16 rounded border border-hairline bg-canvas animate-pulse" />
+                  <div className="h-16 animate-pulse rounded border border-hairline bg-canvas" />
+                  <div className="h-16 animate-pulse rounded border border-hairline bg-canvas" />
                 </div>
               ) : (
                 <>
@@ -2514,8 +2793,12 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
                       origin: t("document.audit.tags.origin", { defaultValue: "Origin" }),
                       derived: t("document.audit.tags.derived", { defaultValue: "Derived" }),
                       reversal: t("document.audit.tags.reversal", { defaultValue: "Reversal" }),
-                      predecessor: t("document.audit.tags.predecessor", { defaultValue: "Predecessor" }),
-                      "storno-source": t("document.audit.tags.stornoSource", { defaultValue: "Storno source" }),
+                      predecessor: t("document.audit.tags.predecessor", {
+                        defaultValue: "Predecessor",
+                      }),
+                      "storno-source": t("document.audit.tags.stornoSource", {
+                        defaultValue: "Storno source",
+                      }),
                       posted: t("document.audit.tags.posted", { defaultValue: "Posted" }),
                       archived: t("document.audit.tags.archived", { defaultValue: "Archived" }),
                     };
@@ -2525,13 +2808,17 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
                         key={node.documentId}
                         className={cn(
                           "rounded border px-3 py-3 text-[12px] shadow-sm",
-                          node.isCurrent ? "border-primary bg-[color-mix(in_oklab,var(--primary)_6%,var(--canvas))]" : "border-hairline bg-canvas",
+                          node.isCurrent
+                            ? "border-primary bg-[color-mix(in_oklab,var(--primary)_6%,var(--canvas))]"
+                            : "border-hairline bg-canvas",
                         )}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-[12px] text-ink">{node.documentNo}</span>
+                              <span className="font-mono text-[12px] text-ink">
+                                {node.documentNo}
+                              </span>
                               <StatusDot status={node.status} />
                             </div>
                             <div className="mt-0.5 text-[11px] text-ink-mute">
@@ -2543,7 +2830,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
                               <span
                                 key={tag}
                                 className={cn(
-                                  "rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide",
+                                  "rounded-full border px-2 py-0.5 text-[10px] tracking-wide uppercase",
                                   tag === "current"
                                     ? "border-primary text-primary"
                                     : "border-hairline text-ink-mute",
@@ -2557,20 +2844,28 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
 
                         <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-ink-mute">
                           <div className="min-w-0">
-                            <div className="uppercase tracking-wide text-[9px]">parent</div>
-                            <div className="truncate font-mono text-ink">{node.parentDocumentId ?? "—"}</div>
+                            <div className="text-[9px] tracking-wide uppercase">parent</div>
+                            <div className="truncate font-mono text-ink">
+                              {node.parentDocumentId ?? "—"}
+                            </div>
                           </div>
                           <div className="min-w-0">
-                            <div className="uppercase tracking-wide text-[9px]">storno</div>
-                            <div className="truncate font-mono text-ink">{node.stornoDocumentId ?? "—"}</div>
+                            <div className="text-[9px] tracking-wide uppercase">storno</div>
+                            <div className="truncate font-mono text-ink">
+                              {node.stornoDocumentId ?? "—"}
+                            </div>
                           </div>
                           <div className="min-w-0">
-                            <div className="uppercase tracking-wide text-[9px]">status</div>
+                            <div className="text-[9px] tracking-wide uppercase">status</div>
                             <div className="truncate text-ink">{node.status}</div>
                           </div>
                           <div className="min-w-0">
-                            <div className="uppercase tracking-wide text-[9px]">archived</div>
-                            <div className="truncate text-ink">{node.isArchived ? formatDate(node.archivedAt ?? node.updatedAt ?? node.createdAt) : "—"}</div>
+                            <div className="text-[9px] tracking-wide uppercase">archived</div>
+                            <div className="truncate text-ink">
+                              {node.isArchived
+                                ? formatDate(node.archivedAt ?? node.updatedAt ?? node.createdAt)
+                                : "—"}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2585,35 +2880,49 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
 
                   {auditTrail?.productionFacts?.length ? (
                     <div className="pt-2">
-                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-mute">
+                      <div className="mb-2 text-[11px] font-semibold tracking-[0.18em] text-ink-mute uppercase">
                         {t("document.audit.production", { defaultValue: "Production Trace" })}
                       </div>
                       <div className="space-y-2">
                         {auditTrail.productionFacts.map((fact) => (
-                          <div key={fact.documentLineId} className="rounded border border-hairline bg-canvas px-3 py-2 text-[12px]">
+                          <div
+                            key={fact.documentLineId}
+                            className="rounded border border-hairline bg-canvas px-3 py-2 text-[12px]"
+                          >
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
-                                <div className="font-mono text-[11px] text-ink">{fact.lineNo.toString().padStart(3, "0")} · {fact.articleTextSnapshot ?? fact.articleId ?? "—"}</div>
-                                <div className="text-[11px] text-ink-mute">{fact.side === "output" ? t("document.audit.sideOutput", { defaultValue: "Output" }) : t("document.audit.sideInput", { defaultValue: "Input" })}</div>
+                                <div className="font-mono text-[11px] text-ink">
+                                  {fact.lineNo.toString().padStart(3, "0")} ·{" "}
+                                  {fact.articleTextSnapshot ?? fact.articleId ?? "—"}
+                                </div>
+                                <div className="text-[11px] text-ink-mute">
+                                  {fact.side === "output"
+                                    ? t("document.audit.sideOutput", { defaultValue: "Output" })
+                                    : t("document.audit.sideInput", { defaultValue: "Input" })}
+                                </div>
                               </div>
-                              <span className={cn(
-                                "rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide border",
-                                fact.side === "output" ? "border-emerald-300 text-emerald-700" : "border-amber-300 text-amber-700",
-                              )}>
+                              <span
+                                className={cn(
+                                  "rounded-full border px-2 py-0.5 text-[10px] tracking-wide uppercase",
+                                  fact.side === "output"
+                                    ? "border-emerald-300 text-emerald-700"
+                                    : "border-amber-300 text-amber-700",
+                                )}
+                              >
                                 {fact.side}
                               </span>
                             </div>
                             <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-ink-mute">
                               <div>
-                                <div className="uppercase tracking-wide text-[9px]">Soll</div>
+                                <div className="text-[9px] tracking-wide uppercase">Soll</div>
                                 <div className="font-mono text-ink">{fact.expectedQty}</div>
                               </div>
                               <div>
-                                <div className="uppercase tracking-wide text-[9px]">Ist</div>
+                                <div className="text-[9px] tracking-wide uppercase">Ist</div>
                                 <div className="font-mono text-ink">{fact.movementQty}</div>
                               </div>
                               <div>
-                                <div className="uppercase tracking-wide text-[9px]">Var.</div>
+                                <div className="text-[9px] tracking-wide uppercase">Var.</div>
                                 <div className="font-mono text-ink">{fact.varianceQty}</div>
                               </div>
                             </div>
@@ -2629,21 +2938,20 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
         </aside>
       </div>
 
-      <Dialog
-        open={closeDialogOpen}
-        onOpenChange={(open) => setCloseDialogOpen(open)}
-      >
-        <DialogContent className="max-w-md p-0 overflow-hidden" showCloseButton={false}>
-          <div className="px-5 py-4 border-b border-hairline">
-            <div className="text-[14px] font-semibold text-ink">{t("document.closePrompt.title")}</div>
-            <div className="text-[12px] text-ink-mute mt-0.5">
+      <Dialog open={closeDialogOpen} onOpenChange={(open) => setCloseDialogOpen(open)}>
+        <DialogContent className="max-w-md overflow-hidden p-0" showCloseButton={false}>
+          <div className="border-b border-hairline px-5 py-4">
+            <div className="text-[14px] font-semibold text-ink">
+              {t("document.closePrompt.title")}
+            </div>
+            <div className="mt-0.5 text-[12px] text-ink-mute">
               {t("document.closePrompt.description")}
             </div>
           </div>
-          <div className="px-5 py-4 flex flex-wrap gap-2 justify-end">
+          <div className="flex flex-wrap justify-end gap-2 px-5 py-4">
             <button
               type="button"
-              className="h-8 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink transition-colors disabled:opacity-40"
+              className="h-8 rounded-full border border-hairline px-4 text-[13px] text-ink-secondary transition-colors hover:text-ink disabled:opacity-40"
               onClick={handleCloseWithoutSaving}
               disabled={saveMutation.isPending}
             >
@@ -2651,7 +2959,7 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
             </button>
             <button
               type="button"
-              className="h-8 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink transition-colors disabled:opacity-40"
+              className="h-8 rounded-full border border-hairline px-4 text-[13px] text-ink-secondary transition-colors hover:text-ink disabled:opacity-40"
               onClick={() => setCloseDialogOpen(false)}
               disabled={saveMutation.isPending}
             >
@@ -2659,12 +2967,14 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
             </button>
             <button
               type="button"
-              className="h-8 px-4 rounded-full text-[13px] disabled:opacity-40 transition-colors"
+              className="h-8 rounded-full px-4 text-[13px] transition-colors disabled:opacity-40"
               style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
               onClick={handleSaveDraftAndClose}
               disabled={saveMutation.isPending}
             >
-              {saveMutation.isPending ? t("document.actions.saving") : t("document.closePrompt.saveDraftAndClose")}
+              {saveMutation.isPending
+                ? t("document.actions.saving")
+                : t("document.closePrompt.saveDraftAndClose")}
             </button>
           </div>
         </DialogContent>
@@ -2680,11 +2990,11 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
           }
         }}
       >
-        <DialogContent className="max-w-sm p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-hairline">
-            <div className="text-[14px] font-semibold text-ink">{t('document.convert.title')}</div>
-            <div className="text-[12px] text-ink-mute mt-0.5">
-              {docType} {header.documentNo} → {t('document.convert.selectTarget')}
+        <DialogContent className="max-w-sm overflow-hidden p-0">
+          <div className="border-b border-hairline px-5 py-4">
+            <div className="text-[14px] font-semibold text-ink">{t("document.convert.title")}</div>
+            <div className="mt-0.5 text-[12px] text-ink-mute">
+              {docType} {header.documentNo} → {t("document.convert.selectTarget")}
             </div>
           </div>
           <div className="flex flex-col gap-1.5 p-5">
@@ -2693,37 +3003,49 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
                 key={c.documentGroupId}
                 type="button"
                 className={cn(
-                  "w-full text-left px-3 py-2 rounded border text-[13px] transition-colors",
-                  (selectedCandidateId === c.documentGroupId || activeConvertCandidates.length === 1)
+                  "w-full rounded border px-3 py-2 text-left text-[13px] transition-colors",
+                  selectedCandidateId === c.documentGroupId || activeConvertCandidates.length === 1
                     ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] text-ink"
-                    : "border-hairline hover:border-primary text-ink-secondary hover:text-ink",
+                    : "border-hairline text-ink-secondary hover:border-primary hover:text-ink",
                 )}
                 onClick={() => setSelectedCandidateId(c.documentGroupId)}
               >
-                <span className="font-mono text-[11px] text-ink-mute mr-2">{c.documentType}{String(c.groupNumber).padStart(2, "0")}</span>
+                <span className="mr-2 font-mono text-[11px] text-ink-mute">
+                  {c.documentType}
+                  {String(c.groupNumber).padStart(2, "0")}
+                </span>
                 {c.name}
               </button>
             ))}
           </div>
-          <div className="px-5 pb-5 flex gap-2 justify-end">
+          <div className="flex justify-end gap-2 px-5 pb-5">
             <button
-              className="h-7 px-4 rounded-full text-[13px] border border-hairline text-ink-secondary hover:text-ink transition-colors"
-              onClick={() => { setConvertCandidates(null); setSelectedCandidateId(null); }}
+              className="h-7 rounded-full border border-hairline px-4 text-[13px] text-ink-secondary transition-colors hover:text-ink"
+              onClick={() => {
+                setConvertCandidates(null);
+                setSelectedCandidateId(null);
+              }}
             >
-              {t('document.actions.close')}
+              {t("document.actions.close")}
             </button>
             <button
-              className="h-7 px-4 rounded-full text-[13px] disabled:opacity-40 transition-colors"
+              className="h-7 rounded-full px-4 text-[13px] transition-colors disabled:opacity-40"
               style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
-              disabled={convertMutation.isPending || (activeConvertCandidates.length > 1 && !selectedCandidateId)}
+              disabled={
+                convertMutation.isPending ||
+                (activeConvertCandidates.length > 1 && !selectedCandidateId)
+              }
               onClick={() => {
-                const target = activeConvertCandidates.length === 1
-                  ? activeConvertCandidates[0].documentGroupId
-                  : selectedCandidateId;
+                const target =
+                  activeConvertCandidates.length === 1
+                    ? activeConvertCandidates[0].documentGroupId
+                    : selectedCandidateId;
                 if (target) convertMutation.mutate(target);
               }}
             >
-              {convertMutation.isPending ? t('document.actions.converting') : t('document.convert.confirm')}
+              {convertMutation.isPending
+                ? t("document.actions.converting")
+                : t("document.convert.confirm")}
             </button>
           </div>
         </DialogContent>
@@ -2739,13 +3061,15 @@ export function DocumentEditor({ documentId, documentGroupId, onClose, onCreateN
         confirmLabel={t("document.actions.duplicate")}
         confirmPendingLabel={t("document.actions.duplicating")}
         isPending={duplicateMutation.isPending}
-        onSelectGroupId={(groupId) => setDuplicateDialog((p) => ({ ...p, selectedGroupId: groupId }))}
+        onSelectGroupId={(groupId) =>
+          setDuplicateDialog((p) => ({ ...p, selectedGroupId: groupId }))
+        }
         onConfirm={() => {
-          const target = duplicateDialog.selectedGroupId ?? duplicateDialog.candidates[0]?.documentGroupId;
+          const target =
+            duplicateDialog.selectedGroupId ?? duplicateDialog.candidates[0]?.documentGroupId;
           if (target) duplicateMutation.mutate(target);
         }}
       />
-
     </div>
   );
 }

@@ -7,10 +7,13 @@ import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { Sparkles as SparklesIcon, CalendarRange as CalendarRangeIcon } from "lucide-react";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { SetupGuide } from "#/components/setup/SetupGuide";
+import { YearEndAssistant } from "#/components/setup/YearEndAssistant";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
 
 export const Route = createFileRoute("/_auth/app/settings/")({
@@ -25,6 +28,15 @@ interface SettingsRegistryEntry {
 
 const GROUP_ORDER = ["master", "organisation", "vertrieb", "lager_artikel", "finanzen", "geodaten"];
 const SETTINGS_GRID_PANEL_ID = "settings-grid";
+const COMPANY_SCOPED_SETTINGS = new Set([
+  "bankAccount",
+  "numberSequence",
+  "documentGroup",
+  "warehouse",
+  "accountDeterminationRule",
+  "costCenter",
+  "glAccount",
+]);
 
 function resolveSettingsLabel(label: SettingsRegistryEntry["label"], language: string) {
   if (typeof label === "string") return label;
@@ -35,12 +47,7 @@ function resolveLocalizedLabel(value: unknown, language: string) {
   if (typeof value === "string") return value;
   if (!value || typeof value !== "object") return "";
   const record = value as Record<string, unknown>;
-  return (
-    (language === "de" ? record.de : record.en) ??
-    record.en ??
-    record.de ??
-    ""
-  ) as string;
+  return ((language === "de" ? record.de : record.en) ?? record.en ?? record.de ?? "") as string;
 }
 
 function resolveGroupLabel(
@@ -80,6 +87,11 @@ function SettingsView() {
   const queryClient = useQueryClient();
   const sidebarItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const settingsGridRef = useRef<DataGridHandle>(null);
+
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
+  const [showYearEndWizard, setShowYearEndWizard] = useState(false);
+  const [wizardCompany, setWizardCompany] = useState<{ id: string; name: string } | null>(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -158,7 +170,10 @@ function SettingsView() {
   const taxClassLabelMap = useMemo(
     () =>
       new Map<string, string>(
-        taxClasses.map((row: any) => [row.taxClassId, row.code ?? resolveLocalizedLabel(row.name, i18n.language)]),
+        taxClasses.map((row: any) => [
+          row.taxClassId,
+          row.code ?? resolveLocalizedLabel(row.name, i18n.language),
+        ]),
       ),
     [taxClasses, i18n.language],
   );
@@ -213,6 +228,8 @@ function SettingsView() {
 
   const selectedEntry = orderedEntries.find((e) => e.tableName === selectedKey);
   const tableLabel = selectedEntry?.label || t(`settings.entities.${selectedKey}`);
+  const isCompanyMaster = selectedKey === "company";
+  const isCompanyScopedSetting = COMPANY_SCOPED_SETTINGS.has(selectedKey);
   const selectedIndex = useMemo(() => {
     const idx = orderedEntries.findIndex((entry) => entry.tableName === selectedKey);
     return idx >= 0 ? idx : 0;
@@ -232,25 +249,25 @@ function SettingsView() {
           key: "taxClassId",
           header: "Tax Class",
           render: (row: any) =>
-            row.taxClassId ? taxClassLabelMap.get(row.taxClassId) ?? row.taxClassId : "—",
+            row.taxClassId ? (taxClassLabelMap.get(row.taxClassId) ?? row.taxClassId) : "—",
         },
         {
           key: "baseUnitId",
           header: "Base Unit",
           render: (row: any) =>
-            row.baseUnitId ? unitLabelMap.get(row.baseUnitId) ?? row.baseUnitId : "—",
+            row.baseUnitId ? (unitLabelMap.get(row.baseUnitId) ?? row.baseUnitId) : "—",
         },
         {
           key: "salesUnitId",
           header: "Sales Unit",
           render: (row: any) =>
-            row.salesUnitId ? unitLabelMap.get(row.salesUnitId) ?? row.salesUnitId : "—",
+            row.salesUnitId ? (unitLabelMap.get(row.salesUnitId) ?? row.salesUnitId) : "—",
         },
         {
           key: "purchaseUnitId",
           header: "Purchase Unit",
           render: (row: any) =>
-            row.purchaseUnitId ? unitLabelMap.get(row.purchaseUnitId) ?? row.purchaseUnitId : "—",
+            row.purchaseUnitId ? (unitLabelMap.get(row.purchaseUnitId) ?? row.purchaseUnitId) : "—",
         },
         { key: "trackingMode", header: "Tracking" },
         { key: "bomType", header: "BOM" },
@@ -269,21 +286,21 @@ function SettingsView() {
           key: "taxClassId",
           header: "Tax Class",
           render: (row: any) =>
-            row.taxClassId ? taxClassLabelMap.get(row.taxClassId) ?? row.taxClassId : "—",
+            row.taxClassId ? (taxClassLabelMap.get(row.taxClassId) ?? row.taxClassId) : "—",
         },
         {
           key: "paymentTermId",
           header: "Payment Terms",
           render: (row: any) =>
             row.paymentTermId
-              ? paymentTermLabelMap.get(row.paymentTermId) ?? row.paymentTermId
+              ? (paymentTermLabelMap.get(row.paymentTermId) ?? row.paymentTermId)
               : "—",
         },
         {
           key: "currencyId",
           header: "Currency",
           render: (row: any) =>
-            row.currencyId ? currencyLabelMap.get(row.currencyId) ?? row.currencyId : "—",
+            row.currencyId ? (currencyLabelMap.get(row.currencyId) ?? row.currencyId) : "—",
         },
       ];
     }
@@ -324,6 +341,63 @@ function SettingsView() {
   useEffect(() => {
     setSubCrumb(tableLabel);
   }, [tableLabel, setSubCrumb]);
+
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const res = await fetch("/api/me");
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  const { data: companyOptions = [], isLoading: areCompaniesLoading } = useQuery({
+    queryKey: ["data", "company", "tenant-options"],
+    queryFn: async () => {
+      const res = await fetch("/api/data/company?orderBy=companyNo:asc&limit=200");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (companyOptions.length === 0) {
+      setSelectedCompanyId(null);
+      return;
+    }
+    setSelectedCompanyId((current) => {
+      if (current && companyOptions.some((row: any) => row.companyId === current)) return current;
+      const preferred = me?.lastCompanyId;
+      if (preferred && companyOptions.some((row: any) => row.companyId === preferred)) {
+        return preferred;
+      }
+      return companyOptions[0]?.companyId ?? null;
+    });
+  }, [companyOptions, me?.lastCompanyId]);
+
+  const selectedCompany = useMemo(
+    () => companyOptions.find((row: any) => row.companyId === selectedCompanyId) ?? null,
+    [companyOptions, selectedCompanyId],
+  );
+
+  const persistSelectedCompany = useCallback(
+    async (companyId: string) => {
+      setSelectedCompanyId(companyId);
+      await fetch("/api/me/company", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+    [queryClient],
+  );
+
+  const createInitialValues = useMemo(
+    () =>
+      isCompanyScopedSetting && selectedCompanyId ? { companyId: selectedCompanyId } : undefined,
+    [isCompanyScopedSetting, selectedCompanyId],
+  );
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
@@ -371,6 +445,7 @@ function SettingsView() {
       queryParams.orderBy,
       queryParams.search,
       queryParams.filters,
+      isCompanyScopedSetting ? selectedCompanyId : null,
     ],
     queryFn: async () => {
       const p = new URLSearchParams({
@@ -381,14 +456,20 @@ function SettingsView() {
       if (queryParams.orderBy) p.set("orderBy", queryParams.orderBy);
       if (queryParams.search) p.set("search", queryParams.search);
       if (queryParams.filters) p.set("filters", JSON.stringify(queryParams.filters));
+      if (isCompanyScopedSetting && selectedCompanyId) p.set("companyId", selectedCompanyId);
       const res = await fetch(`/api/data/${selectedKey}?${p}`);
       if (!res.ok) return { data: [], total: 0 };
       return res.json() as Promise<{ data: any[]; total: number }>;
     },
-    enabled: !!selectedKey,
+    enabled: !!selectedKey && !isCompanyMaster && (!isCompanyScopedSetting || !!selectedCompanyId),
   });
 
-  const data = useMemo(() => entityData?.data ?? [], [entityData]);
+  const companyRecord = selectedCompany;
+  const data = useMemo(
+    () => (isCompanyMaster ? (companyRecord ? [companyRecord] : []) : (entityData?.data ?? [])),
+    [companyRecord, entityData, isCompanyMaster],
+  );
+  const isLoading = isCompanyMaster ? areCompaniesLoading : isDataLoading;
 
   useEffect(() => {
     const modalOpen = showCreate || showEdit || deleteConfirm;
@@ -417,6 +498,14 @@ function SettingsView() {
       isEnabled: () => !modalOpen && orderedEntries.length > 0,
       handler: () => selectEntityByIndex(Math.max(selectedIndex - 1, 0)),
     });
+
+    if (isCompanyMaster) {
+      return () => {
+        unregDown();
+        unregUp();
+      };
+    }
+
     const unregCreate = registerCommand({
       id: "create-record",
       scope: "context",
@@ -445,7 +534,7 @@ function SettingsView() {
       group: "recordOps",
       label: { en: "Delete", de: "Löschen" },
       shortcut: "F4",
-      isEnabled: (state) => !modalOpen && isFocusedRow(state) && selectedKey !== "company",
+      isEnabled: (state) => !modalOpen && isFocusedRow(state),
       handler: (state) => {
         if (!state.recordId) return;
         setDeleteId(state.recordId);
@@ -469,6 +558,7 @@ function SettingsView() {
     deleteConfirm,
     selectEntityByIndex,
     t,
+    isCompanyMaster,
   ]);
 
   return (
@@ -523,44 +613,147 @@ function SettingsView() {
 
       {/* Main content area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas">
-        <DataGrid
-          ref={settingsGridRef}
-          entityName={selectedKey}
-          data={data}
-          columns={selectedColumns}
-          keyExtractor={(row: any) => getSettingsRowId(selectedKey, row)}
-          isLoading={isDataLoading}
-          title={tableLabel}
-          totalCount={entityData?.total}
-          page={page}
-          pageSize={pageSize}
-          sort={sort}
-          onPageChange={gridState.setPage}
-          onPageSizeChange={setPageSize}
-          onSortChange={setSort}
-          search={search}
-          onSearchChange={setSearch}
-          filters={filters}
-          onFiltersChange={setFilters}
-          emptyTitle={`${t("empty.noData")} ${tableLabel}`}
-          emptySubtitle={t("empty.subtitle")}
-          emptyAction={{
-            label: `${t("actions.new")} ${tableLabel}`,
-            kbd: "F3",
-            onClick: () => setShowCreate(true),
-          }}
-          onRowClick={(row: any) => {
-            const id = getSettingsRowId(selectedKey, row);
-            setEditId(id);
-            setShowEdit(true);
-          }}
-          onRowOpen={(row: any) => {
-            const id = getSettingsRowId(selectedKey, row);
-            setEditId(id);
-            setShowEdit(true);
-          }}
-          panelId={SETTINGS_GRID_PANEL_ID}
-        />
+        {(isCompanyMaster || isCompanyScopedSetting) && (
+          <div className="flex h-10 shrink-0 items-center gap-2 border-b border-hairline bg-canvas px-4">
+            <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+              Company
+            </span>
+            <select
+              value={selectedCompanyId ?? ""}
+              disabled={areCompaniesLoading || companyOptions.length === 0}
+              onChange={(event) => {
+                if (event.target.value) void persistSelectedCompany(event.target.value);
+              }}
+              className="h-7 min-w-56 rounded border border-hairline-input bg-canvas px-2 text-[12px] text-ink outline-none focus-visible:border-primary"
+            >
+              {companyOptions.map((row: any) => (
+                <option key={row.companyId} value={row.companyId}>
+                  {[row.companyNo, row.name].filter(Boolean).join(" - ")}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {isCompanyMaster && (
+          <div className="flex items-center justify-between border-b border-hairline bg-canvas-soft/40 px-6 py-4 backdrop-blur-md transition-all duration-300">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                <SparklesIcon className="size-5 animate-pulse" />
+              </div>
+              <div>
+                <h2 className="text-sm leading-tight font-semibold text-ink">
+                  Firmen-Assistent & Ersteinrichtung
+                </h2>
+                <p className="mt-0.5 text-xs text-ink-mute">
+                  Richten Sie Ihr Unternehmen für Deutschland (SKR03) oder Österreich (EKR) ein oder
+                  führen Sie einen Jahreswechsel durch.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (companyRecord) {
+                    setWizardCompany({
+                      id: getSettingsRowId("company", companyRecord),
+                      name: companyRecord.name,
+                    });
+                    setShowSetupWizard(true);
+                  } else {
+                    toast.error("Bitte legen Sie zuerst eine Firma an (F3).");
+                  }
+                }}
+                className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-hairline bg-canvas px-4 text-xs font-semibold text-ink shadow-sm transition-all hover:bg-canvas-soft hover:shadow active:scale-98"
+              >
+                <SparklesIcon className="size-3.5 text-primary" />
+                Ersteinrichtung starten
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (companyRecord) {
+                    setWizardCompany({
+                      id: getSettingsRowId("company", companyRecord),
+                      name: companyRecord.name,
+                    });
+                    setShowYearEndWizard(true);
+                  } else {
+                    toast.error("Bitte legen Sie zuerst eine Firma an.");
+                  }
+                }}
+                className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-hairline bg-canvas px-4 text-xs font-semibold text-ink shadow-sm transition-all hover:bg-canvas-soft hover:shadow active:scale-98"
+              >
+                <CalendarRangeIcon className="size-3.5 text-secondary-foreground" />
+                Jahreswechsel
+              </button>
+            </div>
+          </div>
+        )}
+        {isCompanyMaster ? (
+          <div className="min-h-0 flex-1 overflow-auto">
+            {areCompaniesLoading ? (
+              <div className="space-y-4 p-6">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-[120px] w-full" />
+                <Skeleton className="h-[120px] w-full" />
+                <Skeleton className="h-[120px] w-full" />
+              </div>
+            ) : companyRecord ? (
+              <EntityMask
+                entityName="company"
+                recordId={companyRecord.companyId}
+                mode="edit"
+                inline
+                title={tableLabel}
+                className="h-full"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center p-6 text-[13px] text-ink-mute">
+                Kein Firmenstammsatz für den aktiven Mandanten gefunden.
+              </div>
+            )}
+          </div>
+        ) : (
+          <DataGrid
+            ref={settingsGridRef}
+            entityName={selectedKey}
+            data={data}
+            columns={selectedColumns}
+            keyExtractor={(row: any) => getSettingsRowId(selectedKey, row)}
+            isLoading={isLoading}
+            title={tableLabel}
+            totalCount={entityData?.total}
+            page={page}
+            pageSize={pageSize}
+            sort={sort}
+            onPageChange={gridState.setPage}
+            onPageSizeChange={setPageSize}
+            onSortChange={setSort}
+            search={search}
+            onSearchChange={setSearch}
+            filters={filters}
+            onFiltersChange={setFilters}
+            emptyTitle={`${t("empty.noData")} ${tableLabel}`}
+            emptySubtitle={t("empty.subtitle")}
+            emptyAction={{
+              label: `${t("actions.new")} ${tableLabel}`,
+              kbd: "F3",
+              onClick: () => setShowCreate(true),
+            }}
+            onRowClick={(row: any) => {
+              const id = getSettingsRowId(selectedKey, row);
+              setEditId(id);
+              setShowEdit(true);
+            }}
+            onRowOpen={(row: any) => {
+              const id = getSettingsRowId(selectedKey, row);
+              setEditId(id);
+              setShowEdit(true);
+            }}
+            panelId={SETTINGS_GRID_PANEL_ID}
+          />
+        )}
       </div>
 
       {/* Create Dialog */}
@@ -572,6 +765,7 @@ function SettingsView() {
             title={`${t("actions.new")} ${tableLabel}`}
             onCancel={() => setShowCreate(false)}
             fieldOverrides={selectedFieldOverrides}
+            initialValues={createInitialValues}
             onSaved={(record) => {
               setShowCreate(false);
               queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
@@ -627,24 +821,54 @@ function SettingsView() {
                 className="h-8 rounded bg-destructive px-4 text-[13px] text-white hover:opacity-90"
                 onClick={async () => {
                   if (!deleteId) return;
-                  await fetch(`/api/data/${selectedKey}/${deleteId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ archived: true }),
+                  const res = await fetch(`/api/data/${selectedKey}/${deleteId}`, {
+                    method: "DELETE",
                   });
+                  if (!res.ok) {
+                    const message = await res.text();
+                    toast.error(message || t("form.fkViolationError"));
+                    return;
+                  }
                   setDeleteConfirm(false);
                   setDeleteId(null);
                   setEditId(null);
                   queryClient.invalidateQueries({ queryKey: ["data", selectedKey] });
-                  toast.success(t("form.archiveSuccess"));
+                  toast.success(t("form.deleteSuccess"));
                 }}
               >
-                {t("actions.archive")}
+                {t("actions.delete")}
               </button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Setup Wizard */}
+      {wizardCompany && (
+        <SetupGuide
+          open={showSetupWizard}
+          onOpenChange={setShowSetupWizard}
+          companyId={wizardCompany.id}
+          companyName={wizardCompany.name}
+          onCompleted={() => {
+            queryClient.invalidateQueries({ queryKey: ["data"] });
+            queryClient.invalidateQueries({ queryKey: ["metadata"] });
+          }}
+        />
+      )}
+
+      {/* Year End Assistant */}
+      {wizardCompany && (
+        <YearEndAssistant
+          open={showYearEndWizard}
+          onOpenChange={setShowYearEndWizard}
+          companyId={wizardCompany.id}
+          companyName={wizardCompany.name}
+          onCompleted={() => {
+            queryClient.invalidateQueries({ queryKey: ["data"] });
+          }}
+        />
+      )}
     </div>
   );
 }

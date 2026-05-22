@@ -1,6 +1,9 @@
 import { auth } from "@repo/auth/auth";
+import { db } from "@repo/db";
+import { user } from "@repo/db/schema";
 import { getUserTenantInfo, getTenantInfoById } from "@repo/db/services/tenant";
 import { createFileRoute } from "@tanstack/react-router";
+import { eq } from "drizzle-orm";
 
 function parseCookie(header: string | null, name: string): string | null {
   if (!header) return null;
@@ -31,18 +34,32 @@ export const Route = createFileRoute("/api/me")({
           info = await getUserTenantInfo(session.user.id);
         }
 
+        const [userPrefs] = await db
+          .select({ lastCompanyId: user.lastCompanyId })
+          .from(user)
+          .where(eq(user.id, session.user.id))
+          .limit(1);
+
         if (!info) {
           return new Response(
-            JSON.stringify({ tenantId: null, tenantName: "Default", orgName: "" }),
+            JSON.stringify({
+              tenantId: null,
+              tenantName: "Default",
+              orgName: "",
+              lastCompanyId: userPrefs?.lastCompanyId ?? null,
+            }),
             {
               headers: { "content-type": "application/json" },
             },
           );
         }
 
-        return new Response(JSON.stringify(info), {
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ ...info, lastCompanyId: userPrefs?.lastCompanyId ?? null }),
+          {
+            headers: { "content-type": "application/json" },
+          },
+        );
       },
     },
   },

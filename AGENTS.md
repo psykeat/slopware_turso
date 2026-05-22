@@ -37,6 +37,14 @@ pnpm tanstack search-docs "<q>" --library <lib> --json
 
 - In Codex sessions, prefer the local `vp` binary from `node_modules/.bin/vp` for lint/check runs when `pnpm`/`corepack` is slow or unavailable.
 
+## Database Access
+
+- Local Postgres uses the `DATABASE_URL` in [`apps/web/.env`](apps/web/.env) and [`apps/web/.env.example`](apps/web/.env.example).
+- Use `pnpm db:psql` for an interactive `psql` session.
+- Use `pnpm db:sql -- "select id, email from \"user\" limit 5"` for one-off queries.
+- Use `cat query.sql | pnpm db:sql` for longer statements.
+- If `psql` is missing, install it with `sudo apt-get install postgresql-client`.
+
 ## Environment Constants
 
 | Key               | Value                                  |

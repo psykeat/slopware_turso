@@ -20,7 +20,7 @@ export const Route = createFileRoute("/api/data/$")({
           return new Response("No active tenant found", { status: 403 });
         }
 
-        const service = new DataService(context?.tenantId ?? "", isSystemAdmin);
+        const service = new DataService(context?.tenantId ?? "", false);
         const url = new URL(request.url);
         const segments = url.pathname.split("/").filter(Boolean);
         // /api/data/[entity] OR /api/data/[entity]/[id]
@@ -115,7 +115,7 @@ export const Route = createFileRoute("/api/data/$")({
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context && !isSystemAdmin) return new Response("Forbidden", { status: 403 });
 
-        const service = new DataService(context?.tenantId ?? "", isSystemAdmin);
+        const service = new DataService(context?.tenantId ?? "", false);
         const entityName = new URL(request.url).pathname.split("/").filter(Boolean)[2];
         if (!entityName) return new Response("Bad Request", { status: 400 });
 
@@ -146,7 +146,7 @@ export const Route = createFileRoute("/api/data/$")({
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context && !isSystemAdmin) return new Response("Forbidden", { status: 403 });
 
-        const service = new DataService(context?.tenantId ?? "", isSystemAdmin);
+        const service = new DataService(context?.tenantId ?? "", false);
         const segments = new URL(request.url).pathname.split("/").filter(Boolean);
         const entityName = segments[2];
         const id = segments[3];
@@ -172,7 +172,7 @@ export const Route = createFileRoute("/api/data/$")({
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context && !isSystemAdmin) return new Response("Forbidden", { status: 403 });
 
-        const service = new DataService(context?.tenantId ?? "", isSystemAdmin);
+        const service = new DataService(context?.tenantId ?? "", false);
         const segments = new URL(request.url).pathname.split("/").filter(Boolean);
         const entityName = segments[2];
         const id = segments[3];

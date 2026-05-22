@@ -373,12 +373,57 @@ function DocumentsModule() {
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(
     focusState.entity === "document" ? focusState.recordId : null,
   );
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const lastSyncIdRef = React.useRef<string | null>(activeDocumentId);
   const gridState = useGridUrlState({ defaultPageSize: 50 });
   const documentRestoreIdRef = React.useRef<string | null | undefined>(undefined);
   const prevEditorDocIdRef = React.useRef<string | null>(editorDocId);
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
+
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const res = await fetch("/api/me");
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  const { data: companies = EMPTY_ARRAY } = useQuery({
+    queryKey: ["data", "company", "tenant-options"],
+    queryFn: async () => {
+      const res = await fetch("/api/data/company?orderBy=companyNo:asc&limit=200");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (companies.length === 0) {
+      setSelectedCompanyId(null);
+      return;
+    }
+    setSelectedCompanyId((current) => {
+      if (current && companies.some((row: any) => row.companyId === current)) return current;
+      const preferred = me?.lastCompanyId;
+      if (preferred && companies.some((row: any) => row.companyId === preferred)) return preferred;
+      return companies[0]?.companyId ?? null;
+    });
+  }, [companies, me?.lastCompanyId]);
+
+  const persistSelectedCompany = useCallback(
+    async (companyId: string) => {
+      setSelectedCompanyId(companyId);
+      await fetch("/api/me/company", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+    [queryClient],
+  );
 
   useEffect(() => {
     if (
@@ -412,6 +457,7 @@ function DocumentsModule() {
       gridState.queryParams.orderBy,
       gridState.queryParams.search,
       gridState.queryParams.filters,
+      selectedCompanyId,
     ],
     queryFn: async () => {
       const p = new URLSearchParams({
@@ -425,10 +471,12 @@ function DocumentsModule() {
         p.set("filters", JSON.stringify(gridState.queryParams.filters));
       if (selection.kind === "group") p.set("documentGroupId", selection.groupId);
       else if (selection.kind === "type") p.set("documentType", selection.documentType);
+      if (selectedCompanyId) p.set("companyId", selectedCompanyId);
       const res = await fetch(`/api/data/document?${p}`);
       if (!res.ok) throw new Error("Failed to fetch documents");
       return res.json() as Promise<{ data: any[]; total: number }>;
     },
+    enabled: !!selectedCompanyId,
   });
 
   const documents = useMemo(() => documentData?.data ?? EMPTY_ARRAY, [documentData]);
@@ -439,10 +487,12 @@ function DocumentsModule() {
     isLoading: isTreeLoading,
     error: treeError,
   } = useQuery({
-    queryKey: ["documents", "tree"],
+    queryKey: ["documents", "tree", selectedCompanyId],
     staleTime: 0,
     queryFn: async () => {
-      const res = await fetch("/api/documents/tree");
+      const p = new URLSearchParams();
+      if (selectedCompanyId) p.set("companyId", selectedCompanyId);
+      const res = await fetch(`/api/documents/tree?${p}`);
       if (!res.ok) {
         const text = await res.text();
         console.error("[Tree] fetch failed", res.status, text);
@@ -459,6 +509,7 @@ function DocumentsModule() {
         })),
       })) as TreeSection[];
     },
+    enabled: !!selectedCompanyId,
   });
 
   if (treeError) console.error("[Tree] query error", treeError);
@@ -474,40 +525,55 @@ function DocumentsModule() {
   });
 
   const { data: documentGroups = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "documentGroup", "all"],
+    queryKey: ["data", "documentGroup", "all", selectedCompanyId],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const res = await fetch("/api/data/documentGroup");
+      const p = new URLSearchParams();
+      if (selectedCompanyId) p.set("companyId", selectedCompanyId);
+      const res = await fetch(`/api/data/documentGroup?${p}`);
       if (!res.ok) throw new Error("Failed to fetch document groups");
       return res.json();
     },
+    enabled: !!selectedCompanyId,
   });
 
   const { data: warehouses = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "warehouse", "all"],
+    queryKey: ["data", "warehouse", "all", selectedCompanyId],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const res = await fetch("/api/data/warehouse");
+      const p = new URLSearchParams();
+      if (selectedCompanyId) p.set("companyId", selectedCompanyId);
+      const res = await fetch(`/api/data/warehouse?${p}`);
       if (!res.ok) throw new Error("Failed to fetch warehouses");
       return res.json();
     },
+    enabled: !!selectedCompanyId,
   });
 
   const addressMap = useMemo(
-    () => new Map((addresses || EMPTY_ARRAY).map((a: any) => [a.addressId, a])),
+    () => new Map<string, any>((addresses || EMPTY_ARRAY).map((a: any) => [a.addressId, a])),
     [addresses],
   );
   const groupMap = useMemo(
-    () => new Map((documentGroups || EMPTY_ARRAY).map((g: any) => [g.documentGroupId, g])),
+    () =>
+      new Map<string, any>((documentGroups || EMPTY_ARRAY).map((g: any) => [g.documentGroupId, g])),
     [documentGroups],
   );
   const warehouseMap = useMemo(
-    () => new Map((warehouses || EMPTY_ARRAY).map((w: any) => [w.warehouseId, w])),
+    () => new Map<string, any>((warehouses || EMPTY_ARRAY).map((w: any) => [w.warehouseId, w])),
     [warehouses],
   );
   const onTreeSelectionCommitted = useCallback(() => {
     documentGridRef.current?.restoreFocus(activeDocumentId ?? null);
   }, [activeDocumentId]);
+
+  useEffect(() => {
+    setSelection({ kind: "all" });
+    setActiveDocumentId(null);
+    setEditorDocId(null);
+    setEditorGroupId(undefined);
+    setSubCrumb(undefined);
+  }, [selectedCompanyId, setSubCrumb]);
 
   // Fetch document lines for selected document (server-side FK filter)
   const { data: lines = EMPTY_ARRAY } = useQuery({
@@ -966,182 +1032,220 @@ function DocumentsModule() {
 
   return (
     <>
-      <TriViewWorkspace
-        navigationTree={
-          <DocumentNavigationTree
-            sections={treeSections}
-            isLoading={isTreeLoading}
-            selection={selection}
-            onSelectType={handleSelectType}
-            onSelectGroup={handleSelectGroup}
-            expandedDirections={expandedDirections}
-            onToggleDirection={handleToggleDirection}
-            getTypeLabel={getTypeLabel}
-            getDirectionLabel={getDirectionLabel}
-            onSelectCommit={onTreeSelectionCommitted}
-            header={t("tree.types")}
-          />
-        }
-        primaryGrid={
-          editorDocId ? (
-            <DocumentEditor
-              documentId={editorDocId}
-              documentGroupId={editorGroupId}
-              onCreateNewDocument={(groupId) => {
-                documentRestoreIdRef.current = undefined;
-                setEditorGroupId(groupId);
-                setEditorDocId("__new__");
-              }}
-              onSaved={(savedId) => {
-                documentRestoreIdRef.current = savedId;
-              }}
-              onClose={() => {
-                setEditorDocId(null);
-                setEditorGroupId(undefined);
-              }}
-            />
-          ) : (
-            <DataGrid
-              ref={documentGridRef}
-              entityName="document"
-              panelId="document-grid"
-              data={documents}
-              isLoading={isDataLoading}
-              keyExtractor={(row: any) => row.documentId}
-              title={t("nav.documents")}
-              columns={[
-                {
-                  key: "documentNo",
-                  header: "Beleg-Nr.",
-                  sortable: true,
-                  render: (r: any) => (
-                    <span className="font-mono tabular-nums">{r.documentNo}</span>
-                  ),
-                },
-                {
-                  key: "documentType",
-                  header: "Typ",
-                  render: (r: any) => (
-                    <span className="font-mono text-[11px]" title={DOC_TYPE_LABELS[r.documentType]}>
-                      {r.documentType}
-                    </span>
-                  ),
-                },
-                {
-                  key: "documentGroupId",
-                  header: "Gruppe",
-                  render: (r: any) => <span>{groupMap.get(r.documentGroupId)?.name ?? ""}</span>,
-                },
-                {
-                  key: "documentDate",
-                  header: "Datum",
-                  isNumeric: true,
-                  sortable: true,
-                  render: (r: any) => (
-                    <span className="tabular-nums">{formatDate(r.documentDate)}</span>
-                  ),
-                },
-                {
-                  key: "customerId",
-                  header: "Adresse",
-                  render: (r: any) => (
-                    <span>{addressDisplayName(addressMap.get(r.customerId))}</span>
-                  ),
-                },
-                {
-                  key: "warehouseId",
-                  header: "Lager",
-                  render: (r: any) => <span>{warehouseMap.get(r.warehouseId)?.name ?? ""}</span>,
-                },
-                { key: "currencyId", header: "Währung" },
-                {
-                  key: "totalNet",
-                  header: "Netto",
-                  isNumeric: true,
-                  sortable: true,
-                  render: (r: any) => (
-                    <span className="tabular-nums">
-                      {r.totalNet != null ? formatMoney(r.totalNet) : ""}
-                    </span>
-                  ),
-                },
-                {
-                  key: "totalGross",
-                  header: "Gesamt",
-                  isNumeric: true,
-                  sortable: true,
-                  render: (r: any) => (
-                    <span className="tabular-nums">
-                      {r.totalGross != null ? formatMoney(r.totalGross) : ""}
-                    </span>
-                  ),
-                },
-                {
-                  key: "status",
-                  header: "Status",
-                  sortable: true,
-                  render: (r: any) => <StatusDot status={r.status ?? "draft"} />,
-                },
-              ]}
-              totalCount={documentData?.total}
-              page={gridState.page}
-              pageSize={gridState.pageSize}
-              sort={gridState.sort}
-              onPageChange={gridState.setPage}
-              onPageSizeChange={gridState.setPageSize}
-              onSortChange={gridState.setSort}
-              search={gridState.search}
-              onSearchChange={gridState.setSearch}
-              filters={gridState.filters}
-              onFiltersChange={gridState.setFilters}
-              selectable
-              bulkActions={[
-                {
-                  label: "Archive",
-                  variant: "destructive" as const,
-                  onClick: async (keys: string[]) => {
-                    await Promise.all(
-                      keys.map((id) =>
-                        fetch(`/api/data/document/${id}`, {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ archived: true }),
-                        }),
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-hairline bg-canvas px-4">
+          <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+            Company
+          </span>
+          <select
+            value={selectedCompanyId ?? ""}
+            disabled={companies.length === 0}
+            onChange={(event) => {
+              if (event.target.value) void persistSelectedCompany(event.target.value);
+            }}
+            className="h-7 min-w-56 rounded border border-hairline-input bg-canvas px-2 text-[12px] text-ink outline-none focus-visible:border-primary"
+          >
+            {companies.map((row: any) => (
+              <option key={row.companyId} value={row.companyId}>
+                {[row.companyNo, row.name].filter(Boolean).join(" - ")}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="min-h-0 flex-1">
+          <TriViewWorkspace
+            navigationTree={
+              <DocumentNavigationTree
+                sections={treeSections}
+                isLoading={isTreeLoading}
+                selection={selection}
+                onSelectType={handleSelectType}
+                onSelectGroup={handleSelectGroup}
+                expandedDirections={expandedDirections}
+                onToggleDirection={handleToggleDirection}
+                getTypeLabel={getTypeLabel}
+                getDirectionLabel={getDirectionLabel}
+                onSelectCommit={onTreeSelectionCommitted}
+                header={t("tree.types")}
+              />
+            }
+            primaryGrid={
+              editorDocId ? (
+                <DocumentEditor
+                  documentId={editorDocId}
+                  documentGroupId={editorGroupId}
+                  companyId={selectedCompanyId ?? undefined}
+                  onCreateNewDocument={(groupId) => {
+                    documentRestoreIdRef.current = undefined;
+                    setEditorGroupId(groupId);
+                    setEditorDocId("__new__");
+                  }}
+                  onSaved={(savedId) => {
+                    documentRestoreIdRef.current = savedId;
+                  }}
+                  onClose={() => {
+                    setEditorDocId(null);
+                    setEditorGroupId(undefined);
+                  }}
+                />
+              ) : (
+                <DataGrid
+                  ref={documentGridRef}
+                  entityName="document"
+                  panelId="document-grid"
+                  data={documents}
+                  isLoading={isDataLoading}
+                  keyExtractor={(row: any) => row.documentId}
+                  title={t("nav.documents")}
+                  columns={[
+                    {
+                      key: "documentNo",
+                      header: "Beleg-Nr.",
+                      sortable: true,
+                      render: (r: any) => (
+                        <span className="font-mono tabular-nums">{r.documentNo}</span>
                       ),
-                    );
-                    queryClient.invalidateQueries({ queryKey: ["data", "document"] });
-                  },
-                },
-              ]}
-              onRowOpen={(row: any) => {
-                documentRestoreIdRef.current = undefined;
-                setEditorGroupId(undefined);
-                setEditorDocId(row.documentId);
-              }}
-              emptyTitle="No documents yet."
-              emptySubtitle="Create the first document."
-              emptyAction={{
-                label: `${t("actions.new")} Document`,
-                kbd: "F3",
-                onClick: () => {
-                  const sel = selectionRef.current;
-                  documentRestoreIdRef.current = undefined;
-                  setEditorGroupId(
-                    sel.kind === "group"
-                      ? sel.groupId
-                      : sel.kind === "type"
-                        ? (sel.groupId ?? undefined)
-                        : undefined,
-                  );
-                  setEditorDocId("__new__");
-                },
-              }}
-              className="h-full rounded-none border-none"
-            />
-          )
-        }
-        dependentContext={editorDocId ? null : <ContextTabs tabs={dependentTabs} />}
-      />
+                    },
+                    {
+                      key: "documentType",
+                      header: "Typ",
+                      render: (r: any) => (
+                        <span
+                          className="font-mono text-[11px]"
+                          title={DOC_TYPE_LABELS[r.documentType]}
+                        >
+                          {r.documentType}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "documentGroupId",
+                      header: "Gruppe",
+                      render: (r: any) => (
+                        <span>{groupMap.get(r.documentGroupId)?.name ?? ""}</span>
+                      ),
+                    },
+                    {
+                      key: "documentDate",
+                      header: "Datum",
+                      isNumeric: true,
+                      sortable: true,
+                      render: (r: any) => (
+                        <span className="tabular-nums">{formatDate(r.documentDate)}</span>
+                      ),
+                    },
+                    {
+                      key: "customerId",
+                      header: "Adresse",
+                      render: (r: any) => (
+                        <span>{addressDisplayName(addressMap.get(r.customerId))}</span>
+                      ),
+                    },
+                    {
+                      key: "warehouseId",
+                      header: "Lager",
+                      render: (r: any) => (
+                        <span>{warehouseMap.get(r.warehouseId)?.name ?? ""}</span>
+                      ),
+                    },
+                    { key: "currencyId", header: "Währung" },
+                    {
+                      key: "totalNet",
+                      header: "Netto",
+                      isNumeric: true,
+                      sortable: true,
+                      render: (r: any) => (
+                        <span className="tabular-nums">
+                          {r.totalNet != null ? formatMoney(r.totalNet) : ""}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "totalGross",
+                      header: "Gesamt",
+                      isNumeric: true,
+                      sortable: true,
+                      render: (r: any) => (
+                        <span className="tabular-nums">
+                          {r.totalGross != null ? formatMoney(r.totalGross) : ""}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "status",
+                      header: "Status",
+                      sortable: true,
+                      render: (r: any) => <StatusDot status={r.status ?? "draft"} />,
+                    },
+                  ]}
+                  totalCount={documentData?.total}
+                  page={gridState.page}
+                  pageSize={gridState.pageSize}
+                  sort={gridState.sort}
+                  onPageChange={gridState.setPage}
+                  onPageSizeChange={gridState.setPageSize}
+                  onSortChange={gridState.setSort}
+                  search={gridState.search}
+                  onSearchChange={gridState.setSearch}
+                  filters={gridState.filters}
+                  onFiltersChange={gridState.setFilters}
+                  selectable
+                  bulkActions={[
+                    {
+                      label: "Delete",
+                      variant: "destructive" as const,
+                      onClick: async (keys: string[]) => {
+                        try {
+                          await Promise.all(
+                            keys.map(async (id) => {
+                              const res = await fetch(`/api/documents/${id}/delete`, {
+                                method: "POST",
+                              });
+                              if (!res.ok) throw new Error(await res.text());
+                            }),
+                          );
+                          queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+                        } catch (err) {
+                          toast.error(
+                            err instanceof Error && err.message
+                              ? err.message
+                              : t("form.fkViolationError"),
+                          );
+                        }
+                      },
+                    },
+                  ]}
+                  onRowOpen={(row: any) => {
+                    documentRestoreIdRef.current = undefined;
+                    setEditorGroupId(undefined);
+                    setEditorDocId(row.documentId);
+                  }}
+                  emptyTitle="No documents yet."
+                  emptySubtitle="Create the first document."
+                  emptyAction={{
+                    label: `${t("actions.new")} Document`,
+                    kbd: "F3",
+                    onClick: () => {
+                      const sel = selectionRef.current;
+                      documentRestoreIdRef.current = undefined;
+                      setEditorGroupId(
+                        sel.kind === "group"
+                          ? sel.groupId
+                          : sel.kind === "type"
+                            ? (sel.groupId ?? undefined)
+                            : undefined,
+                      );
+                      setEditorDocId("__new__");
+                    },
+                  }}
+                  className="h-full rounded-none border-none"
+                />
+              )
+            }
+            dependentContext={editorDocId ? null : <ContextTabs tabs={dependentTabs} />}
+          />
+        </div>
+      </div>
 
       <DocumentTargetGroupDialog
         open={duplicateDialog.open}

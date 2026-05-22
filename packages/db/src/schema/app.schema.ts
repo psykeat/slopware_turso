@@ -727,6 +727,7 @@ export const documentLine = pgTable(
     warehouseId: uuid("warehouse_id"),
     costCenterId: uuid("cost_center_id").references(() => costCenter.costCenterId),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     transactionId: uuid("transaction_id"),
     movementType: char("movement_type", { length: 1 }),
     lineType: varchar("line_type", { length: 20 }).notNull().default("article"),
@@ -737,10 +738,13 @@ export const documentLine = pgTable(
       table.tenantId,
       table.documentId,
       table.lineNo,
+      table.archivedAt,
     ),
     unique("document_line_tenant_id_document_line_id_key").on(table.tenantId, table.documentLineId),
     index("idx_document_line_article").on(table.articleId),
     index("idx_document_line_document").on(table.documentId),
+    index("idx_document_line_tenant_document").on(table.tenantId, table.documentId),
+    index("idx_document_line_tenant_archived").on(table.tenantId, table.archivedAt),
     index("idx_document_line_tenant").on(table.tenantId),
     index("idx_document_line_tx").on(table.tenantId, table.transactionId),
     check(
@@ -805,6 +809,12 @@ export const documentLineTracking = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (_table) => [
+    index("idx_document_line_tracking_tenant_line").on(_table.tenantId, _table.documentLineId),
+    index("idx_document_line_tracking_tenant_created").on(
+      _table.tenantId,
+      _table.documentLineId,
+      _table.createdAt,
+    ),
     check(
       "document_line_tracking_check",
       sql`
@@ -1299,6 +1309,7 @@ export const numberSequence = pgTable(
       .notNull()
       .references(() => company.companyId),
     prefix: varchar("prefix", { length: 10 }).notNull(),
+    fiscalYear: integer("fiscal_year"),
     nextValue: integer("next_value").notNull().default(1),
     padding: integer("padding").notNull().default(5),
     archived: boolean("archived").notNull().default(false),
@@ -1306,10 +1317,11 @@ export const numberSequence = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
   (table) => [
-    unique("number_sequence_tenant_id_company_id_prefix_unique").on(
+    unique("number_sequence_tenant_id_company_id_prefix_year_unique").on(
       table.tenantId,
       table.companyId,
       table.prefix,
+      table.fiscalYear,
     ),
     unique("number_sequence_tenant_id_number_sequence_id_unique").on(
       table.tenantId,

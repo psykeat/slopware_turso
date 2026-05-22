@@ -614,19 +614,26 @@ function ArticlesModule() {
             selectable
             bulkActions={[
               {
-                label: "Archive",
+                label: "Delete",
                 variant: "destructive" as const,
                 onClick: async (keys: string[]) => {
-                  await Promise.all(
-                    keys.map((id) =>
-                      fetch(`/api/data/article/${id}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ archived: true }),
+                  try {
+                    await Promise.all(
+                      keys.map(async (id) => {
+                        const res = await fetch(`/api/data/article/${id}`, {
+                          method: "DELETE",
+                        });
+                        if (!res.ok) throw new Error(await res.text());
                       }),
-                    ),
-                  );
-                  queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+                    );
+                    queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+                  } catch (err) {
+                    toast.error(
+                      err instanceof Error && err.message
+                        ? err.message
+                        : t("form.fkViolationError"),
+                    );
+                  }
                 },
               },
             ]}
@@ -665,18 +672,21 @@ function ArticlesModule() {
                 className="h-8 rounded bg-destructive px-4 text-[13px] text-white hover:opacity-90"
                 onClick={async () => {
                   if (!deleteId) return;
-                  await fetch(`/api/data/article/${deleteId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ archived: true }),
+                  const res = await fetch(`/api/data/article/${deleteId}`, {
+                    method: "DELETE",
                   });
+                  if (!res.ok) {
+                    const message = await res.text();
+                    toast.error(message || t("form.fkViolationError"));
+                    return;
+                  }
                   setDeleteConfirm(false);
                   setDeleteId(null);
                   queryClient.invalidateQueries({ queryKey: ["data", "article"] });
-                  toast.success(t("form.archiveSuccess"));
+                  toast.success(t("form.deleteSuccess"));
                 }}
               >
-                {t("actions.archive")}
+                {t("actions.delete")}
               </button>
             </div>
           </div>

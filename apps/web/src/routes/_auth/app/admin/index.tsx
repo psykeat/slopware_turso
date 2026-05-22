@@ -48,6 +48,14 @@ function AdminView() {
   const selectedEntry = ADMIN_ENTITIES.find((e) => e.key === selectedKey);
   const viewLabel = selectedEntry?.label || selectedKey;
 
+  const switchEntity = (entityKey: string) => {
+    setSelectedKey(entityKey);
+    gridState.setPage(1);
+    gridState.setSearch("");
+    gridState.setFilters([]);
+    gridState.setSort(null);
+  };
+
   useEffect(() => {
     setSubCrumb(viewLabel);
   }, [viewLabel, setSubCrumb]);
@@ -133,10 +141,7 @@ function AdminView() {
             {ADMIN_ENTITIES.filter((e) => e.group === "infrastructure").map((entity) => (
               <button
                 key={entity.key}
-                onClick={() => {
-                  setSelectedKey(entity.key);
-                  gridState.setPage(1);
-                }}
+                onClick={() => switchEntity(entity.key)}
                 className={cn(
                   "group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] transition-colors",
                   selectedKey === entity.key
@@ -155,10 +160,7 @@ function AdminView() {
             {ADMIN_ENTITIES.filter((e) => e.group === "system").map((entity) => (
               <button
                 key={entity.key}
-                onClick={() => {
-                  setSelectedKey(entity.key);
-                  gridState.setPage(1);
-                }}
+                onClick={() => switchEntity(entity.key)}
                 className={cn(
                   "group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] transition-colors",
                   selectedKey === entity.key

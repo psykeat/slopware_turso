@@ -17,6 +17,13 @@ A minimal monorepo foundation for building type-safe web applications.
 3. Apply migrations: `pnpm db migrate`
 4. Run the development server: `pnpm dev`
 
+### Database access
+
+- `pnpm db:psql` opens a `psql` session against `DATABASE_URL`.
+- `pnpm db:sql -- "select id, email from \"user\" limit 5"` runs a one-off query.
+- `cat query.sql | pnpm db:sql` is useful for longer statements.
+- If `psql` is missing, install it with `sudo apt-get install postgresql-client`.
+
 ## Deploying to production
 
 The [vite config](./apps/web/vite.config.ts#L45-L46) is configured to use Nitro by default, which supports many [deployment presets](https://nitro.build/deploy) like Netlify, Vercel, Node.js, and more.

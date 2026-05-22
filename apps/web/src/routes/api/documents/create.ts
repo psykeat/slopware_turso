@@ -24,13 +24,13 @@ export const Route = createFileRoute("/api/documents/create")({
 
         try {
           const svc = new DocumentService();
-          const result = await svc.createDocument(context.tenantId, {
+          const result = await svc.saveDocumentDraft(context.tenantId, session.user.id, {
+            documentId: body.documentId ?? null,
             documentGroupId: body.documentGroupId,
             documentType,
             documentDirection:
               body.documentDirection ?? DIRECTION_FROM_TYPE[documentType] ?? "OUTBOUND",
             documentDate: body.documentDate,
-            status: "draft",
             customerId: body.customerId ?? null,
             billingAddress: body.billingAddress ?? null,
             deliveryAddress: body.deliveryAddress ?? null,
@@ -40,6 +40,7 @@ export const Route = createFileRoute("/api/documents/create")({
             warehouseId: body.warehouseId ?? null,
             paymentTermId: body.paymentTermId ?? null,
             shippingMethodId: body.shippingMethodId ?? null,
+            lines: Array.isArray(body.lines) ? body.lines : [],
           });
 
           return new Response(JSON.stringify(result), {

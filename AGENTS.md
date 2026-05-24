@@ -1,10 +1,10 @@
 # slopware
 
-Codex repo instructions. Keep startup context lean: read the project map first, then load deeper docs only when the task needs them.
+Codex repo instructions. Keep startup context lean: read [`map.md`](map.md) only when codebase orientation or navigation is necessary, and load deeper docs only as needed.
 
 ## Startup
 
-1. Read [`map.md`](map.md) first. It is the fast project map for routes, APIs, components, aliases, services, and commands.
+1. Read [`map.md`](map.md) only when necessary for fast orientation on routes, APIs, components, aliases, services, and commands.
 2. Use `.agents/` as the canonical project documentation folder. Load only the docs needed for the task.
 3. Treat `.agents/archive/` as historical context only. Do not read archived docs unless you are investigating prior decisions.
 4. Do not load `.agents/*` wholesale. Some docs are large references or historical checklists.
@@ -16,7 +16,8 @@ React 19 · TanStack Start/Router/Query · Drizzle ORM v1 · Better Auth · Tail
 
 ## Non-Negotiable Rules
 
-- `pnpm lint` passing = changes are correct. Do not run production builds unless build output or bundling is the issue.
+- Run linting (e.g., `pnpm lint` or local `vp` lint) only after major milestones are reached, rather than continuously after every small change. Passing linting validates that changes are correct.
+- Do not run production builds unless build output or bundling is the issue.
 - No hard delete for business data. Archive with `PATCH { archived: true }`.
 - Tenant isolation is server-side only. Never trust client payloads for `tenantId`.
 - All keyboard shortcuts go through `CommandProvider`. No ad hoc `keydown` business logic.

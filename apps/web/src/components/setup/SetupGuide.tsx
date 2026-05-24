@@ -18,7 +18,7 @@ import {
   SparklesIcon,
 } from "lucide-react";
 import * as React from "react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -53,14 +53,14 @@ export function SetupGuide({
   const [step, setStep] = useState(1);
 
   // Step 1 Form state
-  const [profile, setProfile] = useState<LegalProfile>({
+  const [profile, setProfile] = useState<LegalProfile>(() => ({
     legalName: companyName || "",
     taxNumber: "",
     vatId: "",
     bankName: "",
     bankBic: "",
     bankIban: "",
-  });
+  }));
 
   const [errors, setErrors] = useState<Partial<Record<keyof LegalProfile, string>>>({});
   const [touched, setTouched] = useState<Partial<Record<keyof LegalProfile, boolean>>>({});
@@ -95,13 +95,6 @@ export function SetupGuide({
   );
   const [errorMessage, setErrorMessage] = useState("");
   const [progressStep, setProgressStep] = useState(0);
-
-  // Sync profile legalName with companyName prop once it's available
-  useEffect(() => {
-    if (companyName && !profile.legalName) {
-      setProfile((prev) => ({ ...prev, legalName: companyName }));
-    }
-  }, [companyName, profile.legalName]);
 
   // Validations
   const validateField = (field: keyof LegalProfile, value: string): string => {
@@ -231,6 +224,11 @@ export function SetupGuide({
         return;
       }
     }
+    if (step === 4) {
+      setStep(5);
+      void runInitialization();
+      return;
+    }
     setStep((prev) => prev + 1);
   };
 
@@ -358,13 +356,6 @@ export function SetupGuide({
       );
     }
   };
-
-  // Execute wizard initialization
-  useEffect(() => {
-    if (step === 5 && installStatus === "idle") {
-      void runInitialization();
-    }
-  }, [step, installStatus, runInitialization]);
 
   const resetWizard = () => {
     setStep(1);

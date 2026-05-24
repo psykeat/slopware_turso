@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDownIcon, XIcon } from "lucide-react";
 import React, {
   useEffect,
   useLayoutEffect,
@@ -7,10 +9,9 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronDownIcon, XIcon } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
+
 import { cn } from "../lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 
 export interface LookupItem<T = unknown> {
   value: string;
@@ -76,11 +77,7 @@ function LookupOptionList<T>({
   emptyLabel: string;
 }) {
   if (items.length === 0) {
-    return (
-      <div className="px-3 py-2 text-[12px] text-ink-mute">
-        {emptyLabel}
-      </div>
-    );
+    return <div className="px-3 py-2 text-[12px] text-ink-mute">{emptyLabel}</div>;
   }
 
   return (
@@ -109,16 +106,16 @@ function LookupOptionList<T>({
 
 function LookupFieldInner<T>(
   {
-  label,
-  value,
-  source,
-  onChange,
-  tabIndex,
-  className,
-  disabled = false,
-  placeholder,
-  onTabForward,
-  onFocusChange,
+    label,
+    value,
+    source,
+    onChange,
+    tabIndex,
+    className,
+    disabled = false,
+    placeholder,
+    onTabForward,
+    onFocusChange,
   }: LookupFieldProps<T>,
   forwardedRef: React.ForwardedRef<HTMLInputElement>,
 ) {
@@ -140,9 +137,10 @@ function LookupFieldInner<T>(
   }, [onFocusChange]);
 
   const queryLimit = dialogOpen ? 100 : 20;
+  const lookupKey = source.cacheKey ?? source.title ?? label ?? "lookup";
 
   const { data: resolvedItem } = useQuery({
-    queryKey: ["lookup", source.cacheKey ?? source.title ?? label ?? "lookup", value, "resolve"],
+    queryKey: ["lookup", lookupKey, value, source.resolve, "resolve"],
     queryFn: async () => {
       if (!value || !source.resolve) return null;
       return source.resolve(value);
@@ -151,7 +149,15 @@ function LookupFieldInner<T>(
   });
 
   const { data: results = [] } = useQuery({
-    queryKey: ["lookup", source.cacheKey ?? source.title ?? label ?? "lookup", query, queryLimit, dialogOpen ? "dialog" : "inline"],
+    queryKey: [
+      "lookup",
+      lookupKey,
+      query,
+      queryLimit,
+      dialogOpen ? "dialog" : "inline",
+      source,
+      source.search,
+    ],
     queryFn: async () => source.search(query, { limit: queryLimit }),
     enabled: isOpen || dialogOpen,
     staleTime: 0,
@@ -160,9 +166,7 @@ function LookupFieldInner<T>(
   const selectedItem = resolvedItem ?? null;
   const activeIndex = results.length === 0 ? 0 : Math.min(selectedIndex, results.length - 1);
 
-  const displayValue = isOpen || dialogOpen
-    ? query
-    : selectedItem?.label ?? value ?? "";
+  const displayValue = isOpen || dialogOpen ? query : (selectedItem?.label ?? value ?? "");
 
   useLayoutEffect(() => {
     if (!isOpen || dialogOpen) return;
@@ -307,31 +311,32 @@ function LookupFieldInner<T>(
     }
   };
 
-  const popup = canUseDOM && isOpen && !dialogOpen && anchorRect
-    ? createPortal(
-        <div
-          ref={portalRef}
-          style={buildDropdownStyle(anchorRect)}
-          className="z-[70] max-h-[260px] overflow-hidden rounded-md border border-hairline bg-canvas shadow-lg"
-        >
-          <div className="max-h-[260px] overflow-auto">
-            <LookupOptionList
-              items={results}
-              selectedIndex={selectedIndex}
-              onHover={setSelectedIndex}
-              onPick={pick}
-              emptyLabel={source.emptyLabel ?? "No results"}
-            />
-          </div>
-        </div>,
-        document.body,
-      )
-    : null;
+  const popup =
+    canUseDOM && isOpen && !dialogOpen && anchorRect
+      ? createPortal(
+          <div
+            ref={portalRef}
+            style={buildDropdownStyle(anchorRect)}
+            className="z-[70] max-h-[260px] overflow-hidden rounded-md border border-hairline bg-canvas shadow-lg"
+          >
+            <div className="max-h-[260px] overflow-auto">
+              <LookupOptionList
+                items={results}
+                selectedIndex={selectedIndex}
+                onHover={setSelectedIndex}
+                onPick={pick}
+                emptyLabel={source.emptyLabel ?? "No results"}
+              />
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
-    <div className={cn("flex flex-col gap-1.5 min-w-0", className)} ref={rootRef}>
+    <div className={cn("flex min-w-0 flex-col gap-1.5", className)} ref={rootRef}>
       {label && (
-        <label className="text-[11px] font-medium uppercase tracking-wider text-ink-mute">
+        <label className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
           {label}
         </label>
       )}
@@ -372,7 +377,7 @@ function LookupFieldInner<T>(
           <button
             type="button"
             tabIndex={-1}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-mute transition-colors hover:text-ink"
+            className="absolute top-1/2 right-2 -translate-y-1/2 text-ink-mute transition-colors hover:text-ink"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
               onChange(null, null);
@@ -383,21 +388,24 @@ function LookupFieldInner<T>(
             <XIcon className="size-3.5" />
           </button>
         ) : (
-          <ChevronDownIcon className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-mute" />
+          <ChevronDownIcon className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-ink-mute" />
         )}
       </div>
 
       {popup}
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => (open ? setDialogOpen(true) : closeLookup())}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden">
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => (open ? setDialogOpen(true) : closeLookup())}
+      >
+        <DialogContent className="max-w-4xl overflow-hidden p-0">
           <DialogHeader className="border-b border-hairline px-5 py-4">
             <DialogTitle className="text-[14px] font-medium text-ink">
               {source.title ?? label ?? "Lookup"}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 p-5">
-          <input
+            <input
               ref={dialogSearchRef}
               className={inputBase}
               value={query}
@@ -468,7 +476,8 @@ function lookupRecordLabel<T extends Record<string, unknown>>(
       : localizedRecordValue(rawValue);
   const display = localizedRecordValue(record[displayColumn]);
   const code = codeColumn ? localizedRecordValue(record[codeColumn]) : "";
-  const label = code && display && code !== display ? `${code} — ${display}` : (display || code || value);
+  const label =
+    code && display && code !== display ? `${code} — ${display}` : display || code || value;
   return {
     value,
     label,
@@ -493,7 +502,9 @@ function applyLookupFilterParams(params: URLSearchParams, lookupFilter: unknown)
   }
 }
 
-export function createRemoteLookupSource(config: RemoteLookupConfig): LookupSource<Record<string, unknown>> {
+export function createRemoteLookupSource(
+  config: RemoteLookupConfig,
+): LookupSource<Record<string, unknown>> {
   const entityName = config.lookupTable;
   if (!entityName) {
     throw new Error("createRemoteLookupSource requires lookupTable");
@@ -526,7 +537,9 @@ export function createRemoteLookupSource(config: RemoteLookupConfig): LookupSour
       const res = await fetch(`/api/data/${entityName}?${params.toString()}`);
       if (!res.ok) return [];
       const rows = (await res.json()) as Record<string, unknown>[];
-      return rows.map((record) => lookupRecordLabel(record, config, valueColumn, displayColumn, codeColumn));
+      return rows.map((record) =>
+        lookupRecordLabel(record, config, valueColumn, displayColumn, codeColumn),
+      );
     },
     resolve: async (value) => {
       if (!value) return null;
@@ -559,9 +572,10 @@ export function createStaticLookupSource<T extends Record<string, unknown>>(
     const labelPieces = config.labelColumns
       .map((column) => localizedRecordValue(record[column]))
       .filter((part) => part.length > 0);
-    const descriptionPieces = config.descriptionColumns
-      ?.map((column) => localizedRecordValue(record[column]))
-      .filter((part) => part.length > 0) ?? [];
+    const descriptionPieces =
+      config.descriptionColumns
+        ?.map((column) => localizedRecordValue(record[column]))
+        .filter((part) => part.length > 0) ?? [];
     return {
       value,
       label: labelPieces.join(" — ") || value,
@@ -577,16 +591,14 @@ export function createStaticLookupSource<T extends Record<string, unknown>>(
     emptyLabel: config.emptyLabel,
     search: async (query, options) => {
       const normalized = normalizeText(query);
-      const mapped = items
-        .map(mapItem)
-        .filter((item) => {
-          if (!normalized) return true;
-          return (
-            normalizeText(item.label).includes(normalized) ||
-            normalizeText(item.description ?? "").includes(normalized) ||
-            normalizeText(item.value).includes(normalized)
-          );
-        });
+      const mapped = items.map(mapItem).filter((item) => {
+        if (!normalized) return true;
+        return (
+          normalizeText(item.label).includes(normalized) ||
+          normalizeText(item.description ?? "").includes(normalized) ||
+          normalizeText(item.value).includes(normalized)
+        );
+      });
       return mapped.slice(0, options?.limit ?? mapped.length);
     },
     resolve: async (value) => {

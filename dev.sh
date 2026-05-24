@@ -44,6 +44,16 @@ trap cleanup INT TERM EXIT
 
 echo "Using: $COMPOSE_CMD"
 
+VP_CMD="$(cd "$(dirname "$0")" && pwd)/node_modules/.bin/vp"
+if [ ! -x "$VP_CMD" ]; then
+    if command -v vp > /dev/null 2>&1; then
+        VP_CMD="$(command -v vp)"
+    else
+        echo "Error: vp is not available. Run pnpm install to restore node_modules/.bin/vp."
+        exit 1
+    fi
+fi
+
 # Start PostgreSQL
 echo "Starting PostgreSQL..."
 START_TIME=$(date +%s)
@@ -56,7 +66,7 @@ if [ -n "$1" ]; then
     DEV_CMD="--filter=@repo/$1 dev"
     echo "Starting $1 development server..."
 else
-    DEV_CMD="--recursive --parallel dev"
+    DEV_CMD="dev"
     echo "Starting all development servers..."
 fi
 
@@ -64,16 +74,15 @@ fi
 if [ "$SKIP_LLM" != "1" ]; then
     LLM_PORT="${LLM_SERVICE_PORT:-11435}"
     LLM_DIR="$(cd "$(dirname "$0")/services/llm" && pwd)"
-    LLM_UVICORN="$LLM_DIR/.venv/bin/uvicorn"
-    if [ -x "$LLM_UVICORN" ] || command -v uvicorn > /dev/null 2>&1; then
-        UVICORN_CMD="${LLM_UVICORN:-uvicorn}"
+    LLM_PYTHON="$LLM_DIR/.venv/bin/python"
+    if [ -x "$LLM_PYTHON" ] && "$LLM_PYTHON" -c "import uvicorn" > /dev/null 2>&1; then
         echo "Starting LiteLLM service on port $LLM_PORT..."
         START_TIME_LLM=$(date +%s)
-        (cd "$LLM_DIR" && "$UVICORN_CMD" main:app --port "$LLM_PORT" --reload) &
+        (cd "$LLM_DIR" && "$LLM_PYTHON" -m uvicorn main:app --port "$LLM_PORT" --reload) &
         LLM_PID=$!
         echo "LiteLLM service backgrounded."
     else
-        echo "Warning: uvicorn not found — skipping LiteLLM service. Install with: pip install -r services/llm/requirements.txt"
+        echo "Warning: services/llm/.venv is missing or incomplete — skipping LiteLLM service. Recreate it with: python -m venv services/llm/.venv && pip install -r services/llm/requirements.txt"
     fi
 else
     echo "Skipping LiteLLM service (SKIP_LLM=1)..."
@@ -81,6 +90,5 @@ fi
 
 # Start the development server (blocks until Ctrl+C)
 echo "Development environment is ready. Press Ctrl+C to stop all services."
-echo "Executing: pnpm run $DEV_CMD"
-START_TIME_PNPM=$(date +%s)
-pnpm run $DEV_CMD
+echo "Executing: $VP_CMD run $DEV_CMD"
+$VP_CMD run $DEV_CMD

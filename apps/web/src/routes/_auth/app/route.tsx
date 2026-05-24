@@ -10,7 +10,7 @@ import { cn } from "@repo/ui/lib/utils";
 import { ActionBarProvider, useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { DesignerProvider, useDesigner } from "@repo/ui/platform/designer-context";
-import { useFocus } from "@repo/ui/platform/focus-manager";
+import { useFocus, type FocusContextState } from "@repo/ui/platform/focus-manager";
 import { TelemetryProvider, useTelemetry } from "@repo/ui/platform/telemetry-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
@@ -34,7 +34,7 @@ import {
   CheckIcon,
   PlusIcon,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import { captureFeedbackSnapshot, type FeedbackSnapshot } from "#/lib/feedback-snapshot";
@@ -350,10 +350,7 @@ function AvatarMenu({ userName, userEmail }: { userName: string; userEmail: stri
       </button>
 
       {open && (
-        <div
-          className="absolute top-[calc(100%+6px)] right-0 z-50 w-64 rounded-md border border-hairline bg-canvas py-1 shadow-lg"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="absolute top-[calc(100%+6px)] right-0 z-50 w-64 rounded-md border border-hairline bg-canvas py-1 shadow-lg">
           {/* User info */}
           <div className="mb-1 border-b border-hairline px-2.5 py-2.5">
             <div className="text-[13px] text-ink">{userName}</div>
@@ -609,13 +606,25 @@ function AppLayoutInner({
   tenantId: string;
 }) {
   const { subCrumb } = useActionBar();
-  const { state: focusState } = useFocus();
+  const { state: focusState, setFocus, resetFocus } = useFocus();
   const { registerCommand } = useCommands();
   const { getSnapshot } = useTelemetry();
-  const { toggleDesignMode } = useDesigner();
+  const { isDesignMode, toggleDesignMode, resetDelta } = useDesigner();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<FeedbackSnapshot>(DEFAULT_SNAPSHOT);
   const prevFeedbackOpen = useRef(false);
+  const focusSnapshotRef = useRef(focusState);
+  const designerFocusSnapshotRef = useRef<FocusContextState | null>(null);
+
+  useEffect(() => {
+    focusSnapshotRef.current = focusState;
+  }, [focusState]);
+
+  useEffect(() => {
+    if (isDesignMode && focusState.area !== "designer") {
+      setFocus({ area: "designer" });
+    }
+  }, [isDesignMode, focusState.area, setFocus]);
 
   // Capture snapshot when modal transitions to open
   useEffect(() => {
@@ -644,6 +653,35 @@ function AppLayoutInner({
     prevFeedbackOpen.current = feedbackOpen;
   }, [feedbackOpen, userId, tenantId, focusState, getSnapshot]);
 
+  const openDesigner = useCallback(() => {
+    const currentFocus = focusSnapshotRef.current;
+    if (!isDesignMode) {
+      designerFocusSnapshotRef.current = currentFocus;
+      toggleDesignMode();
+    }
+    setFocus({ ...currentFocus, area: "designer" });
+  }, [isDesignMode, setFocus, toggleDesignMode]);
+
+  const closeDesigner = useCallback(() => {
+    if (!isDesignMode) return;
+    toggleDesignMode();
+    const restoredFocus = designerFocusSnapshotRef.current;
+    designerFocusSnapshotRef.current = null;
+    if (restoredFocus) {
+      setFocus(restoredFocus);
+      return;
+    }
+    resetFocus();
+  }, [isDesignMode, resetFocus, setFocus, toggleDesignMode]);
+
+  const toggleDesigner = useCallback(() => {
+    if (isDesignMode) {
+      closeDesigner();
+      return;
+    }
+    openDesigner();
+  }, [closeDesigner, isDesignMode, openDesigner]);
+
   // Register open-feedback command
   useEffect(() => {
     const unregister = registerCommand({
@@ -657,18 +695,93 @@ function AppLayoutInner({
     return unregister;
   }, [registerCommand]);
 
-  // Register designer command
+  // Register designer commands
   useEffect(() => {
-    const unregister = registerCommand({
-      id: "toggle-designer",
+    const unregisterToggle = registerCommand({
+      id: "designer.toggle",
       scope: "global",
       group: "workflow",
-      label: { en: "Toggle Inline Designer", de: "Inline Designer umschalten" },
+      label: { en: "Toggle Designer", de: "Designer umschalten" },
       shortcut: "Ctrl+Shift+F2",
-      handler: () => toggleDesignMode(),
+      handler: toggleDesigner,
     });
-    return unregister;
-  }, [registerCommand, toggleDesignMode]);
+
+    const unregisterSave = registerCommand({
+      id: "designer.save",
+      scope: "local",
+      group: "workflow",
+      label: { en: "Save Designer", de: "Designer speichern" },
+      isEnabled: (state) => isDesignMode && state.area === "designer",
+      handler: () => {
+        if (!isDesignMode) return;
+        setFocus({ ...focusSnapshotRef.current, area: "designer" });
+      },
+    });
+
+    const unregisterReset = registerCommand({
+      id: "designer.reset",
+      scope: "local",
+      group: "workflow",
+      label: { en: "Reset Designer", de: "Designer zurücksetzen" },
+      isEnabled: (state) => isDesignMode && state.area === "designer",
+      handler: () => {
+        if (!isDesignMode) return;
+        resetDelta();
+        setFocus({ ...focusSnapshotRef.current, area: "designer" });
+      },
+    });
+
+    const unregisterApply = registerCommand({
+      id: "designer.apply",
+      scope: "local",
+      group: "workflow",
+      label: { en: "Apply Designer", de: "Designer anwenden" },
+      isEnabled: (state) => isDesignMode && state.area === "designer",
+      handler: () => {
+        if (!isDesignMode) return;
+        setFocus({ ...focusSnapshotRef.current, area: "designer" });
+      },
+    });
+
+    const unregisterReconcile = registerCommand({
+      id: "designer.reconcile",
+      scope: "local",
+      group: "workflow",
+      label: { en: "Reconcile Designer", de: "Designer abgleichen" },
+      isEnabled: (state) => isDesignMode && state.area === "designer",
+      handler: () => {
+        if (!isDesignMode) return;
+        setFocus({ ...focusSnapshotRef.current, area: "designer" });
+      },
+    });
+
+    const unregisterClose = registerCommand({
+      id: "designer.close",
+      scope: "local",
+      group: "workflow",
+      label: { en: "Close Designer", de: "Designer schließen" },
+      shortcut: "Escape",
+      isEnabled: (state) => isDesignMode && state.area === "designer",
+      handler: closeDesigner,
+    });
+
+    return () => {
+      unregisterToggle();
+      unregisterSave();
+      unregisterReset();
+      unregisterApply();
+      unregisterReconcile();
+      unregisterClose();
+    };
+  }, [
+    closeDesigner,
+    isDesignMode,
+    openDesigner,
+    registerCommand,
+    resetDelta,
+    setFocus,
+    toggleDesigner,
+  ]);
 
   const handleFeedbackClick = () => setFeedbackOpen(true);
 

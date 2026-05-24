@@ -609,6 +609,7 @@ function AddressesModule() {
           <EntityMask
             entityName="address"
             mode="create"
+            layout="single"
             title="New Address"
             onCancel={() => setShowCreate(false)}
             onSaved={handleCreateSaved}

@@ -87,7 +87,7 @@ const CURRENCIES = [
   },
 ];
 
-async function main() {
+export async function seedCurrencies() {
   console.log(`Starting seeding of ${CURRENCIES.length} currencies...`);
 
   await db
@@ -106,8 +106,13 @@ async function main() {
   console.log("Currencies seeded successfully!");
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  console.error("Seeding failed:", message);
-  process.exit(1);
-});
+if (
+  process.argv[1] &&
+  (process.argv[1].endsWith("seed-currencies.ts") || process.argv[1].endsWith("seed-currencies"))
+) {
+  seedCurrencies().catch((error: unknown) => {
+    const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    console.error("Seeding failed:", message);
+    process.exit(1);
+  });
+}

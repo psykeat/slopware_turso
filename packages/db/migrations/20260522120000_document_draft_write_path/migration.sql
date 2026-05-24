@@ -1,7 +1,4 @@
-ALTER TABLE "document_line" ADD COLUMN "archived_at" timestamp with time zone;
-ALTER TABLE "document_line" DROP CONSTRAINT "document_line_tenant_id_document_id_line_no_unique";
-ALTER TABLE "document_line" ADD CONSTRAINT "document_line_tenant_id_document_id_line_no_unique" UNIQUE("tenant_id","document_id","line_no","archived_at");
-CREATE INDEX "idx_document_line_tenant_document" ON "document_line" ("tenant_id","document_id");
-CREATE INDEX "idx_document_line_tenant_archived" ON "document_line" ("tenant_id","archived_at");
-CREATE INDEX "idx_document_line_tracking_tenant_line" ON "document_line_tracking" ("tenant_id","document_line_id");
-CREATE INDEX "idx_document_line_tracking_tenant_created" ON "document_line_tracking" ("tenant_id","document_line_id","created_at");
+-- Intentionally left blank.
+-- The `document_line.archived_at` migration already exists in
+-- 20260522010307_purple_firestar. This placeholder keeps the historical
+-- migration timeline intact without reapplying the same DDL on fresh setups.

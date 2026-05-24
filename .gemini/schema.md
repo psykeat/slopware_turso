@@ -1,6 +1,6 @@
 # Slopware — Live Schema
 
-> Generated: 2026-05-22 00:55:54 UTC
+> Generated: 2026-05-24 23:36:46 UTC
 > Tables: 71
 
 ## Module: uncategorized
@@ -551,6 +551,7 @@
 | warehouse_id          | warehouse_id          | uuid                     | —     |                            |             |
 | cost_center_id        | cost_center_id        | uuid                     | —     |                            |             |
 | created_at            | created_at            | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| archived_at           | archived_at           | timestamp with time zone | —     |                            |             |
 | transaction_id        | transaction_id        | uuid                     | —     |                            |             |
 | movement_type         | movement_type         | char(1)                  | —     |                            |             |
 | line_type             | line_type             | varchar(20)              | —     | NOT NULL, DEFAULT article  |             |
@@ -558,6 +559,8 @@
 
 > INDEX `idx_document_line_article` (article_id) [btree]
 > INDEX `idx_document_line_document` (document_id) [btree]
+> INDEX `idx_document_line_tenant_document` (tenant_id, document_id) [btree]
+> INDEX `idx_document_line_tenant_archived` (tenant_id, archived_at) [btree]
 > INDEX `idx_document_line_tenant` (tenant_id) [btree]
 > INDEX `idx_document_line_tx` (tenant_id, transaction_id) [btree]
 
@@ -595,6 +598,9 @@
 | batch_no         | batch_no         | text                     | —     |                            |             |
 | qty              | qty              | numeric                  | —     | NOT NULL                   |             |
 | created_at       | created_at       | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+
+> INDEX `idx_document_line_tracking_tenant_line` (tenant_id, document_line_id) [btree]
+> INDEX `idx_document_line_tracking_tenant_created` (tenant_id, document_line_id, created_at) [btree]
 
 > CHECK `document_line_tracking_check`: [object Object]
 

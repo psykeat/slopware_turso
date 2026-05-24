@@ -11,11 +11,11 @@ ALTER TABLE "tenant_rules" ALTER COLUMN "rule_key" SET NOT NULL;
 --> statement-breakpoint
 ALTER TABLE "tenant_rules" ALTER COLUMN "rule_state" SET DEFAULT 'active';
 --> statement-breakpoint
-DROP INDEX IF EXISTS "uq_rules_global";
+ALTER TABLE "tenant_rules" DROP CONSTRAINT IF EXISTS "uq_rules_global";
 --> statement-breakpoint
-DROP INDEX IF EXISTS "uq_rules_org";
+ALTER TABLE "tenant_rules" DROP CONSTRAINT IF EXISTS "uq_rules_org";
 --> statement-breakpoint
-DROP INDEX IF EXISTS "uq_rules_tenant";
+ALTER TABLE "tenant_rules" DROP CONSTRAINT IF EXISTS "uq_rules_tenant";
 --> statement-breakpoint
 CREATE UNIQUE INDEX "uq_rules_global" ON "tenant_rules" ("entity_name", "rule_key") WHERE scope = 'global';
 --> statement-breakpoint

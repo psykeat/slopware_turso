@@ -361,18 +361,25 @@ function SettingsView() {
   });
 
   useEffect(() => {
-    if (companyOptions.length === 0) {
-      setSelectedCompanyId(null);
-      return;
-    }
-    setSelectedCompanyId((current) => {
-      if (current && companyOptions.some((row: any) => row.companyId === current)) return current;
-      const preferred = me?.lastCompanyId;
-      if (preferred && companyOptions.some((row: any) => row.companyId === preferred)) {
-        return preferred;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (companyOptions.length === 0) {
+        setSelectedCompanyId(null);
+        return;
       }
-      return companyOptions[0]?.companyId ?? null;
+      setSelectedCompanyId((current) => {
+        if (current && companyOptions.some((row: any) => row.companyId === current)) return current;
+        const preferred = me?.lastCompanyId;
+        if (preferred && companyOptions.some((row: any) => row.companyId === preferred)) {
+          return preferred;
+        }
+        return companyOptions[0]?.companyId ?? null;
+      });
     });
+    return () => {
+      cancelled = true;
+    };
   }, [companyOptions, me?.lastCompanyId]);
 
   const selectedCompany = useMemo(

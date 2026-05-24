@@ -136,4 +136,3 @@ export const Route = createFileRoute("/api/documents/$documentId/print")({
     },
   },
 });
-

@@ -1,14 +1,10 @@
+import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ChevronRightIcon,
-  ChevronDownIcon,
-  FolderIcon,
-  FolderOpenIcon,
-} from "lucide-react";
+import { useTranslation } from "react-i18next";
+
 import { cn } from "../lib/utils";
 import { useFocus } from "../platform/focus-manager";
 import { Skeleton } from "./skeleton";
-import { useTranslation } from "react-i18next";
 
 export interface TreeNode {
   id: string;
@@ -59,37 +55,48 @@ export function NavigationTree({
   }, [data, expanded]);
 
   const currentTreeId = focusState.treePanel === panelId ? focusState.treeRecordId : null;
-  const currentIndex = currentTreeId ? flatNodes.findIndex((node) => node.id === currentTreeId) : -1;
+  const currentIndex = currentTreeId
+    ? flatNodes.findIndex((node) => node.id === currentTreeId)
+    : -1;
 
-  const commitSelection = useCallback((id: string) => {
-    onSelect?.(id);
-    requestAnimationFrame(() => onSelectCommit?.(id));
-  }, [onSelect, onSelectCommit]);
+  const commitSelection = useCallback(
+    (id: string) => {
+      onSelect?.(id);
+      requestAnimationFrame(() => onSelectCommit?.(id));
+    },
+    [onSelect, onSelectCommit],
+  );
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleSelect = useCallback((node: TreeNode) => {
-    setFocus({
-      area: "tree",
-      treeEntity: entityName,
-      treePanel: panelId,
-      treeRecordId: node.id,
-      panel: panelId,
-    });
-    commitSelection(node.id);
-  }, [commitSelection, entityName, panelId, setFocus]);
+  const handleSelect = useCallback(
+    (node: TreeNode) => {
+      setFocus({
+        area: "tree",
+        treeEntity: entityName,
+        treePanel: panelId,
+        treeRecordId: node.id,
+        panel: panelId,
+      });
+      commitSelection(node.id);
+    },
+    [commitSelection, entityName, panelId, setFocus],
+  );
 
-  const navigate = useCallback((delta: number) => {
-    if (flatNodes.length === 0) return;
-    const base = currentIndex < 0 ? (delta > 0 ? -1 : flatNodes.length) : currentIndex;
-    const nextIndex = Math.max(0, Math.min(base + delta, flatNodes.length - 1));
-    const node = flatNodes[nextIndex];
-    if (!node) return;
-    handleSelect(node);
-  }, [currentIndex, flatNodes, handleSelect]);
+  const navigate = useCallback(
+    (delta: number) => {
+      if (flatNodes.length === 0) return;
+      const base = currentIndex < 0 ? (delta > 0 ? -1 : flatNodes.length) : currentIndex;
+      const nextIndex = Math.max(0, Math.min(base + delta, flatNodes.length - 1));
+      const node = flatNodes[nextIndex];
+      if (!node) return;
+      handleSelect(node);
+    },
+    [currentIndex, flatNodes, handleSelect],
+  );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -113,8 +120,7 @@ export function NavigationTree({
     return nodes.map((node) => {
       const hasChildren = Boolean(node.children && node.children.length > 0);
       const isExpanded = expanded[node.id] ?? false;
-      const isSelected =
-        focusState.treeRecordId === node.id && focusState.treePanel === panelId;
+      const isSelected = focusState.treeRecordId === node.id && focusState.treePanel === panelId;
       const effectiveLevel = node.level ?? level;
 
       return (
@@ -125,14 +131,12 @@ export function NavigationTree({
             aria-expanded={hasChildren ? isExpanded : undefined}
             tabIndex={0}
             className={cn(
-              "h-7 flex items-center gap-1.5 cursor-pointer select-none text-[13px] transition-colors",
+              "flex h-7 cursor-pointer items-center gap-1.5 text-[13px] transition-colors select-none",
               !isSelected && "hover:bg-canvas",
             )}
             style={{
               paddingLeft: `${8 + effectiveLevel * 14}px`,
-              ...(isSelected
-                ? { background: "var(--primary)", color: "var(--primary-fg)" }
-                : {}),
+              ...(isSelected ? { background: "var(--primary)", color: "var(--primary-fg)" } : {}),
             }}
             onClick={() => handleSelect(node)}
             onKeyDown={(e) => {
@@ -143,7 +147,7 @@ export function NavigationTree({
               <button
                 type="button"
                 aria-label={isExpanded ? "Collapse" : "Expand"}
-                className="size-3 flex items-center justify-center shrink-0 bg-transparent border-0 p-0 cursor-pointer"
+                className="flex size-3 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0"
                 onClick={(e) => toggleExpand(node.id, e)}
               >
                 {isExpanded ? (
@@ -156,7 +160,7 @@ export function NavigationTree({
               <span className="size-3 shrink-0" style={{ display: "inline-block", width: 12 }} />
             )}
 
-            <span className="size-3.5 flex items-center justify-center shrink-0">
+            <span className="flex size-3.5 shrink-0 items-center justify-center">
               {isExpanded ? (
                 <FolderOpenIcon size={13} strokeWidth={1.4} />
               ) : (
@@ -168,7 +172,7 @@ export function NavigationTree({
 
             {node.count !== undefined && (
               <span
-                className="text-[11px] mr-2 tabular-nums"
+                className="mr-2 text-[11px] tabular-nums"
                 style={{
                   color: isSelected
                     ? "color-mix(in oklab, var(--primary-fg) 70%, transparent)"
@@ -180,8 +184,7 @@ export function NavigationTree({
             )}
           </div>
 
-          {hasChildren && isExpanded &&
-            renderTree(node.children!, effectiveLevel + 1)}
+          {hasChildren && isExpanded && renderTree(node.children!, effectiveLevel + 1)}
         </React.Fragment>
       );
     });
@@ -193,11 +196,11 @@ export function NavigationTree({
     <div
       ref={treeRef}
       className={cn(
-        "flex flex-col h-full w-full overflow-hidden bg-canvas-soft border-r border-hairline",
+        "flex h-full w-full flex-col overflow-hidden border-r border-hairline bg-canvas-soft",
         className,
       )}
     >
-      <div className="h-8 flex items-center px-3 shrink-0 border-b border-hairline text-[11px] uppercase tracking-wider font-medium text-ink-mute">
+      <div className="flex h-8 shrink-0 items-center border-b border-hairline px-3 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
         {resolvedHeader}
       </div>
 
@@ -207,15 +210,12 @@ export function NavigationTree({
             {[8, 22, 14, 28, 8, 22, 14].map((indent, i) => (
               <div
                 key={i}
-                className="h-7 flex items-center gap-1.5"
+                className="flex h-7 items-center gap-1.5"
                 style={{ paddingLeft: indent }}
               >
                 <Skeleton className="size-3 shrink-0" />
-                <Skeleton
-                  className="h-2.5"
-                  style={{ width: 80 + (i * 13) % 60 }}
-                />
-                <Skeleton className="h-2 w-6 ml-auto mr-2" />
+                <Skeleton className="h-2.5" style={{ width: 80 + ((i * 13) % 60) }} />
+                <Skeleton className="mr-2 ml-auto h-2 w-6" />
               </div>
             ))}
           </>

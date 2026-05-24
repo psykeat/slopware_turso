@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { and, eq } from "drizzle-orm";
 import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { address, deliveryAddress } from "@repo/db/schema";
+import { createFileRoute } from "@tanstack/react-router";
+import { and, eq } from "drizzle-orm";
+
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 export const Route = createFileRoute("/api/delivery-addresses/$deliveryAddressId")({

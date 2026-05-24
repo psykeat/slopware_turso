@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env";
 import { getColumns as getColumnsBase } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
@@ -138,7 +138,11 @@ function getColumnTypeLabel(columnType: string | undefined): string {
   return "text";
 }
 
-function getLookupTableName(colName: string, key: string, schemaRef: typeof schema): string | undefined {
+function getLookupTableName(
+  colName: string,
+  key: string,
+  schemaRef: typeof schema,
+): string | undefined {
   if (colName.endsWith(lookupSuffix)) {
     const potentialEntity = colName.slice(0, -lookupSuffix.length);
     if ((schemaRef as any)[potentialEntity] && potentialEntity !== key) {
@@ -232,12 +236,7 @@ function getHelperTablePayload(key: string, columns: Record<string, unknown>) {
   };
 }
 
-function getTenantFieldPayload(
-  key: string,
-  colName: string,
-  col: any,
-  schemaRef: typeof schema,
-) {
+function getTenantFieldPayload(key: string, colName: string, col: any, schemaRef: typeof schema) {
   const columnType = col.columnType;
   const lookupTable = getLookupTableName(colName, key, schemaRef);
   const isPk = col.primary || false;
@@ -259,7 +258,7 @@ function getTenantFieldPayload(
  * Automatically discovers metadata from Drizzle schema and populates
  * helper_table_registry and global tenant_fields with improved labels.
  */
-async function main() {
+export async function seedMetadata() {
   console.log("Starting improved dynamic metadata discovery...");
 
   const tables = discoverTables();
@@ -316,10 +315,14 @@ async function main() {
   }
 
   console.log("Improved dynamic metadata discovery complete.");
-  process.exit(0);
 }
 
-main().catch((err) => {
-  console.error("Error in discovery:", err);
-  process.exit(1);
-});
+if (
+  process.argv[1] &&
+  (process.argv[1].endsWith("seed-metadata.ts") || process.argv[1].endsWith("seed-metadata"))
+) {
+  seedMetadata().catch((err) => {
+    console.error("Error in discovery:", err);
+    process.exit(1);
+  });
+}

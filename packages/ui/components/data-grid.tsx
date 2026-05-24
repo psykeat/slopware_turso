@@ -18,7 +18,7 @@ import {
   ChevronUpIcon,
   XIcon,
   SearchIcon,
-  PencilRulerIcon,
+  GripVerticalIcon,
   PinIcon,
 } from "lucide-react";
 import React, {
@@ -146,6 +146,256 @@ function getColType(col: ColumnDef<any> | undefined): string {
   return col?.type ?? (col?.isNumeric ? "number" : "text");
 }
 
+type DesignerColumnDraft = {
+  key: string;
+  visible: boolean;
+  width?: string;
+  pin?: "left" | "right" | null;
+  order: number;
+  identity: string;
+  conflictState: string | null;
+};
+
+type DesignerRuntimeContext = {
+  isDesignMode: boolean;
+  delta: {
+    columns: DesignerColumnDraft[];
+    fieldConfigs: unknown[];
+    activeDragId: string | null;
+    hoverTargetId: string | null;
+  };
+  initColumns: (
+    cols: {
+      key: string;
+      header: string;
+      visible?: boolean;
+      width?: string;
+      pin?: "left" | "right" | null;
+    }[],
+  ) => void;
+  addColumnDraft?: (label?: string) => void;
+  normalized?: unknown;
+  normalizedState?: unknown;
+  state?: { normalized?: unknown };
+  selectedNodeKey?: string | null;
+  selection?: { nodeKey?: string | null; selectedNodeKey?: string | null } | null;
+  surface?: string | null;
+  activeSurface?: string | null;
+  currentSurface?: string | null;
+  entityName?: string | null;
+  entity?: string | null;
+};
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readPath(value: unknown, path: string[]): unknown {
+  let current: unknown = value;
+  for (const segment of path) {
+    if (!isRecord(current)) return undefined;
+    current = current[segment];
+  }
+  return current;
+}
+
+function firstArrayAtPaths(value: unknown, paths: string[][]): unknown[] | null {
+  for (const path of paths) {
+    const candidate = readPath(value, path);
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return null;
+}
+
+function collectDesignerObjects(
+  value: unknown,
+  out: Record<string, any>[] = [],
+  seen = new Set<object>(),
+): Record<string, any>[] {
+  if (!value || typeof value !== "object") return out;
+  if (seen.has(value as object)) return out;
+  seen.add(value as object);
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectDesignerObjects(item, out, seen);
+    }
+    return out;
+  }
+
+  const record = value as Record<string, any>;
+  const kind = typeof record.kind === "string" ? record.kind : null;
+  const nodeKind = typeof record.nodeKind === "string" ? record.nodeKind : null;
+  const type = typeof record.type === "string" ? record.type : null;
+  if (kind || nodeKind || type) {
+    out.push(record);
+  }
+
+  for (const key of [
+    "nodes",
+    "children",
+    "columns",
+    "gridColumns",
+    "items",
+    "layout",
+    "contract",
+  ]) {
+    collectDesignerObjects(record[key], out, seen);
+  }
+
+  return out;
+}
+
+function readDesignerRoot(designer: DesignerRuntimeContext): unknown {
+  return designer.normalized ?? designer.normalizedState ?? designer.state?.normalized ?? null;
+}
+
+function readDesignerSelectionKey(designer: DesignerRuntimeContext): string | null {
+  const root = readDesignerRoot(designer);
+  const candidates = [
+    designer.selectedNodeKey,
+    designer.selection?.selectedNodeKey ?? null,
+    designer.selection?.nodeKey ?? null,
+    (isRecord(root) ? (root.selectedNodeKey as string | null | undefined) : null) ?? null,
+    (isRecord(root) ? (root.selectedNode?.id as string | null | undefined) : null) ?? null,
+    (isRecord(root) ? (root.selection?.selectedNodeKey as string | null | undefined) : null) ??
+      null,
+    (isRecord(root) ? (root.selection?.nodeKey as string | null | undefined) : null) ?? null,
+  ];
+  return (
+    candidates.find((value): value is string => typeof value === "string" && value.length > 0) ??
+    null
+  );
+}
+
+function readDesignerIdentityContext(designer: DesignerRuntimeContext) {
+  const entityName =
+    designer.entityName ??
+    designer.entity ??
+    (isRecord(designer.normalized)
+      ? (designer.normalized.entityName as string | null | undefined)
+      : null) ??
+    (isRecord(designer.normalizedState)
+      ? (designer.normalizedState.entityName as string | null | undefined)
+      : null) ??
+    null;
+  const surface =
+    designer.surface ??
+    designer.activeSurface ??
+    designer.currentSurface ??
+    (isRecord(designer.normalized)
+      ? (designer.normalized.surface as string | null | undefined)
+      : null) ??
+    (isRecord(designer.normalizedState)
+      ? (designer.normalizedState.surface as string | null | undefined)
+      : null) ??
+    null;
+  return { entityName, surface };
+}
+
+function normalizeDesignerColumnDraft(
+  value: unknown,
+  index: number,
+  entityName: string | null,
+  surface: string | null,
+): DesignerColumnDraft | null {
+  if (!isRecord(value)) return null;
+
+  const key =
+    (typeof value.key === "string" && value.key) ||
+    (typeof value.nodeKey === "string" && value.nodeKey) ||
+    (typeof value.fieldKey === "string" && value.fieldKey) ||
+    (typeof value.metadataKey === "string" && value.metadataKey) ||
+    (typeof value.id === "string" && value.id) ||
+    null;
+  if (!key) return null;
+
+  const nodeEntityName =
+    (typeof value.entityName === "string" && value.entityName) ||
+    (typeof value.entity === "string" && value.entity) ||
+    null;
+  if (entityName && nodeEntityName && nodeEntityName !== entityName) return null;
+
+  const nodeSurface =
+    (typeof value.surface === "string" && value.surface) ||
+    (typeof value.surfaceName === "string" && value.surfaceName) ||
+    null;
+  if (surface && nodeSurface && nodeSurface !== surface) return null;
+
+  const rawKind = typeof value.kind === "string" ? value.kind : null;
+  const identity =
+    (typeof value.id === "string" && value.id) ||
+    (typeof value.metadataKey === "string" && value.metadataKey) ||
+    (typeof value.nodeId === "string" && value.nodeId) ||
+    (rawKind ? `${rawKind}:${key}` : `grid-column:${key}`);
+  const conflictState =
+    (typeof value.conflictState === "string" && value.conflictState) ||
+    (typeof value.state === "string" && value.state) ||
+    null;
+
+  const order =
+    (typeof value.displayOrder === "number" && value.displayOrder) ||
+    (typeof value.order === "number" && value.order) ||
+    index;
+  const width =
+    (typeof value.width === "string" && value.width) ||
+    (typeof value.size === "string" && value.size) ||
+    undefined;
+  const pin =
+    value.pin === "left" || value.pin === "right"
+      ? value.pin
+      : value.pinned === "left" || value.pinned === "right"
+        ? value.pinned
+        : null;
+
+  return {
+    key,
+    visible: value.visible !== false,
+    width,
+    pin,
+    order,
+    identity,
+    conflictState,
+  };
+}
+
+function readDesignerColumns(designer: DesignerRuntimeContext): DesignerColumnDraft[] {
+  const root = readDesignerRoot(designer);
+  if (!root) return [];
+
+  const { entityName, surface } = readDesignerIdentityContext(designer);
+  const arrayCandidate =
+    firstArrayAtPaths(root, [
+      ["columns"],
+      ["gridColumns"],
+      ["nodes"],
+      ["layout", "columns"],
+      ["layout", "nodes"],
+      ["contract", "columns"],
+      ["contract", "nodes"],
+    ]) ?? [];
+
+  if (arrayCandidate.length > 0) {
+    return arrayCandidate
+      .map((value, index) => normalizeDesignerColumnDraft(value, index, entityName, surface))
+      .filter((value): value is DesignerColumnDraft => value !== null);
+  }
+
+  return collectDesignerObjects(root)
+    .filter((value) => {
+      const kind = typeof value.kind === "string" ? value.kind : null;
+      const nodeKind = typeof value.nodeKind === "string" ? value.nodeKind : null;
+      return (
+        kind === "grid-column" ||
+        kind === "column" ||
+        nodeKind === "grid-column" ||
+        nodeKind === "column"
+      );
+    })
+    .map((value, index) => normalizeDesignerColumnDraft(value, index, entityName, surface))
+    .filter((value): value is DesignerColumnDraft => value !== null);
+}
+
 let _ruleIdCounter = 0;
 function newRuleId() {
   return `r${++_ruleIdCounter}`;
@@ -189,7 +439,8 @@ function DataGridInner<T>(
   "use no memo";
   const { t, i18n } = useTranslation("ui");
   const { state: focusState, setFocus } = useFocus();
-  const { isDesignMode, delta, initColumns, updateColumn, moveColumn } = useDesigner();
+  const designer = useDesigner() as unknown as DesignerRuntimeContext;
+  const { isDesignMode, delta, initColumns, addColumnDraft } = designer;
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const colPickerRef = useRef<HTMLDivElement>(null);
@@ -222,6 +473,17 @@ function DataGridInner<T>(
   const loading = internalLoading || externalLoading;
   const hasPagination = totalCount !== undefined;
   const totalPages = hasPagination ? Math.ceil(totalCount / pageSize) : 0;
+  const designerColumns = useMemo(() => readDesignerColumns(designer), [designer]);
+  const designerColumnByKey = useMemo(() => {
+    return new Map(designerColumns.map((column) => [column.key, column]));
+  }, [designerColumns]);
+  const designerSelectionKey = readDesignerSelectionKey(designer);
+  const activeDesignerHeaderKey =
+    focusState.area === "designer" &&
+    focusState.entity === entityName &&
+    focusState.panel === panelId
+      ? focusState.field
+      : designerSelectionKey;
 
   // Column visibility persisted per entityName
   const storageKey = `datagrid-cols-${entityName}`;
@@ -309,7 +571,7 @@ function DataGridInner<T>(
     return () => {
       mounted = false;
     };
-  }, [entityName, initialColumns, i18n.language]);
+  }, [entityName, i18n.language, initColumns, initialColumns]);
 
   useEffect(() => {
     if (initialColumns) {
@@ -323,16 +585,47 @@ function DataGridInner<T>(
 
   // In design mode, honour the delta column order and visibility
   const effectiveColumns = useMemo(() => {
-    if (!isDesignMode || delta.columns.length === 0) return resolvedColumns;
-    const orderedKeys = delta.columns
+    const activeDraftColumns = designerColumns.length > 0 ? designerColumns : delta.columns;
+    if (!isDesignMode || activeDraftColumns.length === 0) return resolvedColumns;
+
+    const draftByKey = new Map(activeDraftColumns.map((column) => [column.key, column]));
+    const orderedKeys = activeDraftColumns
       .slice()
       .sort((a, b) => a.order - b.order)
-      .filter((c) => c.visible)
-      .map((c) => c.key);
-    return orderedKeys
-      .map((k) => resolvedColumns.find((c) => c.key === k))
+      .map((column) => column.key);
+
+    const orderedResolved = orderedKeys
+      .map((key) => {
+        const baseColumn = resolvedColumns.find((column) => column.key === key);
+        if (!baseColumn) return null;
+        const draftColumn = draftByKey.get(key);
+        if (draftColumn?.visible === false) return null;
+        return {
+          ...baseColumn,
+          width: draftColumn?.width ?? baseColumn.width,
+          pin: draftColumn?.pin ?? baseColumn.pin,
+        };
+      })
       .filter(Boolean) as typeof resolvedColumns;
-  }, [isDesignMode, delta.columns, resolvedColumns]);
+
+    const remainingResolved = resolvedColumns.filter((column) => !draftByKey.has(column.key));
+
+    const draftOnlyColumns = activeDraftColumns
+      .filter((column) => !resolvedColumns.some((resolved) => resolved.key === column.key))
+      .filter((column) => column.visible)
+      .map((column) => ({
+        key: column.key,
+        header: column.identity,
+        width: column.width,
+        pin: column.pin ?? null,
+        align: "left" as const,
+        isNumeric: false,
+        sortable: false,
+        type: "text" as const,
+      }));
+
+    return [...orderedResolved, ...remainingResolved, ...draftOnlyColumns];
+  }, [delta.columns, designerColumns, isDesignMode, resolvedColumns]);
 
   // TanStack Table column definitions
   const tanstackColumns = useMemo<TsColumnDef<T>[]>(
@@ -421,6 +714,20 @@ function DataGridInner<T>(
     [rows.length, scrollRowIntoView],
   );
 
+  const selectDesignerHeader = useCallback(
+    (headerId: string) => {
+      setFocus({
+        area: "designer",
+        entity: entityName,
+        panel: panelId,
+        field: headerId,
+        recordId: null,
+        row: null,
+      });
+    },
+    [entityName, panelId, setFocus],
+  );
+
   const restoreFocus = useCallback(
     (recordId?: string | null) => {
       setRestoreRequest({
@@ -473,6 +780,7 @@ function DataGridInner<T>(
   }, [dataSignature, focusRow, keyExtractor, loading, restoreRequest, rows]);
 
   useEffect(() => {
+    if (isDesignMode) return;
     if (data.length > 0) {
       const clampedIndex = Math.max(0, Math.min(selectedIndex, rows.length - 1));
       if (clampedIndex !== selectedIndex) {
@@ -502,7 +810,7 @@ function DataGridInner<T>(
     }
     // keyExtractor is intentionally omitted — inline prop, always functionally stable
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, selectedIndex, entityName, panelId, rows.length]);
+  }, [data, isDesignMode, selectedIndex, entityName, panelId, rows.length]);
 
   // Scoped keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -736,6 +1044,17 @@ function DataGridInner<T>(
               >
                 <ColumnsIcon size={14} />
               </button>
+              {isDesignMode && (
+                <button
+                  type="button"
+                  title="Add column"
+                  onClick={() => addColumnDraft?.()}
+                  className="ml-1 inline-flex h-7 items-center gap-1 rounded-sm border border-hairline px-2 text-[12px] text-ink-mute transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  <PlusIcon size={12} />
+                  Column
+                </button>
+              )}
               {showColPicker && resolvedColumns.length > 0 && (
                 <div className="absolute top-full right-0 z-50 min-w-[160px] rounded-[var(--radius-sm)] border border-hairline bg-canvas p-1 shadow-sm">
                   {table.getAllColumns().map((col) => {
@@ -972,8 +1291,46 @@ function DataGridInner<T>(
                 const isSortable = (col?.sortable ?? false) && !isDesignMode;
                 const sortEntry = effectiveSorting.find((s) => s.id === header.id);
                 const designCol = isDesignMode
-                  ? delta.columns.find((c) => c.key === header.id)
+                  ? (designerColumnByKey.get(header.id) ?? null)
                   : null;
+                const headerLabel = col?.header ?? header.id;
+                const isDesignerSelected = activeDesignerHeaderKey === header.id;
+
+                if (isDesignMode) {
+                  return (
+                    <button
+                      key={header.id}
+                      type="button"
+                      aria-pressed={isDesignerSelected}
+                      aria-label={`Select column ${headerLabel}`}
+                      onClick={() => selectDesignerHeader(header.id)}
+                      className={cn(
+                        "flex h-9 shrink-0 items-center gap-1 px-4 text-[12px] font-medium text-ink-mute transition-all outline-none select-none",
+                        (col?.isNumeric || col?.align === "right") && "justify-end",
+                        col?.align === "center" && "justify-center",
+                        isDesignerSelected
+                          ? "bg-[color-mix(in_oklab,var(--primary)_8%,transparent)] text-ink shadow-sm ring-1 ring-primary/60 ring-inset"
+                          : "ring-1 ring-primary/20 ring-inset hover:bg-[color-mix(in_oklab,var(--primary)_4%,transparent)] hover:ring-primary/50",
+                      )}
+                      style={colFlexStyle(col?.width)}
+                    >
+                      <GripVerticalIcon className="size-3 flex-none text-primary/40" />
+                      <span className="truncate text-ink">{headerLabel}</span>
+                      <span
+                        className={cn(
+                          "ml-auto inline-flex max-w-[56%] shrink-0 items-center rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px] leading-none tracking-[0.04em]",
+                          isDesignerSelected
+                            ? "border-primary/30 bg-primary/10 text-primary"
+                            : "border-hairline bg-canvas text-ink-mute",
+                        )}
+                        title={designCol?.identity ?? `grid-column:${header.id}`}
+                      >
+                        {designCol?.identity ?? `grid-column:${header.id}`}
+                      </span>
+                      {designCol?.pin && <PinIcon className="size-2.5 flex-none text-primary" />}
+                    </button>
+                  );
+                }
 
                 return (
                   <div
@@ -983,18 +1340,9 @@ function DataGridInner<T>(
                       (col?.isNumeric || col?.align === "right") && "justify-end",
                       col?.align === "center" && "justify-center",
                       isSortable && "cursor-pointer transition-colors hover:text-ink",
-                      isDesignMode &&
-                        "ring-1 ring-primary/20 transition-all ring-inset hover:ring-primary/50",
                     )}
                     style={colFlexStyle(col?.width)}
                   >
-                    {/* Design-mode indicator */}
-                    {isDesignMode && (
-                      <span className="mr-0.5 flex-none text-primary/50">
-                        <PencilRulerIcon className="size-2.5" />
-                      </span>
-                    )}
-                    {designCol?.pin && <PinIcon className="size-2.5 flex-none text-primary" />}
                     {isSortable ? (
                       <button
                         type="button"
@@ -1005,7 +1353,7 @@ function DataGridInner<T>(
                         )}
                         onClick={() => header.column.toggleSorting()}
                       >
-                        <span className="truncate">{col?.header ?? header.id}</span>
+                        <span className="truncate">{headerLabel}</span>
                         <ChevronUpIcon
                           size={11}
                           className={cn(
@@ -1019,7 +1367,7 @@ function DataGridInner<T>(
                         />
                       </button>
                     ) : (
-                      <span className="truncate">{col?.header ?? header.id}</span>
+                      <span className="truncate">{headerLabel}</span>
                     )}
                   </div>
                 );

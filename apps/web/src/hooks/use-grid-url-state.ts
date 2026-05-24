@@ -71,34 +71,22 @@ export function useGridUrlState(options?: {
   }, [page, pageSize, sort, search, filters, prefix, defaultSize]);
 
   const setPage = useCallback((p: number) => setPage_(p), []);
-  const setPageSize = useCallback(
-    (s: number) => {
-      setPageSize_(s);
-      setPage_(1);
-    },
-    [setPage],
-  );
-  const setSort = useCallback(
-    (s: GridSort | null) => {
-      setSort_(s);
-      setPage_(1);
-    },
-    [setPage],
-  );
-  const setSearch = useCallback(
-    (s: string) => {
-      setSearch_(s);
-      setPage_(1);
-    },
-    [setPage],
-  );
-  const setFilters = useCallback(
-    (f: FilterRule[]) => {
-      setFilters_(f);
-      setPage_(1);
-    },
-    [setPage],
-  );
+  const setPageSize = useCallback((s: number) => {
+    setPageSize_(s);
+    setPage_(1);
+  }, []);
+  const setSort = useCallback((s: GridSort | null) => {
+    setSort_(s);
+    setPage_(1);
+  }, []);
+  const setSearch = useCallback((s: string) => {
+    setSearch_(s);
+    setPage_(1);
+  }, []);
+  const setFilters = useCallback((f: FilterRule[]) => {
+    setFilters_(f);
+    setPage_(1);
+  }, []);
 
   const queryParams = useMemo(
     () => ({

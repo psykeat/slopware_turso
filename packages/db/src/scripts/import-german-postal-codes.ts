@@ -14,7 +14,7 @@ import { db } from "../index";
 import * as schema from "../schema/app.schema";
 import data from "./german_postal_codes.json";
 
-async function main() {
+export async function importGermanPostalCodes() {
   console.log(`Starting import of ${data.length} German postal codes...`);
 
   // Split into chunks of 500 for batch insertion
@@ -33,8 +33,14 @@ async function main() {
   console.log("German postal codes import completed successfully!");
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  console.error("Import failed:", message);
-  process.exit(1);
-});
+if (
+  process.argv[1] &&
+  (process.argv[1].endsWith("import-german-postal-codes.ts") ||
+    process.argv[1].endsWith("import-german-postal-codes"))
+) {
+  importGermanPostalCodes().catch((error: unknown) => {
+    const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    console.error("Import failed:", message);
+    process.exit(1);
+  });
+}

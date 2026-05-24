@@ -400,16 +400,24 @@ function DocumentsModule() {
   });
 
   useEffect(() => {
-    if (companies.length === 0) {
-      setSelectedCompanyId(null);
-      return;
-    }
-    setSelectedCompanyId((current) => {
-      if (current && companies.some((row: any) => row.companyId === current)) return current;
-      const preferred = me?.lastCompanyId;
-      if (preferred && companies.some((row: any) => row.companyId === preferred)) return preferred;
-      return companies[0]?.companyId ?? null;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (companies.length === 0) {
+        setSelectedCompanyId(null);
+        return;
+      }
+      setSelectedCompanyId((current) => {
+        if (current && companies.some((row: any) => row.companyId === current)) return current;
+        const preferred = me?.lastCompanyId;
+        if (preferred && companies.some((row: any) => row.companyId === preferred))
+          return preferred;
+        return companies[0]?.companyId ?? null;
+      });
     });
+    return () => {
+      cancelled = true;
+    };
   }, [companies, me?.lastCompanyId]);
 
   const persistSelectedCompany = useCallback(
@@ -568,11 +576,18 @@ function DocumentsModule() {
   }, [activeDocumentId]);
 
   useEffect(() => {
-    setSelection({ kind: "all" });
-    setActiveDocumentId(null);
-    setEditorDocId(null);
-    setEditorGroupId(undefined);
-    setSubCrumb(undefined);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setSelection({ kind: "all" });
+      setActiveDocumentId(null);
+      setEditorDocId(null);
+      setEditorGroupId(undefined);
+      setSubCrumb(undefined);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCompanyId, setSubCrumb]);
 
   // Fetch document lines for selected document (server-side FK filter)

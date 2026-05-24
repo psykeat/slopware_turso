@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { cn } from "../lib/utils";
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -61,9 +62,7 @@ export function TrackingEditor({
   const { data: existingRows = [] } = useQuery({
     queryKey: ["tracking", documentId, documentLineId],
     queryFn: async () => {
-      const r = await fetch(
-        `/api/documents/${documentId}/lines/${documentLineId}/tracking`,
-      );
+      const r = await fetch(`/api/documents/${documentId}/lines/${documentLineId}/tracking`);
       return r.ok ? (r.json() as Promise<TrackingRow[]>) : [];
     },
     enabled: !!documentLineId && !isNewLine,
@@ -73,9 +72,7 @@ export function TrackingEditor({
   const { data: availableSerials = [] } = useQuery({
     queryKey: ["serial-numbers", articleId, "in_stock"],
     queryFn: async () => {
-      const r = await fetch(
-        `/api/articles/${articleId}/serial-numbers?status=in_stock`,
-      );
+      const r = await fetch(`/api/articles/${articleId}/serial-numbers?status=in_stock`);
       return r.ok ? r.json() : [];
     },
     enabled: trackingMode === "serial" && isOutbound && !!articleId,
@@ -97,12 +94,20 @@ export function TrackingEditor({
     [availableSerials],
   );
   const availableBatchRows = useMemo(
-    () => availableBatches as Array<{ batchNo: string; balance: string | number; warehouseId?: string | null }>,
+    () =>
+      availableBatches as Array<{
+        batchNo: string;
+        balance: string | number;
+        warehouseId?: string | null;
+      }>,
     [availableBatches],
   );
 
   const serialSuggestions = useMemo(
-    () => availableSerialRows.filter((row) => row.serialNo.toLowerCase().includes(trimmedInput.toLowerCase())).slice(0, 8),
+    () =>
+      availableSerialRows
+        .filter((row) => row.serialNo.toLowerCase().includes(trimmedInput.toLowerCase()))
+        .slice(0, 8),
     [availableSerialRows, trimmedInput],
   );
 
@@ -135,8 +140,8 @@ export function TrackingEditor({
   }, [availableBatchRows]);
 
   const activeSuggestions = trackingMode === "serial" ? serialSuggestions : batchSuggestions;
-  const exactSerial = trimmedInput ? serialLookup.get(trimmedInput) ?? null : null;
-  const exactBatchBalance = trimmedInput ? batchLookup.get(trimmedInput) ?? null : null;
+  const exactSerial = trimmedInput ? (serialLookup.get(trimmedInput) ?? null) : null;
+  const exactBatchBalance = trimmedInput ? (batchLookup.get(trimmedInput) ?? null) : null;
   const hasInput = trimmedInput.length > 0;
 
   // ── mutations ──
@@ -147,14 +152,11 @@ export function TrackingEditor({
       batchNo?: string;
       qty: string;
     }) => {
-      const r = await fetch(
-        `/api/documents/${documentId}/lines/${documentLineId}/tracking`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(row),
-        },
-      );
+      const r = await fetch(`/api/documents/${documentId}/lines/${documentLineId}/tracking`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(row),
+      });
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     },
@@ -177,10 +179,7 @@ export function TrackingEditor({
   });
 
   // ── completion state ──
-  const trackingSum = (existingRows as any[]).reduce(
-    (s: number, r: any) => s + Number(r.qty),
-    0,
-  );
+  const trackingSum = (existingRows as any[]).reduce((s: number, r: any) => s + Number(r.qty), 0);
   const isComplete = trackingSum >= lineQty;
   const isOvershot = trackingSum > lineQty;
 
@@ -258,19 +257,11 @@ export function TrackingEditor({
       if (trackingMode === "serial" && inputVal.trim()) {
         e.preventDefault();
         submitSerial();
-      } else if (
-        trackingMode === "batch" &&
-        inputVal.trim() &&
-        e.key === "Tab"
-      ) {
+      } else if (trackingMode === "batch" && inputVal.trim() && e.key === "Tab") {
         e.preventDefault();
         qtyRef.current?.focus();
         qtyRef.current?.select();
-      } else if (
-        trackingMode === "batch" &&
-        inputVal.trim() &&
-        e.key === "Enter"
-      ) {
+      } else if (trackingMode === "batch" && inputVal.trim() && e.key === "Enter") {
         e.preventDefault();
         submitBatch();
       }
@@ -288,10 +279,10 @@ export function TrackingEditor({
 
   // ── render ──
   return (
-    <div className="bg-canvas-soft border-t border-hairline px-4 py-3 ml-6">
+    <div className="ml-6 border-t border-hairline bg-canvas-soft px-4 py-3">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-ink-mute">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
           {trackingMode === "serial" ? "Seriennummern" : "Chargen"}
         </span>
         {(!isComplete || isOvershot) && (
@@ -305,30 +296,23 @@ export function TrackingEditor({
           </span>
         )}
         {isComplete && !isOvershot && (
-          <span className="text-[11px] font-medium text-emerald-600">
-            vollständig
-          </span>
+          <span className="text-[11px] font-medium text-emerald-600">vollständig</span>
         )}
       </div>
 
       {/* Existing rows */}
       {(existingRows as any[]).map((row: any) => (
-        <div
-          key={row.trackingId}
-          className="flex items-center gap-2 py-0.5 text-[13px]"
-        >
-          <span className="text-ink flex-1">
-            {trackingMode === "serial"
-              ? (row.serialNo ?? row.serialNumberId)
-              : row.batchNo}
+        <div key={row.trackingId} className="flex items-center gap-2 py-0.5 text-[13px]">
+          <span className="flex-1 text-ink">
+            {trackingMode === "serial" ? (row.serialNo ?? row.serialNumberId) : row.batchNo}
           </span>
           {trackingMode === "batch" && (
-            <span className="text-ink-mute w-16 text-right">{row.qty}</span>
+            <span className="w-16 text-right text-ink-mute">{row.qty}</span>
           )}
           {!isPosted && (
             <button
               onClick={() => deleteMutation.mutate(row.trackingId)}
-              className="text-ink-mute hover:text-destructive transition-colors"
+              className="text-ink-mute transition-colors hover:text-destructive"
               title="Entfernen"
             >
               <Trash2Icon className="size-3.5" />
@@ -339,16 +323,12 @@ export function TrackingEditor({
 
       {/* Input row (only when not posted) */}
       {!isPosted && !isNewLine && (
-        <div className="flex items-center gap-2 mt-1">
+        <div className="mt-1 flex items-center gap-2">
           <div className="relative flex-1">
             <input
               ref={inputRef}
-              className="h-6 w-full border bg-canvas rounded px-2 text-[13px] outline-none border-hairline-input focus-visible:ring-[2px] focus-visible:ring-[color-mix(in_oklab,var(--primary)_20%,transparent)] focus-visible:border-primary"
-              placeholder={
-                trackingMode === "serial"
-                  ? "Seriennummer..."
-                  : "Chargennummer..."
-              }
+              className="h-6 w-full rounded border border-hairline-input bg-canvas px-2 text-[13px] outline-none focus-visible:border-primary focus-visible:ring-[2px] focus-visible:ring-[color-mix(in_oklab,var(--primary)_20%,transparent)]"
+              placeholder={trackingMode === "serial" ? "Seriennummer..." : "Chargennummer..."}
               value={inputVal}
               onChange={(e) => {
                 setInputVal(e.target.value);
@@ -360,18 +340,18 @@ export function TrackingEditor({
               <div className="mt-1 text-[11px] text-ink-mute">
                 {trackingMode === "serial" ? (
                   exactSerial ? (
-                    <span className="text-emerald-600">
-                      Verfügbar: {exactSerial.serialNo}
-                    </span>
+                    <span className="text-emerald-600">Verfügbar: {exactSerial.serialNo}</span>
                   ) : (
-                    <span className="text-destructive">
-                      Nicht verfügbar
-                    </span>
+                    <span className="text-destructive">Nicht verfügbar</span>
                   )
                 ) : (
                   <span>
                     Verfügbar:{" "}
-                    <span className={exactBatchBalance != null ? "text-emerald-600" : "text-ink-secondary"}>
+                    <span
+                      className={
+                        exactBatchBalance != null ? "text-emerald-600" : "text-ink-secondary"
+                      }
+                    >
                       {exactBatchBalance != null ? `${exactBatchBalance}` : "0"}
                     </span>
                   </span>
@@ -391,7 +371,7 @@ export function TrackingEditor({
                     type="button"
                     key={s.serialNumberId ?? s.batchNo}
                     className={cn(
-                      "w-full text-left px-2 py-1 text-[13px] cursor-pointer hover:bg-canvas-soft",
+                      "w-full cursor-pointer px-2 py-1 text-left text-[13px] hover:bg-canvas-soft",
                       i === suggestionIdx && "bg-canvas-soft",
                     )}
                     onMouseEnter={() => setSuggestionIdx(i)}
@@ -415,7 +395,7 @@ export function TrackingEditor({
           {trackingMode === "batch" && (
             <input
               ref={qtyRef}
-              className="h-6 w-20 border bg-canvas rounded px-2 text-[13px] text-right outline-none border-hairline-input focus-visible:ring-[2px] focus-visible:ring-[color-mix(in_oklab,var(--primary)_20%,transparent)] focus-visible:border-primary"
+              className="h-6 w-20 rounded border border-hairline-input bg-canvas px-2 text-right text-[13px] outline-none focus-visible:border-primary focus-visible:ring-[2px] focus-visible:ring-[color-mix(in_oklab,var(--primary)_20%,transparent)]"
               placeholder="Menge"
               value={inputQty}
               onChange={(e) => setInputQty(e.target.value)}

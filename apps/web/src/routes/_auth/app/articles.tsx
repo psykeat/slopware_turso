@@ -526,6 +526,7 @@ function ArticlesModule() {
     restoreArticleGrid,
     selectTreeNode,
     selectedGroupId,
+    treeNodes,
     treeNodes.length,
   ]);
 

@@ -69,7 +69,7 @@ function parseCsvLine(line: string) {
   return result;
 }
 
-async function main() {
+export async function importCountriesCsv() {
   const url =
     "https://raw.githubusercontent.com/lukes/ISO-3166-Countries-with-Regional-Codes/master/all/all.csv";
   console.log(`Fetching countries CSV from ${url}...`);
@@ -167,8 +167,14 @@ async function main() {
   console.log("Countries CSV import completed successfully!");
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  console.error("Import failed:", message);
-  process.exit(1);
-});
+if (
+  process.argv[1] &&
+  (process.argv[1].endsWith("import-countries-csv.ts") ||
+    process.argv[1].endsWith("import-countries-csv"))
+) {
+  importCountriesCsv().catch((error: unknown) => {
+    const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    console.error("Import failed:", message);
+    process.exit(1);
+  });
+}

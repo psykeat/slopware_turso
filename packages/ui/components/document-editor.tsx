@@ -628,10 +628,17 @@ const DocumentLinesEditor = forwardRef<
   }, []);
 
   useEffect(() => {
-    setBaselineSnapshot(null);
-    onDirtyChange?.(false);
-    setEditingArticleMeta(null);
-    setTrackingFocus(null);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setBaselineSnapshot(null);
+      onDirtyChange?.(false);
+      setEditingArticleMeta(null);
+      setTrackingFocus(null);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [documentId, onDirtyChange]);
 
   const pushGridFocus = useCallback(
@@ -817,8 +824,11 @@ const DocumentLinesEditor = forwardRef<
     // eslint-disable-next-line react-hooks-js/set-state-in-effect
     replaceLines(mapped);
     if (baselineSnapshot == null && !isLoading) {
-      setBaselineSnapshot(serializeLines(mapped));
-      onDirtyChange?.(false);
+      const snapshot = serializeLines(mapped);
+      queueMicrotask(() => {
+        setBaselineSnapshot(snapshot);
+        onDirtyChange?.(false);
+      });
     }
   }, [baselineSnapshot, existingLines, isLoading, taxRateMap, replaceLines, onDirtyChange]);
 
@@ -1794,12 +1804,19 @@ export function DocumentEditor({
   }, [documentId, isNew, resetFocus, setFocus]);
 
   useEffect(() => {
-    didAutoFocusRef.current = false;
-    setHeader({});
-    setHeaderBaselineSnapshot(null);
-    setIsLinesDirty(false);
-    setPendingLines([]);
-    setCloseDialogOpen(false);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      didAutoFocusRef.current = false;
+      setHeader({});
+      setHeaderBaselineSnapshot(null);
+      setIsLinesDirty(false);
+      setPendingLines([]);
+      setCloseDialogOpen(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [documentId, documentGroupId, isNew]);
 
   // ── fetch existing document ──
@@ -1919,16 +1936,17 @@ export function DocumentEditor({
           currencies as any[],
         ),
       };
-      setHeader(hydrated);
-      setHeaderBaselineSnapshot(
-        JSON.stringify(
-          normalizeHeaderForSave(
-            hydrated,
-            !!(docData as any)?.documentType &&
-              MOVEMENT_DOCUMENT_TYPES.has((docData as any).documentType),
-          ),
+      const baseline = JSON.stringify(
+        normalizeHeaderForSave(
+          hydrated,
+          !!(docData as any)?.documentType &&
+            MOVEMENT_DOCUMENT_TYPES.has((docData as any).documentType),
         ),
       );
+      queueMicrotask(() => {
+        setHeader(hydrated);
+        setHeaderBaselineSnapshot(baseline);
+      });
     }
   }, [isNew, docData, currencies]);
 

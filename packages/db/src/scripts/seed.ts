@@ -1,9 +1,14 @@
-import "dotenv/config";
+import "./load-env";
 import { eq, and, sql } from "drizzle-orm";
 
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
 import { user } from "../schema/auth.schema";
+import { importAustrianPostalCodes } from "./import-austrian-postal-codes";
+import { importCountriesCsv } from "./import-countries-csv";
+import { importGermanPostalCodes } from "./import-german-postal-codes";
+import { seedCurrencies } from "./seed-currencies";
+import { seedMetadata } from "./seed-metadata";
 
 const CANONICAL_DOC_TYPES: Array<{ movementType: string; name: string }> = [
   { movementType: "N", name: "Angebot" },
@@ -69,16 +74,20 @@ async function ensureUnit(tenantId: string, code: string, name: { en: string; de
 }
 
 async function seed() {
-  // ── 1. Admin user ──────────────────────────────────────────────────────
+  // ── 1. Admin user (Optional during initial raw setup) ────────────────
   const [adminUser] = await db.select().from(user).where(eq(user.isSystemAdmin, true)).limit(1);
 
   if (!adminUser) {
-    console.error(
-      "No system admin user found. Register a user first and set is_system_admin=true.",
+    console.log(
+      "No system admin user found yet. Seeding reference data, base tenant structure, and metadata...",
     );
-    process.exit(1);
+  } else {
+    console.log(`Admin: ${adminUser.email} (${adminUser.id})`);
   }
-  console.log(`Admin: ${adminUser.email} (${adminUser.id})`);
+
+  // Seed reference data (Countries & Currencies) first because Company creation references them
+  await importCountriesCsv();
+  await seedCurrencies();
 
   // ── 2. Base organization ───────────────────────────────────────────────
   let baseOrg: typeof schema.organization.$inferSelect;
@@ -186,21 +195,32 @@ async function seed() {
   console.log("Linked default warehouse to base company.");
 
   // ── 5. Link admin user to base tenant ──────────────────────────────────
-  const [existingLink] = await db
-    .select()
-    .from(schema.userTenant)
-    .where(eq(schema.userTenant.userId, adminUser.id))
-    .limit(1);
+  if (adminUser) {
+    const [existingLink] = await db
+      .select()
+      .from(schema.userTenant)
+      .where(
+        and(
+          eq(schema.userTenant.userId, adminUser.id),
+          eq(schema.userTenant.tenantId, baseTenant.tenantId),
+        ),
+      )
+      .limit(1);
 
-  if (!existingLink) {
-    await db.insert(schema.userTenant).values({
-      userId: adminUser.id,
-      tenantId: baseTenant.tenantId,
-      role: "owner",
-    });
-    console.log("Linked admin to base tenant.");
+    if (!existingLink) {
+      await db.insert(schema.userTenant).values({
+        userId: adminUser.id,
+        tenantId: baseTenant.tenantId,
+        role: "owner",
+      });
+      console.log("Linked admin to base tenant.");
+    } else {
+      console.log("Admin already linked to base tenant.");
+    }
   } else {
-    console.log("Admin already linked to tenant.");
+    console.log(
+      "Skipping admin tenant link because no system admin user exists in the database yet.",
+    );
   }
 
   // ── 6. Address categories ──────────────────────────────────────────────
@@ -430,6 +450,13 @@ async function seed() {
   // Demo tenant seeding was removed. seed.ts only touches the base tenant.
   // If you need a demo/test tenant, create it manually via the UI or a
   // dedicated seed-demo.ts script scoped to that purpose.
+
+  // Seed dynamic metadata
+  await seedMetadata();
+
+  // Seed reference data (Postal Codes)
+  await importGermanPostalCodes();
+  await importAustrianPostalCodes();
 
   console.log("\nSeed complete.");
   process.exit(0);

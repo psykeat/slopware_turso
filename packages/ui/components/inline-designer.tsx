@@ -1,472 +1,499 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@repo/ui/components/sheet";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/components/tabs";
-import { cn } from "@repo/ui/lib/utils";
-import { useDesigner } from "@repo/ui/platform/designer-context";
-import { useFocus } from "@repo/ui/platform/focus-manager";
 import {
-  LayoutGridIcon,
-  FormInputIcon,
-  Settings2Icon,
-  EyeIcon,
-  EyeOffIcon,
-  PinIcon,
-  GripVerticalIcon,
+  CheckIcon,
+  HistoryIcon,
+  RefreshCwIcon,
   RotateCcwIcon,
   SaveIcon,
-  HistoryIcon,
-  CheckIcon,
+  Settings2Icon,
+  XIcon,
 } from "lucide-react";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 
-// ─── DnD Item ───────────────────────────────────────────────────────────────
+import { cn } from "../lib/utils";
+import {
+  type DesignerConflictRecord,
+  type DesignerHistoryEntry,
+  type DesignerPatchOp,
+  type DesignerSurface,
+  type DesignerVersionInfo,
+  type DesignerNode,
+  useDesigner,
+} from "../platform/designer-context";
+import { useFocus } from "../platform/focus-manager";
 
-interface DnDItem {
-  id: string;
-  label: string;
-  visible: boolean;
-  extra?: React.ReactNode;
+interface DesignerClientSnapshot {
+  entityName: string | null;
+  surface: DesignerSurface | null;
+  versionInfo: DesignerVersionInfo | null;
+  patchOps: DesignerPatchOp[];
+  conflicts: DesignerConflictRecord[];
+  history: DesignerHistoryEntry[];
+  selectedNodes: DesignerNode[];
 }
 
-/**
- * Keyboard-first sortable list.
- * Pattern: Tab → handle, Space/Enter → pick-up, Arrows → move, Space/Enter → drop, Esc → cancel.
- */
-function SortableList({
-  items,
-  onMove,
-  onToggleVisible,
-  renderExtra,
+interface DesignerClient {
+  load: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
+  save: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
+  apply: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
+  reconcile: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
+  history: (entityName: string | null) => Promise<DesignerHistoryEntry[]>;
+}
+
+const designerClient: DesignerClient = {
+  async load(snapshot) {
+    return snapshot;
+  },
+  async save(snapshot) {
+    return snapshot;
+  },
+  async apply(snapshot) {
+    return snapshot;
+  },
+  async reconcile(snapshot) {
+    return snapshot;
+  },
+  async history() {
+    return [];
+  },
+};
+
+function formatValue(value: unknown) {
+  if (value === null || value === undefined) return "∅";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return Object.prototype.toString.call(value);
+  }
+}
+
+function InfoRow({
+  label,
+  value,
+  mono = false,
 }: {
-  items: DnDItem[];
-  onMove: (fromId: string, toId: string) => void;
-  onToggleVisible: (id: string) => void;
-  renderExtra?: (item: DnDItem) => React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
 }) {
+  return (
+    <div className="flex items-start gap-2">
+      <dt className="text-ink-muted w-24 shrink-0 text-[10px] font-semibold tracking-wide uppercase">
+        {label}
+      </dt>
+      <dd className={cn("min-w-0 text-[12px] text-ink-secondary", mono && "font-mono text-[11px]")}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function CompactSection({
+  title,
+  icon,
+  right,
+  children,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          {icon}
+          <h3 className="text-ink-muted text-[10px] font-bold tracking-[0.18em] uppercase">
+            {title}
+          </h3>
+        </div>
+        {right}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function InlineDesigner() {
   const { t } = useTranslation("ui");
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [statusMsg, setStatusMsg] = useState("");
+  const { state: focusState } = useFocus();
+  const {
+    isDesignMode,
+    activeSurface,
+    activeSurfaceState,
+    selectedNodes,
+    closeDesignMode,
+    resetDelta,
+    saveDesign,
+    applyDesign,
+    reconcileDesign,
+  } = useDesigner();
+  const [busyAction, setBusyAction] = useState<"save" | "apply" | "reconcile" | null>(null);
 
-  const handleHandleKeyDown = (e: React.KeyboardEvent, id: string) => {
-    const idx = items.findIndex((it) => it.id === id);
+  const snapshot = useMemo<DesignerClientSnapshot>(
+    () => ({
+      entityName: activeSurfaceState?.entityName ?? focusState.entity ?? null,
+      surface: activeSurfaceState?.surface ?? activeSurface,
+      versionInfo: activeSurfaceState?.versionInfo ?? null,
+      patchOps: activeSurfaceState?.draftPatchOps ?? [],
+      conflicts: activeSurfaceState?.conflicts ?? [],
+      history: activeSurfaceState?.history ?? [],
+      selectedNodes,
+    }),
+    [
+      activeSurface,
+      activeSurfaceState?.conflicts,
+      activeSurfaceState?.draftPatchOps,
+      activeSurfaceState?.entityName,
+      activeSurfaceState?.history,
+      activeSurfaceState?.surface,
+      activeSurfaceState?.versionInfo,
+      focusState.entity,
+      selectedNodes,
+    ],
+  );
 
-    if (e.key === " " || e.key === "Enter") {
-      e.preventDefault();
-      if (activeId === id) {
-        // Drop
-        setActiveId(null);
-        setStatusMsg(t("designer.dnd.dropped", "Item dropped."));
-      } else {
-        setActiveId(id);
-        setStatusMsg(
-          t("designer.dnd.picked", `Picked up ${items[idx]?.label}. Use arrow keys to move.`),
-        );
-      }
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      setActiveId(null);
-      setStatusMsg(t("designer.dnd.cancelled", "Move cancelled."));
-    } else if (activeId === id) {
-      if (e.key === "ArrowUp" && idx > 0) {
-        e.preventDefault();
-        const targetId = items[idx - 1].id;
-        onMove(id, targetId);
-        setStatusMsg(`Moved to position ${idx}.`);
-      } else if (e.key === "ArrowDown" && idx < items.length - 1) {
-        e.preventDefault();
-        const targetId = items[idx + 1].id;
-        onMove(id, targetId);
-        setStatusMsg(`Moved to position ${idx + 2}.`);
-      }
+  const node = selectedNodes[0] ?? null;
+  const patchOps = snapshot.patchOps;
+  const history = snapshot.history;
+  const conflicts = snapshot.conflicts;
+  const versionInfo = snapshot.versionInfo;
+  const entityName = snapshot.entityName;
+
+  if (!isDesignMode) {
+    return null;
+  }
+
+  const handleSave = async () => {
+    setBusyAction("save");
+    try {
+      await designerClient.save(snapshot);
+      await saveDesign();
+    } finally {
+      setBusyAction(null);
     }
   };
 
-  return (
-    <div className="space-y-1">
-      {/* Live region for screen readers */}
-      <div role="status" aria-live="polite" className="sr-only">
-        {statusMsg}
-      </div>
-
-      {items.map((item) => {
-        const isActive = activeId === item.id;
-        return (
-          <div
-            key={item.id}
-            className={cn(
-              "flex h-8 items-center gap-2 rounded-md border px-2 transition-all",
-              isActive
-                ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,transparent)] shadow-sm"
-                : "border-transparent hover:border-hairline hover:bg-canvas-soft",
-              !item.visible && "opacity-50",
-            )}
-            aria-label={`${item.label}, position ${items.indexOf(item) + 1} of ${items.length}`}
-          >
-            {/* Drag handle */}
-            <button
-              type="button"
-              className={cn(
-                "flex-none cursor-grab rounded-[3px] p-0.5 text-ink-mute transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                isActive && "cursor-grabbing text-primary",
-              )}
-              aria-label={
-                isActive
-                  ? t(
-                      "designer.dnd.handleActive",
-                      `Moving ${item.label}. Press Space to drop, Escape to cancel.`,
-                    )
-                  : t("designer.dnd.handle", `Drag ${item.label}. Press Space or Enter to pick up.`)
-              }
-              aria-pressed={isActive}
-              onKeyDown={(e) => handleHandleKeyDown(e, item.id)}
-            >
-              <GripVerticalIcon className="size-3.5" />
-            </button>
-
-            {/* Label */}
-            <span className="flex-1 truncate text-[12px] text-ink">{item.label}</span>
-
-            {/* Extra slot */}
-            {renderExtra?.(item)}
-
-            {/* Visibility toggle */}
-            <button
-              type="button"
-              onClick={() => onToggleVisible(item.id)}
-              className="flex-none rounded-[3px] p-0.5 text-ink-mute transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              aria-label={item.visible ? t("designer.hide", "Hide") : t("designer.show", "Show")}
-              title={item.visible ? t("designer.hide", "Hide") : t("designer.show", "Show")}
-            >
-              {item.visible ? (
-                <EyeIcon className="size-3.5" />
-              ) : (
-                <EyeOffIcon className="size-3.5" />
-              )}
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Section Wrapper ─────────────────────────────────────────────────────────
-
-function DesignerSection({ title, children }: { title: string; children?: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <h3 className="text-[10px] font-bold tracking-widest text-ink-mute uppercase">{title}</h3>
-      <div className="space-y-1">
-        {children ?? (
-          <div className="py-2 text-[12px] text-ink-mute italic">No options available.</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── History Tab ─────────────────────────────────────────────────────────────
-
-function HistoryTab({ entityName }: { entityName: string | null }) {
-  const [history, setHistory] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!entityName) return;
-    setLoading(true);
-    fetch(`/api/metadata/history/${entityName}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => {
-        setHistory(Array.isArray(data) ? data : []);
-      })
-      .catch(() => setHistory([]))
-      .finally(() => setLoading(false));
-  }, [entityName]);
-
-  if (!entityName) {
-    return <div className="p-2 text-[12px] text-ink-mute italic">No entity selected.</div>;
-  }
-
-  if (loading) {
-    return <div className="p-2 text-[12px] text-ink-mute">Loading history…</div>;
-  }
-
-  if (history.length === 0) {
-    return <div className="p-2 text-[12px] text-ink-mute italic">No changes recorded yet.</div>;
-  }
-
-  return (
-    <div className="space-y-2">
-      {history.slice(0, 20).map((entry: any, i: number) => (
-        <div
-          key={i}
-          className="flex flex-col gap-0.5 rounded-md border border-hairline bg-canvas-soft p-2"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium text-ink capitalize">{entry.changeType}</span>
-            <span className="text-[10px] text-ink-mute">
-              {entry.metadataType} · {entry.metadataKey}
-            </span>
-          </div>
-          <div className="text-[10px] text-ink-mute">
-            {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Main Designer ────────────────────────────────────────────────────────────
-
-export function InlineDesigner() {
-  const {
-    isDesignMode,
-    toggleDesignMode,
-    delta,
-    updateColumn,
-    moveColumn,
-    updateField,
-    moveField,
-    resetDelta,
-  } = useDesigner();
-  const { state: focusState } = useFocus();
-  const { t } = useTranslation("ui");
-  const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("grid");
-
-  // Auto-switch to relevant tab based on focus area
-  React.useEffect(() => {
-    if (focusState.area === "grid") setActiveTab("grid");
-    else if (focusState.area === "form") setActiveTab("form");
-  }, [focusState.area]);
-
-  const entityName = focusState.entity ?? null;
-
-  // ── Column helpers ──────────────────────────────────────────────
-  const columnItems: DnDItem[] = delta.columns.map((c) => ({
-    id: c.key,
-    label: c.key,
-    visible: c.visible,
-  }));
-
-  const handleSaveLayout = useCallback(async () => {
-    if (!entityName) return;
-    setIsSaving(true);
+  const handleApply = async () => {
+    setBusyAction("apply");
     try {
-      const layoutDef = {
-        columns: delta.columns,
-      };
-      const res = await fetch(`/api/metadata/layout/${entityName}/grid`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(layoutDef),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      toast.success(t("designer.saved", "Layout gespeichert."));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      await designerClient.apply(snapshot);
+      await applyDesign();
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
-  }, [entityName, delta.columns, t]);
+  };
 
-  const handleSaveFields = useCallback(async () => {
-    if (!entityName) return;
-    setIsSaving(true);
+  const handleReconcile = async () => {
+    setBusyAction("reconcile");
     try {
-      const promises = delta.fieldConfigs.map((fc) =>
-        fetch(`/api/metadata/fields/${entityName}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            fieldName: fc.key,
-            data: {
-              isVisible: fc.visible,
-              displayOrder: fc.order,
-              ...(fc.labelEnOverride != null && {
-                label: { en: fc.labelEnOverride, de: fc.labelDeOverride ?? fc.labelEnOverride },
-              }),
-              ...(fc.readonlyOverride != null && { readonly: fc.readonlyOverride }),
-              ...(fc.requiredOverride != null && { isRequired: fc.requiredOverride }),
-            },
-          }),
-        }),
-      );
-      await Promise.all(promises);
-      toast.success(t("designer.saved", "Felder gespeichert."));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      await designerClient.reconcile(snapshot);
+      await reconcileDesign();
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
-  }, [entityName, delta.fieldConfigs, t]);
+  };
 
-  const handleReset = useCallback(() => {
+  const handleReset = () => {
     resetDelta();
-    toast.info(t("designer.reset", "Zurückgesetzt auf vererbten Zustand."));
-  }, [resetDelta, t]);
+  };
+
+  const handleClose = () => {
+    closeDesignMode();
+  };
+
+  const historyPreview = history.slice().reverse().slice(0, 6);
 
   return (
-    <Sheet open={isDesignMode} onOpenChange={toggleDesignMode} modal={false}>
-      <SheetContent
-        side="right"
-        showCloseButton={true}
-        className="flex w-[380px] flex-col border-l border-hairline bg-canvas p-0 shadow-2xl sm:max-w-[380px]"
-      >
-        {/* Header */}
-        <SheetHeader className="shrink-0 border-b border-hairline bg-canvas-soft p-4">
-          <div className="flex items-center gap-2">
-            <Settings2Icon className="size-4 text-primary" />
-            <SheetTitle className="text-[14px] font-semibold">
-              {t("designer.title", "Inline Designer")}
-            </SheetTitle>
+    <aside className="pointer-events-none fixed right-3 bottom-3 z-50 w-[min(94vw,420px)]">
+      <div className="pointer-events-auto flex max-h-[min(72vh,680px)] flex-col overflow-hidden rounded-xl border border-hairline bg-canvas shadow-[0_24px_48px_rgba(13,37,61,0.18)]">
+        <div className="flex items-start justify-between gap-3 border-b border-hairline bg-canvas-soft px-3 py-2.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Settings2Icon className="size-4 text-primary" />
+              <div className="truncate text-[14px] font-semibold text-ink">
+                {t("designer.title", "Inline Designer")}
+              </div>
+            </div>
+            <div className="text-ink-muted mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+              <span className="rounded-full border border-hairline bg-canvas px-2 py-0.5 font-mono">
+                {entityName ?? t("designer.noEntity", "No entity")}
+              </span>
+              <span className="rounded-full border border-hairline bg-canvas px-2 py-0.5 font-mono">
+                {snapshot.surface ?? t("designer.noSurface", "No surface")}
+              </span>
+              <span className="rounded-full border border-hairline bg-canvas px-2 py-0.5 font-mono">
+                {focusState.area ?? t("designer.focus.none", "no focus")}
+              </span>
+            </div>
           </div>
-          {entityName && (
-            <div className="mt-0.5 font-mono text-[11px] tracking-wider text-ink-mute uppercase">
-              {entityName}
-            </div>
-          )}
-        </SheetHeader>
 
-        {/* Tabs */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="flex min-h-0 flex-1 flex-col gap-0"
+          <button
+            type="button"
+            onClick={handleClose}
+            className="text-ink-muted grid size-7 shrink-0 place-items-center rounded-full border border-hairline transition-colors hover:border-hairline-input hover:text-ink"
+            title={t("designer.close", "Close designer")}
           >
-            <div className="shrink-0 border-b border-hairline bg-canvas-soft px-4 py-2">
-              <TabsList variant="line" className="w-full justify-start gap-4">
-                <TabsTrigger value="grid" className="gap-1.5 text-[12px]">
-                  <LayoutGridIcon className="size-3.5" />
-                  {t("designer.tabs.grid", "Grid")}
-                </TabsTrigger>
-                <TabsTrigger value="form" className="gap-1.5 text-[12px]">
-                  <FormInputIcon className="size-3.5" />
-                  {t("designer.tabs.form", "Maske")}
-                </TabsTrigger>
-                <TabsTrigger value="history" className="gap-1.5 text-[12px]">
-                  <HistoryIcon className="size-3.5" />
-                  {t("designer.tabs.history", "Verlauf")}
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {/* ── Grid Tab ── */}
-              <TabsContent value="grid" className="m-0 mt-0 space-y-6">
-                {delta.columns.length === 0 ? (
-                  <div className="py-4 text-center text-[12px] text-ink-mute italic">
-                    {t(
-                      "designer.grid.noActiveGrid",
-                      "Fokussiere ein Grid, um Spalten zu konfigurieren.",
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <DesignerSection title={t("designer.grid.columns", "Spalten")}>
-                      <SortableList
-                        items={columnItems}
-                        onMove={moveColumn}
-                        onToggleVisible={(id) =>
-                          updateColumn(id, {
-                            visible: !delta.columns.find((c) => c.key === id)?.visible,
-                          })
-                        }
-                        renderExtra={(item) => {
-                          const col = delta.columns.find((c) => c.key === item.id);
-                          return (
-                            <button
-                              type="button"
-                              title={col?.pin ? "Pinning entfernen" : "Links pinnen"}
-                              onClick={() =>
-                                updateColumn(item.id, { pin: col?.pin ? null : "left" })
-                              }
-                              className={cn(
-                                "flex-none rounded-[3px] p-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                                col?.pin ? "text-primary" : "text-ink-mute hover:text-ink",
-                              )}
-                            >
-                              <PinIcon className="size-3.5" />
-                            </button>
-                          );
-                        }}
-                      />
-                    </DesignerSection>
-                  </>
-                )}
-              </TabsContent>
-
-              {/* ── Form Tab ── */}
-              <TabsContent value="form" className="m-0 mt-0 space-y-6">
-                {delta.fieldConfigs.length === 0 ? (
-                  <div className="py-4 text-center text-[12px] text-ink-mute italic">
-                    {t(
-                      "designer.form.noActiveForm",
-                      "Fokussiere eine Maske, um Felder zu konfigurieren.",
-                    )}
-                  </div>
-                ) : (
-                  <DesignerSection title={t("designer.form.fields", "Felder")}>
-                    <SortableList
-                      items={delta.fieldConfigs.map((f) => ({
-                        id: f.key,
-                        label: f.labelEnOverride ?? f.key,
-                        visible: f.visible,
-                      }))}
-                      onMove={moveField}
-                      onToggleVisible={(id) =>
-                        updateField(id, {
-                          visible: !delta.fieldConfigs.find((f) => f.key === id)?.visible,
-                        })
-                      }
-                    />
-                  </DesignerSection>
-                )}
-              </TabsContent>
-
-              {/* ── History Tab ── */}
-              <TabsContent value="history" className="m-0 mt-0">
-                <HistoryTab entityName={entityName} />
-              </TabsContent>
-            </div>
-          </Tabs>
+            <XIcon className="size-3.5" />
+          </button>
         </div>
 
-        {/* Footer */}
-        <div className="flex shrink-0 flex-col gap-2 border-t border-hairline bg-canvas-soft p-3">
-          <div className="text-[10px] text-ink-mute">
-            {t(
-              "designer.keyboardHint",
-              "Space/Enter → aufnehmen  ·  Pfeile → verschieben  ·  Esc → abbrechen",
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+          <CompactSection
+            title={t("designer.selection", "Selection")}
+            icon={<HistoryIcon className="text-ink-muted size-3.5" />}
+            right={
+              <div className="text-ink-muted flex items-center gap-1.5 text-[10px]">
+                <span className="rounded-full border border-hairline bg-canvas px-2 py-0.5">
+                  {selectedNodes.length}
+                </span>
+                <span className="rounded-full border border-hairline bg-canvas px-2 py-0.5">
+                  {conflicts.length}
+                </span>
+                <span className="rounded-full border border-hairline bg-canvas px-2 py-0.5">
+                  {patchOps.length}
+                </span>
+              </div>
+            }
+          >
+            {node ? (
+              <dl className="space-y-1 rounded-lg border border-hairline bg-canvas-soft p-2.5">
+                <InfoRow label={t("designer.node.id", "Node")} value={node.id} mono />
+                <InfoRow label={t("designer.node.kind", "Kind")} value={node.kind} mono />
+                <InfoRow
+                  label={t("designer.node.label", "Label")}
+                  value={node.label || t("designer.node.unlabeled", "Unlabeled")}
+                />
+                <InfoRow label={t("designer.node.surface", "Surface")} value={node.surface} mono />
+                <InfoRow
+                  label={t("designer.node.parent", "Parent")}
+                  value={node.parentId ?? t("designer.node.root", "root")}
+                  mono
+                />
+                <InfoRow label={t("designer.node.order", "Order")} value={node.displayOrder} />
+                <InfoRow
+                  label={t("designer.node.flags", "Flags")}
+                  value={[
+                    node.visible
+                      ? t("designer.visible", "visible")
+                      : t("designer.hidden", "hidden"),
+                    node.readonly
+                      ? t("designer.readonly", "readonly")
+                      : t("designer.editable", "editable"),
+                    node.required
+                      ? t("designer.required", "required")
+                      : t("designer.optional", "optional"),
+                  ].join(" · ")}
+                />
+                <InfoRow
+                  label={t("designer.node.conflict", "Conflict")}
+                  value={node.conflictState}
+                  mono
+                />
+                <InfoRow
+                  label={t("designer.node.version", "Version")}
+                  value={node.versionInfo.clientRevision}
+                  mono
+                />
+                <InfoRow
+                  label={t("designer.node.base", "Base")}
+                  value={node.versionInfo.baseVersion ?? t("designer.node.none", "none")}
+                  mono
+                />
+                <InfoRow
+                  label={t("designer.node.derived", "Derived")}
+                  value={node.versionInfo.derivedFromVersion ?? t("designer.node.none", "none")}
+                  mono
+                />
+                {node.width || node.pin ? (
+                  <InfoRow
+                    label={t("designer.node.layout", "Layout")}
+                    value={[node.width ?? "auto", node.pin ?? "none"].join(" · ")}
+                    mono
+                  />
+                ) : null}
+              </dl>
+            ) : (
+              <div className="text-ink-muted rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
+                {t("designer.node.empty", "No node selected.")}
+              </div>
             )}
-          </div>
-          <div className="flex items-center gap-2">
+          </CompactSection>
+
+          <CompactSection
+            title={t("designer.patches", "Queued patches")}
+            icon={<SaveIcon className="text-ink-muted size-3.5" />}
+          >
+            {patchOps.length > 0 ? (
+              <div className="space-y-1.5">
+                {patchOps.slice(0, 8).map((op, index) => (
+                  <div
+                    key={`${op.op}-${op.nodeKey}-${index}`}
+                    className="rounded-lg border border-hairline bg-canvas-soft px-2.5 py-2 text-[11px]"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-ink uppercase">{op.op}</span>
+                      <span className="text-ink-muted font-mono">{op.nodeKey}</span>
+                    </div>
+                    <div className="text-ink-muted mt-1 space-y-0.5">
+                      {op.path ? <div className="font-mono">{op.path}</div> : null}
+                      {op.parentKey ? (
+                        <div className="font-mono">
+                          {t("designer.patch.parent", "parent")}: {op.parentKey}
+                        </div>
+                      ) : null}
+                      {op.index !== undefined ? (
+                        <div className="font-mono">
+                          {t("designer.patch.index", "index")}: {op.index}
+                        </div>
+                      ) : null}
+                      {"value" in op ? (
+                        <div className="truncate font-mono">
+                          {t("designer.patch.value", "value")}: {formatValue(op.value)}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-ink-muted rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
+                {t("designer.patch.empty", "No queued patch operations.")}
+              </div>
+            )}
+          </CompactSection>
+
+          <CompactSection
+            title={t("designer.conflicts", "Conflicts")}
+            icon={<RefreshCwIcon className="text-ink-muted size-3.5" />}
+          >
+            {conflicts.length > 0 ? (
+              <div className="space-y-1.5">
+                {conflicts.slice(0, 4).map((conflict) => (
+                  <div
+                    key={conflict.id}
+                    className="rounded-lg border border-amber-200 bg-[color-mix(in_oklab,var(--canvas)_82%,var(--primary)_4%)] px-2.5 py-2 text-[11px]"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-ink uppercase">{conflict.state}</span>
+                      <span className="text-ink-muted font-mono">{conflict.nodeKey}</span>
+                    </div>
+                    <div className="mt-1 text-ink-secondary">{conflict.message}</div>
+                    {conflict.reviewNote ? (
+                      <div className="text-ink-muted mt-1 font-mono">{conflict.reviewNote}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-ink-muted rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
+                {t("designer.conflicts.empty", "No conflicts queued.")}
+              </div>
+            )}
+          </CompactSection>
+
+          <CompactSection
+            title={t("designer.history", "History")}
+            icon={<HistoryIcon className="text-ink-muted size-3.5" />}
+            right={
+              versionInfo ? (
+                <div className="text-ink-muted rounded-full border border-hairline bg-canvas px-2 py-0.5 font-mono text-[10px]">
+                  {versionInfo.clientRevision}
+                </div>
+              ) : null
+            }
+          >
+            {historyPreview.length > 0 ? (
+              <div className="space-y-1.5">
+                {historyPreview.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="rounded-lg border border-hairline bg-canvas-soft px-2.5 py-2 text-[11px]"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-ink uppercase">{entry.action}</span>
+                      <span className="text-ink-muted font-mono">{entry.revision}</span>
+                    </div>
+                    <div className="mt-1 text-ink-secondary">{entry.summary}</div>
+                    <div className="text-ink-muted mt-1 font-mono">
+                      {entry.nodeKey ?? t("designer.history.scope", "surface")} ·{" "}
+                      {new Date(entry.at).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-ink-muted rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
+                {t("designer.history.empty", "No history yet.")}
+              </div>
+            )}
+          </CompactSection>
+        </div>
+
+        <div className="border-t border-hairline bg-canvas-soft p-3">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={handleReset}
-              disabled={isSaving}
-              className="flex h-7 items-center gap-1.5 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-hairline-input hover:text-ink disabled:opacity-50"
-              title={t("designer.reset", "Zurücksetzen")}
+              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-hairline-input hover:text-ink"
             >
-              <RotateCcwIcon className="size-3" />
-              {t("designer.reset", "Zurücksetzen")}
+              <RotateCcwIcon className="size-3.5" />
+              {t("designer.reset", "Reset")}
             </button>
             <button
               type="button"
-              onClick={activeTab === "grid" ? handleSaveLayout : handleSaveFields}
-              disabled={isSaving || !entityName}
-              className="flex h-7 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[12px] transition-colors disabled:opacity-50"
-              style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
+              onClick={handleSave}
+              disabled={busyAction !== null}
+              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-full px-3 text-[12px] text-[var(--primary-fg)] transition-colors disabled:opacity-50"
+              style={{ background: "var(--primary)" }}
             >
-              <SaveIcon className="size-3" />
-              {isSaving ? t("designer.saving", "Speichert…") : t("designer.save", "Speichern")}
+              <SaveIcon className="size-3.5" />
+              {busyAction === "save" ? t("designer.saving", "Saving…") : t("designer.save", "Save")}
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={busyAction !== null}
+              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-hairline-input hover:text-ink disabled:opacity-50"
+            >
+              <CheckIcon className="size-3.5" />
+              {busyAction === "apply"
+                ? t("designer.applying", "Applying…")
+                : t("designer.apply", "Apply")}
+            </button>
+            <button
+              type="button"
+              onClick={handleReconcile}
+              disabled={busyAction !== null}
+              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-hairline-input hover:text-ink disabled:opacity-50"
+            >
+              <RefreshCwIcon className="size-3.5" />
+              {busyAction === "reconcile"
+                ? t("designer.reconciling", "Reconciling…")
+                : t("designer.reconcile", "Reconcile")}
+            </button>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="text-ink-muted text-[10px]">
+              {t(
+                "designer.focusHint",
+                "Focus is locked to the designer while active. Escape closes the surface.",
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-hairline-input hover:text-ink"
+            >
+              <XIcon className="size-3.5" />
+              {t("designer.close", "Close")}
             </button>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </aside>
   );
 }

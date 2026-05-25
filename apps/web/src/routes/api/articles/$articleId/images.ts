@@ -81,7 +81,7 @@ export const Route = createFileRoute("/api/articles/$articleId/images")({
           await mkdir(storageDir, { recursive: true });
 
           const safeFileName = `${uuid}-${fileName}`;
-          const storageKey = `storage/tenant-${context.tenantId}/articles/${params.articleId}/${safeFileName}`;
+          const storageKey = `tenant-${context.tenantId}/articles/${params.articleId}/${safeFileName}`;
           const absolutePath = join(storageDir, safeFileName);
 
           const arrayBuffer = await file.arrayBuffer();

@@ -1,4 +1,4 @@
-import { asc, eq, and } from "drizzle-orm";
+import { asc, desc, eq, and } from "drizzle-orm";
 
 import { db } from "../index";
 import {
@@ -116,6 +116,7 @@ export async function getTenantContext(userId: string) {
     .from(userTenant)
     .innerJoin(tenant, eq(userTenant.tenantId, tenant.tenantId))
     .where(and(eq(userTenant.userId, userId), eq(tenant.isActive, true)))
+    .orderBy(desc(tenant.isBase), asc(tenant.name))
     .limit(1);
 
   return result[0] || null;
@@ -135,6 +136,7 @@ export async function getUserTenantInfo(userId: string) {
     .innerJoin(organization, eq(tenant.organizationId, organization.organizationId))
     .innerJoin(user, eq(userTenant.userId, user.id))
     .where(and(eq(userTenant.userId, userId), eq(tenant.isActive, true)))
+    .orderBy(desc(tenant.isBase), asc(tenant.name))
     .limit(1);
 
   return result[0] || null;

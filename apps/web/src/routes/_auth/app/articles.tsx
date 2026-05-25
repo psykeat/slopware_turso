@@ -1,4 +1,4 @@
-import { ArticleImagesTab } from "@repo/ui/components/article-images-tab";
+import { ArticleImageStrip } from "@repo/ui/components/article-image-strip";
 import { BatchInventoryTable } from "@repo/ui/components/batch-inventory-table";
 import { BomEditor } from "@repo/ui/components/bom-editor";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
@@ -311,7 +311,7 @@ function ArticlesModule() {
           }
           return (
             <img
-              src={`/api/storage/article-images/${r.primaryImageId}`}
+              src={`/api/storage/article-images/${r.primaryImageId}?v=${encodeURIComponent(r.primaryImageId)}`}
               alt={r.name}
               className="size-7 rounded border border-hairline object-cover shadow-sm"
               loading="lazy"
@@ -459,23 +459,6 @@ function ArticlesModule() {
               },
             ]}
           />
-        ),
-      },
-      {
-        id: "images",
-        label: "Bilder",
-        content: activeArticleId ? (
-          <ArticleImagesTab
-            articleId={activeArticleId}
-            primaryImageId={selectedArticle?.primaryImageId ?? null}
-            onRefreshArticle={() => {
-              queryClient.invalidateQueries({ queryKey: ["data", "article"] });
-            }}
-          />
-        ) : (
-          <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
-            {t("empty.title")}
-          </div>
         ),
       },
       {
@@ -869,6 +852,24 @@ function ArticlesModule() {
                     </Tabs>
                   </div>
                 </div>
+
+                {activeArticleId ? (
+                  <ArticleImageStrip
+                    articleId={(record.articleId as string) ?? activeArticleId}
+                    primaryImageId={
+                      (record.primaryImageId as string | null) ??
+                      selectedArticle?.primaryImageId ??
+                      null
+                    }
+                    onRefreshArticle={() => {
+                      queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+                    }}
+                  />
+                ) : (
+                  <div className="rounded-md border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
+                    {t("empty.title")}
+                  </div>
+                )}
 
                 {record.trackingMode === "serial" && (
                   <div>

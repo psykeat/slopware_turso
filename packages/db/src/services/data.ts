@@ -315,11 +315,66 @@ export class DataService {
       currentRow,
     );
 
-    return await db
+    let articlePrimaryBeforeArchive: string | null = null;
+    if (
+      entityName === "articleImage" &&
+      normalizedUpdateData.archived === true &&
+      currentRow.articleId &&
+      currentRow.tenantId &&
+      currentRow.articleImageId
+    ) {
+      const [articleRow] = await db
+        .select({ primaryImageId: schema.article.primaryImageId })
+        .from(schema.article)
+        .where(
+          and(
+            eq(schema.article.tenantId, currentRow.tenantId),
+            eq(schema.article.articleId, currentRow.articleId),
+          ),
+        )
+        .limit(1);
+      articlePrimaryBeforeArchive = articleRow?.primaryImageId ?? null;
+    }
+
+    const updatedRows = await db
       .update(table)
       .set(longTextAwareData)
       .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .returning();
+
+    if (
+      entityName === "articleImage" &&
+      normalizedUpdateData.archived === true &&
+      currentRow.articleId &&
+      currentRow.tenantId &&
+      currentRow.articleImageId &&
+      articlePrimaryBeforeArchive === currentRow.articleImageId
+    ) {
+      const [replacement] = await db
+        .select({ articleImageId: schema.articleImage.articleImageId })
+        .from(schema.articleImage)
+        .where(
+          and(
+            eq(schema.articleImage.tenantId, currentRow.tenantId),
+            eq(schema.articleImage.articleId, currentRow.articleId),
+            eq(schema.articleImage.archived, false),
+          ),
+        )
+        .orderBy(asc(schema.articleImage.sortOrder))
+        .limit(1);
+
+      await db
+        .update(schema.article)
+        .set({ primaryImageId: replacement?.articleImageId ?? null })
+        .where(
+          and(
+            eq(schema.article.tenantId, currentRow.tenantId),
+            eq(schema.article.articleId, currentRow.articleId),
+          ),
+        );
+    }
+
+    return updatedRows;
   }
 
   async delete(

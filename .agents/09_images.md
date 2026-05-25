@@ -81,24 +81,23 @@ Files are stored securely under:
 
 The user experience is highly visual and fits seamlessly into the platform's metadata-first design patterns.
 
-### Image Management Tab Component (`ArticleImagesTab.tsx`)
+### Image Strip Component (`ArticleImageStrip.tsx`)
 
-- **Path**: `packages/ui/components/article-images-tab.tsx`
+- **Path**: `packages/ui/components/article-image-strip.tsx`
 - **Features**:
-  - Spacious card gallery grid displaying all uploaded images.
-  - Prominent star badging to identify the current active **Primary** image.
-  - Drag-and-drop file upload zone with visual progress and loading spinner states.
-  - Action overlays:
-    - **Set Primary**: Updates the article's `primaryImageId` reference via PATCH.
-    - **Reorder**: Safely swaps `sortOrder` values between adjacent cards to shift card priority left or right.
-    - **Delete**: Soft deletes the image in the DB (PATCH `archived = true`). If the deleted image was the primary image, it safely nulls `article.primaryImageId`.
+  - Slim horizontal strip for article CRUD side panel.
+  - Multiple image thumbnails in one row with primary badge.
+  - Generic upload new action via file picker or drag/drop.
+  - Set primary, archive/delete, reorder left/right.
+  - Keep this row fast, compact, read-mostly.
 
 ### Article Grid & TriView workspace integration (`articles.tsx`)
 
 - **Path**: `apps/web/src/routes/_auth/app/articles.tsx`
 - **Modifications**:
-  - Appended the **"Bilder"** tab as the second option in the dependent pane (alongside _Details_, _Langtexte_, etc.), loaded dynamically with full upload support when an article is active.
   - Prepeded a visual thumbnail column in the main Articles list DataGrid, displaying a `32x32`px thumbnail preview of `primaryImageId` (with lazy loading and a fallback `ImageIcon` placeholder when empty).
+  - Article edit side panel now shows Bilder as slim third row on right, next to Lagerbewegungen and Langtexte.
+  - The row only displays thumbnails and upload new. Gallery actions stay out of CRUD flow.
 
 ### Document Lines Grid preview (`document-editor.tsx`)
 

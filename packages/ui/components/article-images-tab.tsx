@@ -276,7 +276,7 @@ export function ArticleImagesTab({
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {images.map((image, index) => {
               const isPrimary = image.articleImageId === primaryImageId;
-              const imageUrl = `/api/storage/article-images/${image.articleImageId}`;
+              const imageUrl = `/api/storage/article-images/${image.articleImageId}?v=${encodeURIComponent(image.articleImageId)}`;
 
               return (
                 <div

@@ -154,6 +154,8 @@ interface ArticleMetaRow {
   warntext?: string | null;
   kurzbeschreibung?: string | null;
   primaryImageId?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 interface TrackingFocusRequest {
@@ -1702,7 +1704,7 @@ const DocumentLinesEditor = forwardRef<
                         {companySettings?.showArticleImageInEntry &&
                           articleMeta?.primaryImageId && (
                             <img
-                              src={`/api/storage/article-images/${articleMeta.primaryImageId}`}
+                              src={`/api/storage/article-images/${articleMeta.primaryImageId}?v=${encodeURIComponent(articleMeta.primaryImageId ?? "")}`}
                               alt=""
                               className="size-6 shrink-0 rounded border border-hairline bg-canvas-soft object-cover shadow-sm"
                             />
@@ -1722,7 +1724,7 @@ const DocumentLinesEditor = forwardRef<
                         {companySettings?.showArticleImageInEntry &&
                           articleMeta?.primaryImageId && (
                             <img
-                              src={`/api/storage/article-images/${articleMeta.primaryImageId}`}
+                              src={`/api/storage/article-images/${articleMeta.primaryImageId}?v=${encodeURIComponent(articleMeta.primaryImageId ?? "")}`}
                               alt=""
                               className="size-6 shrink-0 rounded border border-hairline bg-canvas-soft object-cover shadow-sm"
                             />

@@ -90,7 +90,7 @@ export function DeliveryAddressPickerField({
       if (!res.ok) return null;
       return res.json();
     },
-    enabled: Boolean(value) && !addressData,
+    enabled: Boolean(value),
   });
 
   const { data: results = [] } = useQuery<DeliveryAddressResult[]>({
@@ -140,8 +140,13 @@ export function DeliveryAddressPickerField({
     );
   }, [addressData, isEditing, selectedDeliveryAddress, value]);
 
-  const resolvedSnap =
-    addressData ?? (selectedDeliveryAddress ? toSnapshot(selectedDeliveryAddress) : localSnap);
+  const resolvedSnap = selectedDeliveryAddress
+    ? {
+        ...toSnapshot(selectedDeliveryAddress),
+        ...(addressData ?? {}),
+      }
+    : (addressData ?? localSnap);
+  const inputDisplayValue = isOpen ? query || displayName(resolvedSnap) : displayName(resolvedSnap);
 
   const handleSelect = (addr: DeliveryAddressResult) => {
     if (locked) return;
@@ -217,13 +222,12 @@ export function DeliveryAddressPickerField({
           tabIndex={locked ? -1 : tabIndex}
           className={cn(inputBase, "pr-8", locked && "cursor-not-allowed opacity-80")}
           placeholder={addressId ? "Suchen..." : "Bitte zuerst Adresse wählen"}
-          value={isOpen ? query : displayName(resolvedSnap)}
+          value={inputDisplayValue}
           readOnly={locked}
           aria-disabled={locked}
           onFocus={() => {
             if (locked) return;
             setIsOpen(true);
-            setQuery("");
             setSelectedIndex(0);
           }}
           onChange={(e) => {

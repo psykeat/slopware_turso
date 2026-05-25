@@ -35,17 +35,27 @@ const inputBase =
 
 function displayName(snap: AddressSnapshot | null): string {
   if (!snap) return "";
-  return snap.name || snap.companyName || `${snap.firstName ?? ""} ${snap.lastName ?? ""}`.trim();
+  return (
+    snap.name ||
+    snap.companyName ||
+    snap.company ||
+    `${snap.firstName ?? snap.firstname ?? ""} ${snap.lastName ?? snap.lastname ?? ""}`.trim()
+  );
 }
 
 function toSnapshot(addr: DeliveryAddressResult): AddressSnapshot {
   return {
     name: addr.name ?? addr.companyName ?? addr.addressNo,
     companyName: addr.companyName ?? undefined,
+    company: addr.companyName ?? undefined,
     addressLine1: addr.addressLine1,
+    street: addr.addressLine1,
     postalCode: addr.postalCode,
+    zipcode: addr.postalCode,
     city: addr.city,
+    town: addr.city,
     countryCode: addr.countryCode,
+    country: addr.countryCode,
   };
 }
 
@@ -67,6 +77,7 @@ export function DeliveryAddressPickerField({
   const [isEditing, setIsEditing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [localSnap, setLocalSnap] = useState<AddressSnapshot>(addressData ?? {});
+  const prevValueRef = useRef(value);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -118,6 +129,16 @@ export function DeliveryAddressPickerField({
       });
     }
   }, [locked]);
+
+  useEffect(() => {
+    const valueChanged = prevValueRef.current !== value;
+    prevValueRef.current = value;
+    if (isEditing && !valueChanged) return;
+    if (valueChanged) setIsEditing(false);
+    setLocalSnap(
+      addressData ?? (selectedDeliveryAddress ? toSnapshot(selectedDeliveryAddress) : {}),
+    );
+  }, [addressData, isEditing, selectedDeliveryAddress, value]);
 
   const resolvedSnap =
     addressData ?? (selectedDeliveryAddress ? toSnapshot(selectedDeliveryAddress) : localSnap);

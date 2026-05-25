@@ -2039,6 +2039,7 @@ export function DocumentEditor({
   const linesEditorRef = useRef<DocumentLinesEditorHandle>(null);
   const editorRootRef = useRef<HTMLDivElement>(null);
   const didAutoFocusRef = useRef(false);
+  const didAutoSelectActiveLineRef = useRef(false);
 
   useEffect(() => {
     setFocus({
@@ -2062,6 +2063,7 @@ export function DocumentEditor({
       setIsLinesDirty(false);
       setPendingLines([]);
       setActiveLine(null);
+      didAutoSelectActiveLineRef.current = false;
       setCloseDialogOpen(false);
       setPrintDialogOpen(false);
       setPrintAfterSave(false);
@@ -2188,6 +2190,15 @@ export function DocumentEditor({
     [header, hidePartyFields],
   );
   const isHeaderDirty = headerBaselineSnapshot != null && headerSnapshot !== headerBaselineSnapshot;
+
+  useEffect(() => {
+    if (didAutoSelectActiveLineRef.current || activeLine) return;
+    const firstVisibleLine =
+      pendingLines.find((line) => !line.isDeleted && line.lineType !== "bom_component") ?? null;
+    if (!firstVisibleLine) return;
+    didAutoSelectActiveLineRef.current = true;
+    queueMicrotask(() => setActiveLine(firstVisibleLine));
+  }, [activeLine, pendingLines]);
 
   // ── initialize header from doc or group defaults ──
   useEffect(() => {

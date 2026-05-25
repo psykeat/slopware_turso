@@ -20,14 +20,22 @@ interface AddressResult {
 }
 
 export interface AddressSnapshot {
+  addressNo?: string;
   name?: string;
   companyName?: string;
+  company?: string;
   firstName?: string;
+  firstname?: string;
   lastName?: string;
+  lastname?: string;
   addressLine1?: string;
+  street?: string;
   postalCode?: string;
+  zipcode?: string;
   city?: string;
+  town?: string;
   countryCode?: string;
+  country?: string;
   notizText?: string | null;
   langText?: string | null;
   warnText?: string | null;
@@ -54,16 +62,25 @@ const inputBase =
 
 function displayName(snap: AddressSnapshot | null): string {
   if (!snap) return "";
-  return snap.companyName || snap.name || `${snap.firstName ?? ""} ${snap.lastName ?? ""}`.trim();
+  return (
+    snap.companyName ||
+    snap.company ||
+    snap.name ||
+    `${snap.firstName ?? snap.firstname ?? ""} ${snap.lastName ?? snap.lastname ?? ""}`.trim()
+  );
 }
 
 function normalizeSnapshot(
   snap: Partial<AddressSnapshot> & Record<string, any>,
   fallback: Partial<AddressSnapshot> = {},
 ): AddressSnapshot {
-  const firstName = snap.firstName ?? fallback.firstName ?? undefined;
-  const lastName = snap.lastName ?? fallback.lastName ?? undefined;
-  const companyName = snap.companyName ?? fallback.companyName ?? undefined;
+  const addressNo = snap.addressNo ?? fallback.addressNo ?? undefined;
+  const firstName =
+    snap.firstName ?? snap.firstname ?? fallback.firstName ?? fallback.firstname ?? undefined;
+  const lastName =
+    snap.lastName ?? snap.lastname ?? fallback.lastName ?? fallback.lastname ?? undefined;
+  const companyName =
+    snap.companyName ?? snap.company ?? fallback.companyName ?? fallback.company ?? undefined;
   const derivedName =
     snap.name ??
     fallback.name ??
@@ -74,16 +91,31 @@ function normalizeSnapshot(
     snap.notizText ?? snap.notiztext ?? fallback.notizText ?? fallback.notiztext ?? null;
   const langText = snap.langText ?? snap.langtext ?? fallback.langText ?? fallback.langtext ?? null;
   const warnText = snap.warnText ?? snap.warntext ?? fallback.warnText ?? fallback.warntext ?? null;
+  const addressLine1 =
+    snap.addressLine1 ?? snap.street ?? fallback.addressLine1 ?? fallback.street ?? undefined;
+  const postalCode =
+    snap.postalCode ?? snap.zipcode ?? fallback.postalCode ?? fallback.zipcode ?? undefined;
+  const city = snap.city ?? snap.town ?? fallback.city ?? fallback.town ?? undefined;
+  const countryCode =
+    snap.countryCode ?? snap.country ?? fallback.countryCode ?? fallback.country ?? undefined;
 
   return {
+    addressNo,
     name: derivedName,
     companyName,
+    company: companyName,
     firstName,
+    firstname: firstName,
     lastName,
-    addressLine1: snap.addressLine1 ?? fallback.addressLine1,
-    postalCode: snap.postalCode ?? fallback.postalCode,
-    city: snap.city ?? fallback.city,
-    countryCode: snap.countryCode ?? fallback.countryCode,
+    lastname: lastName,
+    addressLine1,
+    street: addressLine1,
+    postalCode,
+    zipcode: postalCode,
+    city,
+    town: city,
+    countryCode,
+    country: countryCode,
     notizText,
     langText,
     warnText,
@@ -95,6 +127,7 @@ function normalizeSnapshot(
 
 function snapshotFromSearchResult(addr: AddressResult): AddressSnapshot {
   return {
+    addressNo: addr.addressNo,
     name: addr.companyName || `${addr.firstName ?? ""} ${addr.lastName ?? ""}`.trim(),
     companyName: addr.companyName ?? undefined,
     firstName: addr.firstName ?? undefined,
@@ -123,6 +156,7 @@ export function AddressPickerField({
   const [isEditing, setIsEditing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [localSnap, setLocalSnap] = useState<AddressSnapshot>(addressData ?? {});
+  const prevValueRef = useRef(value);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -135,6 +169,17 @@ export function AddressPickerField({
       return res.json();
     },
     enabled: isOpen && query.length >= 1,
+  });
+
+  const { data: selectedAddress } = useQuery<Record<string, any> | null>({
+    queryKey: ["address", value],
+    queryFn: async () => {
+      if (!value) return null;
+      const res = await fetch(`/api/data/address/${value}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: Boolean(value),
   });
 
   useEffect(() => {
@@ -158,7 +203,54 @@ export function AddressPickerField({
     }
   }, [locked]);
 
-  const resolvedSnap = addressData ?? localSnap;
+  useEffect(() => {
+    const valueChanged = prevValueRef.current !== value;
+    prevValueRef.current = value;
+    if (isEditing && !valueChanged) return;
+    if (valueChanged) setIsEditing(false);
+    setLocalSnap(
+      selectedAddress
+        ? normalizeSnapshot(
+            {
+              ...selectedAddress,
+              ...(addressData ?? {}),
+            },
+            {
+              addressNo: selectedAddress.addressNo ?? undefined,
+              companyName: selectedAddress.companyName ?? undefined,
+              company: selectedAddress.companyName ?? undefined,
+              firstName: selectedAddress.firstName ?? undefined,
+              lastName: selectedAddress.lastName ?? undefined,
+              addressLine1: selectedAddress.addressLine1 ?? undefined,
+              postalCode: selectedAddress.postalCode ?? undefined,
+              city: selectedAddress.city ?? undefined,
+              countryCode: selectedAddress.countryCode ?? undefined,
+            },
+          )
+        : (addressData ?? {}),
+    );
+  }, [addressData, isEditing, selectedAddress, value]);
+
+  const resolvedSnap = selectedAddress
+    ? normalizeSnapshot(
+        {
+          ...selectedAddress,
+          ...(addressData ?? {}),
+        },
+        {
+          addressNo: selectedAddress.addressNo ?? undefined,
+          companyName: selectedAddress.companyName ?? undefined,
+          company: selectedAddress.companyName ?? undefined,
+          firstName: selectedAddress.firstName ?? undefined,
+          lastName: selectedAddress.lastName ?? undefined,
+          addressLine1: selectedAddress.addressLine1 ?? undefined,
+          postalCode: selectedAddress.postalCode ?? undefined,
+          city: selectedAddress.city ?? undefined,
+          countryCode: selectedAddress.countryCode ?? undefined,
+        },
+      )
+    : (addressData ?? localSnap);
+  const inputDisplayValue = isOpen ? query || displayName(resolvedSnap) : displayName(resolvedSnap);
 
   const handleSelect = async (addr: AddressResult) => {
     if (locked) return;
@@ -204,7 +296,7 @@ export function AddressPickerField({
     inputRef.current?.focus();
   };
 
-  const hasData = displayName(localSnap).length > 0 || localSnap.addressLine1;
+  const hasData = displayName(resolvedSnap).length > 0 || resolvedSnap.addressLine1;
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)} ref={containerRef}>
@@ -236,13 +328,12 @@ export function AddressPickerField({
           tabIndex={locked ? -1 : tabIndex}
           className={cn(inputBase, "pr-8", locked && "cursor-not-allowed opacity-80")}
           placeholder="Suchen..."
-          value={isOpen ? query : displayName(localSnap)}
+          value={inputDisplayValue}
           readOnly={locked}
           aria-disabled={locked}
           onFocus={() => {
             if (locked) return;
             setIsOpen(true);
-            setQuery("");
             setSelectedIndex(0);
           }}
           onChange={(e) => {

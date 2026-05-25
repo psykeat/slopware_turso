@@ -1,4 +1,6 @@
-import { Document, Page, StyleSheet, Text, View, type Styles } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, Text, View, Image, type Styles } from "@react-pdf/renderer";
+import { parseRichTextHtml, type RichTextNode } from "@repo/ui/lib/rich-text";
+import type { ReactNode } from "react";
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -8,6 +10,7 @@ export interface DocumentLine {
   documentLineId: string;
   lineNo: number;
   articleTextSnapshot: string | null;
+  langText: string | null;
   quantity: string | null;
   unit: string | null;
   netPrice: string | null;
@@ -15,6 +18,8 @@ export interface DocumentLine {
   taxAmount: string | null;
   lineTotalNet: string | null;
   lineType: string;
+  bomGroupId?: string | null;
+  primaryImageBase64?: string | null;
 }
 
 export interface DocumentForPrint {
@@ -24,10 +29,21 @@ export interface DocumentForPrint {
   documentDate: string | null;
   billingAddress: Record<string, any> | null;
   deliveryAddress: Record<string, any> | null;
+  noteText: string | null;
+  preText: string | null;
+  postText: string | null;
+  stornoText: string | null;
   totalNet: string | null;
   totalTax: string | null;
   totalGross: string | null;
   currencyId: string | null;
+  printOptions: {
+    noteText: boolean;
+    preText: boolean;
+    postText: boolean;
+    stornoText: boolean;
+    lineTexts: boolean;
+  };
   lines: DocumentLine[];
 }
 
@@ -47,6 +63,7 @@ export interface CompanyForPrint {
   bankName: string | null;
   bankIban: string | null;
   bankBic: string | null;
+  showArticleImageOnDocuments?: boolean;
 }
 
 interface DocumentPDFProps {
@@ -107,6 +124,86 @@ function fmtAmt(s: string | null, currency: string | null): string {
   const num = formatNum(s);
   if (!num) return "";
   return `${num} ${currency ?? "EUR"}`;
+}
+
+function splitRichTextBlocks(nodes: RichTextNode[]): RichTextNode[][] {
+  const blocks: RichTextNode[][] = [];
+  let current: RichTextNode[] = [];
+
+  const flush = () => {
+    if (current.length > 0) {
+      blocks.push(current);
+      current = [];
+    }
+  };
+
+  for (const node of nodes) {
+    if (node.type === "element" && (node.tag === "p" || node.tag === "div")) {
+      flush();
+      if (node.children.length > 0) {
+        blocks.push(node.children);
+      } else {
+        blocks.push([]);
+      }
+      continue;
+    }
+
+    current.push(node);
+  }
+
+  flush();
+  return blocks.length > 0 ? blocks : [[]];
+}
+
+function renderRichTextInline(nodes: RichTextNode[], keyPrefix: string): ReactNode[] {
+  const rendered: ReactNode[] = [];
+
+  for (const [index, node] of nodes.entries()) {
+    const key = `${keyPrefix}-${index}`;
+
+    if (node.type === "text") {
+      rendered.push(<Text key={key}>{node.text}</Text>);
+      continue;
+    }
+
+    if (node.type === "break") {
+      rendered.push(<Text key={key}>{"\n"}</Text>);
+      continue;
+    }
+
+    const childNodes = renderRichTextInline(node.children, key);
+    const styleParts = [] as Record<string, unknown>[];
+    if (node.tag === "strong") styleParts.push({ fontFamily: "Helvetica-Bold" });
+    if (node.tag === "em") styleParts.push({ fontStyle: "italic" });
+    if (node.tag === "u") styleParts.push({ textDecoration: "underline" });
+    if (node.tag === "span" && node.color) styleParts.push({ color: node.color });
+
+    const content =
+      styleParts.length > 0 ? (
+        <Text key={key} style={Object.assign({}, ...styleParts)}>
+          {childNodes}
+        </Text>
+      ) : (
+        <Text key={key}>{childNodes}</Text>
+      );
+
+    rendered.push(content);
+  }
+
+  return rendered;
+}
+
+function richTextBlocks(html: string | null | undefined, keyPrefix: string): ReactNode[] {
+  if (!html) return [];
+  const blocks = splitRichTextBlocks(parseRichTextHtml(html));
+  return blocks.map((block, index) => (
+    <Text
+      key={`${keyPrefix}-block-${index}`}
+      style={index > 0 ? [styles.textBlockBody, styles.richTextParagraph] : styles.textBlockBody}
+    >
+      {renderRichTextInline(block, `${keyPrefix}-block-${index}`)}
+    </Text>
+  ));
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +315,25 @@ const styles = StyleSheet.create({
     color: C.muted,
     lineHeight: 1.4,
   },
+  textBlock: {
+    marginTop: 10,
+  },
+  textBlockTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 8,
+    color: C.muted,
+    marginBottom: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  textBlockBody: {
+    fontSize: 8.5,
+    color: C.text,
+    lineHeight: 1.45,
+  },
+  richTextParagraph: {
+    marginTop: 2,
+  },
 
   // Table
   table: {
@@ -260,6 +376,22 @@ const styles = StyleSheet.create({
     color: C.muted,
     fontStyle: "italic",
     width: "100%",
+  },
+  tableCellBomHeader: {
+    fontSize: 8,
+    color: C.text,
+    fontFamily: "Helvetica-Bold",
+  },
+  tableCellBomComponent: {
+    fontSize: 8,
+    color: C.text,
+    marginLeft: 8,
+  },
+  tableCellBomBadge: {
+    fontSize: 7,
+    color: C.muted,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 0.2,
   },
 
   // Column widths
@@ -390,6 +522,13 @@ function addressesDiffer(a: Record<string, any> | null, b: Record<string, any> |
   return fields.some((f) => (a[f] ?? "") !== (b[f] ?? ""));
 }
 
+function resolveBomLineLabel(lineType: string): string | null {
+  if (lineType === "sales_bom_header") return "H";
+  if (lineType === "production_output") return "P";
+  if (lineType === "bom_component") return "K";
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -462,6 +601,20 @@ function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
           <DeliveryAddressBlock addr={doc.deliveryAddress} />
         ) : null}
 
+        {doc.printOptions.noteText && doc.noteText ? (
+          <View style={styles.textBlock}>
+            <Text style={styles.textBlockTitle}>Notiztext</Text>
+            {richTextBlocks(doc.noteText, "noteText")}
+          </View>
+        ) : null}
+
+        {doc.printOptions.preText && doc.preText ? (
+          <View style={styles.textBlock}>
+            <Text style={styles.textBlockTitle}>Vortext</Text>
+            {richTextBlocks(doc.preText, "preText")}
+          </View>
+        ) : null}
+
         {/* ---- Positions table ---- */}
         <View style={styles.table}>
           {/* Table header */}
@@ -484,24 +637,79 @@ function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
           {/* Table rows */}
           {doc.lines.map((line, idx) => {
             const isAlt = idx % 2 !== 0;
-            const rowStyle = isAlt ? [styles.tableRow, styles.tableRowAlt] : [styles.tableRow];
 
             if (line.lineType === "comment") {
               return (
-                <View key={line.documentLineId} style={rowStyle}>
-                  <Text style={styles.tableCellComment}>{line.articleTextSnapshot ?? ""}</Text>
+                <View
+                  key={line.documentLineId}
+                  style={isAlt ? [styles.tableRow, styles.tableRowAlt] : [styles.tableRow]}
+                >
+                  <View>
+                    <Text style={styles.tableCellComment}>{line.articleTextSnapshot ?? ""}</Text>
+                    {doc.printOptions.lineTexts && line.langText ? (
+                      <View style={{ marginTop: 2 }}>
+                        {richTextBlocks(line.langText, `line-${line.documentLineId}`)}
+                      </View>
+                    ) : null}
+                  </View>
                 </View>
               );
             }
 
             const disc = line.discountPercentage ? `${formatNum(line.discountPercentage)}%` : "";
+            const bomLabel = resolveBomLineLabel(line.lineType);
+            const isBomHeader =
+              line.lineType === "sales_bom_header" || line.lineType === "production_output";
+            const isBomComponent = line.lineType === "bom_component";
+            const descStyle = isBomHeader
+              ? styles.tableCellBomHeader
+              : isBomComponent
+                ? styles.tableCellBomComponent
+                : styles.tableCell;
 
             return (
-              <View key={line.documentLineId} style={rowStyle}>
-                <Text style={[styles.tableCell, styles.colPos]}>{line.lineNo}</Text>
-                <Text style={[styles.tableCell, styles.colDesc]}>
-                  {line.articleTextSnapshot ?? ""}
-                </Text>
+              <View
+                key={line.documentLineId}
+                style={
+                  isBomComponent
+                    ? [styles.tableRow, styles.tableRowAlt]
+                    : isAlt
+                      ? [styles.tableRow, styles.tableRowAlt]
+                      : [styles.tableRow]
+                }
+              >
+                <View
+                  style={[styles.colPos, { flexDirection: "row", alignItems: "center", gap: 2 }]}
+                >
+                  <Text style={styles.tableCell}>{line.lineNo}</Text>
+                  {bomLabel ? <Text style={styles.tableCellBomBadge}>{bomLabel}</Text> : null}
+                </View>
+                <View style={styles.colDesc}>
+                  <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+                    {company.showArticleImageOnDocuments && line.primaryImageBase64 && (
+                      <Image
+                        src={line.primaryImageBase64}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 2,
+                          borderWidth: 0.5,
+                          borderColor: "#d1d5db",
+                          objectFit: "cover",
+                          marginTop: 1,
+                        }}
+                      />
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={descStyle}>{line.articleTextSnapshot ?? ""}</Text>
+                      {doc.printOptions.lineTexts && line.langText ? (
+                        <View style={{ marginTop: 2 }}>
+                          {richTextBlocks(line.langText, `line-${line.documentLineId}`)}
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
                 <Text style={[styles.tableCellRight, styles.colQty]}>
                   {formatNum(line.quantity)}
                 </Text>
@@ -535,6 +743,20 @@ function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
             </View>
           </View>
         </View>
+
+        {doc.printOptions.postText && doc.postText ? (
+          <View style={styles.textBlock}>
+            <Text style={styles.textBlockTitle}>Nachtext</Text>
+            {richTextBlocks(doc.postText, "postText")}
+          </View>
+        ) : null}
+
+        {doc.printOptions.stornoText && doc.stornoText ? (
+          <View style={styles.textBlock}>
+            <Text style={styles.textBlockTitle}>Stornotext</Text>
+            {richTextBlocks(doc.stornoText, "stornoText")}
+          </View>
+        ) : null}
 
         {/* ---- Footer ---- */}
         <View style={styles.footer} fixed>

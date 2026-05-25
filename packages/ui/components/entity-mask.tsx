@@ -34,6 +34,7 @@ export interface FieldDef {
   /** Renders a visual section divider above this field */
   sectionLabel?: string;
   sectionLabelDe?: string;
+  visible?: boolean;
 }
 
 export interface EntityMaskProps {
@@ -59,7 +60,10 @@ export interface EntityMaskProps {
   /** Renders directly in document flow with no modal wrapper and no Cancel button */
   inline?: boolean;
   /** Renders after the form fields when a record is loaded and not in loading state */
-  childSection?: (record: Record<string, unknown>) => React.ReactNode;
+  childSection?: (
+    record: Record<string, unknown>,
+    onChange: (key: string, value: any) => void,
+  ) => React.ReactNode;
   /** "side" splits the mask into a left fields panel and right child-section panel */
   childLayout?: "below" | "side";
 }
@@ -373,6 +377,11 @@ export function EntityMask({
     return [...orderedFields, ...remainingFields, ...draftOnlyFields];
   }, [fields, designerFieldConfigs, delta.fieldConfigs, isDesignMode]);
 
+  const renderedFields = useMemo(
+    () => effectiveFields.filter((field) => isDesignMode || field.visible !== false),
+    [effectiveFields, isDesignMode],
+  );
+
   const selectDesignerField = useCallback(
     (fieldKey: string) => {
       if (!isDesignMode) return;
@@ -567,7 +576,7 @@ export function EntityMask({
         </div>
       )}
       <div className={cn("grid gap-x-6 gap-y-5", isSingleColumn ? "grid-cols-1" : "grid-cols-2")}>
-        {effectiveFields.map((field) => {
+        {renderedFields.map((field) => {
           const isSelected = selectedDesignerFieldKey === field.key;
           const designerConfig = designerFieldConfigs.get(field.key);
           const visibilityChecked = designerConfig?.visible ?? field.visible !== false;
@@ -757,7 +766,7 @@ export function EntityMask({
 
   const childSectionNode = hasChildContent ? (
     <div className="mt-4 border-t border-hairline pt-4">
-      {childSection!(formData as Record<string, unknown>)}
+      {childSection!(formData as Record<string, unknown>, handleChange)}
     </div>
   ) : null;
 
@@ -812,7 +821,7 @@ export function EntityMask({
             {fieldsGrid}
           </div>
           <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
-            {childSection!(formData as Record<string, unknown>)}
+            {childSection!(formData as Record<string, unknown>, handleChange)}
           </div>
         </div>
         <div className="shrink-0 border-t border-hairline bg-canvas px-6 py-4">{footerButtons}</div>

@@ -1,6 +1,6 @@
 import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
-import { EntityMask } from "@repo/ui/components/entity-mask";
+import { EntityMask, type FieldDef } from "@repo/ui/components/entity-mask";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { cn } from "@repo/ui/lib/utils";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
@@ -37,6 +37,20 @@ const COMPANY_SCOPED_SETTINGS = new Set([
   "costCenter",
   "glAccount",
 ]);
+
+const COMPANY_FIELD_OVERRIDES: Partial<FieldDef>[] = [
+  {
+    key: "copyLongTextsOnlyOnChange",
+    sectionLabel: "Long Texts",
+    sectionLabelDe: "Langtexte",
+  },
+  { key: "printAddressLongText", sectionLabel: "Print", sectionLabelDe: "Druck" },
+  { key: "printPreText", sectionLabel: "Print", sectionLabelDe: "Druck" },
+  { key: "printPostText", sectionLabel: "Print", sectionLabelDe: "Druck" },
+  { key: "printPositionTexts", sectionLabel: "Print", sectionLabelDe: "Druck" },
+  { key: "showArticleImageInEntry", sectionLabel: "Media", sectionLabelDe: "Medien" },
+  { key: "showArticleImageOnDocuments", sectionLabel: "Media", sectionLabelDe: "Medien" },
+];
 
 function resolveSettingsLabel(label: SettingsRegistryEntry["label"], language: string) {
   if (typeof label === "string") return label;
@@ -271,6 +285,15 @@ function SettingsView() {
         },
         { key: "trackingMode", header: "Tracking" },
         { key: "bomType", header: "BOM" },
+        {
+          key: "printPositionTexts",
+          header: "Print Texts",
+          render: (row: any) => (
+            <span className="font-mono text-[11px] text-ink-mute">
+              {row.printPositionTexts ? "On" : "—"}
+            </span>
+          ),
+        },
       ];
     }
 
@@ -334,6 +357,11 @@ function SettingsView() {
           { value: "sales", label: "Sales (H)" },
           { value: "production", label: "Production (P)" },
         ],
+      },
+      {
+        key: "printPositionTexts",
+        sectionLabel: "Print",
+        sectionLabelDe: "Druck",
       },
     ];
   }, [selectedKey]);
@@ -714,6 +742,7 @@ function SettingsView() {
                 inline
                 title={tableLabel}
                 className="h-full"
+                fieldOverrides={COMPANY_FIELD_OVERRIDES}
               />
             ) : (
               <div className="flex h-full items-center justify-center p-6 text-[13px] text-ink-mute">

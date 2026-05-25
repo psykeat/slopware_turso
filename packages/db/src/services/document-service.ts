@@ -124,6 +124,11 @@ const TYPE_LABELS: Record<string, string> = {
   p: "Fertigmeldungen",
 };
 
+const toDateOrNull = (value: string | Date | null | undefined): Date | null => {
+  if (value == null) return null;
+  return value instanceof Date ? value : new Date(value);
+};
+
 export const DIRECTION_FROM_TYPE: Record<string, string> = {
   N: "OUTBOUND",
   A: "OUTBOUND",
@@ -244,6 +249,12 @@ type DraftDocumentLineInput = {
   lineNo: number;
   articleId?: string | null;
   articleTextSnapshot?: string | null;
+  langText?: string | null;
+  langTextSourceEntity?: string | null;
+  langTextSourceId?: string | null;
+  langTextSourceField?: string | null;
+  langTextLinkedAt?: string | null;
+  langTextOverriddenAt?: string | null;
   quantity: string | number;
   unit?: string | null;
   netPrice: string | number;
@@ -274,6 +285,30 @@ type SaveDocumentDraftInput = {
   warehouseId?: string | null;
   paymentTermId?: string | null;
   shippingMethodId?: string | null;
+  noteText?: string | null;
+  noteTextSourceEntity?: string | null;
+  noteTextSourceId?: string | null;
+  noteTextSourceField?: string | null;
+  noteTextLinkedAt?: string | null;
+  noteTextOverriddenAt?: string | null;
+  preText?: string | null;
+  preTextSourceEntity?: string | null;
+  preTextSourceId?: string | null;
+  preTextSourceField?: string | null;
+  preTextLinkedAt?: string | null;
+  preTextOverriddenAt?: string | null;
+  postText?: string | null;
+  postTextSourceEntity?: string | null;
+  postTextSourceId?: string | null;
+  postTextSourceField?: string | null;
+  postTextLinkedAt?: string | null;
+  postTextOverriddenAt?: string | null;
+  stornoText?: string | null;
+  stornoTextSourceEntity?: string | null;
+  stornoTextSourceId?: string | null;
+  stornoTextSourceField?: string | null;
+  stornoTextLinkedAt?: string | null;
+  stornoTextOverriddenAt?: string | null;
   lines: DraftDocumentLineInput[];
 };
 
@@ -407,6 +442,30 @@ type DocumentPostingDoc = {
   deliveryAddress: unknown;
   deliveryAddressId: string | null;
   customAttributes: unknown;
+  noteText: string | null;
+  noteTextSourceEntity: string | null;
+  noteTextSourceId: string | null;
+  noteTextSourceField: string | null;
+  noteTextLinkedAt: string | Date | null;
+  noteTextOverriddenAt: string | Date | null;
+  preText: string | null;
+  preTextSourceEntity: string | null;
+  preTextSourceId: string | null;
+  preTextSourceField: string | null;
+  preTextLinkedAt: string | Date | null;
+  preTextOverriddenAt: string | Date | null;
+  postText: string | null;
+  postTextSourceEntity: string | null;
+  postTextSourceId: string | null;
+  postTextSourceField: string | null;
+  postTextLinkedAt: string | Date | null;
+  postTextOverriddenAt: string | Date | null;
+  stornoText: string | null;
+  stornoTextSourceEntity: string | null;
+  stornoTextSourceId: string | null;
+  stornoTextSourceField: string | null;
+  stornoTextLinkedAt: string | Date | null;
+  stornoTextOverriddenAt: string | Date | null;
   paymentTermId: string | null;
   shippingMethodId: string | null;
   documentTypeId: string | null;
@@ -424,6 +483,12 @@ type DocumentPostingLine = {
   taxCodeId: string | null;
   costCenterId: string | null;
   bomGroupId: string | null;
+  langText: string | null;
+  langTextSourceEntity: string | null;
+  langTextSourceId: string | null;
+  langTextSourceField: string | null;
+  langTextLinkedAt: string | Date | null;
+  langTextOverriddenAt: string | Date | null;
 };
 
 type DocumentPostingLineWithArticle = DocumentPostingLine & {
@@ -1452,6 +1517,12 @@ export class DocumentService {
       lineNo: number;
       articleId?: string | null;
       articleTextSnapshot?: string | null;
+      langText?: string | null;
+      langTextSourceEntity?: string | null;
+      langTextSourceId?: string | null;
+      langTextSourceField?: string | null;
+      langTextLinkedAt?: string | null;
+      langTextOverriddenAt?: string | null;
       quantity: string | number;
       unit?: string | null;
       netPrice: string | number;
@@ -1481,6 +1552,12 @@ export class DocumentService {
         lineNo: Number(data.lineNo),
         articleId: data.articleId ?? null,
         articleTextSnapshot: data.articleTextSnapshot ?? null,
+        langText: data.langText ?? null,
+        langTextSourceEntity: data.langTextSourceEntity ?? null,
+        langTextSourceId: data.langTextSourceId ?? null,
+        langTextSourceField: data.langTextSourceField ?? null,
+        langTextLinkedAt: toDateOrNull(data.langTextLinkedAt),
+        langTextOverriddenAt: toDateOrNull(data.langTextOverriddenAt),
         quantity: String(data.quantity),
         unit: data.unit ?? null,
         netPrice: String(data.netPrice),
@@ -1577,6 +1654,12 @@ export class DocumentService {
               lineNo: baseLine.lineNo + index + 1,
               articleId: component.componentArticleId,
               articleTextSnapshot: component.name,
+              langText: null,
+              langTextSourceEntity: null,
+              langTextSourceId: null,
+              langTextSourceField: null,
+              langTextLinkedAt: null,
+              langTextOverriddenAt: null,
               quantity: String(parentQty * componentQty * scrapFactor),
               unit: component.salesUnitCode ?? component.baseUnitCode ?? null,
               netPrice: "0",
@@ -1707,6 +1790,16 @@ export class DocumentService {
         lines as DocumentPostingLine[],
       );
 
+      await tx
+        .update(documentLine)
+        .set({
+          langTextSourceEntity: null,
+          langTextSourceId: null,
+          langTextSourceField: null,
+          langTextLinkedAt: null,
+        })
+        .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)));
+
       const [updated] = await tx
         .update(document)
         .set({
@@ -1714,6 +1807,22 @@ export class DocumentService {
           postedAt: now,
           postedBy: userId,
           updatedAt: now,
+          noteTextSourceEntity: null,
+          noteTextSourceId: null,
+          noteTextSourceField: null,
+          noteTextLinkedAt: null,
+          preTextSourceEntity: null,
+          preTextSourceId: null,
+          preTextSourceField: null,
+          preTextLinkedAt: null,
+          postTextSourceEntity: null,
+          postTextSourceId: null,
+          postTextSourceField: null,
+          postTextLinkedAt: null,
+          stornoTextSourceEntity: null,
+          stornoTextSourceId: null,
+          stornoTextSourceField: null,
+          stornoTextLinkedAt: null,
         })
         .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
         .returning();
@@ -1753,6 +1862,13 @@ export class DocumentService {
       };
       const reversalType = reversalTypeMap[doc.documentType] ?? doc.documentType;
       const now = new Date();
+      const stornoReason = (doc.customAttributes as any)?.stornoReason ?? "Storno";
+      const generatedStornoText = [
+        `<p><strong>Storno</strong> ${now.toISOString()}</p>`,
+        `<p>Benutzer: ${userId}</p>`,
+        `<p>Grund: ${String(stornoReason)}</p>`,
+        `<p>Beleg: ${doc.documentNo}</p>`,
+      ].join("");
       const lines = await loadActiveDocumentLines(tx, tenantId, documentId);
 
       let documentNo = `STORNO-${doc.documentNo}`;
@@ -1803,6 +1919,30 @@ export class DocumentService {
           billingAddress: doc.billingAddress,
           deliveryAddress: doc.deliveryAddress,
           deliveryAddressId: doc.deliveryAddressId,
+          noteText: doc.noteText,
+          noteTextSourceEntity: doc.noteTextSourceEntity,
+          noteTextSourceId: doc.noteTextSourceId,
+          noteTextSourceField: doc.noteTextSourceField,
+          noteTextLinkedAt: toDateOrNull(doc.noteTextLinkedAt),
+          noteTextOverriddenAt: toDateOrNull(doc.noteTextOverriddenAt),
+          preText: doc.preText,
+          preTextSourceEntity: doc.preTextSourceEntity,
+          preTextSourceId: doc.preTextSourceId,
+          preTextSourceField: doc.preTextSourceField,
+          preTextLinkedAt: toDateOrNull(doc.preTextLinkedAt),
+          preTextOverriddenAt: toDateOrNull(doc.preTextOverriddenAt),
+          postText: doc.postText,
+          postTextSourceEntity: doc.postTextSourceEntity,
+          postTextSourceId: doc.postTextSourceId,
+          postTextSourceField: doc.postTextSourceField,
+          postTextLinkedAt: toDateOrNull(doc.postTextLinkedAt),
+          postTextOverriddenAt: toDateOrNull(doc.postTextOverriddenAt),
+          stornoText: generatedStornoText,
+          stornoTextSourceEntity: null,
+          stornoTextSourceId: null,
+          stornoTextSourceField: null,
+          stornoTextLinkedAt: null,
+          stornoTextOverriddenAt: null,
           paymentTermId: doc.paymentTermId,
           shippingMethodId: doc.shippingMethodId,
           documentTypeId: doc.documentTypeId,
@@ -1824,6 +1964,12 @@ export class DocumentService {
             lineNo: l.lineNo,
             articleId: l.articleId,
             articleTextSnapshot: l.articleTextSnapshot,
+            langText: l.langText,
+            langTextSourceEntity: l.langTextSourceEntity,
+            langTextSourceId: l.langTextSourceId,
+            langTextSourceField: l.langTextSourceField,
+            langTextLinkedAt: toDateOrNull(l.langTextLinkedAt),
+            langTextOverriddenAt: toDateOrNull(l.langTextOverriddenAt),
             quantity: l.quantity,
             unit: l.unit,
             netPrice: l.netPrice,
@@ -2064,6 +2210,30 @@ export class DocumentService {
           billingAddress: doc.billingAddress,
           deliveryAddress: doc.deliveryAddress,
           deliveryAddressId: doc.deliveryAddressId,
+          noteText: doc.noteText,
+          noteTextSourceEntity: doc.noteTextSourceEntity,
+          noteTextSourceId: doc.noteTextSourceId,
+          noteTextSourceField: doc.noteTextSourceField,
+          noteTextLinkedAt: toDateOrNull(doc.noteTextLinkedAt),
+          noteTextOverriddenAt: toDateOrNull(doc.noteTextOverriddenAt),
+          preText: doc.preText,
+          preTextSourceEntity: doc.preTextSourceEntity,
+          preTextSourceId: doc.preTextSourceId,
+          preTextSourceField: doc.preTextSourceField,
+          preTextLinkedAt: toDateOrNull(doc.preTextLinkedAt),
+          preTextOverriddenAt: toDateOrNull(doc.preTextOverriddenAt),
+          postText: doc.postText,
+          postTextSourceEntity: doc.postTextSourceEntity,
+          postTextSourceId: doc.postTextSourceId,
+          postTextSourceField: doc.postTextSourceField,
+          postTextLinkedAt: toDateOrNull(doc.postTextLinkedAt),
+          postTextOverriddenAt: toDateOrNull(doc.postTextOverriddenAt),
+          stornoText: doc.stornoText,
+          stornoTextSourceEntity: doc.stornoTextSourceEntity,
+          stornoTextSourceId: doc.stornoTextSourceId,
+          stornoTextSourceField: doc.stornoTextSourceField,
+          stornoTextLinkedAt: toDateOrNull(doc.stornoTextLinkedAt),
+          stornoTextOverriddenAt: toDateOrNull(doc.stornoTextOverriddenAt),
           customAttributes: doc.customAttributes,
           paymentTermId: doc.paymentTermId,
           shippingMethodId: doc.shippingMethodId,
@@ -2116,6 +2286,12 @@ export class DocumentService {
             lineNo: line.lineNo,
             articleId: line.articleId,
             articleTextSnapshot: line.articleTextSnapshot,
+            langText: line.langText,
+            langTextSourceEntity: line.langTextSourceEntity,
+            langTextSourceId: line.langTextSourceId,
+            langTextSourceField: line.langTextSourceField,
+            langTextLinkedAt: toDateOrNull(line.langTextLinkedAt),
+            langTextOverriddenAt: toDateOrNull(line.langTextOverriddenAt),
             quantity: shouldCopyAsIs ? line.quantity : String(remainingQty),
             unit: line.unit,
             netPrice: line.netPrice,
@@ -2651,6 +2827,12 @@ export class DocumentService {
           lineNo: number;
           articleId: string | null;
           articleTextSnapshot: string | null;
+          langText: string | null;
+          langTextSourceEntity: string | null;
+          langTextSourceId: string | null;
+          langTextSourceField: string | null;
+          langTextLinkedAt: Date | null;
+          langTextOverriddenAt: Date | null;
           quantity: string;
           unit: string | null;
           netPrice: string;
@@ -2671,6 +2853,12 @@ export class DocumentService {
           lineNo: number;
           articleId: string | null;
           articleTextSnapshot: string | null;
+          langText: string | null;
+          langTextSourceEntity: string | null;
+          langTextSourceId: string | null;
+          langTextSourceField: string | null;
+          langTextLinkedAt: Date | null;
+          langTextOverriddenAt: Date | null;
           quantity: string;
           unit: string | null;
           netPrice: string;
@@ -2691,6 +2879,12 @@ export class DocumentService {
             lineNo: Number(line.lineNo),
             articleId: line.articleId ?? null,
             articleTextSnapshot: line.articleTextSnapshot ?? null,
+            langText: line.langText ?? null,
+            langTextSourceEntity: line.langTextSourceEntity ?? null,
+            langTextSourceId: line.langTextSourceId ?? null,
+            langTextSourceField: line.langTextSourceField ?? null,
+            langTextLinkedAt: toDateOrNull(line.langTextLinkedAt),
+            langTextOverriddenAt: toDateOrNull(line.langTextOverriddenAt),
             quantity: String(line.quantity),
             unit: line.unit ?? null,
             netPrice: String(line.netPrice),
@@ -2725,6 +2919,12 @@ export class DocumentService {
               lineNo: row.lineNo,
               articleId: row.articleId,
               articleTextSnapshot: row.articleTextSnapshot,
+              langText: row.langText,
+              langTextSourceEntity: row.langTextSourceEntity,
+              langTextSourceId: row.langTextSourceId,
+              langTextSourceField: row.langTextSourceField,
+              langTextLinkedAt: toDateOrNull(row.langTextLinkedAt),
+              langTextOverriddenAt: toDateOrNull(row.langTextOverriddenAt),
               quantity: row.quantity,
               unit: row.unit,
               netPrice: row.netPrice,
@@ -2762,6 +2962,44 @@ export class DocumentService {
             billingAddress: data.billingAddress ?? null,
             deliveryAddress: data.deliveryAddress ?? null,
             deliveryAddressId: data.deliveryAddressId ?? null,
+            noteText: data.noteText ?? lockedDoc.noteText ?? null,
+            noteTextSourceEntity:
+              data.noteTextSourceEntity ?? lockedDoc.noteTextSourceEntity ?? null,
+            noteTextSourceId: data.noteTextSourceId ?? lockedDoc.noteTextSourceId ?? null,
+            noteTextSourceField: data.noteTextSourceField ?? lockedDoc.noteTextSourceField ?? null,
+            noteTextLinkedAt: toDateOrNull(data.noteTextLinkedAt ?? lockedDoc.noteTextLinkedAt),
+            noteTextOverriddenAt: toDateOrNull(
+              data.noteTextOverriddenAt ?? lockedDoc.noteTextOverriddenAt,
+            ),
+            preText: data.preText ?? lockedDoc.preText ?? null,
+            preTextSourceEntity: data.preTextSourceEntity ?? lockedDoc.preTextSourceEntity ?? null,
+            preTextSourceId: data.preTextSourceId ?? lockedDoc.preTextSourceId ?? null,
+            preTextSourceField: data.preTextSourceField ?? lockedDoc.preTextSourceField ?? null,
+            preTextLinkedAt: toDateOrNull(data.preTextLinkedAt ?? lockedDoc.preTextLinkedAt),
+            preTextOverriddenAt: toDateOrNull(
+              data.preTextOverriddenAt ?? lockedDoc.preTextOverriddenAt,
+            ),
+            postText: data.postText ?? lockedDoc.postText ?? null,
+            postTextSourceEntity:
+              data.postTextSourceEntity ?? lockedDoc.postTextSourceEntity ?? null,
+            postTextSourceId: data.postTextSourceId ?? lockedDoc.postTextSourceId ?? null,
+            postTextSourceField: data.postTextSourceField ?? lockedDoc.postTextSourceField ?? null,
+            postTextLinkedAt: toDateOrNull(data.postTextLinkedAt ?? lockedDoc.postTextLinkedAt),
+            postTextOverriddenAt: toDateOrNull(
+              data.postTextOverriddenAt ?? lockedDoc.postTextOverriddenAt,
+            ),
+            stornoText: data.stornoText ?? lockedDoc.stornoText ?? null,
+            stornoTextSourceEntity:
+              data.stornoTextSourceEntity ?? lockedDoc.stornoTextSourceEntity ?? null,
+            stornoTextSourceId: data.stornoTextSourceId ?? lockedDoc.stornoTextSourceId ?? null,
+            stornoTextSourceField:
+              data.stornoTextSourceField ?? lockedDoc.stornoTextSourceField ?? null,
+            stornoTextLinkedAt: toDateOrNull(
+              data.stornoTextLinkedAt ?? lockedDoc.stornoTextLinkedAt,
+            ),
+            stornoTextOverriddenAt: toDateOrNull(
+              data.stornoTextOverriddenAt ?? lockedDoc.stornoTextOverriddenAt,
+            ),
             customAttributes: data.customAttributes ?? null,
             currencyId: await resolveCurrencyCode(tx, data.currencyId ?? null),
             warehouseId: data.warehouseId ?? lockedDoc.warehouseId,
@@ -2860,6 +3098,30 @@ export class DocumentService {
           billingAddress: data.billingAddress ?? null,
           deliveryAddress: data.deliveryAddress ?? null,
           deliveryAddressId: data.deliveryAddressId ?? null,
+          noteText: data.noteText ?? null,
+          noteTextSourceEntity: data.noteTextSourceEntity ?? null,
+          noteTextSourceId: data.noteTextSourceId ?? null,
+          noteTextSourceField: data.noteTextSourceField ?? null,
+          noteTextLinkedAt: toDateOrNull(data.noteTextLinkedAt),
+          noteTextOverriddenAt: toDateOrNull(data.noteTextOverriddenAt),
+          preText: data.preText ?? null,
+          preTextSourceEntity: data.preTextSourceEntity ?? null,
+          preTextSourceId: data.preTextSourceId ?? null,
+          preTextSourceField: data.preTextSourceField ?? null,
+          preTextLinkedAt: toDateOrNull(data.preTextLinkedAt),
+          preTextOverriddenAt: toDateOrNull(data.preTextOverriddenAt),
+          postText: data.postText ?? null,
+          postTextSourceEntity: data.postTextSourceEntity ?? null,
+          postTextSourceId: data.postTextSourceId ?? null,
+          postTextSourceField: data.postTextSourceField ?? null,
+          postTextLinkedAt: toDateOrNull(data.postTextLinkedAt),
+          postTextOverriddenAt: toDateOrNull(data.postTextOverriddenAt),
+          stornoText: data.stornoText ?? null,
+          stornoTextSourceEntity: data.stornoTextSourceEntity ?? null,
+          stornoTextSourceId: data.stornoTextSourceId ?? null,
+          stornoTextSourceField: data.stornoTextSourceField ?? null,
+          stornoTextLinkedAt: toDateOrNull(data.stornoTextLinkedAt),
+          stornoTextOverriddenAt: toDateOrNull(data.stornoTextOverriddenAt),
           customAttributes: data.customAttributes ?? null,
           currencyId: await resolveCurrencyCode(tx, data.currencyId ?? resolvedCurrencyId ?? null),
           warehouseId: resolvedWarehouseId,
@@ -2883,6 +3145,12 @@ export class DocumentService {
           lineNo: Number(line.lineNo),
           articleId: line.articleId ?? null,
           articleTextSnapshot: line.articleTextSnapshot ?? null,
+          langText: line.langText ?? null,
+          langTextSourceEntity: line.langTextSourceEntity ?? null,
+          langTextSourceId: line.langTextSourceId ?? null,
+          langTextSourceField: line.langTextSourceField ?? null,
+          langTextLinkedAt: toDateOrNull(line.langTextLinkedAt),
+          langTextOverriddenAt: toDateOrNull(line.langTextOverriddenAt),
           quantity: String(line.quantity),
           unit: line.unit ?? null,
           netPrice: String(line.netPrice),
@@ -2919,6 +3187,30 @@ export class DocumentService {
       billingAddress?: unknown;
       deliveryAddress?: unknown;
       deliveryAddressId?: string | null;
+      noteText?: string | null;
+      noteTextSourceEntity?: string | null;
+      noteTextSourceId?: string | null;
+      noteTextSourceField?: string | null;
+      noteTextLinkedAt?: string | null;
+      noteTextOverriddenAt?: string | null;
+      preText?: string | null;
+      preTextSourceEntity?: string | null;
+      preTextSourceId?: string | null;
+      preTextSourceField?: string | null;
+      preTextLinkedAt?: string | null;
+      preTextOverriddenAt?: string | null;
+      postText?: string | null;
+      postTextSourceEntity?: string | null;
+      postTextSourceId?: string | null;
+      postTextSourceField?: string | null;
+      postTextLinkedAt?: string | null;
+      postTextOverriddenAt?: string | null;
+      stornoText?: string | null;
+      stornoTextSourceEntity?: string | null;
+      stornoTextSourceId?: string | null;
+      stornoTextSourceField?: string | null;
+      stornoTextLinkedAt?: string | null;
+      stornoTextOverriddenAt?: string | null;
       customAttributes?: unknown;
       currencyId?: string | null;
       warehouseId?: string | null;
@@ -2996,6 +3288,30 @@ export class DocumentService {
           billingAddress: data.billingAddress ?? null,
           deliveryAddress: data.deliveryAddress ?? null,
           deliveryAddressId: data.deliveryAddressId ?? null,
+          noteText: data.noteText ?? null,
+          noteTextSourceEntity: data.noteTextSourceEntity ?? null,
+          noteTextSourceId: data.noteTextSourceId ?? null,
+          noteTextSourceField: data.noteTextSourceField ?? null,
+          noteTextLinkedAt: toDateOrNull(data.noteTextLinkedAt),
+          noteTextOverriddenAt: toDateOrNull(data.noteTextOverriddenAt),
+          preText: data.preText ?? null,
+          preTextSourceEntity: data.preTextSourceEntity ?? null,
+          preTextSourceId: data.preTextSourceId ?? null,
+          preTextSourceField: data.preTextSourceField ?? null,
+          preTextLinkedAt: toDateOrNull(data.preTextLinkedAt),
+          preTextOverriddenAt: toDateOrNull(data.preTextOverriddenAt),
+          postText: data.postText ?? null,
+          postTextSourceEntity: data.postTextSourceEntity ?? null,
+          postTextSourceId: data.postTextSourceId ?? null,
+          postTextSourceField: data.postTextSourceField ?? null,
+          postTextLinkedAt: toDateOrNull(data.postTextLinkedAt),
+          postTextOverriddenAt: toDateOrNull(data.postTextOverriddenAt),
+          stornoText: data.stornoText ?? null,
+          stornoTextSourceEntity: data.stornoTextSourceEntity ?? null,
+          stornoTextSourceId: data.stornoTextSourceId ?? null,
+          stornoTextSourceField: data.stornoTextSourceField ?? null,
+          stornoTextLinkedAt: toDateOrNull(data.stornoTextLinkedAt),
+          stornoTextOverriddenAt: toDateOrNull(data.stornoTextOverriddenAt),
           customAttributes: data.customAttributes ?? null,
           currencyId: resolvedCurrencyId,
           warehouseId: resolvedWarehouseId,
@@ -3098,6 +3414,30 @@ export class DocumentService {
           billingAddress: src.billingAddress,
           deliveryAddress: src.deliveryAddress,
           deliveryAddressId: src.deliveryAddressId,
+          noteText: src.noteText,
+          noteTextSourceEntity: src.noteTextSourceEntity,
+          noteTextSourceId: src.noteTextSourceId,
+          noteTextSourceField: src.noteTextSourceField,
+          noteTextLinkedAt: toDateOrNull(src.noteTextLinkedAt),
+          noteTextOverriddenAt: toDateOrNull(src.noteTextOverriddenAt),
+          preText: src.preText,
+          preTextSourceEntity: src.preTextSourceEntity,
+          preTextSourceId: src.preTextSourceId,
+          preTextSourceField: src.preTextSourceField,
+          preTextLinkedAt: toDateOrNull(src.preTextLinkedAt),
+          preTextOverriddenAt: toDateOrNull(src.preTextOverriddenAt),
+          postText: src.postText,
+          postTextSourceEntity: src.postTextSourceEntity,
+          postTextSourceId: src.postTextSourceId,
+          postTextSourceField: src.postTextSourceField,
+          postTextLinkedAt: toDateOrNull(src.postTextLinkedAt),
+          postTextOverriddenAt: toDateOrNull(src.postTextOverriddenAt),
+          stornoText: src.stornoText,
+          stornoTextSourceEntity: src.stornoTextSourceEntity,
+          stornoTextSourceId: src.stornoTextSourceId,
+          stornoTextSourceField: src.stornoTextSourceField,
+          stornoTextLinkedAt: toDateOrNull(src.stornoTextLinkedAt),
+          stornoTextOverriddenAt: toDateOrNull(src.stornoTextOverriddenAt),
           customAttributes: src.customAttributes,
           currencyId: src.currencyId,
           warehouseId: src.warehouseId,
@@ -3120,6 +3460,12 @@ export class DocumentService {
             bomGroupId: l.bomGroupId ?? null,
             articleId: l.articleId,
             articleTextSnapshot: l.articleTextSnapshot,
+            langText: l.langText,
+            langTextSourceEntity: l.langTextSourceEntity,
+            langTextSourceId: l.langTextSourceId,
+            langTextSourceField: l.langTextSourceField,
+            langTextLinkedAt: toDateOrNull(l.langTextLinkedAt),
+            langTextOverriddenAt: toDateOrNull(l.langTextOverriddenAt),
             quantity: l.quantity,
             unit: l.unit,
             netPrice: l.netPrice,

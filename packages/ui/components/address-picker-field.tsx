@@ -28,6 +28,12 @@ export interface AddressSnapshot {
   postalCode?: string;
   city?: string;
   countryCode?: string;
+  notizText?: string | null;
+  langText?: string | null;
+  warnText?: string | null;
+  notiztext?: string | null;
+  langtext?: string | null;
+  warntext?: string | null;
 }
 
 export interface AddressPickerFieldProps {
@@ -49,6 +55,55 @@ const inputBase =
 function displayName(snap: AddressSnapshot | null): string {
   if (!snap) return "";
   return snap.companyName || snap.name || `${snap.firstName ?? ""} ${snap.lastName ?? ""}`.trim();
+}
+
+function normalizeSnapshot(
+  snap: Partial<AddressSnapshot> & Record<string, any>,
+  fallback: Partial<AddressSnapshot> = {},
+): AddressSnapshot {
+  const firstName = snap.firstName ?? fallback.firstName ?? undefined;
+  const lastName = snap.lastName ?? fallback.lastName ?? undefined;
+  const companyName = snap.companyName ?? fallback.companyName ?? undefined;
+  const derivedName =
+    snap.name ??
+    fallback.name ??
+    companyName ??
+    (`${firstName ?? ""} ${lastName ?? ""}`.trim() || undefined);
+
+  const notizText =
+    snap.notizText ?? snap.notiztext ?? fallback.notizText ?? fallback.notiztext ?? null;
+  const langText = snap.langText ?? snap.langtext ?? fallback.langText ?? fallback.langtext ?? null;
+  const warnText = snap.warnText ?? snap.warntext ?? fallback.warnText ?? fallback.warntext ?? null;
+
+  return {
+    name: derivedName,
+    companyName,
+    firstName,
+    lastName,
+    addressLine1: snap.addressLine1 ?? fallback.addressLine1,
+    postalCode: snap.postalCode ?? fallback.postalCode,
+    city: snap.city ?? fallback.city,
+    countryCode: snap.countryCode ?? fallback.countryCode,
+    notizText,
+    langText,
+    warnText,
+    notiztext: notizText,
+    langtext: langText,
+    warntext: warnText,
+  };
+}
+
+function snapshotFromSearchResult(addr: AddressResult): AddressSnapshot {
+  return {
+    name: addr.companyName || `${addr.firstName ?? ""} ${addr.lastName ?? ""}`.trim(),
+    companyName: addr.companyName ?? undefined,
+    firstName: addr.firstName ?? undefined,
+    lastName: addr.lastName ?? undefined,
+    addressLine1: addr.addressLine1,
+    postalCode: addr.postalCode,
+    city: addr.city,
+    countryCode: addr.countryCode,
+  };
 }
 
 export function AddressPickerField({
@@ -105,18 +160,11 @@ export function AddressPickerField({
 
   const resolvedSnap = addressData ?? localSnap;
 
-  const handleSelect = (addr: AddressResult) => {
+  const handleSelect = async (addr: AddressResult) => {
     if (locked) return;
-    const snap: AddressSnapshot = {
-      name: addr.companyName || `${addr.firstName ?? ""} ${addr.lastName ?? ""}`.trim(),
-      companyName: addr.companyName ?? undefined,
-      firstName: addr.firstName ?? undefined,
-      lastName: addr.lastName ?? undefined,
-      addressLine1: addr.addressLine1,
-      postalCode: addr.postalCode,
-      city: addr.city,
-      countryCode: addr.countryCode,
-    };
+    const fullRes = await fetch(`/api/data/address/${addr.addressId}`);
+    const fullData = fullRes.ok ? await fullRes.json() : null;
+    const snap = normalizeSnapshot(fullData ?? addr, snapshotFromSearchResult(addr));
     setLocalSnap(snap);
     onChange(addr.addressId, snap, addr);
     setIsOpen(false);
@@ -134,7 +182,7 @@ export function AddressPickerField({
       setSelectedIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter" && isOpen && results[selectedIndex]) {
       e.preventDefault();
-      handleSelect(results[selectedIndex]);
+      void handleSelect(results[selectedIndex]);
     } else if (e.key === "Escape") {
       setIsOpen(false);
     }
@@ -231,7 +279,7 @@ export function AddressPickerField({
                   idx === selectedIndex && "bg-canvas-soft",
                 )}
                 onMouseEnter={() => setSelectedIndex(idx)}
-                onClick={() => handleSelect(r)}
+                onClick={() => void handleSelect(r)}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-[13px] font-medium text-ink">

@@ -32,6 +32,8 @@ import { Route as ApiImportConnectorsRouteImport } from './routes/api/import/con
 import { Route as ApiImportBatchesRouteImport } from './routes/api/import/batches'
 import { Route as ApiFeedbackSubmitRouteImport } from './routes/api/feedback/submit'
 import { Route as ApiDocumentsTreeRouteImport } from './routes/api/documents/tree'
+import { Route as ApiDocumentsImportTrackingRouteImport } from './routes/api/documents/import-tracking'
+import { Route as ApiDocumentsExportRouteImport } from './routes/api/documents/export'
 import { Route as ApiDocumentsCreateRouteImport } from './routes/api/documents/create'
 import { Route as ApiDeliveryAddressesSearchRouteImport } from './routes/api/delivery-addresses/search'
 import { Route as ApiDeliveryAddressesDeliveryAddressIdRouteImport } from './routes/api/delivery-addresses/$deliveryAddressId'
@@ -51,11 +53,13 @@ import { Route as AuthAppAdminRouteRouteImport } from './routes/_auth/app/admin/
 import { Route as ApiAdminDocumentGroupsIndexRouteImport } from './routes/api/admin/document-groups/index'
 import { Route as AuthAppSettingsIndexRouteImport } from './routes/_auth/app/settings/index'
 import { Route as AuthAppAdminIndexRouteImport } from './routes/_auth/app/admin/index'
+import { Route as ApiStorageArticleImagesImageIdRouteImport } from './routes/api/storage/article-images/$imageId'
 import { Route as ApiStatsArticleArticleIdRouteImport } from './routes/api/stats/article/$articleId'
 import { Route as ApiStatsAddressAddressIdRouteImport } from './routes/api/stats/address/$addressId'
 import { Route as ApiImportProfilesProfileIdRouteImport } from './routes/api/import/profiles/$profileId'
 import { Route as ApiImportBatchesBatchIdRouteImport } from './routes/api/import/batches/$batchId'
 import { Route as ApiDocumentsDocumentIdStornoRouteImport } from './routes/api/documents/$documentId/storno'
+import { Route as ApiDocumentsDocumentIdShipmentRouteImport } from './routes/api/documents/$documentId/shipment'
 import { Route as ApiDocumentsDocumentIdPrintRouteImport } from './routes/api/documents/$documentId/print'
 import { Route as ApiDocumentsDocumentIdPostRouteImport } from './routes/api/documents/$documentId/post'
 import { Route as ApiDocumentsDocumentIdDuplicateRouteImport } from './routes/api/documents/$documentId/duplicate'
@@ -65,6 +69,7 @@ import { Route as ApiDocumentsDocumentIdConvertRouteImport } from './routes/api/
 import { Route as ApiDocumentsDocumentIdAuditRouteImport } from './routes/api/documents/$documentId/audit'
 import { Route as ApiArticlesArticleIdSerialNumbersRouteImport } from './routes/api/articles/$articleId/serial-numbers'
 import { Route as ApiArticlesArticleIdPricingRouteImport } from './routes/api/articles/$articleId/pricing'
+import { Route as ApiArticlesArticleIdImagesRouteImport } from './routes/api/articles/$articleId/images'
 import { Route as ApiArticlesArticleIdBomRouteImport } from './routes/api/articles/$articleId/bom'
 import { Route as ApiArticlesArticleIdBatchesRouteImport } from './routes/api/articles/$articleId/batches'
 import { Route as ApiAdminDocumentGroupsIdRouteImport } from './routes/api/admin/document-groups/$id'
@@ -199,6 +204,17 @@ const ApiDocumentsTreeRoute = ApiDocumentsTreeRouteImport.update({
   path: '/api/documents/tree',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDocumentsImportTrackingRoute =
+  ApiDocumentsImportTrackingRouteImport.update({
+    id: '/api/documents/import-tracking',
+    path: '/api/documents/import-tracking',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiDocumentsExportRoute = ApiDocumentsExportRouteImport.update({
+  id: '/api/documents/export',
+  path: '/api/documents/export',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDocumentsCreateRoute = ApiDocumentsCreateRouteImport.update({
   id: '/api/documents/create',
   path: '/api/documents/create',
@@ -297,6 +313,12 @@ const AuthAppAdminIndexRoute = AuthAppAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthAppAdminRouteRoute,
 } as any)
+const ApiStorageArticleImagesImageIdRoute =
+  ApiStorageArticleImagesImageIdRouteImport.update({
+    id: '/api/storage/article-images/$imageId',
+    path: '/api/storage/article-images/$imageId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiStatsArticleArticleIdRoute =
   ApiStatsArticleArticleIdRouteImport.update({
     id: '/api/stats/article/$articleId',
@@ -324,6 +346,12 @@ const ApiDocumentsDocumentIdStornoRoute =
   ApiDocumentsDocumentIdStornoRouteImport.update({
     id: '/api/documents/$documentId/storno',
     path: '/api/documents/$documentId/storno',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiDocumentsDocumentIdShipmentRoute =
+  ApiDocumentsDocumentIdShipmentRouteImport.update({
+    id: '/api/documents/$documentId/shipment',
+    path: '/api/documents/$documentId/shipment',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiDocumentsDocumentIdPrintRoute =
@@ -378,6 +406,12 @@ const ApiArticlesArticleIdPricingRoute =
   ApiArticlesArticleIdPricingRouteImport.update({
     id: '/api/articles/$articleId/pricing',
     path: '/api/articles/$articleId/pricing',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiArticlesArticleIdImagesRoute =
+  ApiArticlesArticleIdImagesRouteImport.update({
+    id: '/api/articles/$articleId/images',
+    path: '/api/articles/$articleId/images',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiArticlesArticleIdBomRoute = ApiArticlesArticleIdBomRouteImport.update({
@@ -521,6 +555,8 @@ export interface FileRoutesByFullPath {
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
   '/api/documents/create': typeof ApiDocumentsCreateRoute
+  '/api/documents/export': typeof ApiDocumentsExportRoute
+  '/api/documents/import-tracking': typeof ApiDocumentsImportTrackingRoute
   '/api/documents/tree': typeof ApiDocumentsTreeRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
@@ -543,6 +579,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
+  '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
   '/api/documents/$documentId/audit': typeof ApiDocumentsDocumentIdAuditRoute
@@ -552,11 +589,13 @@ export interface FileRoutesByFullPath {
   '/api/documents/$documentId/duplicate': typeof ApiDocumentsDocumentIdDuplicateRoute
   '/api/documents/$documentId/post': typeof ApiDocumentsDocumentIdPostRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
+  '/api/documents/$documentId/shipment': typeof ApiDocumentsDocumentIdShipmentRoute
   '/api/documents/$documentId/storno': typeof ApiDocumentsDocumentIdStornoRoute
   '/api/import/batches/$batchId': typeof ApiImportBatchesBatchIdRouteWithChildren
   '/api/import/profiles/$profileId': typeof ApiImportProfilesProfileIdRouteWithChildren
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
+  '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
   '/app/admin/': typeof AuthAppAdminIndexRoute
   '/app/settings/': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
@@ -595,6 +634,8 @@ export interface FileRoutesByTo {
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
   '/api/documents/create': typeof ApiDocumentsCreateRoute
+  '/api/documents/export': typeof ApiDocumentsExportRoute
+  '/api/documents/import-tracking': typeof ApiDocumentsImportTrackingRoute
   '/api/documents/tree': typeof ApiDocumentsTreeRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
@@ -617,6 +658,7 @@ export interface FileRoutesByTo {
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
+  '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
   '/api/documents/$documentId/audit': typeof ApiDocumentsDocumentIdAuditRoute
@@ -626,11 +668,13 @@ export interface FileRoutesByTo {
   '/api/documents/$documentId/duplicate': typeof ApiDocumentsDocumentIdDuplicateRoute
   '/api/documents/$documentId/post': typeof ApiDocumentsDocumentIdPostRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
+  '/api/documents/$documentId/shipment': typeof ApiDocumentsDocumentIdShipmentRoute
   '/api/documents/$documentId/storno': typeof ApiDocumentsDocumentIdStornoRoute
   '/api/import/batches/$batchId': typeof ApiImportBatchesBatchIdRouteWithChildren
   '/api/import/profiles/$profileId': typeof ApiImportProfilesProfileIdRouteWithChildren
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
+  '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
   '/app/admin': typeof AuthAppAdminIndexRoute
   '/app/settings': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups': typeof ApiAdminDocumentGroupsIndexRoute
@@ -674,6 +718,8 @@ export interface FileRoutesById {
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
   '/api/documents/create': typeof ApiDocumentsCreateRoute
+  '/api/documents/export': typeof ApiDocumentsExportRoute
+  '/api/documents/import-tracking': typeof ApiDocumentsImportTrackingRoute
   '/api/documents/tree': typeof ApiDocumentsTreeRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
@@ -696,6 +742,7 @@ export interface FileRoutesById {
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
+  '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
   '/api/documents/$documentId/audit': typeof ApiDocumentsDocumentIdAuditRoute
@@ -705,11 +752,13 @@ export interface FileRoutesById {
   '/api/documents/$documentId/duplicate': typeof ApiDocumentsDocumentIdDuplicateRoute
   '/api/documents/$documentId/post': typeof ApiDocumentsDocumentIdPostRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
+  '/api/documents/$documentId/shipment': typeof ApiDocumentsDocumentIdShipmentRoute
   '/api/documents/$documentId/storno': typeof ApiDocumentsDocumentIdStornoRoute
   '/api/import/batches/$batchId': typeof ApiImportBatchesBatchIdRouteWithChildren
   '/api/import/profiles/$profileId': typeof ApiImportProfilesProfileIdRouteWithChildren
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
+  '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
   '/_auth/app/admin/': typeof AuthAppAdminIndexRoute
   '/_auth/app/settings/': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
@@ -752,6 +801,8 @@ export interface FileRouteTypes {
     | '/api/delivery-addresses/$deliveryAddressId'
     | '/api/delivery-addresses/search'
     | '/api/documents/create'
+    | '/api/documents/export'
+    | '/api/documents/import-tracking'
     | '/api/documents/tree'
     | '/api/feedback/submit'
     | '/api/import/batches'
@@ -774,6 +825,7 @@ export interface FileRouteTypes {
     | '/api/admin/document-groups/$id'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
+    | '/api/articles/$articleId/images'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
     | '/api/documents/$documentId/audit'
@@ -783,11 +835,13 @@ export interface FileRouteTypes {
     | '/api/documents/$documentId/duplicate'
     | '/api/documents/$documentId/post'
     | '/api/documents/$documentId/print'
+    | '/api/documents/$documentId/shipment'
     | '/api/documents/$documentId/storno'
     | '/api/import/batches/$batchId'
     | '/api/import/profiles/$profileId'
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
+    | '/api/storage/article-images/$imageId'
     | '/app/admin/'
     | '/app/settings/'
     | '/api/admin/document-groups/'
@@ -826,6 +880,8 @@ export interface FileRouteTypes {
     | '/api/delivery-addresses/$deliveryAddressId'
     | '/api/delivery-addresses/search'
     | '/api/documents/create'
+    | '/api/documents/export'
+    | '/api/documents/import-tracking'
     | '/api/documents/tree'
     | '/api/feedback/submit'
     | '/api/import/batches'
@@ -848,6 +904,7 @@ export interface FileRouteTypes {
     | '/api/admin/document-groups/$id'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
+    | '/api/articles/$articleId/images'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
     | '/api/documents/$documentId/audit'
@@ -857,11 +914,13 @@ export interface FileRouteTypes {
     | '/api/documents/$documentId/duplicate'
     | '/api/documents/$documentId/post'
     | '/api/documents/$documentId/print'
+    | '/api/documents/$documentId/shipment'
     | '/api/documents/$documentId/storno'
     | '/api/import/batches/$batchId'
     | '/api/import/profiles/$profileId'
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
+    | '/api/storage/article-images/$imageId'
     | '/app/admin'
     | '/app/settings'
     | '/api/admin/document-groups'
@@ -904,6 +963,8 @@ export interface FileRouteTypes {
     | '/api/delivery-addresses/$deliveryAddressId'
     | '/api/delivery-addresses/search'
     | '/api/documents/create'
+    | '/api/documents/export'
+    | '/api/documents/import-tracking'
     | '/api/documents/tree'
     | '/api/feedback/submit'
     | '/api/import/batches'
@@ -926,6 +987,7 @@ export interface FileRouteTypes {
     | '/api/admin/document-groups/$id'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
+    | '/api/articles/$articleId/images'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
     | '/api/documents/$documentId/audit'
@@ -935,11 +997,13 @@ export interface FileRouteTypes {
     | '/api/documents/$documentId/duplicate'
     | '/api/documents/$documentId/post'
     | '/api/documents/$documentId/print'
+    | '/api/documents/$documentId/shipment'
     | '/api/documents/$documentId/storno'
     | '/api/import/batches/$batchId'
     | '/api/import/profiles/$profileId'
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
+    | '/api/storage/article-images/$imageId'
     | '/_auth/app/admin/'
     | '/_auth/app/settings/'
     | '/api/admin/document-groups/'
@@ -974,6 +1038,8 @@ export interface RootRouteChildren {
   ApiDeliveryAddressesDeliveryAddressIdRoute: typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   ApiDeliveryAddressesSearchRoute: typeof ApiDeliveryAddressesSearchRoute
   ApiDocumentsCreateRoute: typeof ApiDocumentsCreateRoute
+  ApiDocumentsExportRoute: typeof ApiDocumentsExportRoute
+  ApiDocumentsImportTrackingRoute: typeof ApiDocumentsImportTrackingRoute
   ApiDocumentsTreeRoute: typeof ApiDocumentsTreeRoute
   ApiFeedbackSubmitRoute: typeof ApiFeedbackSubmitRoute
   ApiImportBatchesRoute: typeof ApiImportBatchesRouteWithChildren
@@ -990,6 +1056,7 @@ export interface RootRouteChildren {
   ApiAdminDocumentGroupsIdRoute: typeof ApiAdminDocumentGroupsIdRoute
   ApiArticlesArticleIdBatchesRoute: typeof ApiArticlesArticleIdBatchesRoute
   ApiArticlesArticleIdBomRoute: typeof ApiArticlesArticleIdBomRouteWithChildren
+  ApiArticlesArticleIdImagesRoute: typeof ApiArticlesArticleIdImagesRoute
   ApiArticlesArticleIdPricingRoute: typeof ApiArticlesArticleIdPricingRoute
   ApiArticlesArticleIdSerialNumbersRoute: typeof ApiArticlesArticleIdSerialNumbersRoute
   ApiDocumentsDocumentIdAuditRoute: typeof ApiDocumentsDocumentIdAuditRoute
@@ -999,9 +1066,11 @@ export interface RootRouteChildren {
   ApiDocumentsDocumentIdDuplicateRoute: typeof ApiDocumentsDocumentIdDuplicateRoute
   ApiDocumentsDocumentIdPostRoute: typeof ApiDocumentsDocumentIdPostRoute
   ApiDocumentsDocumentIdPrintRoute: typeof ApiDocumentsDocumentIdPrintRoute
+  ApiDocumentsDocumentIdShipmentRoute: typeof ApiDocumentsDocumentIdShipmentRoute
   ApiDocumentsDocumentIdStornoRoute: typeof ApiDocumentsDocumentIdStornoRoute
   ApiStatsAddressAddressIdRoute: typeof ApiStatsAddressAddressIdRoute
   ApiStatsArticleArticleIdRoute: typeof ApiStatsArticleArticleIdRoute
+  ApiStorageArticleImagesImageIdRoute: typeof ApiStorageArticleImagesImageIdRoute
   ApiAdminDocumentGroupsIndexRoute: typeof ApiAdminDocumentGroupsIndexRoute
   ApiDocumentsLinesLineIdDeltaRoute: typeof ApiDocumentsLinesLineIdDeltaRoute
   ApiDocumentsDocumentIdLinesLineIdTrackingRoute: typeof ApiDocumentsDocumentIdLinesLineIdTrackingRouteWithChildren
@@ -1170,6 +1239,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDocumentsTreeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/documents/import-tracking': {
+      id: '/api/documents/import-tracking'
+      path: '/api/documents/import-tracking'
+      fullPath: '/api/documents/import-tracking'
+      preLoaderRoute: typeof ApiDocumentsImportTrackingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/export': {
+      id: '/api/documents/export'
+      path: '/api/documents/export'
+      fullPath: '/api/documents/export'
+      preLoaderRoute: typeof ApiDocumentsExportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/documents/create': {
       id: '/api/documents/create'
       path: '/api/documents/create'
@@ -1303,6 +1386,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAppAdminIndexRouteImport
       parentRoute: typeof AuthAppAdminRouteRoute
     }
+    '/api/storage/article-images/$imageId': {
+      id: '/api/storage/article-images/$imageId'
+      path: '/api/storage/article-images/$imageId'
+      fullPath: '/api/storage/article-images/$imageId'
+      preLoaderRoute: typeof ApiStorageArticleImagesImageIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/stats/article/$articleId': {
       id: '/api/stats/article/$articleId'
       path: '/api/stats/article/$articleId'
@@ -1336,6 +1426,13 @@ declare module '@tanstack/react-router' {
       path: '/api/documents/$documentId/storno'
       fullPath: '/api/documents/$documentId/storno'
       preLoaderRoute: typeof ApiDocumentsDocumentIdStornoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/$documentId/shipment': {
+      id: '/api/documents/$documentId/shipment'
+      path: '/api/documents/$documentId/shipment'
+      fullPath: '/api/documents/$documentId/shipment'
+      preLoaderRoute: typeof ApiDocumentsDocumentIdShipmentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/documents/$documentId/print': {
@@ -1399,6 +1496,13 @@ declare module '@tanstack/react-router' {
       path: '/api/articles/$articleId/pricing'
       fullPath: '/api/articles/$articleId/pricing'
       preLoaderRoute: typeof ApiArticlesArticleIdPricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/articles/$articleId/images': {
+      id: '/api/articles/$articleId/images'
+      path: '/api/articles/$articleId/images'
+      fullPath: '/api/articles/$articleId/images'
+      preLoaderRoute: typeof ApiArticlesArticleIdImagesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/articles/$articleId/bom': {
@@ -1761,6 +1865,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiDeliveryAddressesDeliveryAddressIdRoute,
   ApiDeliveryAddressesSearchRoute: ApiDeliveryAddressesSearchRoute,
   ApiDocumentsCreateRoute: ApiDocumentsCreateRoute,
+  ApiDocumentsExportRoute: ApiDocumentsExportRoute,
+  ApiDocumentsImportTrackingRoute: ApiDocumentsImportTrackingRoute,
   ApiDocumentsTreeRoute: ApiDocumentsTreeRoute,
   ApiFeedbackSubmitRoute: ApiFeedbackSubmitRoute,
   ApiImportBatchesRoute: ApiImportBatchesRouteWithChildren,
@@ -1777,6 +1883,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminDocumentGroupsIdRoute: ApiAdminDocumentGroupsIdRoute,
   ApiArticlesArticleIdBatchesRoute: ApiArticlesArticleIdBatchesRoute,
   ApiArticlesArticleIdBomRoute: ApiArticlesArticleIdBomRouteWithChildren,
+  ApiArticlesArticleIdImagesRoute: ApiArticlesArticleIdImagesRoute,
   ApiArticlesArticleIdPricingRoute: ApiArticlesArticleIdPricingRoute,
   ApiArticlesArticleIdSerialNumbersRoute:
     ApiArticlesArticleIdSerialNumbersRoute,
@@ -1787,9 +1894,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDocumentsDocumentIdDuplicateRoute: ApiDocumentsDocumentIdDuplicateRoute,
   ApiDocumentsDocumentIdPostRoute: ApiDocumentsDocumentIdPostRoute,
   ApiDocumentsDocumentIdPrintRoute: ApiDocumentsDocumentIdPrintRoute,
+  ApiDocumentsDocumentIdShipmentRoute: ApiDocumentsDocumentIdShipmentRoute,
   ApiDocumentsDocumentIdStornoRoute: ApiDocumentsDocumentIdStornoRoute,
   ApiStatsAddressAddressIdRoute: ApiStatsAddressAddressIdRoute,
   ApiStatsArticleArticleIdRoute: ApiStatsArticleArticleIdRoute,
+  ApiStorageArticleImagesImageIdRoute: ApiStorageArticleImagesImageIdRoute,
   ApiAdminDocumentGroupsIndexRoute: ApiAdminDocumentGroupsIndexRoute,
   ApiDocumentsLinesLineIdDeltaRoute: ApiDocumentsLinesLineIdDeltaRoute,
   ApiDocumentsDocumentIdLinesLineIdTrackingRoute:

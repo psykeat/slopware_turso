@@ -999,7 +999,8 @@ export class MetadataResolver {
           isVisible:
             (!isPk &&
               !technicalFieldNames.has(colName) &&
-              (!colName.endsWith("Id") || !!lookupTable)) ||
+              (!colName.endsWith("Id") || !!lookupTable) &&
+              !/SourceEntity$|SourceId$|SourceField$|LinkedAt$|OverriddenAt$/.test(colName)) ||
             (entityName === "documentGroup" && colName === "nextGroupId"),
           isRequired: (col as any).notNull || false,
           label: { en: colName, de: colName },

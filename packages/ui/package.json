@@ -5,9 +5,11 @@
   "type": "module",
   "exports": {
     "./*": "./*.ts",
+    "./lib/*": "./lib/*.ts",
     "./styles/base.css": "./styles/base.css",
     "./lib/theme-provider": "./lib/theme-provider.tsx",
-    "./components/*": "./components/*.tsx"
+    "./components/*": "./components/*.tsx",
+    "./components/langtext-record-panel": "./components/langtext-record-panel.tsx"
   },
   "scripts": {
     "ui": "vpx shadcn@latest"

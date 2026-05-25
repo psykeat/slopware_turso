@@ -1,3 +1,4 @@
+import { ArticleImagesTab } from "@repo/ui/components/article-images-tab";
 import { BatchInventoryTable } from "@repo/ui/components/batch-inventory-table";
 import { BomEditor } from "@repo/ui/components/bom-editor";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
@@ -6,6 +7,7 @@ import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { EntityMask } from "@repo/ui/components/entity-mask";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
 import { InventoryBalanceTable } from "@repo/ui/components/inventory-balance-table";
+import { LangTextRecordPanel } from "@repo/ui/components/langtext-record-panel";
 import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
 import { SerialInventoryTable } from "@repo/ui/components/serial-inventory-table";
 import { StockLedgerTable } from "@repo/ui/components/stock-ledger-table";
@@ -17,6 +19,7 @@ import { useCommands } from "@repo/ui/platform/command-registry";
 import { useFocus } from "@repo/ui/platform/focus-manager";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { ImageIcon } from "lucide-react";
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -48,6 +51,22 @@ const ARTICLE_FIELD_OVERRIDES = [
       { value: "batch", label: "Batch" },
     ],
   },
+];
+
+const ARTICLE_TEXT_FIELD_OVERRIDES = [
+  { key: "notiztext", visible: false },
+  { key: "langtext", visible: false },
+  { key: "kurzbeschreibung", visible: false },
+  { key: "warntext", visible: false },
+];
+
+const ARTICLE_EDIT_FIELD_OVERRIDES = [...ARTICLE_FIELD_OVERRIDES, ...ARTICLE_TEXT_FIELD_OVERRIDES];
+
+const ARTICLE_LANGTEXT_FIELDS = [
+  { field: "notiztext", label: "Notiztext" },
+  { field: "langtext", label: "Langtext" },
+  { field: "kurzbeschreibung", label: "Kurzbeschreibung" },
+  { field: "warntext", label: "Warntext" },
 ];
 
 function ArticlesModule() {
@@ -279,6 +298,28 @@ function ArticlesModule() {
   const articleGridColumns = useMemo(
     () => [
       {
+        key: "primaryImageId",
+        header: "Bild",
+        sortable: false,
+        render: (r: any) => {
+          if (!r.primaryImageId) {
+            return (
+              <div className="flex size-7 items-center justify-center rounded border border-hairline bg-canvas-soft text-ink-mute">
+                <ImageIcon className="size-3.5" />
+              </div>
+            );
+          }
+          return (
+            <img
+              src={`/api/storage/article-images/${r.primaryImageId}`}
+              alt={r.name}
+              className="size-7 rounded border border-hairline object-cover shadow-sm"
+              loading="lazy"
+            />
+          );
+        },
+      },
+      {
         key: "articleNo",
         header: "No.",
         sortable: true,
@@ -382,11 +423,59 @@ function ArticlesModule() {
                       : "—",
                   },
                   { label: "Warehouse", value: selectedArticle?.defaultWarehouseId },
-                  { label: "Tracking", value: selectedArticle?.trackingMode },
+                  {
+                    label: "Tracking",
+                    value: selectedArticle?.trackingMode ? (
+                      <span
+                        className={
+                          selectedArticle.trackingMode === "serial"
+                            ? "inline-flex rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-mono text-[11px] text-emerald-800"
+                            : "inline-flex rounded-full border border-sky-300 bg-sky-50 px-2 py-0.5 font-mono text-[11px] text-sky-800"
+                        }
+                      >
+                        {selectedArticle.trackingMode}
+                      </span>
+                    ) : (
+                      "—"
+                    ),
+                  },
+                  {
+                    label: "BOM",
+                    value: selectedArticle?.bomType ? (
+                      <span
+                        className={
+                          selectedArticle.bomType === "sales"
+                            ? "inline-flex rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 font-mono text-[11px] text-amber-800"
+                            : "inline-flex rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 font-mono text-[11px] text-violet-800"
+                        }
+                      >
+                        {selectedArticle.bomType}
+                      </span>
+                    ) : (
+                      "—"
+                    ),
+                  },
                 ],
               },
             ]}
           />
+        ),
+      },
+      {
+        id: "images",
+        label: "Bilder",
+        content: activeArticleId ? (
+          <ArticleImagesTab
+            articleId={activeArticleId}
+            primaryImageId={selectedArticle?.primaryImageId ?? null}
+            onRefreshArticle={() => {
+              queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+            }}
+          />
+        ) : (
+          <div className="flex h-24 items-center justify-center text-[13px] text-ink-mute">
+            {t("empty.title")}
+          </div>
         ),
       },
       {
@@ -471,6 +560,21 @@ function ArticlesModule() {
           </div>
         ),
       },
+      {
+        id: "langtexte",
+        label: "Langtexte",
+        content: (
+          <div className="h-full p-2">
+            <LangTextRecordPanel
+              entityName="article"
+              recordId={activeArticleId}
+              title="Langtexte"
+              fields={ARTICLE_LANGTEXT_FIELDS}
+              className="h-full"
+            />
+          </div>
+        ),
+      },
     ],
     [
       selectedArticle,
@@ -481,6 +585,7 @@ function ArticlesModule() {
       movementGridColumns,
       t,
       articleStats,
+      queryClient,
     ],
   );
 
@@ -700,7 +805,7 @@ function ArticlesModule() {
             entityName="article"
             mode="create"
             title="New Article"
-            fieldOverrides={ARTICLE_FIELD_OVERRIDES}
+            fieldOverrides={ARTICLE_EDIT_FIELD_OVERRIDES}
             onCancel={() => setShowCreate(false)}
             onFieldChange={handleCreateFieldChange}
             onSaved={handleCreateSaved}
@@ -717,13 +822,27 @@ function ArticlesModule() {
             mode="edit"
             layout="single"
             recordId={activeArticleId ?? undefined}
-            fieldOverrides={ARTICLE_FIELD_OVERRIDES}
+            fieldOverrides={ARTICLE_EDIT_FIELD_OVERRIDES}
             onCancel={() => setShowEdit(false)}
             onSaved={handleEditSaved}
             embedded
             childLayout="side"
-            childSection={(record) => (
+            childSection={(record, onChange) => (
               <div className="flex flex-col gap-6">
+                <LangTextRecordPanel
+                  entityName="article"
+                  recordId={activeArticleId}
+                  title="Langtexte"
+                  fields={ARTICLE_LANGTEXT_FIELDS}
+                  className="min-h-[220px]"
+                  controlledValues={{
+                    notiztext: record.notiztext as string,
+                    langtext: record.langtext as string,
+                    kurzbeschreibung: record.kurzbeschreibung as string,
+                    warntext: record.warntext as string,
+                  }}
+                  onControlledChange={(field, value) => onChange(field, value)}
+                />
                 <div>
                   <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                     Lagerbewegungen

@@ -31,6 +31,7 @@ import {
   DocumentTargetGroupDialog,
   type DocumentTargetGroupCandidate,
 } from "./document-target-group-dialog";
+import { LangtextEditor } from "./langtext-editor";
 import { LookupField, createStaticLookupSource, type LookupSource } from "./lookup-field";
 import { TrackingEditor } from "./tracking-editor";
 
@@ -55,6 +56,30 @@ interface DocHeader {
   billingAddress?: AddressSnapshot | null;
   deliveryAddressId?: string | null;
   deliveryAddress?: AddressSnapshot | null;
+  noteText?: string | null;
+  noteTextSourceEntity?: string | null;
+  noteTextSourceId?: string | null;
+  noteTextSourceField?: string | null;
+  noteTextLinkedAt?: string | null;
+  noteTextOverriddenAt?: string | null;
+  preText?: string | null;
+  preTextSourceEntity?: string | null;
+  preTextSourceId?: string | null;
+  preTextSourceField?: string | null;
+  preTextLinkedAt?: string | null;
+  preTextOverriddenAt?: string | null;
+  postText?: string | null;
+  postTextSourceEntity?: string | null;
+  postTextSourceId?: string | null;
+  postTextSourceField?: string | null;
+  postTextLinkedAt?: string | null;
+  postTextOverriddenAt?: string | null;
+  stornoText?: string | null;
+  stornoTextSourceEntity?: string | null;
+  stornoTextSourceId?: string | null;
+  stornoTextSourceField?: string | null;
+  stornoTextLinkedAt?: string | null;
+  stornoTextOverriddenAt?: string | null;
   customAttributes?: Record<string, unknown> | null;
   warehouseId?: string | null;
   paymentTermId?: string | null;
@@ -74,6 +99,8 @@ interface DocGroup {
   defaultPaymentTermId?: string | null;
   defaultShippingMethodId?: string | null;
   defaultCurrencyId?: string | null;
+  requireSerialTracking?: boolean;
+  requireBatchTracking?: boolean;
 }
 
 interface LineRow {
@@ -83,6 +110,12 @@ interface LineRow {
   articleId: string | null;
   articleNo?: string | null;
   articleTextSnapshot: string | null;
+  langText?: string | null;
+  langTextSourceEntity?: string | null;
+  langTextSourceId?: string | null;
+  langTextSourceField?: string | null;
+  langTextLinkedAt?: string | null;
+  langTextOverriddenAt?: string | null;
   lineType?: string | null;
   bomGroupId?: string | null;
   quantity: number;
@@ -116,6 +149,11 @@ interface ArticleMetaRow {
   name: string;
   bomType?: string | null;
   trackingMode?: string | null;
+  langtext?: string | null;
+  notiztext?: string | null;
+  warntext?: string | null;
+  kurzbeschreibung?: string | null;
+  primaryImageId?: string | null;
 }
 
 interface TrackingFocusRequest {
@@ -223,6 +261,15 @@ interface AddressLockState {
   deliveryAddress?: boolean;
 }
 
+type DocumentTextField = "noteText" | "preText" | "postText" | "stornoText";
+interface DocumentPrintOptions {
+  noteText: boolean;
+  preText: boolean;
+  postText: boolean;
+  stornoText: boolean;
+  lineTexts: boolean;
+}
+
 function lineNet(qty: number, price: number, disc: number | null): number {
   return qty * price * (1 - (disc ?? 0) / 100);
 }
@@ -247,6 +294,12 @@ function emptyLine(parentId: string, lineNo: number): LineRow {
     articleId: null,
     articleNo: null,
     articleTextSnapshot: null,
+    langText: null,
+    langTextSourceEntity: null,
+    langTextSourceId: null,
+    langTextSourceField: null,
+    langTextLinkedAt: null,
+    langTextOverriddenAt: null,
     quantity: 1,
     unit: null,
     netPrice: 0,
@@ -277,6 +330,12 @@ function normalizeLineForSave(line: LineRow) {
     articleId: line.articleId,
     articleNo: line.articleNo,
     articleTextSnapshot: line.articleTextSnapshot,
+    langText: line.langText ?? null,
+    langTextSourceEntity: line.langTextSourceEntity ?? null,
+    langTextSourceId: line.langTextSourceId ?? null,
+    langTextSourceField: line.langTextSourceField ?? null,
+    langTextLinkedAt: line.langTextLinkedAt ?? null,
+    langTextOverriddenAt: line.langTextOverriddenAt ?? null,
     lineType: line.lineType ?? "article",
     quantity: String(line.quantity),
     unit: line.unit,
@@ -305,6 +364,30 @@ function normalizeHeaderForSave(header: DocHeader, hidePartyFields: boolean) {
     billingAddress: hidePartyFields ? null : (header.billingAddress ?? null),
     deliveryAddress: hidePartyFields ? null : (header.deliveryAddress ?? null),
     deliveryAddressId: hidePartyFields ? null : (header.deliveryAddressId ?? null),
+    noteText: header.noteText ?? null,
+    noteTextSourceEntity: header.noteTextSourceEntity ?? null,
+    noteTextSourceId: header.noteTextSourceId ?? null,
+    noteTextSourceField: header.noteTextSourceField ?? null,
+    noteTextLinkedAt: header.noteTextLinkedAt ?? null,
+    noteTextOverriddenAt: header.noteTextOverriddenAt ?? null,
+    preText: header.preText ?? null,
+    preTextSourceEntity: header.preTextSourceEntity ?? null,
+    preTextSourceId: header.preTextSourceId ?? null,
+    preTextSourceField: header.preTextSourceField ?? null,
+    preTextLinkedAt: header.preTextLinkedAt ?? null,
+    preTextOverriddenAt: header.preTextOverriddenAt ?? null,
+    postText: header.postText ?? null,
+    postTextSourceEntity: header.postTextSourceEntity ?? null,
+    postTextSourceId: header.postTextSourceId ?? null,
+    postTextSourceField: header.postTextSourceField ?? null,
+    postTextLinkedAt: header.postTextLinkedAt ?? null,
+    postTextOverriddenAt: header.postTextOverriddenAt ?? null,
+    stornoText: header.stornoText ?? null,
+    stornoTextSourceEntity: header.stornoTextSourceEntity ?? null,
+    stornoTextSourceId: header.stornoTextSourceId ?? null,
+    stornoTextSourceField: header.stornoTextSourceField ?? null,
+    stornoTextLinkedAt: header.stornoTextLinkedAt ?? null,
+    stornoTextOverriddenAt: header.stornoTextOverriddenAt ?? null,
     customAttributes: header.customAttributes ?? null,
     currencyId: header.currencyId ?? null,
     warehouseId: header.warehouseId ?? null,
@@ -335,6 +418,32 @@ function setAddressLock(
   return next;
 }
 
+function getDocumentPrintOptions(
+  customAttributes: DocHeader["customAttributes"],
+  defaults: DocumentPrintOptions,
+): DocumentPrintOptions {
+  const raw = (
+    customAttributes as { documentPrintOptions?: Partial<DocumentPrintOptions> } | null | undefined
+  )?.documentPrintOptions;
+  return {
+    noteText: raw?.noteText ?? defaults.noteText,
+    preText: raw?.preText ?? defaults.preText,
+    postText: raw?.postText ?? defaults.postText,
+    stornoText: raw?.stornoText ?? defaults.stornoText,
+    lineTexts: raw?.lineTexts ?? defaults.lineTexts,
+  };
+}
+
+function setDocumentPrintOptions(
+  customAttributes: DocHeader["customAttributes"],
+  options: DocumentPrintOptions,
+): Record<string, unknown> {
+  return {
+    ...(customAttributes ?? {}),
+    documentPrintOptions: options,
+  };
+}
+
 function normalizeCurrencyId(
   value: string | null | undefined,
   currencies: Array<{ currencyId?: string; code?: string }>,
@@ -342,6 +451,66 @@ function normalizeCurrencyId(
   if (!value) return null;
   const matched = currencies.find((c) => c.code === value || c.currencyId === value);
   return matched?.code ?? value;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function resolveTextSourceLabel(sourceEntity?: string | null, sourceField?: string | null) {
+  const parts = [sourceEntity, sourceField].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function applyHeaderTextFromSource(
+  header: DocHeader,
+  field: DocumentTextField,
+  value: string | null | undefined,
+  sourceEntity: string | null,
+  sourceId: string | null,
+  sourceField: string | null,
+) {
+  if (value == null) return header;
+  const sourceEntityKey = `${field}SourceEntity` as keyof DocHeader;
+  const sourceIdKey = `${field}SourceId` as keyof DocHeader;
+  const sourceFieldKey = `${field}SourceField` as keyof DocHeader;
+  const linkedAtKey = `${field}LinkedAt` as keyof DocHeader;
+  const overriddenAtKey = `${field}OverriddenAt` as keyof DocHeader;
+  return {
+    ...header,
+    [field]: value,
+    [sourceEntityKey]: sourceEntity,
+    [sourceIdKey]: sourceId,
+    [sourceFieldKey]: sourceField,
+    [linkedAtKey]: nowIso(),
+    [overriddenAtKey]: null,
+  };
+}
+
+function applyHeaderTextOverride(header: DocHeader, field: DocumentTextField, value: string) {
+  const sourceEntityKey = `${field}SourceEntity` as keyof DocHeader;
+  const sourceIdKey = `${field}SourceId` as keyof DocHeader;
+  const sourceFieldKey = `${field}SourceField` as keyof DocHeader;
+  const overriddenAtKey = `${field}OverriddenAt` as keyof DocHeader;
+  return {
+    ...header,
+    [field]: value,
+    [sourceEntityKey]: null,
+    [sourceIdKey]: null,
+    [sourceFieldKey]: null,
+    [overriddenAtKey]: nowIso(),
+  };
+}
+
+function applyLineTextOverride(line: Partial<LineRow>, value: string) {
+  return {
+    ...line,
+    langText: value,
+    langTextSourceEntity: null,
+    langTextSourceId: null,
+    langTextSourceField: null,
+    langTextOverriddenAt: nowIso(),
+  };
 }
 
 function resolveArticleLabel(line: LineRow, articleMeta?: ArticleMetaRow | null) {
@@ -394,6 +563,12 @@ function lineFromPersistedRow(row: any): LineRow {
     articleId: row.articleId ?? null,
     articleNo: row.articleNo ?? null,
     articleTextSnapshot: row.articleTextSnapshot ?? null,
+    langText: row.langText ?? null,
+    langTextSourceEntity: row.langTextSourceEntity ?? null,
+    langTextSourceId: row.langTextSourceId ?? null,
+    langTextSourceField: row.langTextSourceField ?? null,
+    langTextLinkedAt: row.langTextLinkedAt ?? null,
+    langTextOverriddenAt: row.langTextOverriddenAt ?? null,
     lineType: row.lineType ?? "article",
     bomGroupId: row.bomGroupId ?? null,
     quantity: Number(row.quantity ?? 1),
@@ -568,6 +743,7 @@ interface DocumentLinesEditorHandle {
   commitCurrentEdit: () => Promise<LineRow | null>;
   deleteCurrentLine: () => void;
   duplicateCurrentLine: () => void;
+  setActiveLineLangText: (html: string) => void;
   getLines: () => LineRow[];
   getDraftLines: () => LineRow[];
   isDirty: () => boolean;
@@ -583,8 +759,10 @@ const DocumentLinesEditor = forwardRef<
     customerId: string | null;
     documentDate: string | null;
     status?: string;
+    companyId?: string | null;
     onLinesChange?: (lines: LineRow[]) => void;
     onDirtyChange?: (dirty: boolean) => void;
+    onActiveLineChange?: (line: LineRow | null) => void;
   }
 >(function DocumentLinesEditor(
   {
@@ -594,8 +772,10 @@ const DocumentLinesEditor = forwardRef<
     customerId,
     documentDate,
     status,
+    companyId,
     onLinesChange,
     onDirtyChange,
+    onActiveLineChange,
   },
   ref,
 ) {
@@ -604,6 +784,19 @@ const DocumentLinesEditor = forwardRef<
   const isPosted = status === "posted";
   const queryClient = useQueryClient();
   const [lines, setLines] = useState<LineRow[]>([]);
+
+  // Fetch company settings for displaying article images in line items
+  const { data: companySettings } = useQuery({
+    queryKey: ["data", "company", companyId],
+    queryFn: async () => {
+      if (!companyId) return null;
+      const res = await fetch(`/api/data/company/${companyId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!companyId,
+    staleTime: 5 * 60 * 1000,
+  });
   const linesRef = useRef<LineRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVals, setEditVals] = useState<Partial<LineRow>>({});
@@ -681,6 +874,13 @@ const DocumentLinesEditor = forwardRef<
   const priceRef = useRef<HTMLInputElement>(null);
   const discRef = useRef<HTMLInputElement>(null);
   const korrInputRef = useRef<HTMLInputElement>(null);
+
+  const emitActiveLine = useCallback(
+    (line: LineRow | null) => {
+      onActiveLineChange?.(line);
+    },
+    [onActiveLineChange],
+  );
 
   const { data: existingLines = EMPTY_DOC_LINES, isLoading } = useQuery({
     queryKey: ["data", "documentLine", documentId],
@@ -811,6 +1011,12 @@ const DocumentLinesEditor = forwardRef<
         articleId: l.articleId ?? null,
         articleNo: l.articleNo ?? null,
         articleTextSnapshot: l.articleTextSnapshot ?? null,
+        langText: l.langText ?? null,
+        langTextSourceEntity: l.langTextSourceEntity ?? null,
+        langTextSourceId: l.langTextSourceId ?? null,
+        langTextSourceField: l.langTextSourceField ?? null,
+        langTextLinkedAt: l.langTextLinkedAt ?? null,
+        langTextOverriddenAt: l.langTextOverriddenAt ?? null,
         lineType: l.lineType ?? "article",
         quantity: Number(l.quantity ?? 1),
         unit: l.unit ?? null,
@@ -939,6 +1145,10 @@ const DocumentLinesEditor = forwardRef<
     duplicateCurrentLine: () => {
       duplicateLine();
     },
+    setActiveLineLangText: (html: string) => {
+      if (!editingId) return;
+      setEditVals((prev) => applyLineTextOverride(prev, html));
+    },
     getLines: () => linesRef.current,
     getDraftLines: () => linesRef.current.filter((line) => !isBlankDraftLine(line)),
     isDirty: () => isDirty,
@@ -953,7 +1163,7 @@ const DocumentLinesEditor = forwardRef<
     pushGridFocus("articleId", rowIndex ?? linesRef.current.findIndex((l) => l._id === line._id));
   }
 
-  function getEditableLineDraft() {
+  const getEditableLineDraft = useCallback(() => {
     if (!editingId) return null;
     const current = linesRef.current.find((line) => line._id === editingId);
     if (!current) return null;
@@ -963,7 +1173,11 @@ const DocumentLinesEditor = forwardRef<
       articleNo: editVals.articleNo ?? current.articleNo ?? null,
       taxRate: editVals.taxCodeId ? (taxRateMap[editVals.taxCodeId as string] ?? null) : null,
     } as LineRow;
-  }
+  }, [editVals, editingId, taxRateMap]);
+
+  useEffect(() => {
+    emitActiveLine(editingId ? getEditableLineDraft() : null);
+  }, [editingId, emitActiveLine, getEditableLineDraft]);
 
   async function fetchBomComponents(articleId: string) {
     const cached = bomCacheRef.current[articleId];
@@ -1290,6 +1504,16 @@ const DocumentLinesEditor = forwardRef<
       bomGroupId: shouldExpandBom(articleMeta, documentType)
         ? (prev.bomGroupId ?? prev.documentLineId ?? prev._id ?? null)
         : null,
+      ...(articleMeta?.langtext
+        ? {
+            langText: articleMeta.langtext,
+            langTextSourceEntity: "article",
+            langTextSourceId: articleMeta.articleId,
+            langTextSourceField: "langtext",
+            langTextLinkedAt: nowIso(),
+            langTextOverriddenAt: null,
+          }
+        : {}),
     }));
 
     if (shouldExpandBom(articleMeta, documentType)) {
@@ -1474,17 +1698,39 @@ const DocumentLinesEditor = forwardRef<
                   {/* Article */}
                   <div className={cn("self-center px-1.5 py-1", isBomComponent && "pl-5")}>
                     {isEditing ? (
-                      <ArticleSearchCell
-                        value={ev.articleId ?? null}
-                        textSnapshot={ev.articleTextSnapshot ?? null}
-                        onSelect={handleArticleSelect}
-                        inputRef={articleInputRef}
-                        rowIndex={rowIndex}
-                      />
+                      <div className="flex items-center gap-1.5">
+                        {companySettings?.showArticleImageInEntry &&
+                          articleMeta?.primaryImageId && (
+                            <img
+                              src={`/api/storage/article-images/${articleMeta.primaryImageId}`}
+                              alt=""
+                              className="size-6 shrink-0 rounded border border-hairline bg-canvas-soft object-cover shadow-sm"
+                            />
+                          )}
+                        <div className="min-w-0 flex-1">
+                          <ArticleSearchCell
+                            value={ev.articleId ?? null}
+                            textSnapshot={ev.articleTextSnapshot ?? null}
+                            onSelect={handleArticleSelect}
+                            inputRef={articleInputRef}
+                            rowIndex={rowIndex}
+                          />
+                        </div>
+                      </div>
                     ) : (
-                      <span className="font-mono text-[12px] text-ink-mute">
-                        {resolveArticleLabel(line, articleMeta)}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {companySettings?.showArticleImageInEntry &&
+                          articleMeta?.primaryImageId && (
+                            <img
+                              src={`/api/storage/article-images/${articleMeta.primaryImageId}`}
+                              alt=""
+                              className="size-6 shrink-0 rounded border border-hairline bg-canvas-soft object-cover shadow-sm"
+                            />
+                          )}
+                        <span className="truncate font-mono text-[12px] text-ink-mute">
+                          {resolveArticleLabel(line, articleMeta)}
+                        </span>
+                      </div>
                     )}
                   </div>
 
@@ -1776,8 +2022,11 @@ export function DocumentEditor({
   const [headerBaselineSnapshot, setHeaderBaselineSnapshot] = useState<string | null>(null);
   const [isLinesDirty, setIsLinesDirty] = useState(false);
   const [pendingLines, setPendingLines] = useState<LineRow[]>([]);
+  const [activeLine, setActiveLine] = useState<LineRow | null>(null);
   const [showTechnical, setShowTechnical] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [printAfterSave, setPrintAfterSave] = useState(false);
   const [convertCandidates, setConvertCandidates] = useState<ConvertCandidate[] | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [duplicateDialog, setDuplicateDialog] = useState<DuplicateDialogState>({
@@ -1812,7 +2061,10 @@ export function DocumentEditor({
       setHeaderBaselineSnapshot(null);
       setIsLinesDirty(false);
       setPendingLines([]);
+      setActiveLine(null);
       setCloseDialogOpen(false);
+      setPrintDialogOpen(false);
+      setPrintAfterSave(false);
     });
     return () => {
       cancelled = true;
@@ -1841,6 +2093,16 @@ export function DocumentEditor({
       return res.json();
     },
     enabled: !!groupId,
+  });
+
+  const { data: companySettings } = useQuery({
+    queryKey: ["data", "company", companyId],
+    queryFn: async () => {
+      if (!companyId) return null;
+      const res = await fetch(`/api/data/company/${companyId}`);
+      return res.ok ? res.json() : null;
+    },
+    enabled: !!companyId,
   });
 
   // ── document type + group selectors (new documents only) ──
@@ -1915,6 +2177,9 @@ export function DocumentEditor({
   const activeDocumentType =
     header.documentType ?? groupData?.documentType ?? (docData as any)?.documentType ?? null;
   const hidePartyFields = !!activeDocumentType && MOVEMENT_DOCUMENT_TYPES.has(activeDocumentType);
+  const requireSerialTracking = !!groupData?.requireSerialTracking;
+  const requireBatchTracking = !!groupData?.requireBatchTracking;
+  const requiresGroupTracking = requireSerialTracking || requireBatchTracking;
   const addressLocks = getAddressLocks(header.customAttributes);
   const billingAddressLocked = !!addressLocks.billingAddress;
   const deliveryAddressLocked = !!addressLocks.deliveryAddress;
@@ -2012,6 +2277,12 @@ export function DocumentEditor({
             lineNo: line.lineNo,
             articleId: line.articleId,
             articleTextSnapshot: line.articleTextSnapshot,
+            langText: line.langText ?? null,
+            langTextSourceEntity: line.langTextSourceEntity ?? null,
+            langTextSourceId: line.langTextSourceId ?? null,
+            langTextSourceField: line.langTextSourceField ?? null,
+            langTextLinkedAt: line.langTextLinkedAt ?? null,
+            langTextOverriddenAt: line.langTextOverriddenAt ?? null,
             lineType: line.lineType ?? "article",
             quantity: String(line.quantity),
             unit: line.unit,
@@ -2049,6 +2320,30 @@ export function DocumentEditor({
           billingAddress: hidePartyFields ? null : (header.billingAddress ?? null),
           deliveryAddress: hidePartyFields ? null : (header.deliveryAddress ?? null),
           deliveryAddressId: hidePartyFields ? null : (header.deliveryAddressId ?? null),
+          noteText: header.noteText ?? null,
+          noteTextSourceEntity: header.noteTextSourceEntity ?? null,
+          noteTextSourceId: header.noteTextSourceId ?? null,
+          noteTextSourceField: header.noteTextSourceField ?? null,
+          noteTextLinkedAt: header.noteTextLinkedAt ?? null,
+          noteTextOverriddenAt: header.noteTextOverriddenAt ?? null,
+          preText: header.preText ?? null,
+          preTextSourceEntity: header.preTextSourceEntity ?? null,
+          preTextSourceId: header.preTextSourceId ?? null,
+          preTextSourceField: header.preTextSourceField ?? null,
+          preTextLinkedAt: header.preTextLinkedAt ?? null,
+          preTextOverriddenAt: header.preTextOverriddenAt ?? null,
+          postText: header.postText ?? null,
+          postTextSourceEntity: header.postTextSourceEntity ?? null,
+          postTextSourceId: header.postTextSourceId ?? null,
+          postTextSourceField: header.postTextSourceField ?? null,
+          postTextLinkedAt: header.postTextLinkedAt ?? null,
+          postTextOverriddenAt: header.postTextOverriddenAt ?? null,
+          stornoText: header.stornoText ?? null,
+          stornoTextSourceEntity: header.stornoTextSourceEntity ?? null,
+          stornoTextSourceId: header.stornoTextSourceId ?? null,
+          stornoTextSourceField: header.stornoTextSourceField ?? null,
+          stornoTextLinkedAt: header.stornoTextLinkedAt ?? null,
+          stornoTextOverriddenAt: header.stornoTextOverriddenAt ?? null,
           customAttributes: header.customAttributes ?? null,
           currencyId: normalizeCurrencyId(
             header.currencyId ?? groupData?.defaultCurrencyId ?? null,
@@ -2069,11 +2364,19 @@ export function DocumentEditor({
       queryClient.invalidateQueries({ queryKey: ["data", "documentLine"] });
       setIsLinesDirty(false);
       setCloseDialogOpen(false);
+      setPrintDialogOpen(false);
       toast.success(t("document.actions.save"));
       onSaved?.(savedId);
+      if (printAfterSave) {
+        window.open(`/api/documents/${savedId}/print`, "_blank", "noopener,noreferrer");
+        setPrintAfterSave(false);
+      }
       onClose();
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => {
+      setPrintAfterSave(false);
+      toast.error(err.message);
+    },
   });
 
   const postMutation = useMutation({
@@ -2187,8 +2490,12 @@ export function DocumentEditor({
   const handleDelete = useCallback(() => deleteDocMutate(), [deleteDocMutate]);
   const handleStorno = useCallback(() => stornoDocMutate(), [stornoDocMutate]);
   const handlePrint = useCallback(() => {
-    window.open(`/api/documents/${documentId}/print`, "_blank", "noopener,noreferrer");
-  }, [documentId]);
+    setPrintDialogOpen(true);
+  }, []);
+  const handlePrintDialogConfirm = useCallback(() => {
+    setPrintAfterSave(true);
+    saveDocMutate();
+  }, [saveDocMutate]);
   const handleOpenDuplicateDialog = useCallback(async () => {
     const res = await fetch(`/api/documents/${documentId}/duplicate`, { method: "POST" });
     if (!res.ok) {
@@ -2220,6 +2527,17 @@ export function DocumentEditor({
   const stornoDocumentId = (header as any).stornoDocumentId ?? null;
   const activeConvertCandidates = convertCandidates ?? [];
   const isDocumentDirty = isHeaderDirty || isLinesDirty;
+  const printOptions = useMemo(
+    () =>
+      getDocumentPrintOptions(header.customAttributes, {
+        noteText: companySettings?.printAddressLongText ?? true,
+        preText: companySettings?.printPreText ?? true,
+        postText: companySettings?.printPostText ?? true,
+        stornoText: true,
+        lineTexts: companySettings?.printPositionTexts ?? true,
+      }),
+    [companySettings, header.customAttributes],
+  );
   const handleClose = useCallback(() => {
     if (saveMutation.isPending) return;
     if (isDocumentDirty) {
@@ -2286,6 +2604,7 @@ export function DocumentEditor({
     isNew,
     isDocumentDirty: false,
     isCloseDialogOpen: false,
+    isPrintDialogOpen: false,
     isSavePending: false,
     isConvertDialogOpen: false,
     isDuplicateDialogOpen: false,
@@ -2310,6 +2629,7 @@ export function DocumentEditor({
     commandRefs.current.isNew = isNew;
     commandRefs.current.isDocumentDirty = isDocumentDirty;
     commandRefs.current.isCloseDialogOpen = closeDialogOpen;
+    commandRefs.current.isPrintDialogOpen = printDialogOpen;
     commandRefs.current.isSavePending = saveMutation.isPending;
     commandRefs.current.isConvertDialogOpen = activeConvertCandidates.length > 0;
     commandRefs.current.isDuplicateDialogOpen = duplicateDialog.open;
@@ -2332,6 +2652,7 @@ export function DocumentEditor({
     isNew,
     isDocumentDirty,
     closeDialogOpen,
+    printDialogOpen,
     saveMutation.isPending,
     activeConvertCandidates.length,
     duplicateDialog.open,
@@ -2452,6 +2773,7 @@ export function DocumentEditor({
       isEnabled: () =>
         !commandRefs.current.isSavePending &&
         !commandRefs.current.isCloseDialogOpen &&
+        !commandRefs.current.isPrintDialogOpen &&
         !commandRefs.current.isConvertDialogOpen &&
         !commandRefs.current.isDuplicateDialogOpen,
       handler: () => commandRefs.current.handleClose(),
@@ -2627,6 +2949,42 @@ export function DocumentEditor({
                         update.deliveryAddressId = raw.defaultDeliveryAddressId;
                       }
                       patchHeader(update);
+                      const addressTextSource = (json ?? raw ?? {}) as AddressSnapshot & {
+                        notizText?: string | null;
+                        langText?: string | null;
+                        warnText?: string | null;
+                        notiztext?: string | null;
+                        langtext?: string | null;
+                        warntext?: string | null;
+                      };
+                      const addressNotizText =
+                        addressTextSource.notiztext ?? addressTextSource.notizText ?? null;
+                      const addressLangText =
+                        addressTextSource.langtext ?? addressTextSource.langText ?? null;
+                      if (addressNotizText != null) {
+                        setHeader((prev) =>
+                          applyHeaderTextFromSource(
+                            prev,
+                            "noteText",
+                            addressNotizText,
+                            "address",
+                            id,
+                            "notiztext",
+                          ),
+                        );
+                      }
+                      if (addressLangText != null) {
+                        setHeader((prev) =>
+                          applyHeaderTextFromSource(
+                            prev,
+                            "preText",
+                            addressLangText,
+                            "address",
+                            id,
+                            "langtext",
+                          ),
+                        );
+                      }
                     }}
                   />
 
@@ -2763,6 +3121,20 @@ export function DocumentEditor({
 
           {/* Lines */}
           <div className="min-h-0 flex-1 overflow-hidden">
+            {requiresGroupTracking && (
+              <div className="mx-4 mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                <div className="font-medium">Beleggruppe erzwingt Tracking vor dem Buchen.</div>
+                <div className="mt-0.5 text-[12px] text-amber-800">
+                  {[
+                    requireSerialTracking ? "Seriennummern" : null,
+                    requireBatchTracking ? "Chargen" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" und ")}{" "}
+                  müssen für betroffene Positionen vollständig erfasst sein.
+                </div>
+              </div>
+            )}
             <DocumentLinesEditor
               ref={linesEditorRef}
               documentId={isNew ? null : documentId}
@@ -2771,8 +3143,10 @@ export function DocumentEditor({
               customerId={header.customerId ?? null}
               documentDate={header.documentDate ?? null}
               status={docStatus}
+              companyId={companyId ?? null}
               onLinesChange={setPendingLines}
               onDirtyChange={setIsLinesDirty}
+              onActiveLineChange={setActiveLine}
             />
           </div>
         </div>
@@ -2792,6 +3166,85 @@ export function DocumentEditor({
             </div>
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+              <div className="rounded border border-hairline bg-canvas p-2">
+                <LangtextEditor
+                  title={t("document.langtexts.title", { defaultValue: "Langtexte" })}
+                  entries={[
+                    {
+                      key: "noteText",
+                      label: t("document.langtexts.note", { defaultValue: "Notiztext" }),
+                      value: header.noteText ?? "",
+                      sourceLabel: resolveTextSourceLabel(
+                        header.noteTextSourceEntity,
+                        header.noteTextSourceField,
+                      ),
+                      linked: !!header.noteTextSourceEntity || !!header.noteTextSourceId,
+                      overridden: !!header.noteTextOverriddenAt,
+                    },
+                    {
+                      key: "preText",
+                      label: t("document.langtexts.pre", { defaultValue: "Vortext" }),
+                      value: header.preText ?? "",
+                      sourceLabel: resolveTextSourceLabel(
+                        header.preTextSourceEntity,
+                        header.preTextSourceField,
+                      ),
+                      linked: !!header.preTextSourceEntity || !!header.preTextSourceId,
+                      overridden: !!header.preTextOverriddenAt,
+                    },
+                    {
+                      key: "postText",
+                      label: t("document.langtexts.post", { defaultValue: "Nachtext" }),
+                      value: header.postText ?? "",
+                      sourceLabel: resolveTextSourceLabel(
+                        header.postTextSourceEntity,
+                        header.postTextSourceField,
+                      ),
+                      linked: !!header.postTextSourceEntity || !!header.postTextSourceId,
+                      overridden: !!header.postTextOverriddenAt,
+                    },
+                    {
+                      key: "stornoText",
+                      label: t("document.langtexts.reverse", { defaultValue: "Stornotext" }),
+                      value: header.stornoText ?? "",
+                      sourceLabel: resolveTextSourceLabel(
+                        header.stornoTextSourceEntity,
+                        header.stornoTextSourceField,
+                      ),
+                      linked: !!header.stornoTextSourceEntity || !!header.stornoTextSourceId,
+                      overridden: !!header.stornoTextOverriddenAt,
+                    },
+                  ]}
+                  activeKey={undefined}
+                  syncKey={documentId ? `document:${documentId}:header` : "document:new:header"}
+                  onChange={(fieldKey, html) => {
+                    if (fieldKey === "noteText") {
+                      setHeader((prev) => applyHeaderTextOverride(prev, "noteText", html));
+                    } else if (fieldKey === "preText") {
+                      setHeader((prev) => applyHeaderTextOverride(prev, "preText", html));
+                    } else if (fieldKey === "postText") {
+                      setHeader((prev) => applyHeaderTextOverride(prev, "postText", html));
+                    } else if (fieldKey === "stornoText") {
+                      setHeader((prev) => applyHeaderTextOverride(prev, "stornoText", html));
+                    }
+                  }}
+                  className="h-[420px]"
+                />
+                <div className="mt-2 flex items-center justify-between gap-2 px-1">
+                  <div className="text-[11px] text-ink-mute">
+                    {t("document.langtexts.savedPerDocument", {
+                      defaultValue: "Die Auswahl wird pro Beleg gespeichert.",
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-2 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-primary hover:text-primary"
+                    onClick={() => setPrintDialogOpen(true)}
+                  >
+                    {t("document.actions.printOptions", { defaultValue: "Druckoptionen" })}
+                  </button>
+                </div>
+              </div>
               {isNew ? (
                 <div className="rounded border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
                   {t("document.audit.noDraft", {
@@ -2949,6 +3402,46 @@ export function DocumentEditor({
                       </div>
                     </div>
                   ) : null}
+
+                  <div className="rounded border border-hairline bg-canvas p-2">
+                    <LangtextEditor
+                      title={t("document.langtexts.lineTitle", {
+                        defaultValue: "Positionslangtext",
+                      })}
+                      entries={[
+                        {
+                          key: "langText",
+                          label: t("document.langtexts.line", {
+                            defaultValue: "Langtext",
+                          }),
+                          value: activeLine?.langText ?? "",
+                          sourceLabel: resolveTextSourceLabel(
+                            activeLine?.langTextSourceEntity ?? null,
+                            activeLine?.langTextSourceField ?? null,
+                          ),
+                          linked:
+                            !!activeLine?.langTextSourceEntity || !!activeLine?.langTextSourceId,
+                          overridden: !!activeLine?.langTextOverriddenAt,
+                        },
+                      ]}
+                      onChange={(_, html) => {
+                        linesEditorRef.current?.setActiveLineLangText(html);
+                      }}
+                      className="h-[320px]"
+                      syncKey={
+                        activeLine?.documentLineId ?? activeLine?._id ?? "document-line:none"
+                      }
+                    />
+                    <div className="mt-2 px-1 text-[11px] text-ink-mute">
+                      {activeLine
+                        ? `${String(activeLine.lineNo).padStart(3, "0")} · ${
+                            activeLine.articleTextSnapshot ?? activeLine.articleNo ?? "—"
+                          }`
+                        : t("document.langtexts.noLine", {
+                            defaultValue: "Wähle eine Position, um den Langtext zu bearbeiten.",
+                          })}
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -2993,6 +3486,73 @@ export function DocumentEditor({
               {saveMutation.isPending
                 ? t("document.actions.saving")
                 : t("document.closePrompt.saveDraftAndClose")}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={printDialogOpen} onOpenChange={(open) => setPrintDialogOpen(open)}>
+        <DialogContent className="max-w-md overflow-hidden p-0">
+          <div className="border-b border-hairline px-5 py-4">
+            <div className="text-[14px] font-semibold text-ink">
+              {t("document.print.title", { defaultValue: "Druckoptionen" })}
+            </div>
+            <div className="mt-0.5 text-[12px] text-ink-mute">
+              {t("document.print.description", {
+                defaultValue: "Die Auswahl wird am Beleg gespeichert.",
+              })}
+            </div>
+          </div>
+          <div className="space-y-2 px-5 py-4 text-[13px]">
+            {(
+              [
+                ["noteText", t("document.langtexts.note", { defaultValue: "Notiztext" })],
+                ["preText", t("document.langtexts.pre", { defaultValue: "Vortext" })],
+                ["postText", t("document.langtexts.post", { defaultValue: "Nachtext" })],
+                ["stornoText", t("document.langtexts.reverse", { defaultValue: "Stornotext" })],
+                [
+                  "lineTexts",
+                  t("document.langtexts.lineToggle", { defaultValue: "Positionstexte" }),
+                ],
+              ] as const
+            ).map(([key, label]) => (
+              <label
+                key={key}
+                className="flex items-center justify-between gap-3 rounded border border-hairline px-3 py-2"
+              >
+                <span>{label}</span>
+                <input
+                  type="checkbox"
+                  checked={printOptions[key]}
+                  onChange={(e) =>
+                    setHeader((prev) => ({
+                      ...prev,
+                      customAttributes: setDocumentPrintOptions(prev.customAttributes, {
+                        ...printOptions,
+                        [key]: e.target.checked,
+                      }),
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 px-5 pb-5">
+            <button
+              className="h-7 rounded-full border border-hairline px-4 text-[13px] text-ink-secondary transition-colors hover:text-ink"
+              onClick={() => setPrintDialogOpen(false)}
+            >
+              {t("document.actions.close")}
+            </button>
+            <button
+              className="h-7 rounded-full px-4 text-[13px] transition-colors disabled:opacity-40"
+              style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
+              disabled={saveMutation.isPending}
+              onClick={handlePrintDialogConfirm}
+            >
+              {saveMutation.isPending
+                ? t("document.actions.saving")
+                : t("document.actions.print", { defaultValue: "Drucken" })}
             </button>
           </div>
         </DialogContent>

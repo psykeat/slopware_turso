@@ -97,6 +97,15 @@ export const company = pgTable(
     bankIban: text("bank_iban"),
     fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(1),
     defaultWarehouseId: uuid("default_warehouse_id"),
+    copyLongTextsOnlyOnChange: boolean("copy_long_texts_only_on_change").notNull().default(true),
+    printAddressLongText: boolean("print_address_long_text").notNull().default(false),
+    printPreText: boolean("print_pre_text").notNull().default(false),
+    printPostText: boolean("print_post_text").notNull().default(false),
+    printPositionTexts: boolean("print_position_texts").notNull().default(false),
+    showArticleImageInEntry: boolean("show_article_image_in_entry").notNull().default(false),
+    showArticleImageOnDocuments: boolean("show_article_image_on_documents")
+      .notNull()
+      .default(false),
   },
   (table) => [
     unique("company_tenant_id_company_id_key").on(table.tenantId, table.companyId),
@@ -251,6 +260,24 @@ export const address = pgTable(
     companyName: text("company_name"),
     firstName: text("first_name"),
     lastName: text("last_name"),
+    notiztext: text("notiztext"),
+    notiztextSourceEntity: text("notiztext_source_entity"),
+    notiztextSourceId: uuid("notiztext_source_id"),
+    notiztextSourceField: text("notiztext_source_field"),
+    notiztextLinkedAt: timestamp("notiztext_linked_at", { withTimezone: true }),
+    notiztextOverriddenAt: timestamp("notiztext_overridden_at", { withTimezone: true }),
+    langtext: text("langtext"),
+    langtextSourceEntity: text("langtext_source_entity"),
+    langtextSourceId: uuid("langtext_source_id"),
+    langtextSourceField: text("langtext_source_field"),
+    langtextLinkedAt: timestamp("langtext_linked_at", { withTimezone: true }),
+    langtextOverriddenAt: timestamp("langtext_overridden_at", { withTimezone: true }),
+    warntext: text("warntext"),
+    warntextSourceEntity: text("warntext_source_entity"),
+    warntextSourceId: uuid("warntext_source_id"),
+    warntextSourceField: text("warntext_source_field"),
+    warntextLinkedAt: timestamp("warntext_linked_at", { withTimezone: true }),
+    warntextOverriddenAt: timestamp("warntext_overridden_at", { withTimezone: true }),
     addressLine1: text("address_line_1").notNull(),
     addressLine2: text("address_line_2"),
     postalCode: text("postal_code").notNull(),
@@ -293,6 +320,12 @@ export const addressContact = pgTable(
       .references(() => address.addressId),
     firstName: text("first_name"),
     lastName: text("last_name").notNull(),
+    notiztext: text("notiztext"),
+    notiztextSourceEntity: text("notiztext_source_entity"),
+    notiztextSourceId: uuid("notiztext_source_id"),
+    notiztextSourceField: text("notiztext_source_field"),
+    notiztextLinkedAt: timestamp("notiztext_linked_at", { withTimezone: true }),
+    notiztextOverriddenAt: timestamp("notiztext_overridden_at", { withTimezone: true }),
     email: text("email"),
     phoneMobile: text("phone_mobile"),
     phoneLandline: text("phone_landline"),
@@ -335,6 +368,7 @@ export const articleGroup = pgTable(
     purchaseUnitId: uuid("purchase_unit_id").references(() => unit.unitId),
     trackingMode: text("tracking_mode"),
     bomType: text("bom_type").notNull().default("none"),
+    printPositionTexts: boolean("print_position_texts"),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -356,6 +390,32 @@ export const article = pgTable(
       .references(() => tenant.tenantId),
     articleNo: text("article_no").notNull(),
     name: text("name").notNull(),
+    notiztext: text("notiztext"),
+    langtext: text("langtext"),
+    kurzbeschreibung: text("kurzbeschreibung"),
+    warntext: text("warntext"),
+    notiztextSourceEntity: text("notiztext_source_entity"),
+    notiztextSourceId: uuid("notiztext_source_id"),
+    notiztextSourceField: text("notiztext_source_field"),
+    notiztextLinkedAt: timestamp("notiztext_linked_at", { withTimezone: true }),
+    notiztextOverriddenAt: timestamp("notiztext_overridden_at", { withTimezone: true }),
+    langtextSourceEntity: text("langtext_source_entity"),
+    langtextSourceId: uuid("langtext_source_id"),
+    langtextSourceField: text("langtext_source_field"),
+    langtextLinkedAt: timestamp("langtext_linked_at", { withTimezone: true }),
+    langtextOverriddenAt: timestamp("langtext_overridden_at", { withTimezone: true }),
+    kurzbeschreibungSourceEntity: text("kurzbeschreibung_source_entity"),
+    kurzbeschreibungSourceId: uuid("kurzbeschreibung_source_id"),
+    kurzbeschreibungSourceField: text("kurzbeschreibung_source_field"),
+    kurzbeschreibungLinkedAt: timestamp("kurzbeschreibung_linked_at", { withTimezone: true }),
+    kurzbeschreibungOverriddenAt: timestamp("kurzbeschreibung_overridden_at", {
+      withTimezone: true,
+    }),
+    warntextSourceEntity: text("warntext_source_entity"),
+    warntextSourceId: uuid("warntext_source_id"),
+    warntextSourceField: text("warntext_source_field"),
+    warntextLinkedAt: timestamp("warntext_linked_at", { withTimezone: true }),
+    warntextOverriddenAt: timestamp("warntext_overridden_at", { withTimezone: true }),
     description: text("description"),
     articleGroupId: uuid("article_group_id").references(() => articleGroup.articleGroupId),
     taxClassId: uuid("tax_class_id").references(() => taxClass.taxClassId),
@@ -369,6 +429,8 @@ export const article = pgTable(
     defaultWarehouseId: uuid("default_warehouse_id"),
     trackingMode: text("tracking_mode"),
     bomType: text("bom_type").notNull().default("none"),
+    printPositionTexts: boolean("print_position_texts"),
+    primaryImageId: uuid("primary_image_id"),
   },
   (table) => [
     unique("article_tenant_id_article_id_key").on(table.tenantId, table.articleId),
@@ -413,6 +475,36 @@ export const articleBom = pgTable(
       table.componentArticleId,
     ),
     check("article_bom_quantity_check", sql`quantity > 0`),
+  ],
+);
+
+export const articleImage = pgTable(
+  "article_image",
+  {
+    articleImageId: uuid("article_image_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => article.articleId),
+    storageKey: text("storage_key").notNull(),
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    fileSize: integer("file_size").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    altText: text("alt_text"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("article_image_tenant_id_image_id_key").on(table.tenantId, table.articleImageId),
+    index("idx_article_image_tenant_article").on(table.tenantId, table.articleId),
+    index("idx_article_image_tenant_archived").on(table.tenantId, table.archived),
   ],
 );
 
@@ -644,6 +736,7 @@ export const document = pgTable(
     status: text("status").notNull(),
     customerId: uuid("customer_id").references(() => address.addressId),
     currencyId: char("currency_id", { length: 3 }),
+    printOptions: jsonb("print_options"),
     documentDate: date("document_date").notNull(),
     postingDate: date("posting_date"),
     totalNet: numeric("total_net"),
@@ -666,6 +759,30 @@ export const document = pgTable(
     deliveryAddressId: uuid("delivery_address_id").references(
       () => deliveryAddress.deliveryAddressId,
     ),
+    noteText: text("note_text"),
+    noteTextSourceEntity: text("note_text_source_entity"),
+    noteTextSourceId: uuid("note_text_source_id"),
+    noteTextSourceField: text("note_text_source_field"),
+    noteTextLinkedAt: timestamp("note_text_linked_at", { withTimezone: true }),
+    noteTextOverriddenAt: timestamp("note_text_overridden_at", { withTimezone: true }),
+    preText: text("pre_text"),
+    preTextSourceEntity: text("pre_text_source_entity"),
+    preTextSourceId: uuid("pre_text_source_id"),
+    preTextSourceField: text("pre_text_source_field"),
+    preTextLinkedAt: timestamp("pre_text_linked_at", { withTimezone: true }),
+    preTextOverriddenAt: timestamp("pre_text_overridden_at", { withTimezone: true }),
+    postText: text("post_text"),
+    postTextSourceEntity: text("post_text_source_entity"),
+    postTextSourceId: uuid("post_text_source_id"),
+    postTextSourceField: text("post_text_source_field"),
+    postTextLinkedAt: timestamp("post_text_linked_at", { withTimezone: true }),
+    postTextOverriddenAt: timestamp("post_text_overridden_at", { withTimezone: true }),
+    stornoText: text("storno_text"),
+    stornoTextSourceEntity: text("storno_text_source_entity"),
+    stornoTextSourceId: uuid("storno_text_source_id"),
+    stornoTextSourceField: text("storno_text_source_field"),
+    stornoTextLinkedAt: timestamp("storno_text_linked_at", { withTimezone: true }),
+    stornoTextOverriddenAt: timestamp("storno_text_overridden_at", { withTimezone: true }),
     paymentTermId: uuid("payment_term_id"),
     shippingMethodId: uuid("shipping_method_id"),
     documentTypeId: uuid("document_type_id").references(() => documentType.documentTypeId),
@@ -717,6 +834,12 @@ export const documentLine = pgTable(
     lineNo: integer("line_no").notNull(),
     articleId: uuid("article_id").references(() => article.articleId),
     articleTextSnapshot: text("article_text_snapshot"),
+    langText: text("lang_text"),
+    langTextSourceEntity: text("lang_text_source_entity"),
+    langTextSourceId: uuid("lang_text_source_id"),
+    langTextSourceField: text("lang_text_source_field"),
+    langTextLinkedAt: timestamp("lang_text_linked_at", { withTimezone: true }),
+    langTextOverriddenAt: timestamp("lang_text_overridden_at", { withTimezone: true }),
     quantity: numeric("quantity").notNull(),
     unit: text("unit"),
     netPrice: numeric("net_price").notNull(),
@@ -1986,3 +2109,67 @@ export const devCycles = pgTable("dev_cycles", {
   processAdjustment: text("process_adjustment"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const documentShipment = pgTable(
+  "document_shipment",
+  {
+    documentShipmentId: uuid("document_shipment_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => document.documentId),
+
+    // Status and Carrier
+    shipmentStatus: text("shipment_status").notNull().default("open"), // open, exported, label_created, shipped, cancelled
+    carrierKey: text("carrier_key").notNull().default("dhl"),
+    carrierServiceKey: text("carrier_service_key").notNull().default("paket"),
+    trackingId: text("tracking_id"),
+
+    // Recipient Snapshot
+    recipientName: text("recipient_name").notNull(),
+    company: text("company"),
+    street: text("street").notNull(),
+    houseNumber: text("house_number").notNull(),
+    postalCode: text("postal_code").notNull(),
+    city: text("city").notNull(),
+    countryCode: char("country_code", { length: 2 }).notNull().default("DE"),
+    email: text("email"),
+    phone: text("phone"),
+
+    // Timestamps
+    exportedAt: timestamp("exported_at", { withTimezone: true }),
+    labelCreatedAt: timestamp("label_created_at", { withTimezone: true }),
+    shippedAt: timestamp("shipped_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("uq_document_shipment").on(table.tenantId, table.documentId),
+    index("idx_shipment_document").on(table.documentId),
+    index("idx_shipment_status").on(table.shipmentStatus),
+  ],
+);
+
+export const documentShipmentPackage = pgTable(
+  "document_shipment_package",
+  {
+    documentShipmentPackageId: uuid("document_shipment_package_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    documentShipmentId: uuid("document_shipment_id")
+      .notNull()
+      .references(() => documentShipment.documentShipmentId),
+
+    seq: integer("seq").notNull().default(1),
+    weightKg: numeric("weight_kg").notNull().default("1.0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("idx_shipment_package_shipment").on(table.documentShipmentId)],
+);

@@ -550,7 +550,7 @@ function insertNodeInBucket(
 }
 
 function resetBucket(bucket: DesignerSurfaceState) {
-  const nextBucket = {
+  const nextBucket: DesignerSurfaceState = {
     ...bucket,
     nodes: bucket.baselineNodes.map((node) => ({ ...node })),
     selectedNodeIds: bucket.baselineNodes.length > 0 ? [bucket.baselineNodes[0].id] : [],

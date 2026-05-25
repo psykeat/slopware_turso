@@ -5,9 +5,11 @@ import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { EntityMask } from "@repo/ui/components/entity-mask";
 import { InlineEditGrid } from "@repo/ui/components/inline-edit-grid";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
+import { LangTextRecordPanel } from "@repo/ui/components/langtext-record-panel";
 import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
 import { formatMoney, formatDate, StatusDot } from "@repo/ui/lib/formatters";
+import { cn } from "@repo/ui/lib/utils";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useFocus } from "@repo/ui/platform/focus-manager";
@@ -31,6 +33,18 @@ const ADDRESS_FIELD_OVERRIDES = [
   { key: "vatId", sectionLabel: "Commercial", sectionLabelDe: "Kaufmännisch" },
 ];
 
+const ADDRESS_TEXT_FIELD_OVERRIDES = [
+  { key: "notiztext", visible: false },
+  { key: "warntext", visible: false },
+  { key: "langtext", visible: false },
+];
+
+const ADDRESS_LANGTEXT_FIELDS = [
+  { field: "notiztext", label: "Notiztext" },
+  { field: "warntext", label: "Warntext" },
+  { field: "langtext", label: "Langtext" },
+];
+
 function AddressesModule() {
   const { state: focusState } = useFocus();
   const { registerCommand } = useCommands();
@@ -43,6 +57,7 @@ function AddressesModule() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
   const [activeAddressId, setActiveAddressId] = useState<string | null>(
     focusState.entity === "address" ? focusState.recordId : null,
@@ -232,6 +247,52 @@ function AddressesModule() {
     [addresses, activeAddressId],
   );
 
+  const getContactId = useCallback(
+    (row: any) => row.contactId || row.addressContactId || row.id || null,
+    [],
+  );
+
+  const getContactLabel = useCallback((contact: any) => {
+    const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+    const tail = contact.roleFunction ? ` · ${contact.roleFunction}` : "";
+    return `${name || contact.email || contact.phoneMobile || "Kontakt"}${tail}`;
+  }, []);
+
+  const resolvedContactId = useMemo(() => {
+    if (contacts.length === 0) return null;
+    if (
+      selectedContactId &&
+      contacts.some((contact: any) => getContactId(contact) === selectedContactId)
+    ) {
+      return selectedContactId;
+    }
+    return getContactId(contacts[0]);
+  }, [contacts, getContactId, selectedContactId]);
+
+  const contactOptions = useMemo(
+    () =>
+      contacts
+        .map((contact: any) => {
+          const id = getContactId(contact);
+          if (!id) return null;
+          return {
+            id,
+            label: getContactLabel(contact),
+            isPrimary: !!contact.isPrimary,
+            email: contact.email ?? null,
+            phone: contact.phoneMobile ?? null,
+          };
+        })
+        .filter(Boolean) as Array<{
+        id: string;
+        label: string;
+        isPrimary: boolean;
+        email: string | null;
+        phone: string | null;
+      }>,
+    [contacts, getContactId, getContactLabel],
+  );
+
   const dependentTabs = useMemo(
     () => [
       {
@@ -277,6 +338,21 @@ function AddressesModule() {
         ),
       },
       {
+        id: "langtexte",
+        label: "Langtexte",
+        content: (
+          <div className="h-full p-2">
+            <LangTextRecordPanel
+              entityName="address"
+              recordId={activeAddressId}
+              title="Langtexte"
+              fields={ADDRESS_LANGTEXT_FIELDS}
+              className="h-full"
+            />
+          </div>
+        ),
+      },
+      {
         id: "contacts",
         label: "Contacts",
         count: contacts.length || undefined,
@@ -291,6 +367,15 @@ function AddressesModule() {
             columns={[
               { key: "firstName", header: "First" },
               { key: "lastName", header: "Last" },
+              {
+                key: "notiztext",
+                header: "Note Text",
+                render: (row: any) => (
+                  <span className="block max-w-[240px] truncate text-ink-secondary">
+                    {row.notiztext ?? "—"}
+                  </span>
+                ),
+              },
               { key: "email", header: "Email" },
               { key: "phoneMobile", header: "Mobile" },
               { key: "roleFunction", header: "Role" },
@@ -614,7 +699,7 @@ function AddressesModule() {
             onCancel={() => setShowCreate(false)}
             onSaved={handleCreateSaved}
             className="rounded-none border-none shadow-none"
-            fieldOverrides={ADDRESS_FIELD_OVERRIDES}
+            fieldOverrides={[...ADDRESS_FIELD_OVERRIDES, ...ADDRESS_TEXT_FIELD_OVERRIDES]}
           />
         </DialogContent>
       </Dialog>
@@ -671,11 +756,29 @@ function AddressesModule() {
             recordId={activeAddressId ?? undefined}
             onCancel={() => setShowEdit(false)}
             onSaved={handleEditSaved}
-            fieldOverrides={ADDRESS_FIELD_OVERRIDES}
+            fieldOverrides={[...ADDRESS_FIELD_OVERRIDES, ...ADDRESS_TEXT_FIELD_OVERRIDES]}
             embedded
             childLayout="side"
-            childSection={(record) => (
+            childSection={(record, onChange) => (
               <div className="flex flex-col gap-6">
+                <div>
+                  <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                    Langtexte
+                  </div>
+                  <LangTextRecordPanel
+                    entityName="address"
+                    recordId={activeAddressId}
+                    title="Langtexte"
+                    fields={ADDRESS_LANGTEXT_FIELDS}
+                    className="min-h-[220px]"
+                    controlledValues={{
+                      notiztext: record.notiztext as string,
+                      warntext: record.warntext as string,
+                      langtext: record.langtext as string,
+                    }}
+                    onControlledChange={(field, value) => onChange(field, value)}
+                  />
+                </div>
                 <div>
                   <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                     Contacts
@@ -693,6 +796,88 @@ function AddressesModule() {
                       { key: "isPrimary", header: "Primary", type: "boolean", width: "60px" },
                     ]}
                   />
+                  <div className="mt-3 rounded-xl border border-hairline bg-canvas shadow-sm">
+                    <div className="flex items-start justify-between gap-3 border-b border-hairline px-4 py-3">
+                      <div>
+                        <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                          Ansprechpartner-Langtext
+                        </div>
+                        <div className="mt-0.5 text-[12px] text-ink-secondary">
+                          {resolvedContactId
+                            ? "Ausgewählter Kontakt wird rechts als Text-Inspector bearbeitet."
+                            : "Wähle einen Kontakt, damit der Text-Inspector aktiv wird."}
+                        </div>
+                      </div>
+                      <div className="text-right text-[11px] text-ink-mute">
+                        {contactOptions.length} Kontakte
+                      </div>
+                    </div>
+                    <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
+                      <div className="space-y-2">
+                        {contactOptions.length === 0 ? (
+                          <div className="rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
+                            Noch keine Kontakte vorhanden.
+                          </div>
+                        ) : (
+                          contactOptions.map((contact) => {
+                            const isSelected = contact.id === resolvedContactId;
+                            return (
+                              <button
+                                key={contact.id}
+                                type="button"
+                                className={cn(
+                                  "flex w-full items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
+                                  isSelected
+                                    ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] shadow-sm"
+                                    : "border-hairline bg-canvas hover:border-primary hover:bg-canvas-soft",
+                                )}
+                                onClick={() => setSelectedContactId(contact.id)}
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="truncate text-[13px] font-medium text-ink">
+                                      {contact.label}
+                                    </span>
+                                    {contact.isPrimary ? (
+                                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium tracking-wide text-emerald-700 uppercase">
+                                        Primär
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-1 truncate text-[11px] text-ink-mute">
+                                    {[contact.email, contact.phone].filter(Boolean).join(" · ") ||
+                                      " "}
+                                  </div>
+                                </div>
+                                <span
+                                  className={cn(
+                                    "mt-0.5 inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase",
+                                    isSelected
+                                      ? "border-primary/30 bg-primary/10 text-primary"
+                                      : "border-hairline text-ink-mute",
+                                  )}
+                                >
+                                  {isSelected ? "Aktiv" : "Wählen"}
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                      <LangTextRecordPanel
+                        entityName="addressContact"
+                        recordId={resolvedContactId}
+                        title="Notiztext"
+                        fields={[
+                          {
+                            field: "notiztext",
+                            label: "Notiztext",
+                          },
+                        ]}
+                        className="min-h-[220px]"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">

@@ -15,7 +15,13 @@ import { useCommands } from "@repo/ui/platform/command-registry";
 import { useFocus } from "@repo/ui/platform/focus-manager";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  ChevronDownIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  ExternalLinkIcon,
+} from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -323,6 +329,538 @@ function buildFlatNodes(
     }
   }
   return nodes;
+}
+
+interface ShipmentInspectorProps {
+  documentId: string | null;
+}
+
+function ShipmentInspector({ documentId }: ShipmentInspectorProps) {
+  const { t } = useTranslation("ui");
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["document-shipment", documentId],
+    queryFn: async () => {
+      if (!documentId) return null;
+      const res = await fetch(`/api/documents/${documentId}/shipment`);
+      if (!res.ok) throw new Error("Failed to fetch shipment");
+      return res.json() as Promise<{ shipment: any; packages: any[] }>;
+    },
+    enabled: !!documentId,
+  });
+
+  if (!documentId) {
+    return (
+      <div className="flex h-full items-center justify-center bg-canvas p-6 text-center">
+        <span className="text-[13px] text-ink-mute">
+          {t("shipment.selectDocument", {
+            defaultValue: "Wähle einen Beleg aus der Liste aus, um die Versanddetails anzuzeigen.",
+          })}
+        </span>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4 bg-canvas p-6">
+        <Skeleton className="h-6 w-32" />
+        <div className="grid grid-cols-2 gap-6">
+          <Skeleton className="h-40" />
+          <Skeleton className="h-40" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex h-full items-center justify-center bg-canvas p-6 text-[13px] text-rose-500">
+        {t("shipment.loadError", {
+          defaultValue: "Fehler beim Laden der Versanddaten:",
+        })}{" "}
+        {error instanceof Error
+          ? error.message
+          : t("common.unknownError", { defaultValue: "Unbekannter Fehler" })}
+      </div>
+    );
+  }
+
+  const key = data.shipment?.documentShipmentId || documentId;
+  return <ShipmentForm key={key} documentId={documentId} initialData={data} />;
+}
+
+interface ShipmentFormProps {
+  documentId: string;
+  initialData: { shipment: any; packages: any[] };
+}
+
+function ShipmentForm({ documentId, initialData }: ShipmentFormProps) {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation("ui");
+  const s = initialData.shipment || {};
+
+  const [recipientName, setRecipientName] = useState(s.recipientName || "");
+  const [company, setCompany] = useState(s.company || "");
+  const [street, setStreet] = useState(s.street || "");
+  const [houseNumber, setHouseNumber] = useState(s.houseNumber || "");
+  const [postalCode, setPostalCode] = useState(s.postalCode || "");
+  const [city, setCity] = useState(s.city || "");
+  const [countryCode, setCountryCode] = useState(s.countryCode || "DE");
+  const [email, setEmail] = useState(s.email || "");
+  const [phone, setPhone] = useState(s.phone || "");
+  const [trackingId, setTrackingId] = useState(s.trackingId || "");
+  const [carrierKey, setCarrierKey] = useState(s.carrierKey || "dhl");
+  const [carrierServiceKey, setCarrierServiceKey] = useState(s.carrierServiceKey || "paket");
+  const [shipmentStatus, setShipmentStatus] = useState(s.shipmentStatus || "open");
+
+  const [packageLines, setPackageLines] = useState<Array<{ seq: number; weightKg: string }>>(() => {
+    if (initialData.packages && initialData.packages.length > 0) {
+      return initialData.packages.map((pkg: any) => ({
+        seq: pkg.seq,
+        weightKg: String(pkg.weightKg || "1.0"),
+      }));
+    }
+    return [{ seq: 1, weightKg: "1.0" }];
+  });
+  const [isSaving, setIsSaving] = useState(false);
+
+  const totalWeight = useMemo(() => {
+    return packageLines.reduce((sum, pkg) => {
+      const w = parseFloat(pkg.weightKg) || 0;
+      return sum + w;
+    }, 0);
+  }, [packageLines]);
+
+  const handleAddPackage = () => {
+    setPackageLines((prev) => [...prev, { seq: prev.length + 1, weightKg: "1.0" }]);
+  };
+
+  const handleDeletePackage = (index: number) => {
+    if (packageLines.length <= 1) return;
+    setPackageLines((prev) => {
+      const updated = prev.filter((_, idx) => idx !== index);
+      return updated.map((pkg, idx) => ({
+        ...pkg,
+        seq: idx + 1,
+      }));
+    });
+  };
+
+  const handleWeightChange = (index: number, val: string) => {
+    setPackageLines((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], weightKg: val };
+      return updated;
+    });
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/documents/${documentId}/shipment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          shipment: {
+            recipientName,
+            company: company || null,
+            street,
+            houseNumber,
+            postalCode,
+            city,
+            countryCode,
+            email: email || null,
+            phone: phone || null,
+            trackingId: trackingId || null,
+            carrierKey,
+            carrierServiceKey,
+            shipmentStatus,
+          },
+          packages: packageLines.map((pkg) => ({
+            seq: pkg.seq,
+            weightKg: pkg.weightKg,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || "Failed to save shipment");
+      }
+      toast.success("Versanddetails erfolgreich gespeichert");
+      queryClient.invalidateQueries({ queryKey: ["document-shipment", documentId] });
+      queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Fehler beim Speichern des Versands");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case "label_created":
+      case "shipped":
+        return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900";
+      case "exported":
+        return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-900";
+      case "open":
+        return "bg-zinc-100 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800";
+      case "cancelled":
+        return "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-900";
+      default:
+        return "bg-zinc-100 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800";
+    }
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-canvas select-text">
+      {/* Action Bar */}
+      <div className="flex shrink-0 items-center justify-between border-b border-hairline bg-canvas px-4 py-2">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] font-medium text-ink-mute uppercase">
+              {t("shipment.statusLabel", { defaultValue: "Status:" })}
+            </span>
+            <span
+              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase ${getStatusBadgeClass(shipmentStatus)}`}
+            >
+              {shipmentStatus}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={isSaving}
+          onClick={handleSave}
+          className="inline-flex h-8 items-center justify-center rounded bg-primary px-3 text-[12px] font-medium text-primary-fg transition-all hover:opacity-90 disabled:opacity-50"
+        >
+          {isSaving
+            ? t("common.saving", { defaultValue: "Speichern..." })
+            : t("shipment.save", { defaultValue: "Versand speichern" })}
+        </button>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {/* Card 1: Address Snapshot */}
+          <div className="space-y-4 rounded border border-hairline bg-canvas-soft p-4 lg:col-span-2">
+            <h4 className="border-b border-hairline pb-2 text-[12px] font-bold tracking-wider text-ink uppercase">
+              {t("shipment.addressSnapshot", {
+                defaultValue: "Empfängeradresse (Snapshot)",
+              })}
+            </h4>
+            <div className="space-y-3">
+              <div>
+                <label
+                  htmlFor="shipment-recipient-name"
+                  className="block text-[11px] font-medium text-ink-mute uppercase"
+                >
+                  {t("shipment.recipientName", { defaultValue: "Name" })}
+                </label>
+                <input
+                  id="shipment-recipient-name"
+                  type="text"
+                  value={recipientName}
+                  onChange={(e) => setRecipientName(e.target.value)}
+                  className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="shipment-company"
+                  className="block text-[11px] font-medium text-ink-mute uppercase"
+                >
+                  {t("shipment.company", { defaultValue: "Firma (Optional)" })}
+                </label>
+                <input
+                  id="shipment-company"
+                  type="text"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label
+                    htmlFor="shipment-street"
+                    className="block text-[11px] font-medium text-ink-mute uppercase"
+                  >
+                    {t("shipment.street", { defaultValue: "Straße" })}
+                  </label>
+                  <input
+                    id="shipment-street"
+                    type="text"
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                    className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="shipment-house-number"
+                    className="block text-[11px] font-medium text-ink-mute uppercase"
+                  >
+                    {t("shipment.houseNumber", { defaultValue: "Hausnummer" })}
+                  </label>
+                  <input
+                    id="shipment-house-number"
+                    type="text"
+                    value={houseNumber}
+                    onChange={(e) => setHouseNumber(e.target.value)}
+                    className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label
+                    htmlFor="shipment-postal-code"
+                    className="block text-[11px] font-medium text-ink-mute uppercase"
+                  >
+                    {t("shipment.postalCode", { defaultValue: "PLZ" })}
+                  </label>
+                  <input
+                    id="shipment-postal-code"
+                    type="text"
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value)}
+                    className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label
+                    htmlFor="shipment-city"
+                    className="block text-[11px] font-medium text-ink-mute uppercase"
+                  >
+                    {t("shipment.city", { defaultValue: "Ort" })}
+                  </label>
+                  <input
+                    id="shipment-city"
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label
+                    htmlFor="shipment-country-code"
+                    className="block text-[11px] font-medium text-ink-mute uppercase"
+                  >
+                    {t("shipment.countryCode", { defaultValue: "Land (Code)" })}
+                  </label>
+                  <input
+                    id="shipment-country-code"
+                    type="text"
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
+                    placeholder="DE"
+                    className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label
+                    htmlFor="shipment-email"
+                    className="block text-[11px] font-medium text-ink-mute uppercase"
+                  >
+                    {t("shipment.email", { defaultValue: "E-Mail" })}
+                  </label>
+                  <input
+                    id="shipment-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="shipment-phone"
+                  className="block text-[11px] font-medium text-ink-mute uppercase"
+                >
+                  {t("shipment.phone", { defaultValue: "Telefon" })}
+                </label>
+                <input
+                  id="shipment-phone"
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Carrier, Status, Tracking & Packages */}
+          <div className="space-y-4">
+            {/* Shipment Controls */}
+            <div className="space-y-4 rounded border border-hairline bg-canvas-soft p-4">
+              <h4 className="border-b border-hairline pb-2 text-[12px] font-bold tracking-wider text-ink uppercase">
+                {t("shipment.options", { defaultValue: "Versandoptionen" })}
+              </h4>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="shipment-carrier-key"
+                    className="block text-[11px] font-medium text-ink-mute uppercase"
+                  >
+                    {t("shipment.carrier", { defaultValue: "Dienstleister" })}
+                  </label>
+                  <select
+                    id="shipment-carrier-key"
+                    value={carrierKey}
+                    onChange={(e) => setCarrierKey(e.target.value)}
+                    className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                  >
+                    <option value="dhl">DHL</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="shipment-service-key"
+                    className="block text-[11px] font-medium text-ink-mute uppercase"
+                  >
+                    {t("shipment.service", { defaultValue: "Service" })}
+                  </label>
+                  <select
+                    id="shipment-service-key"
+                    value={carrierServiceKey}
+                    onChange={(e) => setCarrierServiceKey(e.target.value)}
+                    className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                  >
+                    <option value="paket">Paket</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="shipment-status-select"
+                  className="block text-[11px] font-medium text-ink-mute uppercase"
+                >
+                  {t("shipment.changeStatus", { defaultValue: "Status ändern" })}
+                </label>
+                <select
+                  id="shipment-status-select"
+                  value={shipmentStatus}
+                  onChange={(e) => setShipmentStatus(e.target.value)}
+                  className="mt-1 h-8 w-full rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink shadow-sm outline-none focus:border-primary"
+                >
+                  <option value="open">Open / Offen</option>
+                  <option value="exported">Exported / Exportiert</option>
+                  <option value="label_created">Label Created / Label erstellt</option>
+                  <option value="shipped">Shipped / Versendet</option>
+                  <option value="cancelled">Cancelled / Storniert</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="shipment-tracking-id"
+                  className="block text-[11px] font-medium text-ink-mute uppercase"
+                >
+                  {t("shipment.trackingId", { defaultValue: "Tracking ID" })}
+                </label>
+                <div className="mt-1 flex gap-1.5">
+                  <input
+                    id="shipment-tracking-id"
+                    type="text"
+                    value={trackingId}
+                    onChange={(e) => setTrackingId(e.target.value)}
+                    placeholder="Tracking-ID eintragen..."
+                    className="h-8 flex-1 rounded border border-hairline bg-canvas px-2.5 text-[13px] text-ink outline-none focus:border-primary"
+                  />
+                  {trackingId && (
+                    <a
+                      href={`https://www.dhl.de/de/privatkunden/pakete-empfangen/verfolgen.html?piececode=${encodeURIComponent(trackingId)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex size-8 items-center justify-center rounded border border-hairline bg-canvas text-ink-mute hover:bg-canvas-soft hover:text-ink"
+                      title={t("shipment.openTracking", {
+                        defaultValue: "DHL Sendungsverfolgung öffnen",
+                      })}
+                    >
+                      <ExternalLinkIcon size={14} />
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Packages Controls */}
+            <div className="space-y-4 rounded border border-hairline bg-canvas-soft p-4">
+              <div className="flex items-center justify-between border-b border-hairline pb-2">
+                <h4 className="text-[12px] font-bold tracking-wider text-ink uppercase">
+                  {t("shipment.packages", { defaultValue: "Pakete" })} ({packageLines.length})
+                </h4>
+                <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                  {totalWeight.toFixed(2)} kg
+                </span>
+              </div>
+
+              <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
+                {packageLines.length === 0 ? (
+                  <div className="py-4 text-center text-[12px] text-ink-mute">
+                    {t("shipment.noPackages", { defaultValue: "Keine Pakete hinzugefügt" })}
+                  </div>
+                ) : (
+                  packageLines.map((pkg, index) => (
+                    <div key={index} className="flex items-center gap-3">
+                      <span className="w-8 font-mono text-[12px] text-ink-mute">#{pkg.seq}</span>
+                      <div className="flex flex-1 items-center gap-1.5">
+                        <label htmlFor={`shipment-package-weight-${index}`} className="sr-only">
+                          Gewicht
+                        </label>
+                        <input
+                          id={`shipment-package-weight-${index}`}
+                          type="text"
+                          value={pkg.weightKg}
+                          onChange={(e) => handleWeightChange(index, e.target.value)}
+                          className="h-8 flex-1 rounded border border-hairline bg-canvas px-2.5 text-right font-mono text-[13px] text-ink outline-none focus:border-primary"
+                          placeholder="1.0"
+                        />
+                        <span className="text-[13px] text-ink-mute">kg</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePackage(index)}
+                        disabled={packageLines.length <= 1}
+                        className="flex h-8 items-center justify-center rounded border border-rose-200 bg-rose-50 px-2 text-[12px] font-medium text-rose-600 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-rose-200 dark:bg-rose-950/20 dark:text-rose-400"
+                      >
+                        {t("common.delete", { defaultValue: "Löschen" })}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddPackage}
+                className="flex h-8 w-full items-center justify-center rounded border border-dashed border-hairline bg-canvas text-[12px] font-medium text-ink hover:border-ink-mute hover:bg-canvas-soft"
+              >
+                {t("shipment.addPackage", { defaultValue: "+ Paket hinzufügen" })}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DocumentsModule() {
@@ -812,6 +1350,45 @@ function DocumentsModule() {
         queryClient.invalidateQueries({ queryKey: ["data", "documentLine"] });
       },
     });
+    const unregImportTracking = registerCommand({
+      id: "import-tracking-csv",
+      scope: "context",
+      group: "workflow",
+      label: { en: "Import DHL Tracking", de: "DHL-Tracking importieren" },
+      isEnabled: () => true,
+      handler: () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".csv";
+        input.onchange = async (e) => {
+          const file = (e.target as HTMLInputElement).files?.[0];
+          if (!file) return;
+
+          const formData = new FormData();
+          formData.append("file", file);
+
+          try {
+            const res = await fetch("/api/documents/import-tracking", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!res.ok) {
+              throw new Error(await res.text());
+            }
+
+            const data = await res.json();
+            const updatedCount = data.count ?? 0;
+            toast.success(`${updatedCount} shipments updated / Sendungen aktualisiert`);
+            queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+          } catch (err: any) {
+            console.error("Error importing tracking CSV:", err);
+            toast.error(err.message || "Failed to import tracking CSV");
+          }
+        };
+        input.click();
+      },
+    });
     return () => {
       unregF3();
       unregEdit();
@@ -821,6 +1398,7 @@ function DocumentsModule() {
       unregDup();
       unregPrint();
       unregPost();
+      unregImportTracking();
     };
   }, [registerCommand, t, queryClient, editorDocId]);
 
@@ -932,7 +1510,7 @@ function DocumentsModule() {
     () => [
       {
         id: "lines",
-        label: "Document Lines",
+        label: t("document.linesTab", { defaultValue: "Belegzeilen" }),
         count: lines.length || undefined,
         content: (
           <DataGrid
@@ -940,10 +1518,12 @@ function DocumentsModule() {
             panelId="lines-grid"
             data={lines}
             keyExtractor={(row: any) => row.documentLineId || row.lineId || row.id}
-            title="Lines"
+            title={t("document.linesTitle", { defaultValue: "Zeilen" })}
             toolbar={false}
-            emptyTitle="No lines yet."
-            emptySubtitle="Open the document editor to add lines."
+            emptyTitle={t("document.noLinesTitle", { defaultValue: "Noch keine Zeilen." })}
+            emptySubtitle={t("document.noLinesSubtitle", {
+              defaultValue: "Öffne den Belegeditor, um Zeilen hinzuzufügen.",
+            })}
             className="h-full rounded-none border-none"
             columns={[
               {
@@ -1002,14 +1582,14 @@ function DocumentsModule() {
       },
       {
         id: "header",
-        label: "Header Details",
+        label: t("document.headerTab", { defaultValue: "Kopfdaten" }),
         content: (
           <InspectorPanel
-            title={selectedDocument?.documentNo ?? "Document"}
+            title={selectedDocument?.documentNo ?? t("document.title", { defaultValue: "Beleg" })}
             recordId={activeDocumentId ?? undefined}
             sections={[
               {
-                title: "Document",
+                title: t("document.section", { defaultValue: "Beleg" }),
                 fields: [
                   {
                     label: "No.",
@@ -1023,14 +1603,14 @@ function DocumentsModule() {
                 ],
               },
               {
-                title: "Parties",
+                title: t("document.parties", { defaultValue: "Beteiligte" }),
                 fields: [
                   { label: "Customer", value: selectedDocument?.customerId },
                   { label: "Currency", value: selectedDocument?.currencyId },
                 ],
               },
               {
-                title: "Totals",
+                title: t("document.totals", { defaultValue: "Summen" }),
                 fields: [
                   { label: "Net", value: selectedDocument?.totalNet },
                   { label: "Tax", value: selectedDocument?.totalTax },
@@ -1041,8 +1621,13 @@ function DocumentsModule() {
           />
         ),
       },
+      {
+        id: "shipment",
+        label: "Versand",
+        content: <ShipmentInspector documentId={activeDocumentId} />,
+      },
     ],
-    [lines, selectedDocument, activeDocumentId],
+    [lines, selectedDocument, activeDocumentId, t],
   );
 
   return (
@@ -1225,6 +1810,39 @@ function DocumentsModule() {
                             err instanceof Error && err.message
                               ? err.message
                               : t("form.fkViolationError"),
+                          );
+                        }
+                      },
+                    },
+                    {
+                      label: "Versand-CSV (DHL GKP)",
+                      onClick: async (keys: string[]) => {
+                        try {
+                          const res = await fetch("/api/documents/export", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ documentIds: keys }),
+                          });
+                          if (!res.ok) throw new Error(await res.text());
+
+                          const csvText = await res.text();
+                          const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement("a");
+                          link.href = url;
+                          link.setAttribute("download", "dhl_export.csv");
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          URL.revokeObjectURL(url);
+
+                          toast.success("DHL-Export erfolgreich abgeschlossen");
+                          queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+                        } catch (err) {
+                          toast.error(
+                            err instanceof Error && err.message
+                              ? err.message
+                              : "Fehler beim DHL-CSV-Export",
                           );
                         }
                       },

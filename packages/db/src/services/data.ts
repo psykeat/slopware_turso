@@ -67,6 +67,51 @@ export class DataService {
     return values;
   }
 
+  private applyLongTextOverrideMetadata(
+    table: any,
+    data: Record<string, any>,
+    _currentRow: Record<string, any> | null,
+  ) {
+    const columns = getColumns(table);
+    const update = { ...data };
+    const now = new Date();
+
+    for (const fieldName of Object.keys(update)) {
+      if (!(fieldName in columns)) continue;
+      if (typeof update[fieldName] !== "string" && update[fieldName] !== null) continue;
+
+      const sourceEntityKey = `${fieldName}SourceEntity`;
+      const sourceIdKey = `${fieldName}SourceId`;
+      const sourceFieldKey = `${fieldName}SourceField`;
+      const linkedAtKey = `${fieldName}LinkedAt`;
+      const overriddenAtKey = `${fieldName}OverriddenAt`;
+
+      const hasMetadataColumns =
+        sourceEntityKey in columns ||
+        sourceIdKey in columns ||
+        sourceFieldKey in columns ||
+        linkedAtKey in columns ||
+        overriddenAtKey in columns;
+      if (!hasMetadataColumns) continue;
+
+      const callerProvidedMetadata =
+        sourceEntityKey in update ||
+        sourceIdKey in update ||
+        sourceFieldKey in update ||
+        linkedAtKey in update ||
+        overriddenAtKey in update;
+      if (callerProvidedMetadata) continue;
+
+      if (sourceEntityKey in columns) update[sourceEntityKey] = null;
+      if (sourceIdKey in columns) update[sourceIdKey] = null;
+      if (sourceFieldKey in columns) update[sourceFieldKey] = null;
+      if (linkedAtKey in columns) update[linkedAtKey] = null;
+      if (overriddenAtKey in columns) update[overriddenAtKey] = now;
+    }
+
+    return update;
+  }
+
   async list(
     entityName: string,
     filters: Record<string, string> = {},
@@ -251,16 +296,28 @@ export class DataService {
     const entityPkName = `${entityName}Id`;
     if (entityPkName in updateData) delete updateData[entityPkName];
 
-    const normalizedUpdateData = this.normalizeLifecyclePayload(table, updateData);
-
     const conditions = [eq(pkColumn, id)];
     if (hasTenantId && !this.isSystemAdmin) {
       conditions.push(eq(table.tenantId, this.tenantId));
     }
 
+    const [currentRow] = await db
+      .select()
+      .from(table)
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+      .limit(1);
+    if (!currentRow) return [];
+
+    const normalizedUpdateData = this.normalizeLifecyclePayload(table, updateData);
+    const longTextAwareData = this.applyLongTextOverrideMetadata(
+      table,
+      normalizedUpdateData,
+      currentRow,
+    );
+
     return await db
       .update(table)
-      .set(normalizedUpdateData)
+      .set(longTextAwareData)
       .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .returning();
   }

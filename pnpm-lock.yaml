@@ -15,6 +15,9 @@ catalogs:
     '@fontsource-variable/inter':
       specifier: ^5.2.8
       version: 5.2.8
+    '@icons-pack/react-simple-icons':
+      specifier: ^13.7.0
+      version: 13.13.0
     '@react-pdf/renderer':
       specifier: ^4.5.1
       version: 4.5.1
@@ -189,6 +192,9 @@ importers:
       '@fontsource-variable/inter':
         specifier: 'catalog:'
         version: 5.2.8
+      '@icons-pack/react-simple-icons':
+        specifier: 'catalog:'
+        version: 13.13.0(react@19.2.6)
       '@react-pdf/renderer':
         specifier: 'catalog:'
         version: 4.5.1(react@19.2.6)
@@ -623,7 +629,7 @@ packages:
         optional: true
 
   '@better-auth/drizzle-adapter@https://pkg.pr.new/@better-auth/drizzle-adapter@9489':
-    resolution: {tarball: https://pkg.pr.new/@better-auth/drizzle-adapter@9489}
+    resolution: {integrity: sha512-P6IRsdzR+uy9xB9GXtlkXECUbeXk34K0RvEkbEDTMTENzyJVmS9KsYA5yxEg6rF2Skf78qA0YT5D2CwIyPtvEQ==, tarball: https://pkg.pr.new/@better-auth/drizzle-adapter@9489}
     version: 1.7.0-beta.3
     peerDependencies:
       '@better-auth/core': ^1.7.0-beta.3
@@ -1235,6 +1241,12 @@ packages:
   '@humanwhocodes/retry@0.4.3':
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
+
+  '@icons-pack/react-simple-icons@13.13.0':
+    resolution: {integrity: sha512-B5HhQMIpcSH4z8IZ8HFhD59CboHceKYMpPC9kAwGyKntvPdyJJv26DLu4Z1wAjcCLyrJhf11tMhiQGom9Rxb9g==}
+    engines: {node: '>=24', pnpm: '>=10'}
+    peerDependencies:
+      react: ^16.13 || ^17 || ^18 || ^19
 
   '@inquirer/ansi@2.0.5':
     resolution: {integrity: sha512-doc2sWgJpbFQ64UflSVd17ibMGDuxO1yKgOgLMwavzESnXjFWJqUeG8saYosqKpHp4kWiM5x1nXvEjbpx90gzw==}
@@ -6334,6 +6346,10 @@ snapshots:
   '@humanwhocodes/module-importer@1.0.1': {}
 
   '@humanwhocodes/retry@0.4.3': {}
+
+  '@icons-pack/react-simple-icons@13.13.0(react@19.2.6)':
+    dependencies:
+      react: 19.2.6
 
   '@inquirer/ansi@2.0.5': {}
 

@@ -46,6 +46,22 @@ export default defineConfig({
   },
   plugins: [
     devtools(),
+    {
+      name: "bypass-api-assets",
+      configureServer(server: any) {
+        server.middlewares.use((req: any, res: any, next: any) => {
+          if (req.url && req.url.startsWith("/api/")) {
+            if (req.headers["sec-fetch-dest"] === "image") {
+              delete req.headers["sec-fetch-dest"];
+            }
+            if (req.headers.accept && req.headers.accept.includes("image/")) {
+              req.headers.accept = "*/*";
+            }
+          }
+          next();
+        });
+      },
+    },
     tanstackStart(),
     // https://tanstack.com/start/latest/docs/framework/react/guide/hosting
     nitro({

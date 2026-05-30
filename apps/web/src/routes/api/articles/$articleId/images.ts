@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { auth } from "@repo/auth/auth";
@@ -71,7 +72,7 @@ export const Route = createFileRoute("/api/articles/$articleId/images")({
           const mimeType = file.type || "application/octet-stream";
           const fileSize = file.size;
 
-          const storageRoot = process.env.STORAGE_PATH || "/home/joerg/slopware/storage";
+          const storageRoot = process.env.STORAGE_PATH || join(homedir(), "slopware/storage");
           const storageDir = join(
             storageRoot,
             `tenant-${context.tenantId}`,

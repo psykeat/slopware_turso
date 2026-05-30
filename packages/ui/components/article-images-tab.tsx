@@ -223,7 +223,8 @@ export function ArticleImagesTab({
   return (
     <div className="flex h-full flex-col space-y-4 p-4">
       {/* ── DRAG & DROP UPLOAD ZONE ────────────────────────────────────────── */}
-      <div
+      <button
+        type="button"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -256,7 +257,7 @@ export function ArticleImagesTab({
             <p className="text-[11px] text-ink-mute">Unterstützt PNG, JPG, GIF (max. 10MB)</p>
           </>
         )}
-      </div>
+      </button>
 
       {/* ── IMAGE GALLERY LISTING ──────────────────────────────────────────── */}
       {isLoading ? (

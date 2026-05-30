@@ -123,6 +123,8 @@ function LookupFieldInner<T>(
   const [dialogOpen, setDialogOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [userHasInteracted, setUserHasInteracted] = useState(false);
+  const [hasTyped, setHasTyped] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const fieldInputRef = useRef<HTMLInputElement>(null);
   const dialogSearchRef = useRef<HTMLInputElement>(null);
@@ -166,7 +168,8 @@ function LookupFieldInner<T>(
   const selectedItem = resolvedItem ?? null;
   const activeIndex = results.length === 0 ? 0 : Math.min(selectedIndex, results.length - 1);
 
-  const displayValue = isOpen || dialogOpen ? query : (selectedItem?.label ?? value ?? "");
+  const displayValue =
+    (isOpen || dialogOpen) && hasTyped ? query : (selectedItem?.label ?? value ?? "");
 
   useLayoutEffect(() => {
     if (!isOpen || dialogOpen) return;
@@ -220,6 +223,8 @@ function LookupFieldInner<T>(
     setDialogOpen(false);
     setQuery("");
     setSelectedIndex(0);
+    setUserHasInteracted(false);
+    setHasTyped(false);
   };
 
   const pick = (item: LookupItem<T>) => {
@@ -232,6 +237,9 @@ function LookupFieldInner<T>(
     setIsOpen(true);
     setQuery(initialQuery);
     setSelectedIndex(0);
+    const isTyped = initialQuery !== "";
+    setUserHasInteracted(isTyped);
+    setHasTyped(isTyped);
   };
 
   const toggleDialog = () => {
@@ -271,26 +279,42 @@ function LookupFieldInner<T>(
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
+      setUserHasInteracted(true);
       setSelectedIndex((index) => Math.min(index + 1, results.length - 1));
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
+      setUserHasInteracted(true);
       setSelectedIndex((index) => Math.max(index - 1, 0));
       return;
     }
 
     if (event.key === "Enter") {
       event.preventDefault();
-      const item = selectedResult;
-      if (item) pick(item);
+      if (query === "") {
+        onChange(null, null);
+        closeLookup();
+      } else {
+        const item = selectedResult;
+        if (item) pick(item);
+      }
       return;
     }
 
     if (event.key === "Tab" && !event.shiftKey) {
-      const item = selectedResult;
-      if (item) pick(item);
+      if (userHasInteracted) {
+        if (query === "") {
+          onChange(null, null);
+          closeLookup();
+        } else {
+          const item = selectedResult;
+          if (item) pick(item);
+        }
+      } else {
+        closeLookup();
+      }
       if (onTabForward) {
         event.preventDefault();
         requestAnimationFrame(() => onTabForward());
@@ -358,6 +382,12 @@ function LookupFieldInner<T>(
             setDialogOpen(false);
             setQuery("");
             setSelectedIndex(0);
+            setUserHasInteracted(false);
+            setHasTyped(false);
+          }}
+          onBlur={() => {
+            if (dialogOpen) return;
+            closeLookup();
           }}
           onClick={() => {
             if (disabled) return;
@@ -365,11 +395,15 @@ function LookupFieldInner<T>(
             setDialogOpen(false);
             setQuery("");
             setSelectedIndex(0);
+            setUserHasInteracted(false);
+            setHasTyped(false);
           }}
           onChange={(event) => {
             if (!isOpen && !dialogOpen) return;
             setQuery(event.target.value);
             setSelectedIndex(0);
+            setUserHasInteracted(true);
+            setHasTyped(true);
           }}
           onKeyDown={handleKeyDown}
         />

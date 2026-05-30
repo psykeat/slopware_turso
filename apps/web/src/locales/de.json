@@ -5,6 +5,8 @@
     "documents": "Belege",
     "accounting": "Buchhaltung",
     "import": "Import",
+    "email": "E-Mail",
+    "emailTemplates": "E-Mail-Vorlagen",
     "settings": "Einstellungen",
     "administration": "Administration",
     "baseTenant": "Basis-Mandant"
@@ -248,6 +250,9 @@
     "breadcrumb": "Belege",
     "technicalFields": "Technische Felder",
     "loading": "Lade…",
+    "linesTab": "Belegzeilen",
+    "headerTab": "Kopfdaten",
+    "shipmentTab": "Versand",
     "fields": {
       "documentType": "Belegart",
       "documentGroup": "Beleggruppe",
@@ -257,7 +262,13 @@
       "paymentTerm": "Zahlungsbedingung",
       "shippingMethod": "Versandart",
       "date": "Datum",
-      "currency": "Währung"
+      "currency": "Währung",
+      "documentNo": "Belegnr.",
+      "status": "Status",
+      "customerId": "Kunde",
+      "net": "Netto",
+      "tax": "MwSt.",
+      "gross": "Gesamt"
     },
     "lookup": {
       "search": "Suchen…",

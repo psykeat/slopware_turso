@@ -797,12 +797,14 @@ function DataGridInner<T>(
         row: clampedIndex,
       };
 
+      const shouldSetFocus = !focusState.panel || focusState.panel === panelId;
       if (
-        !last ||
-        last.id !== id ||
-        last.entity !== entityName ||
-        last.panel !== panelId ||
-        last.row !== clampedIndex
+        shouldSetFocus &&
+        (!last ||
+          last.id !== id ||
+          last.entity !== entityName ||
+          last.panel !== panelId ||
+          last.row !== clampedIndex)
       ) {
         lastFocusRef.current = { id, entity: entityName, panel: panelId, row: clampedIndex };
         setFocus(nextFocus);
@@ -810,7 +812,16 @@ function DataGridInner<T>(
     }
     // keyExtractor is intentionally omitted — inline prop, always functionally stable
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, isDesignMode, selectedIndex, entityName, panelId, rows.length]);
+  }, [
+    data,
+    isDesignMode,
+    selectedIndex,
+    entityName,
+    panelId,
+    rows.length,
+    focusState.workspace,
+    focusState.panel,
+  ]);
 
   // Scoped keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1272,6 +1283,20 @@ function DataGridInner<T>(
             className="flex-1 overflow-auto outline-none"
             tabIndex={0}
             onKeyDown={handleKeyDown}
+            onFocus={() => {
+              if (focusState.panel !== panelId && data.length > 0) {
+                const clampedIndex = Math.max(0, Math.min(selectedIndex, rows.length - 1));
+                const row = data[clampedIndex] ?? data[0];
+                const id = keyExtractor(row);
+                setFocus({
+                  entity: entityName,
+                  recordId: id,
+                  panel: panelId,
+                  area: "grid",
+                  row: clampedIndex,
+                });
+              }
+            }}
           >
             {/* Sticky header row */}
             <div className="sticky top-0 z-10 flex border-b border-hairline bg-canvas-soft">

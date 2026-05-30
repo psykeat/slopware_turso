@@ -5,6 +5,8 @@
     "documents": "Documents",
     "accounting": "Accounting",
     "import": "Import",
+    "email": "Email",
+    "emailTemplates": "Email Templates",
     "settings": "Settings",
     "administration": "Administration",
     "baseTenant": "Base Tenant"
@@ -248,6 +250,9 @@
     "breadcrumb": "Documents",
     "technicalFields": "Technical Fields",
     "loading": "Loading…",
+    "linesTab": "Lines",
+    "headerTab": "Header",
+    "shipmentTab": "Shipment",
     "fields": {
       "documentType": "Document Type",
       "documentGroup": "Document Group",
@@ -257,7 +262,13 @@
       "paymentTerm": "Payment Terms",
       "shippingMethod": "Shipping Method",
       "date": "Date",
-      "currency": "Currency"
+      "currency": "Currency",
+      "documentNo": "No.",
+      "status": "Status",
+      "customerId": "Customer",
+      "net": "Net",
+      "tax": "Tax",
+      "gross": "Gross"
     },
     "lookup": {
       "search": "Search…",

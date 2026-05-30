@@ -31,6 +31,22 @@ export class DataService {
     this.isSystemAdmin = isSystemAdmin;
   }
 
+  private async decryptLlmApiKeyListIfNeeded(entityName: string, rows: any[]) {
+    if (entityName === "tenantLlmConfig" && Array.isArray(rows)) {
+      const { decryptEmailCredentials } = await import("./email/credential-crypto");
+      for (const row of rows) {
+        if (row && row.apiKey) {
+          try {
+            row.apiKey = decryptEmailCredentials<string>(row.apiKey);
+          } catch {
+            // Fallback
+          }
+        }
+      }
+    }
+    return rows;
+  }
+
   private getTable(entityName: string) {
     const table = (schema as any)[entityName];
     if (!table) throw new Error(`Entity ${entityName} not found in schema`);
@@ -239,16 +255,44 @@ export class DataService {
           ? conditions[0]
           : and(...conditions);
 
+    if (entityName === "documentLine") {
+      const dataQ = db
+        .select({
+          ...getColumns(table),
+          articleNo: schema.article.articleNo,
+        })
+        .from(table)
+        .leftJoin(schema.article, eq(table.articleId, schema.article.articleId));
+      if (whereClause) dataQ.where(whereClause);
+      applyOptions(dataQ);
+
+      if (!options.count) return await dataQ;
+
+      const countQ = db
+        .select({ total: drizzleCount() })
+        .from(table)
+        .leftJoin(schema.article, eq(table.articleId, schema.article.articleId));
+      if (whereClause) countQ.where(whereClause);
+
+      const [data, countRows] = await Promise.all([dataQ, countQ]);
+      return { data, total: Number(countRows[0]?.total ?? 0) };
+    }
+
     const dataQ = db.select().from(table);
     if (whereClause) dataQ.where(whereClause);
     applyOptions(dataQ);
 
-    if (!options.count) return await dataQ;
+    if (!options.count) {
+      const rows = await dataQ;
+      await this.decryptLlmApiKeyListIfNeeded(entityName, rows);
+      return rows;
+    }
 
     const countQ = db.select({ total: drizzleCount() }).from(table);
     if (whereClause) countQ.where(whereClause);
 
     const [data, countRows] = await Promise.all([dataQ, countQ]);
+    await this.decryptLlmApiKeyListIfNeeded(entityName, data);
     return { data, total: Number(countRows[0]?.total ?? 0) };
   }
 
@@ -268,7 +312,11 @@ export class DataService {
       .from(table)
       .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .limit(1);
-    return results[0] || null;
+    const row = results[0] || null;
+    if (row) {
+      await this.decryptLlmApiKeyListIfNeeded(entityName, [row]);
+    }
+    return row;
   }
 
   async create(entityName: string, data: any) {
@@ -280,7 +328,14 @@ export class DataService {
         ? { ...lifecycleValues, tenantId: this.tenantId }
         : lifecycleValues;
 
-    return await db.insert(table).values(values).returning();
+    if (entityName === "tenantLlmConfig" && values.apiKey) {
+      const { encryptEmailCredentials } = await import("./email/credential-crypto");
+      values.apiKey = encryptEmailCredentials(values.apiKey);
+    }
+
+    const inserted = await db.insert(table).values(values).returning();
+    await this.decryptLlmApiKeyListIfNeeded(entityName, inserted);
+    return inserted;
   }
 
   async patch(entityName: string, id: string, data: any) {
@@ -315,6 +370,11 @@ export class DataService {
       currentRow,
     );
 
+    if (entityName === "tenantLlmConfig" && longTextAwareData.apiKey) {
+      const { encryptEmailCredentials } = await import("./email/credential-crypto");
+      longTextAwareData.apiKey = encryptEmailCredentials(longTextAwareData.apiKey);
+    }
+
     let articlePrimaryBeforeArchive: string | null = null;
     if (
       entityName === "articleImage" &&
@@ -341,6 +401,8 @@ export class DataService {
       .set(longTextAwareData)
       .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .returning();
+
+    await this.decryptLlmApiKeyListIfNeeded(entityName, updatedRows);
 
     if (
       entityName === "articleImage" &&

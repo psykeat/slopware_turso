@@ -45,6 +45,7 @@ export interface AddressSnapshot {
 }
 
 export interface AddressPickerFieldProps {
+  id?: string;
   label: string;
   value: string | null;
   addressData: AddressSnapshot | null;
@@ -140,6 +141,7 @@ function snapshotFromSearchResult(addr: AddressResult): AddressSnapshot {
 }
 
 export function AddressPickerField({
+  id,
   label,
   value,
   addressData,
@@ -325,6 +327,7 @@ export function AddressPickerField({
       <div className="relative">
         <input
           ref={inputRef}
+          id={id}
           tabIndex={locked ? -1 : tabIndex}
           className={cn(inputBase, "pr-8", locked && "cursor-not-allowed opacity-80")}
           placeholder="Suchen..."

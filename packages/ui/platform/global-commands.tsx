@@ -1,10 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
+import { useAiOverlay } from "./ai-overlay";
 import { useCommands } from "./command-registry";
 
 export function GlobalCommands() {
   const { registerCommand } = useCommands();
+  const { requestAiOverlay } = useAiOverlay();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -56,6 +58,24 @@ export function GlobalCommands() {
       handler: () => navigate({ to: "/app/settings/" as any }),
     });
 
+    const unregister6 = registerCommand({
+      id: "nav-email",
+      scope: "global",
+      group: "navigation",
+      label: { en: "Email", de: "E-Mail" },
+      shortcut: "Alt+6",
+      handler: () => navigate({ to: "/app/email" as any }),
+    });
+
+    const unregister7 = registerCommand({
+      id: "nav-email-templates",
+      scope: "global",
+      group: "navigation",
+      label: { en: "Email Templates", de: "E-Mail-Vorlagen" },
+      shortcut: "Alt+7",
+      handler: () => navigate({ to: "/app/email-templates" as any }),
+    });
+
     const unregStats = registerCommand({
       id: "open-statistics",
       scope: "global",
@@ -66,6 +86,18 @@ export function GlobalCommands() {
         // StatisticsModule listens for this command
         const event = new CustomEvent("slopware:open-statistics");
         window.dispatchEvent(event);
+      },
+    });
+
+    const unregAi = registerCommand({
+      id: "open-ai-assistant",
+      scope: "global",
+      group: "assistant",
+      label: { en: "AI Assistant", de: "KI-Assistent" },
+      shortcut: "Alt+A",
+      isEnabled: (state) => state.workspace === "email" && state.entity === "emailThread",
+      handler: () => {
+        requestAiOverlay();
       },
     });
 
@@ -87,10 +119,13 @@ export function GlobalCommands() {
       unregister2();
       unregister3();
       unregister0();
+      unregister6();
+      unregister7();
       unregStats();
+      unregAi();
       unregPalette();
     };
-  }, [registerCommand, navigate]);
+  }, [registerCommand, navigate, requestAiOverlay]);
 
   return null;
 }

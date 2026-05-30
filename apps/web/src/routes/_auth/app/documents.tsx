@@ -26,6 +26,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import {
+  EmailComposeDialog,
+  type EmailComposeAction,
+  type EmailComposeAttachment,
+  type EmailComposeIdentity,
+  type EmailComposeSubmitValue,
+  type EmailComposeValue,
+} from "#/components/email/EmailComposeDialog";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
 
 export const Route = createFileRoute("/_auth/app/documents")({
@@ -60,6 +68,23 @@ function addressDisplayName(addr: any): string {
     addr.addressNo ||
     ""
   );
+}
+
+function formatEmailAddresses(
+  value: Array<{ email: string; name?: string | null }> | undefined | null,
+) {
+  return (value ?? [])
+    .map((item) => item.email)
+    .filter(Boolean)
+    .join(", ");
+}
+
+function parseEmailAddresses(value: string) {
+  return value
+    .split(",")
+    .map((email) => email.trim())
+    .filter(Boolean)
+    .map((email) => ({ email }));
 }
 
 interface DocumentGroup {
@@ -912,6 +937,22 @@ function DocumentsModule() {
     focusState.entity === "document" ? focusState.recordId : null,
   );
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [documentMailBusy, setDocumentMailBusy] = useState(false);
+  const [documentMailOpen, setDocumentMailOpen] = useState(false);
+  const [documentMailIdentities, setDocumentMailIdentities] = useState<EmailComposeIdentity[]>([]);
+  const [documentMailComposer, setDocumentMailComposer] = useState<EmailComposeValue>({
+    identityId: "",
+    to: "",
+    cc: "",
+    bcc: "",
+    subject: "",
+    bodyText: "",
+    bodyHtml: "",
+  });
+  const [documentMailAttachments, setDocumentMailAttachments] = useState<EmailComposeAttachment[]>(
+    [],
+  );
+  const [documentMailNotice, setDocumentMailNotice] = useState<string | null>(null);
   const lastSyncIdRef = React.useRef<string | null>(activeDocumentId);
   const gridState = useGridUrlState({ defaultPageSize: 50 });
   const documentRestoreIdRef = React.useRef<string | null | undefined>(undefined);
@@ -1185,6 +1226,122 @@ function DocumentsModule() {
     });
   };
 
+  const openDocumentMail = useCallback(async () => {
+    if (!activeDocumentId) {
+      toast.error("No document selected");
+      return;
+    }
+    setDocumentMailBusy(true);
+    try {
+      const accountsRes = await fetch("/api/email/accounts");
+      if (!accountsRes.ok) throw new Error(await accountsRes.text());
+      const accounts = (await accountsRes.json()) as Array<{ emailAccountId: string }>;
+      let identities: EmailComposeIdentity[] = [];
+      let identity: EmailComposeIdentity | undefined;
+      for (const account of accounts) {
+        const identitiesRes = await fetch(
+          `/api/email/accounts/${account.emailAccountId}/identities`,
+        );
+        if (!identitiesRes.ok) continue;
+        const accountIdentities = (await identitiesRes.json()) as EmailComposeIdentity[];
+        identities = [...identities, ...accountIdentities];
+        identity = accountIdentities.find((item) => item.canSend) ?? identity;
+      }
+      if (!identity) throw new Error("No sending identity available");
+
+      const res = await fetch(`/api/email/documents/${activeDocumentId}/compose-defaults`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          emailIdentityId: identity.emailIdentityId,
+          templateId: null,
+          language: null,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const result = await res.json();
+      const warnings = Array.isArray(result.warnings)
+        ? result.warnings.filter((item: unknown) => typeof item === "string")
+        : [];
+      setDocumentMailIdentities(identities.filter((item) => item.canSend !== false));
+      setDocumentMailComposer({
+        identityId: result.emailIdentityId ?? identity.emailIdentityId,
+        to: formatEmailAddresses(result.to),
+        cc: formatEmailAddresses(result.cc),
+        bcc: formatEmailAddresses(result.bcc),
+        subject: result.subject ?? "",
+        bodyText: result.bodyText ?? "",
+        bodyHtml: result.bodyHtml ?? "",
+      });
+      setDocumentMailAttachments(
+        (Array.isArray(result.attachments) ? result.attachments : []).map((attachment: any) => ({
+          fileName: String(attachment.fileName ?? ""),
+          contentType: String(attachment.contentType ?? "application/octet-stream"),
+          sizeBytes: typeof attachment.sizeBytes === "number" ? attachment.sizeBytes : null,
+          readOnly: true,
+        })),
+      );
+      setDocumentMailNotice(warnings.length > 0 ? warnings.join(" ") : null);
+      setDocumentMailOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDocumentMailBusy(false);
+    }
+  }, [activeDocumentId]);
+
+  const submitDocumentMail = useCallback(
+    async (action: EmailComposeAction, value: EmailComposeSubmitValue) => {
+      if (!activeDocumentId) return;
+      setDocumentMailBusy(true);
+      try {
+        const res = await fetch(`/api/email/documents/${activeDocumentId}/prepare-send`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            emailIdentityId: value.identityId,
+            to: parseEmailAddresses(value.to),
+            cc: parseEmailAddresses(value.cc),
+            bcc: parseEmailAddresses(value.bcc),
+            subject: value.subject,
+            bodyText: value.bodyText,
+            bodyHtml: value.bodyHtml,
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const result = await res.json();
+        const outboxId = result.draft?.outbox?.emailOutboxId ?? result.draft?.emailOutboxId;
+        if (!outboxId) throw new Error("Email draft was not created");
+
+        if (action !== "save-draft") {
+          const actionPath =
+            action === "provider-draft" ? "provider-draft" : action === "queue" ? "queue" : "send";
+          const actionRes = await fetch(`/api/email/drafts/${outboxId}/${actionPath}`, {
+            method: "POST",
+          });
+          if (!actionRes.ok) throw new Error(await actionRes.text());
+        }
+
+        toast.success(
+          action === "save-draft"
+            ? "Draft saved"
+            : action === "provider-draft"
+              ? "Provider draft saved"
+              : action === "queue"
+                ? "Draft queued"
+                : "Draft sent",
+        );
+        setDocumentMailOpen(false);
+        queryClient.invalidateQueries({ queryKey: ["email"] });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        setDocumentMailBusy(false);
+      }
+    },
+    [activeDocumentId, queryClient],
+  );
+
   // Register context commands
   useEffect(() => {
     if (editorDocId) return;
@@ -1350,6 +1507,17 @@ function DocumentsModule() {
         queryClient.invalidateQueries({ queryKey: ["data", "documentLine"] });
       },
     });
+    const unregEmail = registerCommand({
+      id: "document-mail",
+      scope: "context",
+      group: "workflow",
+      label: { en: "Send by Email", de: "Per E-Mail senden" },
+      shortcut: "Ctrl+Alt+M",
+      isEnabled: (s) => !!s.recordId && s.entity === "document",
+      handler: async () => {
+        await openDocumentMail();
+      },
+    });
     const unregImportTracking = registerCommand({
       id: "import-tracking-csv",
       scope: "context",
@@ -1398,9 +1566,10 @@ function DocumentsModule() {
       unregDup();
       unregPrint();
       unregPost();
+      unregEmail();
       unregImportTracking();
     };
-  }, [registerCommand, t, queryClient, editorDocId]);
+  }, [editorDocId, openDocumentMail, queryClient, registerCommand, t]);
 
   // Tree keyboard navigation
   useEffect(() => {
@@ -1528,7 +1697,7 @@ function DocumentsModule() {
             columns={[
               {
                 key: "lineNo",
-                header: "Pos.",
+                header: t("document.lines.pos", { defaultValue: "Pos." }),
                 isNumeric: true,
                 render: (r: any) => (
                   <span className="font-mono tabular-nums">
@@ -1537,14 +1706,19 @@ function DocumentsModule() {
                 ),
               },
               {
-                key: "articleId",
-                header: "Article",
-                render: (r: any) => <span className="font-mono text-[12px]">{r.articleId}</span>,
+                key: "articleNo",
+                header: t("document.lines.article", { defaultValue: "Article" }),
+                render: (r: any) => (
+                  <span className="font-mono text-[12px]">{r.articleNo || "—"}</span>
+                ),
               },
-              { key: "articleTextSnapshot", header: "Description" },
+              {
+                key: "articleTextSnapshot",
+                header: t("document.lines.description", { defaultValue: "Description" }),
+              },
               {
                 key: "quantity",
-                header: "Qty",
+                header: t("document.lines.qty", { defaultValue: "Qty" }),
                 isNumeric: true,
                 render: (r: any) => (
                   <span className="tabular-nums">
@@ -1554,7 +1728,7 @@ function DocumentsModule() {
               },
               {
                 key: "netPrice",
-                header: "Unit Price",
+                header: t("document.lines.price", { defaultValue: "Unit Price" }),
                 isNumeric: true,
                 render: (r: any) => (
                   <span className="tabular-nums">{formatMoney(r.netPrice ?? 0)}</span>
@@ -1562,7 +1736,7 @@ function DocumentsModule() {
               },
               {
                 key: "discountPercentage",
-                header: "Disc.",
+                header: t("document.lines.discount", { defaultValue: "Disc." }),
                 isNumeric: true,
                 render: (r: any) => (
                   <span className="tabular-nums">{r.discountPercentage ?? 0}%</span>
@@ -1570,7 +1744,7 @@ function DocumentsModule() {
               },
               {
                 key: "lineTotalNet",
-                header: "Total",
+                header: t("document.lines.net", { defaultValue: "Total" }),
                 isNumeric: true,
                 render: (r: any) => (
                   <span className="tabular-nums">{formatMoney(r.lineTotalNet ?? 0)}</span>
@@ -1592,29 +1766,62 @@ function DocumentsModule() {
                 title: t("document.section", { defaultValue: "Beleg" }),
                 fields: [
                   {
-                    label: "No.",
+                    label: t("document.fields.documentNo", { defaultValue: "No." }),
                     value: (
                       <span className="font-mono tabular-nums">{selectedDocument?.documentNo}</span>
                     ),
                   },
-                  { label: "Type", value: selectedDocument?.documentTypeId },
-                  { label: "Date", value: selectedDocument?.documentDate },
-                  { label: "Status", value: selectedDocument?.status },
+                  {
+                    label: t("document.fields.documentType", { defaultValue: "Type" }),
+                    value: selectedDocument?.documentTypeId,
+                  },
+                  {
+                    label: t("document.fields.date", { defaultValue: "Date" }),
+                    value: selectedDocument?.documentDate,
+                  },
+                  {
+                    label: t("document.fields.status", { defaultValue: "Status" }),
+                    value: selectedDocument?.status,
+                  },
                 ],
               },
               {
                 title: t("document.parties", { defaultValue: "Beteiligte" }),
                 fields: [
-                  { label: "Customer", value: selectedDocument?.customerId },
-                  { label: "Currency", value: selectedDocument?.currencyId },
+                  {
+                    label: t("document.fields.customerId", { defaultValue: "Customer" }),
+                    value: selectedDocument?.customerId,
+                  },
+                  {
+                    label: t("document.fields.currency", { defaultValue: "Currency" }),
+                    value: selectedDocument?.currencyId,
+                  },
                 ],
               },
               {
                 title: t("document.totals", { defaultValue: "Summen" }),
                 fields: [
-                  { label: "Net", value: selectedDocument?.totalNet },
-                  { label: "Tax", value: selectedDocument?.totalTax },
-                  { label: "Gross", value: selectedDocument?.totalGross },
+                  {
+                    label: t("document.fields.net", { defaultValue: "Net" }),
+                    value:
+                      selectedDocument?.totalNet != null
+                        ? formatMoney(selectedDocument.totalNet)
+                        : "—",
+                  },
+                  {
+                    label: t("document.fields.tax", { defaultValue: "Tax" }),
+                    value:
+                      selectedDocument?.totalTax != null
+                        ? formatMoney(selectedDocument.totalTax)
+                        : "—",
+                  },
+                  {
+                    label: t("document.fields.gross", { defaultValue: "Gross" }),
+                    value:
+                      selectedDocument?.totalGross != null
+                        ? formatMoney(selectedDocument.totalGross)
+                        : "—",
+                  },
                 ],
               },
             ]}
@@ -1623,7 +1830,7 @@ function DocumentsModule() {
       },
       {
         id: "shipment",
-        label: "Versand",
+        label: t("document.shipmentTab", { defaultValue: "Versand" }),
         content: <ShipmentInspector documentId={activeDocumentId} />,
       },
     ],
@@ -1632,6 +1839,18 @@ function DocumentsModule() {
 
   return (
     <>
+      <EmailComposeDialog
+        open={documentMailOpen}
+        title="Send document by email"
+        identities={documentMailIdentities}
+        value={documentMailComposer}
+        mode={documentMailComposer.bodyHtml ? "html" : "plain"}
+        attachments={documentMailAttachments}
+        notice={documentMailNotice}
+        busy={documentMailBusy}
+        onClose={() => setDocumentMailOpen(false)}
+        onSubmit={submitDocumentMail}
+      />
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex h-10 shrink-0 items-center gap-2 border-b border-hairline bg-canvas px-4">
           <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
@@ -1651,6 +1870,14 @@ function DocumentsModule() {
               </option>
             ))}
           </select>
+          <button
+            onClick={() => void openDocumentMail()}
+            disabled={!activeDocumentId || documentMailBusy}
+            className="ml-auto flex h-7 items-center gap-1.5 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
+          >
+            <ExternalLinkIcon className="size-3.5" />
+            {documentMailBusy ? "Preparing…" : "Email"}
+          </button>
         </div>
         <div className="min-h-0 flex-1">
           <TriViewWorkspace

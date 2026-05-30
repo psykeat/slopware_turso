@@ -27,6 +27,9 @@
     "seed-document-sequences": "tsx src/scripts/seed-document-sequences.ts",
     "setup:reference": "pnpm run import-countries-csv && pnpm run seed-currencies && pnpm run import-postal-codes && pnpm run import-german-postal-codes",
     "test:introspection": "tsx src/scripts/test-introspection.ts",
+    "mail:smoke": "tsx src/scripts/mail-smoke.ts",
+    "mail:resilience": "tsx src/scripts/mail-resilience-smoke.ts",
+    "mail:fixtures": "tsx src/scripts/mail-fixture-tests.ts",
     "auth:generate": "vpx https://pkg.pr.new/auth@9489 generate --config ../auth/src/auth.ts --y --output ./src/schema/auth.schema.ts"
   },
   "dependencies": {

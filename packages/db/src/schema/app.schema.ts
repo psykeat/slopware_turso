@@ -2093,6 +2093,514 @@ export const accountingExportRow = pgTable(
   ],
 );
 
+export const emailAccount = pgTable(
+  "email_account",
+  {
+    emailAccountId: uuid("email_account_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    provider: text("provider").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    displayName: text("display_name").notNull(),
+    primaryEmail: text("primary_email").notNull(),
+    status: text("status").notNull().default("connected"),
+    credentialsEncrypted: text("credentials_encrypted").notNull(),
+    scopes: jsonb("scopes").notNull().default([]),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastSyncStatus: text("last_sync_status").notNull().default("idle"),
+    lastSyncError: text("last_sync_error"),
+    watchExpiresAt: timestamp("watch_expires_at", { withTimezone: true }),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("email_account_tenant_provider_account_unique").on(
+      table.tenantId,
+      table.provider,
+      table.providerAccountId,
+    ),
+    index("idx_email_account_tenant").on(table.tenantId),
+    index("idx_email_account_status").on(table.tenantId, table.status),
+    check("chk_email_account_provider", sql`provider IN ('gmail', 'microsoft')`),
+    check(
+      "chk_email_account_status",
+      sql`status IN ('connected', 'reauth_required', 'disabled', 'error')`,
+    ),
+    check(
+      "chk_email_account_sync_status",
+      sql`last_sync_status IN ('idle', 'queued', 'syncing', 'ok', 'error', 'recovery_required')`,
+    ),
+  ],
+);
+
+export const emailIdentity = pgTable(
+  "email_identity",
+  {
+    emailIdentityId: uuid("email_identity_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id")
+      .notNull()
+      .references(() => emailAccount.emailAccountId),
+    email: text("email").notNull(),
+    displayName: text("display_name"),
+    providerIdentityId: text("provider_identity_id"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    canSend: boolean("can_send").notNull().default(true),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("email_identity_account_email_unique").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.email,
+    ),
+    index("idx_email_identity_account").on(table.tenantId, table.emailAccountId),
+  ],
+);
+
+export const emailAccountUserGrant = pgTable(
+  "email_account_user_grant",
+  {
+    emailAccountUserGrantId: uuid("email_account_user_grant_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id")
+      .notNull()
+      .references(() => emailAccount.emailAccountId),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    canRead: boolean("can_read").notNull().default(true),
+    canSend: boolean("can_send").notNull().default(false),
+    canManage: boolean("can_manage").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("email_account_grant_user_unique").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.userId,
+    ),
+    index("idx_email_account_grant_user").on(table.tenantId, table.userId),
+  ],
+);
+
+export const emailThread = pgTable(
+  "email_thread",
+  {
+    emailThreadId: uuid("email_thread_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id")
+      .notNull()
+      .references(() => emailAccount.emailAccountId),
+    providerThreadId: text("provider_thread_id").notNull(),
+    subject: text("subject"),
+    snippet: text("snippet"),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+    isRead: boolean("is_read").notNull().default(false),
+    isStarred: boolean("is_starred").notNull().default(false),
+    messageCount: integer("message_count").notNull().default(0),
+    relatedAddressId: uuid("related_address_id").references(() => address.addressId),
+    relatedDocumentId: uuid("related_document_id").references(() => document.documentId),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("email_thread_account_provider_unique").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.providerThreadId,
+    ),
+    index("idx_email_thread_mailbox_list").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.archived,
+      table.lastMessageAt,
+      table.createdAt,
+    ),
+    index("idx_email_thread_document").on(table.tenantId, table.relatedDocumentId),
+    index("idx_email_thread_address").on(table.tenantId, table.relatedAddressId),
+  ],
+);
+
+export const emailMessage = pgTable(
+  "email_message",
+  {
+    emailMessageId: uuid("email_message_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id")
+      .notNull()
+      .references(() => emailAccount.emailAccountId),
+    emailThreadId: uuid("email_thread_id")
+      .notNull()
+      .references(() => emailThread.emailThreadId),
+    providerMessageId: text("provider_message_id").notNull(),
+    providerDraftId: text("provider_draft_id"),
+    internetMessageId: text("internet_message_id"),
+    direction: text("direction").notNull(),
+    fromJson: jsonb("from_json").notNull().default({}),
+    toJson: jsonb("to_json").notNull().default([]),
+    ccJson: jsonb("cc_json").notNull().default([]),
+    bccJson: jsonb("bcc_json").notNull().default([]),
+    subject: text("subject"),
+    snippet: text("snippet"),
+    bodyHtml: text("body_html"),
+    bodyText: text("body_text"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    isRead: boolean("is_read").notNull().default(false),
+    hasAttachments: boolean("has_attachments").notNull().default(false),
+    rawHeaders: jsonb("raw_headers").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("email_message_account_provider_unique").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.providerMessageId,
+    ),
+    index("idx_email_message_thread").on(table.tenantId, table.emailThreadId),
+    index("idx_email_message_thread_timeline").on(
+      table.tenantId,
+      table.emailThreadId,
+      table.receivedAt,
+      table.sentAt,
+      table.createdAt,
+    ),
+    index("idx_email_message_account_date").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.receivedAt,
+    ),
+    check("chk_email_message_direction", sql`direction IN ('inbound', 'outbound', 'draft')`),
+  ],
+);
+
+export const emailAttachment = pgTable(
+  "email_attachment",
+  {
+    emailAttachmentId: uuid("email_attachment_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailMessageId: uuid("email_message_id")
+      .notNull()
+      .references(() => emailMessage.emailMessageId),
+    providerAttachmentId: text("provider_attachment_id"),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type"),
+    sizeBytes: integer("size_bytes"),
+    storageKey: text("storage_key"),
+    inlineContentId: text("inline_content_id"),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("email_attachment_message_provider_unique").on(
+      table.tenantId,
+      table.emailMessageId,
+      table.providerAttachmentId,
+    ),
+    index("idx_email_attachment_message").on(table.tenantId, table.emailMessageId),
+    index("idx_email_attachment_storage").on(table.tenantId, table.storageKey),
+  ],
+);
+
+export const emailLabel = pgTable(
+  "email_label",
+  {
+    emailLabelId: uuid("email_label_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id")
+      .notNull()
+      .references(() => emailAccount.emailAccountId),
+    providerLabelId: text("provider_label_id").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").notNull().default("label"),
+    color: text("color"),
+    parentProviderLabelId: text("parent_provider_label_id"),
+    messageCount: integer("message_count").notNull().default(0),
+    unreadCount: integer("unread_count").notNull().default(0),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("email_label_account_provider_unique").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.providerLabelId,
+    ),
+    index("idx_email_label_account_active").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.archived,
+      table.kind,
+      table.name,
+    ),
+    check("chk_email_label_kind", sql`kind IN ('system', 'folder', 'label')`),
+  ],
+);
+
+export const emailMessageLabel = pgTable(
+  "email_message_label",
+  {
+    emailMessageLabelId: uuid("email_message_label_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailMessageId: uuid("email_message_id")
+      .notNull()
+      .references(() => emailMessage.emailMessageId),
+    emailLabelId: uuid("email_label_id")
+      .notNull()
+      .references(() => emailLabel.emailLabelId),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("email_message_label_unique").on(
+      table.tenantId,
+      table.emailMessageId,
+      table.emailLabelId,
+    ),
+    index("idx_email_message_label_label").on(table.tenantId, table.emailLabelId),
+  ],
+);
+
+export const emailSyncState = pgTable(
+  "email_sync_state",
+  {
+    emailSyncStateId: uuid("email_sync_state_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id")
+      .notNull()
+      .references(() => emailAccount.emailAccountId),
+    scope: text("scope").notNull().default("mailbox"),
+    cursor: text("cursor"),
+    cursorJson: jsonb("cursor_json"),
+    status: text("status").notNull().default("idle"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("email_sync_state_account_scope_unique").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.scope,
+    ),
+    index("idx_email_sync_state_account").on(table.tenantId, table.emailAccountId),
+    check(
+      "chk_email_sync_state_status",
+      sql`status IN ('idle', 'queued', 'syncing', 'ok', 'error', 'recovery_required')`,
+    ),
+  ],
+);
+
+export const emailTemplate = pgTable(
+  "email_template",
+  {
+    emailTemplateId: uuid("email_template_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    category: text("category").notNull().default("document"),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    subjectTemplate: text("subject_template").notNull(),
+    bodyHtmlTemplate: text("body_html_template").notNull(),
+    bodyTextTemplate: text("body_text_template"),
+    language: char("language", { length: 2 }),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("email_template_tenant_category_code_unique").on(
+      table.tenantId,
+      table.category,
+      table.code,
+    ),
+    index("idx_email_template_tenant").on(table.tenantId, table.category),
+  ],
+);
+
+export const emailTemplateBinding = pgTable(
+  "email_template_binding",
+  {
+    emailTemplateBindingId: uuid("email_template_binding_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailTemplateId: uuid("email_template_id")
+      .notNull()
+      .references(() => emailTemplate.emailTemplateId),
+    documentType: char("document_type", { length: 1 }),
+    companyId: uuid("company_id").references(() => company.companyId),
+    language: char("language", { length: 2 }),
+    emailIdentityId: uuid("email_identity_id").references(() => emailIdentity.emailIdentityId),
+    priority: integer("priority").notNull().default(100),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_email_template_binding_lookup").on(
+      table.tenantId,
+      table.documentType,
+      table.companyId,
+      table.language,
+      table.emailIdentityId,
+    ),
+  ],
+);
+
+export const emailTemplateRenderLog = pgTable(
+  "email_template_render_log",
+  {
+    emailTemplateRenderLogId: uuid("email_template_render_log_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailTemplateId: uuid("email_template_id").references(() => emailTemplate.emailTemplateId),
+    emailTemplateBindingId: uuid("email_template_binding_id").references(
+      () => emailTemplateBinding.emailTemplateBindingId,
+    ),
+    documentId: uuid("document_id").references(() => document.documentId),
+    emailIdentityId: uuid("email_identity_id").references(() => emailIdentity.emailIdentityId),
+    language: char("language", { length: 2 }),
+    subject: text("subject").notNull(),
+    renderedHash: text("rendered_hash"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: text("created_by").references(() => user.id),
+  },
+  (table) => [
+    index("idx_email_template_render_log_document").on(table.tenantId, table.documentId),
+    index("idx_email_template_render_log_template").on(table.tenantId, table.emailTemplateId),
+  ],
+);
+
+export const emailJob = pgTable(
+  "email_job",
+  {
+    emailJobId: uuid("email_job_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id").references(() => emailAccount.emailAccountId),
+    jobType: text("job_type").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    status: text("status").notNull().default("queued"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(5),
+    runAfter: timestamp("run_after", { withTimezone: true }).notNull().defaultNow(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("email_job_idempotency_unique").on(table.tenantId, table.idempotencyKey),
+    index("idx_email_job_queue_claim").on(
+      table.tenantId,
+      table.status,
+      table.runAfter,
+      table.createdAt,
+    ),
+    index("idx_email_job_account").on(table.tenantId, table.emailAccountId),
+    check(
+      "chk_email_job_type",
+      sql`job_type IN ('initial_sync', 'incremental_sync', 'watch_renewal', 'reconcile', 'send', 'fetch_attachment')`,
+    ),
+    check("chk_email_job_status", sql`status IN ('queued', 'running', 'done', 'failed')`),
+  ],
+);
+
+export const emailOutbox = pgTable(
+  "email_outbox",
+  {
+    emailOutboxId: uuid("email_outbox_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id")
+      .notNull()
+      .references(() => emailAccount.emailAccountId),
+    emailIdentityId: uuid("email_identity_id")
+      .notNull()
+      .references(() => emailIdentity.emailIdentityId),
+    emailMessageId: uuid("email_message_id").references(() => emailMessage.emailMessageId),
+    providerDraftId: text("provider_draft_id"),
+    status: text("status").notNull().default("draft"),
+    payload: jsonb("payload").notNull().default({}),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => user.id),
+  },
+  (table) => [
+    index("idx_email_outbox_queue").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.status,
+      table.updatedAt,
+      table.createdAt,
+    ),
+    index("idx_email_outbox_message").on(table.tenantId, table.emailMessageId),
+    check(
+      "chk_email_outbox_status",
+      sql`status IN ('draft', 'queued', 'sending', 'sent', 'failed')`,
+    ),
+  ],
+);
+
 export const devCycles = pgTable("dev_cycles", {
   cycleId: uuid("cycle_id")
     .primaryKey()
@@ -2172,4 +2680,159 @@ export const documentShipmentPackage = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("idx_shipment_package_shipment").on(table.documentShipmentId)],
+);
+
+export const aiRun = pgTable(
+  "ai_run",
+  {
+    runId: uuid("run_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    taskScope: text("task_scope").notNull(),
+    status: text("status").notNull(),
+    durationMs: integer("duration_ms"),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_ai_run_tenant").on(table.tenantId),
+    index("idx_ai_run_user").on(table.userId),
+    index("idx_ai_run_status").on(table.status),
+  ],
+);
+
+export const aiPromptVersion = pgTable(
+  "ai_prompt_version",
+  {
+    promptVersionId: uuid("prompt_version_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id").references(() => tenant.tenantId),
+    systemPrompt: text("system_prompt").notNull(),
+    inputSchema: jsonb("input_schema").notNull(),
+    modelConfig: jsonb("model_config").notNull(),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [index("idx_ai_prompt_version_tenant").on(table.tenantId)],
+);
+
+export const aiPlan = pgTable(
+  "ai_plan",
+  {
+    planId: uuid("plan_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => aiRun.runId),
+    promptVersionId: uuid("prompt_version_id")
+      .notNull()
+      .references(() => aiPromptVersion.promptVersionId),
+    planJson: jsonb("plan_json").notNull(),
+    confidenceScore: numeric("confidence_score").notNull(),
+    applyReadiness: text("apply_readiness").notNull(),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_ai_plan_tenant").on(table.tenantId),
+    index("idx_ai_plan_run").on(table.runId),
+    index("idx_ai_plan_prompt_version").on(table.promptVersionId),
+    index("idx_ai_plan_readiness").on(table.applyReadiness),
+  ],
+);
+
+export const aiApplyAttempt = pgTable(
+  "ai_apply_attempt",
+  {
+    attemptId: uuid("attempt_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => aiPlan.planId),
+    appliedPlanJson: jsonb("applied_plan_json").notNull(),
+    status: text("status").notNull(),
+    executedByUserId: text("executed_by_user_id")
+      .notNull()
+      .references(() => user.id),
+    errorLogs: text("error_logs"),
+    appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_ai_apply_attempt_tenant").on(table.tenantId),
+    index("idx_ai_apply_attempt_plan").on(table.planId),
+    index("idx_ai_apply_attempt_executor").on(table.executedByUserId),
+    index("idx_ai_apply_attempt_status").on(table.status),
+  ],
+);
+
+export const aiEvidence = pgTable(
+  "ai_evidence",
+  {
+    evidenceId: uuid("evidence_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => aiPlan.planId),
+    fieldName: text("field_name").notNull(),
+    sourceText: text("source_text").notNull(),
+    matchConfidence: numeric("match_confidence").notNull(),
+    ambiguityNote: text("ambiguity_note"),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_ai_evidence_tenant").on(table.tenantId),
+    index("idx_ai_evidence_plan").on(table.planId),
+    index("idx_ai_evidence_field").on(table.fieldName),
+  ],
+);
+
+export const tenantLlmConfig = pgTable(
+  "tenant_llm_config",
+  {
+    tenantLlmConfigId: uuid("tenant_llm_config_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => company.companyId),
+    endpointUrl: text("endpoint_url"),
+    model: text("model"),
+    apiKey: text("api_key"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("uq_tenant_llm_config_company").on(table.tenantId, table.companyId),
+    index("idx_tenant_llm_config_tenant").on(table.tenantId),
+  ],
 );

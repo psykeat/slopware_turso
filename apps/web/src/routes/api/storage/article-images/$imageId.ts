@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { extname, join, normalize } from "node:path";
 
 import { auth } from "@repo/auth/auth";
@@ -10,7 +11,7 @@ import { eq } from "drizzle-orm";
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 function storageRoot() {
-  return process.env.STORAGE_PATH || "/home/joerg/slopware/storage";
+  return process.env.STORAGE_PATH || join(homedir(), "slopware/storage");
 }
 
 function safeStoragePath(storageKey: string) {

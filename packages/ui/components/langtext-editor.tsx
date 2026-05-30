@@ -1,4 +1,4 @@
-import { BoldIcon, ItalicIcon, UnderlineIcon, PaletteIcon } from "lucide-react";
+import { BoldIcon, ItalicIcon, UnderlineIcon } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
@@ -255,26 +255,26 @@ export function LangtextEditor({
           <UnderlineIcon size={14} />
         </button>
         <div className="mx-1 h-5 w-px bg-hairline" />
-        {COLORS.map((color) => (
-          <button
-            key={color.label}
-            type="button"
-            disabled={readOnly}
-            className={cn(
-              "inline-flex min-w-8 items-center justify-center rounded border px-2 py-1 text-[11px] transition-colors disabled:opacity-40",
-              color.value
-                ? "border-hairline-input hover:border-primary"
-                : "border-hairline-input text-ink hover:border-primary hover:text-primary",
-            )}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => applyFormat("foreColor", color.value || "inherit")}
-            aria-label={color.label}
-            title={color.label}
-          >
-            <PaletteIcon size={12} className="mr-1" />
-            <span className="max-w-16 truncate">{color.label}</span>
-          </button>
-        ))}
+        <select
+          disabled={readOnly}
+          className="h-8 cursor-pointer rounded border border-hairline-input bg-canvas px-2 text-[11px] text-ink transition-colors outline-none hover:border-primary"
+          onChange={(e) => {
+            if (e.target.value !== "placeholder") {
+              applyFormat("foreColor", e.target.value || "inherit");
+              e.target.value = "placeholder";
+            }
+          }}
+          defaultValue="placeholder"
+        >
+          <option value="placeholder" disabled>
+            Farbe...
+          </option>
+          {COLORS.map((color) => (
+            <option key={color.label} value={color.value}>
+              {color.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">

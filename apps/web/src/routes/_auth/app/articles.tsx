@@ -568,7 +568,6 @@ function ArticlesModule() {
       movementGridColumns,
       t,
       articleStats,
-      queryClient,
     ],
   );
 

@@ -43,6 +43,7 @@ export interface DocumentForPrint {
     postText: boolean;
     stornoText: boolean;
     lineTexts: boolean;
+    lineImages: boolean;
   };
   lines: DocumentLine[];
 }
@@ -686,7 +687,7 @@ function DocumentPDF({ doc, company, typeLabel }: DocumentPDFProps) {
                 </View>
                 <View style={styles.colDesc}>
                   <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
-                    {company.showArticleImageOnDocuments && line.primaryImageBase64 && (
+                    {doc.printOptions.lineImages && line.primaryImageBase64 && (
                       <Image
                         src={line.primaryImageBase64}
                         style={{

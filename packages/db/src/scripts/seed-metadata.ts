@@ -33,6 +33,7 @@ const entityLabelMap: EntityLabelMap = {
   address: { en: "Addresses", de: "Adressen" },
   article: { en: "Articles", de: "Artikel" },
   document: { en: "Documents", de: "Belege" },
+  tenantLlmConfig: { en: "Tenant LLM Config", de: "Mandanten-KI-Konfiguration" },
 };
 
 const fieldLabelMap: EntityLabelMap = {
@@ -67,6 +68,9 @@ const fieldLabelMap: EntityLabelMap = {
   nextGroupId: { en: "Next Group", de: "Nächste Gruppe" },
   requireSerialTracking: { en: "Require Serial Tracking", de: "Seriennummernpflicht" },
   requireBatchTracking: { en: "Require Batch Tracking", de: "Chargenpflicht" },
+  endpointUrl: { en: "LiteLLM Endpoint URL", de: "LiteLLM Endpoint URL" },
+  model: { en: "LLM Model", de: "KI-Modell" },
+  apiKey: { en: "API Key", de: "API-Key" },
 };
 
 const technicalFieldNames = new Set([
@@ -79,7 +83,7 @@ const technicalFieldNames = new Set([
 ]);
 
 const groupedEntitySets = {
-  organisation: new Set(["bankAccount", "numberSequence"]),
+  organisation: new Set(["bankAccount", "numberSequence", "tenantLlmConfig"]),
   vertrieb: new Set([
     "paymentTerm",
     "shippingMethod",

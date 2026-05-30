@@ -1,0 +1,1630 @@
+import { SiGmail } from "@icons-pack/react-simple-icons";
+import { DataGrid } from "@repo/ui/components/data-grid";
+import { EntityMask, type FieldDef } from "@repo/ui/components/entity-mask";
+import { InspectorPanel } from "@repo/ui/components/inspector-panel";
+import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
+import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
+import { cn } from "@repo/ui/lib/utils";
+import { useActionBar } from "@repo/ui/platform/action-bar-context";
+import { useAiOverlay } from "@repo/ui/platform/ai-overlay";
+import { useCommands } from "@repo/ui/platform/command-registry";
+import { useFocus } from "@repo/ui/platform/focus-manager";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import {
+  ArchiveIcon,
+  AtSignIcon,
+  ClockIcon,
+  MailIcon,
+  MailOpenIcon,
+  PlusIcon,
+  RefreshCcwIcon,
+  SendIcon,
+  SparklesIcon,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import { EmailAiAssistantPanel } from "#/components/email/EmailAiAssistantPanel";
+import {
+  EmailComposeDialog,
+  type EmailComposeAction,
+  type EmailComposeSubmitValue,
+} from "#/components/email/EmailComposeDialog";
+
+export const Route = createFileRoute("/_auth/app/email")({
+  component: EmailWorkspace,
+});
+
+type EmailAccount = {
+  emailAccountId: string;
+  provider: "gmail" | "microsoft";
+  displayName: string;
+  primaryEmail: string;
+  status: string;
+  lastSyncStatus: string;
+  lastSyncError?: string | null;
+  watchExpiresAt?: string | null;
+};
+
+type EmailLabel = {
+  emailLabelId: string;
+  providerLabelId: string;
+  emailAccountId: string;
+  name: string;
+  kind: "system" | "folder" | "label";
+  color?: string | null;
+  messageCount?: number;
+  unreadCount?: number;
+};
+
+type EmailThread = {
+  emailThreadId: string;
+  emailAccountId: string;
+  subject: string | null;
+  snippet: string | null;
+  lastMessageAt: string | null;
+  isRead: boolean;
+  messageCount: number;
+};
+
+type EmailAttachment = {
+  emailAttachmentId: string;
+  emailMessageId?: string;
+  providerAttachmentId: string | null;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+  storageKey: string | null;
+  inlineContentId: string | null;
+  fetchedAt: string | null;
+};
+
+type EmailMessage = {
+  emailMessageId: string;
+  fromJson: { email?: string; name?: string } | Record<string, unknown>;
+  toJson: Array<{ email: string; name?: string | null }>;
+  ccJson?: Array<{ email: string; name?: string | null }>;
+  bccJson?: Array<{ email: string; name?: string | null }>;
+  subject: string | null;
+  snippet?: string | null;
+  bodyHtml: string | null;
+  bodyText: string | null;
+  receivedAt: string | null;
+  sentAt: string | null;
+  providerMessageId?: string;
+};
+
+type EmailThreadDetail = EmailThread & {
+  messages: EmailMessage[];
+  attachments?: EmailAttachment[];
+  labels?: Array<{
+    emailMessageId: string;
+    emailLabelId: string;
+    providerLabelId: string;
+    name: string;
+    kind: string;
+  }>;
+};
+
+type ComposerAttachment = {
+  fileName: string;
+  contentType: string;
+  providerAttachmentId?: string | null;
+  storageKey?: string | null;
+  sizeBytes?: number | null;
+  inlineContentId?: string | null;
+};
+
+type EmailTemplateRow = {
+  emailTemplateId: string;
+  category: string;
+  code: string;
+  name: string;
+  subjectTemplate: string;
+  bodyHtmlTemplate: string;
+  bodyTextTemplate: string | null;
+  language: string | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+};
+
+type EmailTemplateBindingRow = {
+  emailTemplateBindingId: string;
+  emailTemplateId: string;
+  documentType: string | null;
+  companyId: string | null;
+  language: string | null;
+  emailIdentityId: string | null;
+  priority: number;
+  archived: boolean;
+  createdAt: string;
+};
+
+type EmailTemplateRenderLogRow = {
+  emailTemplateRenderLogId: string;
+  emailTemplateId: string | null;
+  emailTemplateBindingId: string | null;
+  documentId: string | null;
+  emailIdentityId: string | null;
+  language: string | null;
+  subject: string;
+  renderedHash: string | null;
+  createdAt: string;
+  createdBy: string | null;
+};
+
+const TEMPLATE_FIELDS: FieldDef[] = [
+  {
+    key: "category",
+    label: "Category",
+    type: "text",
+    required: true,
+    helpText: "Business case, e.g. document.",
+  },
+  { key: "code", label: "Code", type: "text", required: true, helpText: "Stable template key." },
+  { key: "name", label: "Name", type: "text", required: true, helpText: "Human-readable label." },
+  {
+    key: "subjectTemplate",
+    label: "Subject Template",
+    type: "textarea",
+    required: true,
+    fullWidth: true,
+    helpText: "Supports {{path}} placeholders.",
+  },
+  {
+    key: "bodyHtmlTemplate",
+    label: "Body HTML Template",
+    type: "textarea",
+    required: true,
+    fullWidth: true,
+    helpText: "Rendered HTML body used for document mail preparation.",
+  },
+  {
+    key: "bodyTextTemplate",
+    label: "Body Text Template",
+    type: "textarea",
+    fullWidth: true,
+    helpText: "Optional plain-text fallback. Leave blank to derive from HTML.",
+  },
+  {
+    key: "language",
+    label: "Language",
+    type: "text",
+    helpText: "Optional 2-letter language code.",
+  },
+];
+
+const TEMPLATE_BINDING_FIELDS: FieldDef[] = [
+  { key: "emailTemplateId", label: "Template", type: "text", required: true, readonly: true },
+  { key: "documentType", label: "Document Type", type: "text" },
+  { key: "companyId", label: "Company", type: "text" },
+  { key: "language", label: "Language", type: "text" },
+  { key: "emailIdentityId", label: "Identity", type: "text" },
+  { key: "priority", label: "Priority", type: "number" },
+];
+
+const SYNC_STATE_COLUMNS = [
+  { key: "scope", header: "Scope", sortable: true },
+  { key: "status", header: "Status", sortable: true },
+  { key: "cursor", header: "Cursor", sortable: false },
+  { key: "lastSyncedAt", header: "Last Synced", sortable: true },
+  { key: "lastError", header: "Last Error", sortable: false },
+];
+
+const EMPTY: never[] = [];
+
+function formatMailboxDate(value: string | null) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function htmlToText(value: string) {
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function parsePeople(value: Array<{ email: string; name?: string | null }> | undefined | null) {
+  return (value ?? [])
+    .map((item) => item.email.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function fromJsonToPerson(
+  value: Record<string, unknown> | { email?: string; name?: string } | undefined,
+) {
+  if (!value || typeof value !== "object") return "Unknown sender";
+  const email = typeof value.email === "string" ? value.email : "";
+  const name = typeof value.name === "string" ? value.name : "";
+  return (
+    [name, email].filter(Boolean).join(" <") + (name && email ? ">" : "") ||
+    email ||
+    "Unknown sender"
+  );
+}
+
+function formatBytes(value: number | null | undefined) {
+  if (!value || !Number.isFinite(value)) return "—";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+function accountBrandIcon(provider: EmailAccount["provider"]) {
+  const common = "size-3.5 shrink-0";
+  if (provider === "gmail") {
+    return <SiGmail aria-hidden className={common} style={{ color: "#ea4335" }} />;
+  }
+  return <MailIcon aria-hidden className={common} style={{ color: "#0078d4" }} />;
+}
+
+function formatStatusLabel(value: string | null | undefined) {
+  if (!value) return "Unknown";
+  if (value === "reauth_required") return "Reauthorization required";
+  if (value === "recovery_required") return "Recovery required";
+  if (value === "connected") return "Connected";
+  if (value === "ok") return "Healthy";
+  if (value === "idle") return "Idle";
+  if (value === "queued") return "Queued";
+  if (value === "syncing") return "Syncing";
+  if (value === "error") return "Error";
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatTemplateBindingScope(binding: EmailTemplateBindingRow | null) {
+  if (!binding) return "No binding selected";
+  return [
+    binding.documentType ? `Doc ${binding.documentType}` : "Doc any",
+    binding.companyId ? `Company ${binding.companyId}` : "Company any",
+    binding.language ? `Lang ${binding.language}` : "Lang any",
+    binding.emailIdentityId ? `Identity ${binding.emailIdentityId}` : "Identity any",
+  ].join(" · ");
+}
+
+function EmailWorkspace() {
+  const queryClient = useQueryClient();
+  const { setSubCrumb } = useActionBar();
+  const { registerCommand } = useCommands();
+  const { openAiOverlay, closeAiOverlay } = useAiOverlay();
+  const { setFocus } = useFocus();
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [selectedSystemView, setSelectedSystemView] = useState<"sync" | "templates" | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedBindingId, setSelectedBindingId] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [savedOutboxId, setSavedOutboxId] = useState<string | null>(null);
+  const [composerMode, setComposerMode] = useState<"plain" | "html">("plain");
+  const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
+  const [composerNotice, setComposerNotice] = useState<string | null>(null);
+  const [composer, setComposer] = useState({
+    identityId: "",
+    to: "",
+    cc: "",
+    bcc: "",
+    subject: "",
+    bodyText: "",
+    bodyHtml: "",
+  });
+
+  useEffect(() => {
+    setSubCrumb("Email");
+    return () => setSubCrumb(undefined);
+  }, [setSubCrumb]);
+
+  const { data: accounts = EMPTY } = useQuery<EmailAccount[]>({
+    queryKey: ["email", "accounts"],
+    queryFn: async () => {
+      const res = await fetch("/api/email/accounts");
+      if (!res.ok) throw new Error("Failed to fetch email accounts");
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const activeAccountId = selectedAccountId ?? accounts[0]?.emailAccountId ?? null;
+  const activeAccount =
+    accounts.find((account) => account.emailAccountId === activeAccountId) ?? null;
+
+  const { data: identities = EMPTY } = useQuery<any[]>({
+    queryKey: ["email", "identities", activeAccountId],
+    queryFn: async () => {
+      const res = await fetch(`/api/email/accounts/${activeAccountId}/identities`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: Boolean(activeAccountId),
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: labels = EMPTY } = useQuery<EmailLabel[]>({
+    queryKey: ["email", "labels", activeAccountId],
+    queryFn: async () => {
+      const res = await fetch(`/api/email/accounts/${activeAccountId}/labels`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: Boolean(activeAccountId),
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: threads = EMPTY, isLoading: threadsLoading } = useQuery<EmailThread[]>({
+    queryKey: ["email", "threads", activeAccountId, selectedLabelId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (activeAccountId) params.set("accountId", activeAccountId);
+      if (selectedLabelId) params.set("labelId", selectedLabelId);
+      const res = await fetch(`/api/email/threads?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch threads");
+      return res.json();
+    },
+    enabled: Boolean(activeAccountId),
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: threadDetail } = useQuery<EmailThreadDetail | null>({
+    queryKey: ["email", "thread", selectedThreadId],
+    queryFn: async () => {
+      const res = await fetch(`/api/email/threads/${selectedThreadId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: Boolean(selectedThreadId),
+  });
+
+  const { data: syncState = EMPTY } = useQuery<
+    Array<{
+      emailSyncStateId: string;
+      scope: string;
+      cursor: string | null;
+      cursorJson: unknown;
+      status: string;
+      lastSyncedAt: string | null;
+      lastError: string | null;
+    }>
+  >({
+    queryKey: ["email", "sync-state", activeAccountId],
+    queryFn: async () => {
+      if (!activeAccountId) return [];
+      const res = await fetch(`/api/email/accounts/${activeAccountId}/sync-state`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: Boolean(activeAccountId),
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: templates = EMPTY } = useQuery<EmailTemplateRow[]>({
+    queryKey: ["email", "templates"],
+    queryFn: async () => {
+      const res = await fetch("/api/data/emailTemplate?limit=200&orderBy=updatedAt:desc");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: bindings = EMPTY } = useQuery<EmailTemplateBindingRow[]>({
+    queryKey: ["email", "template-bindings", selectedTemplateId],
+    queryFn: async () => {
+      if (!selectedTemplateId) return [];
+      const params = new URLSearchParams({ emailTemplateId: selectedTemplateId, limit: "200" });
+      const res = await fetch(`/api/data/emailTemplateBinding?${params.toString()}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: Boolean(selectedTemplateId),
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: renderLogs = EMPTY } = useQuery<EmailTemplateRenderLogRow[]>({
+    queryKey: ["email", "template-render-logs", selectedTemplateId],
+    queryFn: async () => {
+      if (!selectedTemplateId) return [];
+      const params = new URLSearchParams({
+        emailTemplateId: selectedTemplateId,
+        limit: "25",
+        orderBy: "createdAt:desc",
+      });
+      const res = await fetch(`/api/data/emailTemplateRenderLog?${params.toString()}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: Boolean(selectedTemplateId),
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: allAddresses = EMPTY } = useQuery<any[]>({
+    queryKey: ["data", "address"],
+    queryFn: async () => {
+      const res = await fetch("/api/data/address");
+      return res.ok ? res.json() : [];
+    },
+  });
+
+  const treeNodes = useMemo<TreeNode[]>(
+    () => [
+      {
+        id: "accounts",
+        label: "Accounts",
+        children: accounts.map((account) => ({
+          id: `account:${account.emailAccountId}`,
+          label: `${account.displayName || account.primaryEmail} (${account.primaryEmail})`,
+          leadingIcon: accountBrandIcon(account.provider),
+          count: account.lastSyncStatus === "error" ? 1 : undefined,
+          children: [
+            { id: `account:${account.emailAccountId}:inbox`, label: "Inbox" },
+            { id: `account:${account.emailAccountId}:sent`, label: "Sent" },
+            { id: `account:${account.emailAccountId}:drafts`, label: "Drafts" },
+            { id: `account:${account.emailAccountId}:archive`, label: "Archive" },
+            ...(labels
+              .filter((label) => label.emailAccountId === account.emailAccountId)
+              .map((label) => ({
+                id: `label:${label.emailLabelId}`,
+                label: label.name,
+                count: label.unreadCount ?? undefined,
+              })) ?? []),
+          ],
+        })),
+      },
+      {
+        id: "system",
+        label: "Mailbox",
+        children: [
+          { id: "system:sync", label: "Sync status" },
+          { id: "system:templates", label: "Templates" },
+        ],
+      },
+    ],
+    [accounts, labels],
+  );
+
+  const selectedTemplate =
+    templates.find((template) => template.emailTemplateId === selectedTemplateId) ?? null;
+  const selectedBinding =
+    bindings.find((binding) => binding.emailTemplateBindingId === selectedBindingId) ?? null;
+  const accountProviderLabel =
+    activeAccount?.provider === "microsoft" ? "Microsoft Graph" : "Gmail";
+  const accountStatusLabel = activeAccount ? formatStatusLabel(activeAccount.status) : "No account";
+  const accountSyncLabel = activeAccount ? formatStatusLabel(activeAccount.lastSyncStatus) : "Idle";
+  const accountNeedsRecovery =
+    activeAccount?.status === "reauth_required" ||
+    activeAccount?.lastSyncStatus === "recovery_required";
+  const selectedSystemLabel =
+    selectedSystemView === "sync"
+      ? "Sync status"
+      : selectedSystemView === "templates"
+        ? "Templates"
+        : null;
+
+  const connectProvider = async (provider: "google" | "microsoft") => {
+    window.location.href = `/api/email/accounts/connect/${provider}`;
+  };
+
+  const openSystemView = (view: "sync" | "templates") => {
+    setSelectedThreadId(null);
+    setComposerOpen(false);
+    setSelectedSystemView(view);
+  };
+
+  const queueAccountAction = useCallback(
+    async (path: string, successMessage: string) => {
+      if (!activeAccountId) return false;
+      const res = await fetch(path, { method: "POST" });
+      if (!res.ok) {
+        toast.error(await res.text());
+        return false;
+      }
+      toast.success(successMessage);
+      queryClient.invalidateQueries({ queryKey: ["email"] });
+      return true;
+    },
+    [activeAccountId, queryClient],
+  );
+
+  const selectedIdentityId = composer.identityId || identities[0]?.emailIdentityId || "";
+  const selectedIdentity =
+    identities.find((identity) => identity.emailIdentityId === selectedIdentityId) ??
+    identities[0] ??
+    null;
+  const selectedThread = threadDetail ?? null;
+
+  const resolveFolderLabelId = (accountId: string, folder: string) => {
+    const folderLower = folder.toLowerCase();
+    const match = labels.find((label) => {
+      if (label.emailAccountId !== accountId) return false;
+      const provider = label.providerLabelId.toLowerCase();
+      const name = label.name.toLowerCase();
+      return provider === folderLower || name.includes(folderLower);
+    });
+    return match?.emailLabelId ?? null;
+  };
+
+  const openComposerWithDraft = useCallback(
+    (draft: any, open = true) => {
+      const outbox = draft?.outbox ?? draft?.emailOutbox ?? (draft?.emailOutboxId ? draft : null);
+      const payload = outbox?.payload ?? {};
+      const attachmentPayload = Array.isArray(payload.attachments) ? payload.attachments : [];
+      const documentMailWarnings = Array.isArray(payload?.meta?.documentMail?.warnings)
+        ? payload.meta.documentMail.warnings.filter((item: unknown) => typeof item === "string")
+        : [];
+      setSavedOutboxId(outbox?.emailOutboxId ?? null);
+      setComposerOpen(open);
+      setComposerNotice(documentMailWarnings.length > 0 ? documentMailWarnings.join(" ") : null);
+      setComposerMode(payload.bodyHtml ? "html" : "plain");
+      if (outbox?.emailAccountId) setSelectedAccountId(outbox.emailAccountId);
+      setComposer({
+        identityId: outbox?.emailIdentityId ?? selectedIdentityId,
+        to: (payload.to ?? []).map((item: any) => item.email).join(", "),
+        cc: (payload.cc ?? []).map((item: any) => item.email).join(", "),
+        bcc: (payload.bcc ?? []).map((item: any) => item.email).join(", "),
+        subject: payload.subject ?? "",
+        bodyText: payload.bodyText ?? "",
+        bodyHtml: payload.bodyHtml ?? "",
+      });
+      setComposerAttachments(
+        attachmentPayload.map((attachment: any) => ({
+          fileName: String(attachment.fileName ?? ""),
+          contentType: String(attachment.contentType ?? "application/octet-stream"),
+          providerAttachmentId: attachment.providerAttachmentId ?? null,
+          storageKey: attachment.storageKey ?? null,
+          sizeBytes: attachment.sizeBytes ?? null,
+          inlineContentId: attachment.inlineContentId ?? null,
+        })),
+      );
+    },
+    [selectedIdentityId],
+  );
+
+  const openBlankComposer = () => {
+    setSelectedSystemView(null);
+    setSelectedThreadId(null);
+    setSavedOutboxId(null);
+    setComposerMode("plain");
+    setComposerAttachments([]);
+    setComposerNotice(null);
+    setComposer({
+      identityId: "",
+      to: "",
+      cc: "",
+      bcc: "",
+      subject: "",
+      bodyText: "",
+      bodyHtml: "",
+    });
+    setComposerOpen(true);
+  };
+
+  const saveDraft = useCallback(
+    async (options: { close?: boolean; value?: EmailComposeSubmitValue } = {}) => {
+      if (!activeAccountId || !selectedIdentity) {
+        toast.error("No sending identity available");
+        return null;
+      }
+      const source = options.value ?? {
+        ...composer,
+        identityId: selectedIdentityId,
+        mode: composerMode,
+        attachments: composerAttachments,
+      };
+      const bodyHtml =
+        source.mode === "html" ? source.bodyHtml : source.bodyText.replace(/\n/g, "<br />");
+      const bodyText = source.mode === "html" ? htmlToText(source.bodyHtml) : source.bodyText;
+      const res = await fetch("/api/email/drafts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          accountId: activeAccountId,
+          identityId: source.identityId || selectedIdentityId,
+          to: source.to
+            .split(",")
+            .map((email) => email.trim())
+            .filter(Boolean)
+            .map((email) => ({ email })),
+          cc: source.cc
+            .split(",")
+            .map((email) => email.trim())
+            .filter(Boolean)
+            .map((email) => ({ email })),
+          bcc: source.bcc
+            .split(",")
+            .map((email) => email.trim())
+            .filter(Boolean)
+            .map((email) => ({ email })),
+          subject: source.subject,
+          bodyText,
+          bodyHtml,
+          attachments: source.attachments,
+        }),
+      });
+      if (!res.ok) {
+        toast.error(await res.text());
+        return null;
+      }
+      const result = await res.json();
+      setSavedOutboxId(result.outbox?.emailOutboxId ?? null);
+      toast.success("Draft saved");
+      if (options.close) {
+        setComposerOpen(false);
+        setSavedOutboxId(null);
+        setComposerAttachments([]);
+        setComposerNotice(null);
+        setComposer({
+          identityId: selectedIdentityId,
+          to: "",
+          cc: "",
+          bcc: "",
+          subject: "",
+          bodyText: "",
+          bodyHtml: "",
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["email"] });
+      return result;
+    },
+    [
+      activeAccountId,
+      composer,
+      composerAttachments,
+      queryClient,
+      selectedIdentity,
+      selectedIdentityId,
+      composerMode,
+    ],
+  );
+
+  const actOnDraft = useCallback(
+    async (action: "provider-draft" | "queue" | "send", value?: EmailComposeSubmitValue) => {
+      const draft = savedOutboxId && !value ? null : await saveDraft({ value });
+      const outboxId = value
+        ? draft?.outbox?.emailOutboxId
+        : (savedOutboxId ?? draft?.outbox?.emailOutboxId);
+      if (!outboxId) return;
+      const res = await fetch(`/api/email/drafts/${outboxId}/${action}`, { method: "POST" });
+      if (!res.ok) {
+        toast.error(await res.text());
+        return;
+      }
+      toast.success(
+        action === "provider-draft"
+          ? "Provider draft saved"
+          : action === "queue"
+            ? "Draft queued"
+            : "Draft sent",
+      );
+      if (action === "send") {
+        setComposerOpen(false);
+        setSavedOutboxId(null);
+        setComposerAttachments([]);
+        setComposerNotice(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ["email"] });
+    },
+    [queryClient, saveDraft, savedOutboxId],
+  );
+
+  const submitComposer = useCallback(
+    async (action: EmailComposeAction, value: EmailComposeSubmitValue) => {
+      setComposer({
+        identityId: value.identityId,
+        to: value.to,
+        cc: value.cc,
+        bcc: value.bcc,
+        subject: value.subject,
+        bodyText: value.bodyText,
+        bodyHtml: value.bodyHtml,
+      });
+      setComposerMode(value.mode);
+      setComposerAttachments(value.attachments);
+      if (action === "save-draft") {
+        await saveDraft({ value });
+        return;
+      }
+      await actOnDraft(action, value);
+    },
+    [actOnDraft, saveDraft],
+  );
+
+  const startReply = async (messageIndex = 0) => {
+    if (!selectedThread || !selectedThread.messages[messageIndex]) return;
+    const source = selectedThread.messages[messageIndex];
+    const res = await fetch(`/api/email/messages/${source.emailMessageId}/reply`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        identityId: selectedIdentityId,
+        to: [{ email: typeof source.fromJson?.email === "string" ? source.fromJson.email : "" }],
+        subject: `Re: ${source.subject ?? selectedThread.subject ?? ""}`,
+        bodyText: `\n\nOn ${formatMailboxDate(source.receivedAt ?? source.sentAt)} ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "someone"} wrote:\n${source.bodyText ?? htmlToText(source.bodyHtml ?? "")}`,
+        bodyHtml: `<p></p><p>On ${formatMailboxDate(source.receivedAt ?? source.sentAt)} ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "someone"} wrote:</p><blockquote>${source.bodyHtml ?? `<pre>${(source.bodyText ?? "").replace(/</g, "&lt;")}</pre>`}</blockquote>`,
+      }),
+    });
+    if (!res.ok) {
+      toast.error(await res.text());
+      return;
+    }
+    openComposerWithDraft(await res.json());
+  };
+
+  const startForward = async (messageIndex = 0) => {
+    if (!selectedThread || !selectedThread.messages[messageIndex]) return;
+    const source = selectedThread.messages[messageIndex];
+    const res = await fetch(`/api/email/messages/${source.emailMessageId}/forward`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        identityId: selectedIdentityId,
+        to: [],
+        subject: `Fwd: ${source.subject ?? selectedThread.subject ?? ""}`,
+        bodyText: `\n\n-------- Forwarded message --------\nFrom: ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "unknown"}\nDate: ${formatMailboxDate(source.receivedAt ?? source.sentAt)}\nSubject: ${source.subject ?? ""}\n\n${source.bodyText ?? htmlToText(source.bodyHtml ?? "")}`,
+        bodyHtml: `<p>-------- Forwarded message --------</p><p>From: ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "unknown"}<br />Date: ${formatMailboxDate(source.receivedAt ?? source.sentAt)}<br />Subject: ${source.subject ?? ""}</p><blockquote>${source.bodyHtml ?? `<pre>${(source.bodyText ?? "").replace(/</g, "&lt;")}</pre>`}</blockquote>`,
+      }),
+    });
+    if (!res.ok) {
+      toast.error(await res.text());
+      return;
+    }
+    openComposerWithDraft(await res.json());
+  };
+
+  const archiveThread = async () => {
+    if (!selectedThreadId) return;
+    const res = await fetch(`/api/email/threads/${selectedThreadId}/archive`, { method: "POST" });
+    if (!res.ok) {
+      toast.error(await res.text());
+      return;
+    }
+    setSelectedThreadId(null);
+    queryClient.invalidateQueries({ queryKey: ["email"] });
+  };
+
+  const openMailAiAssistant = useCallback(() => {
+    if (!selectedThreadId) return;
+    if (!threadDetail) {
+      toast.error("Thread wird noch geladen");
+      return;
+    }
+    openAiOverlay({
+      title: "KI-Assistent / AI Assistant",
+      description: "Thread analysieren, Absichten erkennen und Belegentwürfe vorschlagen.",
+      content: (
+        <EmailAiAssistantPanel
+          key={selectedThreadId}
+          selectedThreadId={selectedThreadId}
+          threadDetail={threadDetail}
+          allAddresses={allAddresses}
+          onApplied={() => queryClient.invalidateQueries({ queryKey: ["email"] })}
+          onClose={closeAiOverlay}
+        />
+      ),
+    });
+  }, [allAddresses, closeAiOverlay, openAiOverlay, queryClient, selectedThreadId, threadDetail]);
+
+  useEffect(() => {
+    window.addEventListener("slopware:open-ai", openMailAiAssistant);
+    return () => window.removeEventListener("slopware:open-ai", openMailAiAssistant);
+  }, [openMailAiAssistant]);
+
+  const draftBootstrapRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const draftId = new URLSearchParams(window.location.search).get("draftId");
+    if (!draftId || draftBootstrapRef.current === draftId) return;
+    draftBootstrapRef.current = draftId;
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(`/api/email/drafts/${draftId}`);
+      if (!res.ok) return;
+      const draft = await res.json();
+      if (cancelled) return;
+      openComposerWithDraft(draft);
+      setComposerOpen(true);
+      setSelectedThreadId(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAccountId, openComposerWithDraft]);
+
+  useEffect(() => {
+    const unregCompose = registerCommand({
+      id: "email-compose",
+      scope: "context",
+      group: "email",
+      label: { en: "Compose email", de: "E-Mail verfassen" },
+      shortcut: "F3",
+      handler: () => {
+        openBlankComposer();
+        setSelectedThreadId(null);
+      },
+    });
+    const unregSync = registerCommand({
+      id: "email-sync-account",
+      scope: "context",
+      group: "email",
+      label: { en: "Sync email account", de: "E-Mail-Konto synchronisieren" },
+      shortcut: "F9",
+      isEnabled: () => Boolean(activeAccountId),
+      handler: async () => {
+        if (!activeAccountId) return;
+        const res = await fetch(`/api/email/accounts/${activeAccountId}/sync`, { method: "POST" });
+        if (!res.ok) throw new Error(await res.text());
+        toast.success("Email sync queued");
+        queryClient.invalidateQueries({ queryKey: ["email"] });
+      },
+    });
+    const unregMarkRead = registerCommand({
+      id: "email-mark-read",
+      scope: "context",
+      group: "email",
+      label: { en: "Mark thread read", de: "Thread gelesen markieren" },
+      shortcut: "F8",
+      isEnabled: () => Boolean(selectedThreadId),
+      handler: async () => {
+        if (!selectedThreadId) return;
+        const res = await fetch(`/api/email/threads/${selectedThreadId}/mark-read`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ read: true }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        queryClient.invalidateQueries({ queryKey: ["email"] });
+      },
+    });
+    const unregSave = registerCommand({
+      id: "email-save-draft",
+      scope: "local",
+      group: "email",
+      label: { en: "Save draft", de: "Entwurf speichern" },
+      shortcut: "F10",
+      isEnabled: () => composerOpen,
+      handler: async () => {
+        if (composerOpen) await saveDraft();
+      },
+    });
+    const unregSend = registerCommand({
+      id: "email-send",
+      scope: "local",
+      group: "email",
+      label: { en: "Send draft", de: "Entwurf senden" },
+      shortcut: "Ctrl+Enter",
+      isEnabled: () => composerOpen,
+      handler: async () => {
+        if (composerOpen) await actOnDraft("send");
+      },
+    });
+    const unregArchive = registerCommand({
+      id: "email-archive-thread",
+      scope: "context",
+      group: "email",
+      label: { en: "Archive thread", de: "Thread archivieren" },
+      isEnabled: () => Boolean(selectedThreadId),
+      handler: async () => {
+        if (!selectedThreadId) return;
+        const res = await fetch(`/api/email/threads/${selectedThreadId}/archive`, {
+          method: "POST",
+        });
+        if (!res.ok) throw new Error(await res.text());
+        setSelectedThreadId(null);
+        queryClient.invalidateQueries({ queryKey: ["email"] });
+      },
+    });
+    return () => {
+      unregCompose();
+      unregSync();
+      unregMarkRead();
+      unregSave();
+      unregSend();
+      unregArchive();
+    };
+  }, [
+    activeAccountId,
+    actOnDraft,
+    composerOpen,
+    queryClient,
+    registerCommand,
+    saveDraft,
+    selectedThreadId,
+  ]);
+
+  const threadAttachments = selectedThread?.attachments ?? [];
+  const threadMessages = selectedThread?.messages ?? [];
+  const accountSyncError = activeAccount?.lastSyncError ?? null;
+
+  return (
+    <>
+      <EmailComposeDialog
+        open={composerOpen}
+        identities={identities}
+        value={composer}
+        mode={composerMode}
+        attachments={composerAttachments}
+        notice={composerNotice}
+        onClose={() => {
+          setComposerOpen(false);
+          setSavedOutboxId(null);
+          setComposerAttachments([]);
+          setComposerNotice(null);
+        }}
+        onSubmit={submitComposer}
+      />
+      <TriViewWorkspace
+        className="min-h-0"
+        defaultLayout={["22%", "78%"]}
+        defaultRightLayout={["58%", "42%"]}
+        navigationTree={
+          <div className="flex h-full flex-col">
+            <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
+              <div className="flex items-center gap-2 text-[13px] text-ink">
+                <MailIcon className="size-4" />
+                <span>Mailbox</span>
+              </div>
+              <button
+                className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas hover:text-ink"
+                onClick={() => {
+                  openBlankComposer();
+                }}
+                title="Compose"
+              >
+                <PlusIcon className="size-4" />
+              </button>
+            </div>
+            <NavigationTree
+              entityName="emailAccount"
+              panelId="email-nav"
+              data={treeNodes}
+              isLoading={!accounts}
+              onSelect={(id) => {
+                if (id.startsWith("account:")) {
+                  const parts = id.split(":");
+                  const accountId = parts[1] ?? null;
+                  const folder = parts[2] ?? null;
+                  if (accountId) {
+                    setSelectedAccountId(accountId);
+                    setSelectedThreadId(null);
+                    setComposerOpen(false);
+                    setSelectedSystemView(null);
+                  }
+                  if (folder) {
+                    const labelId = resolveFolderLabelId(accountId ?? "", folder);
+                    setSelectedLabelId(labelId);
+                  } else {
+                    setSelectedLabelId(null);
+                  }
+                  return;
+                }
+                if (id.startsWith("label:")) {
+                  setSelectedLabelId(id.slice("label:".length));
+                  setSelectedSystemView(null);
+                  return;
+                }
+                if (id.startsWith("system:")) {
+                  setSelectedLabelId(null);
+                  setSelectedThreadId(null);
+                  setComposerOpen(false);
+                  openSystemView(id === "system:templates" ? "templates" : "sync");
+                  return;
+                }
+              }}
+            />
+            <div className="mt-auto border-t border-hairline p-2">
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  onClick={() => connectProvider("google")}
+                  className="flex h-8 items-center justify-center gap-1.5 rounded-sm border border-hairline text-[12px] text-ink-secondary hover:bg-canvas"
+                >
+                  <AtSignIcon className="size-3.5" />
+                  Gmail
+                </button>
+                <button
+                  onClick={() => connectProvider("microsoft")}
+                  className="flex h-8 items-center justify-center gap-1.5 rounded-sm border border-hairline text-[12px] text-ink-secondary hover:bg-canvas"
+                >
+                  <AtSignIcon className="size-3.5" />
+                  Graph
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+        primaryGrid={
+          <section className="flex h-full flex-col bg-canvas">
+            <div className="flex h-10 items-center justify-between border-b border-hairline px-3">
+              <div className="flex items-center gap-2 text-[13px] text-ink-secondary">
+                <span>{selectedSystemLabel ?? activeAccount?.primaryEmail ?? "No account"}</span>
+                {threadsLoading && <ClockIcon className="size-3.5 animate-spin" />}
+              </div>
+              <div className="flex items-center gap-2">
+                {activeAccount && (
+                  <div className="flex items-center gap-1 text-[11px] text-ink-mute">
+                    <span className="rounded-full border border-hairline px-1.5 py-0.5">
+                      {accountProviderLabel}
+                    </span>
+                    <span className="rounded-full border border-hairline px-1.5 py-0.5">
+                      {accountStatusLabel}
+                    </span>
+                    <span className="rounded-full border border-hairline px-1.5 py-0.5">
+                      Sync {accountSyncLabel}
+                    </span>
+                  </div>
+                )}
+                <button
+                  onClick={() =>
+                    activeAccountId &&
+                    void queueAccountAction(
+                      `/api/email/accounts/${activeAccountId}/sync`,
+                      "Mailbox sync queued",
+                    )
+                  }
+                  disabled={!activeAccountId}
+                  className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
+                  title="Sync"
+                >
+                  <RefreshCcwIcon className="size-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    openBlankComposer();
+                  }}
+                  className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
+                  title="Compose"
+                >
+                  <PlusIcon className="size-4" />
+                </button>
+              </div>
+            </div>
+            {!activeAccount ? (
+              <div className="border-b border-hairline bg-canvas-soft px-3 py-2 text-[12px] text-ink-secondary">
+                Connect Gmail or Microsoft Graph to start mailbox sync, recovery, and document mail
+                preparation.
+              </div>
+            ) : activeAccount.status === "reauth_required" ? (
+              <div className="flex items-center justify-between gap-3 border-b border-hairline bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] px-3 py-2 text-[12px] text-ink">
+                <div className="min-w-0">
+                  <div className="font-medium">
+                    {activeAccount.provider === "microsoft"
+                      ? "Microsoft Graph access needs to be reauthorized."
+                      : "Gmail access needs to be reauthorized."}
+                  </div>
+                  <div className="text-ink-secondary">
+                    Sync, watch renewal, and document-mail preparation will stay blocked until the
+                    account is reconnected.
+                  </div>
+                </div>
+                <button
+                  onClick={() =>
+                    connectProvider(activeAccount.provider === "microsoft" ? "microsoft" : "google")
+                  }
+                  className="rounded-sm border border-hairline bg-canvas px-2 py-1 text-[12px] text-ink-secondary hover:text-ink"
+                >
+                  Reauthorize
+                </button>
+              </div>
+            ) : accountNeedsRecovery ? (
+              <div className="flex items-center justify-between gap-3 border-b border-hairline bg-[color-mix(in_oklab,var(--primary)_7%,transparent)] px-3 py-2 text-[12px] text-ink">
+                <div className="min-w-0">
+                  <div className="font-medium">
+                    {activeAccount.lastSyncStatus === "recovery_required"
+                      ? "Mailbox recovery is required."
+                      : "Mailbox sync needs attention."}
+                  </div>
+                  <div className="text-ink-secondary">
+                    Reconnect the provider, then run Initial sync or Refresh so template rendering
+                    and document-mail preparation use current mailbox state.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      connectProvider(
+                        activeAccount.provider === "microsoft" ? "microsoft" : "google",
+                      )
+                    }
+                    className="rounded-sm border border-hairline bg-canvas px-2 py-1 text-[12px] text-ink-secondary hover:text-ink"
+                  >
+                    Reconnect
+                  </button>
+                  <button
+                    onClick={() =>
+                      void queueAccountAction(
+                        `/api/email/accounts/${activeAccountId}/initial-sync`,
+                        "Initial sync queued",
+                      )
+                    }
+                    className="rounded-sm border border-hairline bg-canvas px-2 py-1 text-[12px] text-ink-secondary hover:text-ink"
+                  >
+                    Initial sync
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1 overflow-auto">
+              {threads.length === 0 ? (
+                <div className="grid h-full place-items-center text-[13px] text-ink-mute">
+                  No email threads
+                </div>
+              ) : (
+                threads.map((thread) => (
+                  <button
+                    key={thread.emailThreadId}
+                    onClick={() => {
+                      setSelectedThreadId(thread.emailThreadId);
+                      setSelectedSystemView(null);
+                      setFocus({
+                        workspace: "email",
+                        area: "grid",
+                        panel: "email-thread-list",
+                        entity: "emailThread",
+                        recordId: thread.emailThreadId,
+                      });
+                    }}
+                    className={cn(
+                      "grid w-full grid-cols-[1fr_auto] gap-2 border-b border-hairline px-3 py-2.5 text-left transition-colors hover:bg-canvas-soft",
+                      selectedThreadId === thread.emailThreadId &&
+                        "bg-[color-mix(in_oklab,var(--primary)_8%,transparent)]",
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span
+                        className={cn(
+                          "block truncate text-[13px]",
+                          !thread.isRead && "font-medium text-ink",
+                        )}
+                      >
+                        {thread.subject || "(no subject)"}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[12px] text-ink-mute">
+                        {thread.snippet || "No preview"}
+                      </span>
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {selectedLabelId ? null : null}
+                        <span className="rounded-full border border-hairline px-1.5 py-0.5 text-[10px] text-ink-mute">
+                          {thread.messageCount} msgs
+                        </span>
+                        {!thread.isRead && (
+                          <span className="rounded-full border border-hairline px-1.5 py-0.5 text-[10px] text-ink">
+                            unread
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                    <span className="text-[11px] text-ink-mute">
+                      {formatMailboxDate(thread.lastMessageAt)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+        }
+        dependentContext={
+          selectedSystemView === "templates" ? (
+            <section className="flex h-full min-h-0 flex-col bg-canvas">
+              <div className="flex h-10 items-center justify-between border-b border-hairline px-3">
+                <div className="text-[13px] text-ink-secondary">
+                  {selectedTemplate
+                    ? `${selectedTemplate.code} · ${selectedTemplate.name}`
+                    : "Create template"}
+                  {selectedBinding ? ` · binding ${selectedBinding.priority}` : ""}
+                </div>
+                <div className="flex items-center gap-1">
+                  {selectedTemplateId && (
+                    <button
+                      onClick={() => setSelectedBindingId(null)}
+                      className="rounded-sm border border-hairline px-2 py-1 text-[12px] text-ink-secondary hover:bg-canvas-soft hover:text-ink"
+                    >
+                      New binding
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto p-4">
+                <div className="mx-auto flex max-w-4xl flex-col gap-4">
+                  <div className="rounded-md border border-hairline bg-canvas-soft p-3 text-[12px] text-ink-secondary">
+                    Document mail uses the binding row to resolve the template before rendering
+                    subject and body. Scope bindings by document type, company, language, and
+                    sending identity.
+                    {selectedBinding && (
+                      <div className="mt-1 text-ink-mute">
+                        {formatTemplateBindingScope(selectedBinding)}
+                      </div>
+                    )}
+                  </div>
+                  <EntityMask
+                    entityName="emailTemplate"
+                    recordId={selectedTemplateId ?? undefined}
+                    mode={selectedTemplateId ? "edit" : "create"}
+                    title={selectedTemplateId ? "Edit template" : "Create template"}
+                    fields={TEMPLATE_FIELDS}
+                    initialValues={
+                      selectedTemplateId
+                        ? undefined
+                        : {
+                            code: "",
+                            category: "document",
+                            name: "",
+                            subjectTemplate: "",
+                            bodyHtmlTemplate: "<p></p>",
+                            bodyTextTemplate: "",
+                            language: null,
+                          }
+                    }
+                    onSaved={(record) => {
+                      const next = record as EmailTemplateRow;
+                      setSelectedTemplateId(next.emailTemplateId);
+                      queryClient.invalidateQueries({ queryKey: ["email"] });
+                    }}
+                  />
+                  {selectedTemplateId && (
+                    <EntityMask
+                      entityName="emailTemplateBinding"
+                      recordId={selectedBindingId ?? undefined}
+                      mode={selectedBindingId ? "edit" : "create"}
+                      title={selectedBindingId ? "Edit binding" : "Create binding"}
+                      fields={TEMPLATE_BINDING_FIELDS}
+                      initialValues={
+                        selectedBindingId
+                          ? undefined
+                          : {
+                              emailTemplateId: selectedTemplateId,
+                              priority: 100,
+                            }
+                      }
+                      onSaved={(record) => {
+                        const next = record as EmailTemplateBindingRow;
+                        setSelectedBindingId(next.emailTemplateBindingId);
+                        queryClient.invalidateQueries({ queryKey: ["email"] });
+                      }}
+                    />
+                  )}
+                  {selectedTemplateId && (
+                    <DataGrid
+                      entityName="emailTemplateBinding"
+                      panelId="email-template-binding-grid"
+                      data={bindings}
+                      keyExtractor={(row) => row.emailTemplateBindingId}
+                      columns={[
+                        { key: "priority", header: "Priority", sortable: true, width: "90px" },
+                        { key: "documentType", header: "Doc Type", sortable: true, width: "120px" },
+                        { key: "companyId", header: "Company", sortable: false },
+                        { key: "language", header: "Language", sortable: true, width: "90px" },
+                        { key: "emailIdentityId", header: "Identity", sortable: false },
+                      ]}
+                      emptyTitle="No bindings yet"
+                      emptySubtitle="Add a binding to scope this template to a document, company, language, or identity."
+                      onRowClick={(row: EmailTemplateBindingRow) =>
+                        setSelectedBindingId(row.emailTemplateBindingId)
+                      }
+                    />
+                  )}
+                  {renderLogs.length > 0 && (
+                    <div className="rounded-md border border-hairline bg-canvas-soft p-3">
+                      <div className="mb-2 text-[11px] tracking-wider text-ink-mute uppercase">
+                        Recent render logs
+                      </div>
+                      <div className="space-y-2">
+                        {renderLogs.map((log) => (
+                          <div
+                            key={log.emailTemplateRenderLogId}
+                            className="rounded-sm border border-hairline bg-canvas px-3 py-2 text-[12px]"
+                          >
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="truncate text-ink">{log.subject}</span>
+                              <span className="text-ink-mute">
+                                {formatMailboxDate(log.createdAt)}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[11px] text-ink-mute">
+                              {log.language || "default"} · {log.emailIdentityId || "no identity"} ·{" "}
+                              {log.renderedHash || "no hash"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          ) : selectedSystemView === "sync" ? (
+            <section className="flex h-full min-h-0 flex-col bg-canvas">
+              <div className="flex h-10 items-center justify-between border-b border-hairline px-3">
+                <div className="text-[13px] text-ink-secondary">Sync status</div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() =>
+                      activeAccountId &&
+                      void queueAccountAction(
+                        `/api/email/accounts/${activeAccountId}/initial-sync`,
+                        "Initial sync queued",
+                      )
+                    }
+                    className="rounded-sm border border-hairline px-2 py-1 text-[12px] text-ink-secondary hover:bg-canvas-soft hover:text-ink"
+                  >
+                    Initial sync
+                  </button>
+                  <button
+                    onClick={() =>
+                      activeAccountId &&
+                      void queueAccountAction(
+                        `/api/email/accounts/${activeAccountId}/sync`,
+                        "Mailbox sync queued",
+                      )
+                    }
+                    className="rounded-sm border border-hairline px-2 py-1 text-[12px] text-ink-secondary hover:bg-canvas-soft hover:text-ink"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto p-4">
+                <div className="mx-auto flex max-w-4xl flex-col gap-4">
+                  <div className="rounded-md border border-hairline bg-canvas-soft p-4">
+                    <div className="text-[13px] font-medium text-ink">Setup and recovery</div>
+                    <div className="mt-1 text-[12px] text-ink-secondary">
+                      {activeAccount?.provider === "microsoft"
+                        ? "Microsoft Graph needs Mail.ReadWrite, Mail.Send, offline_access, and a configured subscription client state before watch renewal can succeed."
+                        : "Gmail needs labels, modify, compose, send, and readonly scopes before sync and watch renewal can succeed."}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={() =>
+                          connectProvider(
+                            activeAccount?.provider === "microsoft" ? "microsoft" : "google",
+                          )
+                        }
+                        className="rounded-sm bg-primary px-3 py-1.5 text-[12px] text-primary-fg"
+                      >
+                        {activeAccount?.status === "reauth_required" ? "Reconnect" : "Connect"}{" "}
+                        {activeAccount?.provider === "microsoft" ? "Microsoft" : "Gmail"}
+                      </button>
+                      {activeAccountId && (
+                        <button
+                          onClick={() =>
+                            void queueAccountAction(
+                              `/api/email/accounts/${activeAccountId}/watch-renewal`,
+                              "Watch renewal queued",
+                            )
+                          }
+                          className="rounded-sm border border-hairline px-3 py-1.5 text-[12px] text-ink-secondary hover:bg-canvas-soft hover:text-ink"
+                        >
+                          Renew watch
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-3 text-[12px] text-ink-mute">
+                      Recovery clears expired cursors, reconnects provider access, and keeps
+                      document mail templates in sync with the active mailbox state.
+                    </div>
+                  </div>
+                  <DataGrid
+                    entityName="emailSyncState"
+                    panelId="email-sync-state-grid"
+                    data={syncState}
+                    keyExtractor={(row) => row.emailSyncStateId}
+                    columns={SYNC_STATE_COLUMNS}
+                    emptyTitle="No sync state"
+                    emptySubtitle="Run initial sync to seed cursors and mailbox state."
+                  />
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="flex h-full min-h-0 bg-canvas">
+              <div className="flex min-w-0 flex-1 flex-col border-r border-hairline">
+                <div className="flex h-10 items-center gap-1 border-b border-hairline px-3">
+                  <button
+                    onClick={async () => {
+                      if (!selectedThreadId) return;
+                      const res = await fetch(`/api/email/threads/${selectedThreadId}/mark-read`, {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ read: !selectedThread?.isRead }),
+                      });
+                      if (!res.ok) {
+                        toast.error(await res.text());
+                        return;
+                      }
+                      queryClient.invalidateQueries({ queryKey: ["email"] });
+                    }}
+                    className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
+                    title={selectedThread?.isRead ? "Mark unread" : "Mark read"}
+                  >
+                    <MailOpenIcon className="size-4" />
+                  </button>
+                  <button
+                    onClick={archiveThread}
+                    className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
+                    title="Archive"
+                  >
+                    <ArchiveIcon className="size-4" />
+                  </button>
+                  <button
+                    onClick={openMailAiAssistant}
+                    disabled={!selectedThreadId}
+                    className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
+                    title="AI Assistant (Alt+A)"
+                  >
+                    <SparklesIcon className="size-4 text-primary" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      openBlankComposer();
+                    }}
+                    className="ml-auto flex h-7 items-center gap-1.5 rounded-sm bg-primary px-2 text-[12px] text-primary-fg"
+                  >
+                    <SendIcon className="size-3.5" />
+                    Compose
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto p-4">
+                  {selectedThread ? (
+                    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+                      <div>
+                        <h2 className="text-[18px] text-ink">
+                          {selectedThread.subject || "(no subject)"}
+                        </h2>
+                        <div className="mt-1 flex flex-wrap gap-2 text-[12px] text-ink-mute">
+                          <span>{selectedThread.messages.length} messages</span>
+                          <span>{selectedThread.isRead ? "Read" : "Unread"}</span>
+                          <span>{selectedThread.messageCount} stored</span>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        {threadMessages.map((message, index) => {
+                          const attachmentRows = threadAttachments.filter(
+                            (attachment) => attachment.emailMessageId === message.emailMessageId,
+                          );
+                          return (
+                            <article
+                              key={message.emailMessageId}
+                              className="rounded-md border border-hairline bg-canvas p-3"
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                  <div className="text-[13px] text-ink">
+                                    {fromJsonToPerson(message.fromJson as any)}
+                                  </div>
+                                  <div className="mt-0.5 text-[12px] text-ink-mute">
+                                    To: {parsePeople(message.toJson)}
+                                    {message.ccJson?.length
+                                      ? ` · Cc: ${parsePeople(message.ccJson)}`
+                                      : ""}
+                                    {message.bccJson?.length
+                                      ? ` · Bcc: ${parsePeople(message.bccJson)}`
+                                      : ""}
+                                  </div>
+                                </div>
+                                <div className="shrink-0 text-right text-[11px] text-ink-mute">
+                                  <div>
+                                    {formatMailboxDate(message.receivedAt ?? message.sentAt)}
+                                  </div>
+                                  <div>{message.subject ?? ""}</div>
+                                </div>
+                              </div>
+                              <div className="mt-3 text-[13px] whitespace-pre-wrap text-ink">
+                                {message.bodyText ||
+                                  (message.bodyHtml ? htmlToText(message.bodyHtml) : "No body")}
+                              </div>
+                              {attachmentRows.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {attachmentRows.map((attachment) => (
+                                    <button
+                                      key={attachment.emailAttachmentId}
+                                      onClick={async () => {
+                                        const res = await fetch(
+                                          `/api/email/attachments/${attachment.emailAttachmentId}/fetch`,
+                                          { method: "POST" },
+                                        );
+                                        if (!res.ok) {
+                                          toast.error(await res.text());
+                                          return;
+                                        }
+                                        toast.success("Attachment fetch queued");
+                                        queryClient.invalidateQueries({ queryKey: ["email"] });
+                                      }}
+                                      className="rounded-full border border-hairline px-2 py-1 text-[11px] text-ink-secondary hover:text-ink"
+                                    >
+                                      {attachment.fileName} · {formatBytes(attachment.sizeBytes)}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => startReply(index)}
+                                  className="rounded-full border border-hairline px-2 py-1 text-[11px] text-ink-secondary hover:text-ink"
+                                >
+                                  Reply
+                                </button>
+                                <button
+                                  onClick={() => startForward(index)}
+                                  className="rounded-full border border-hairline px-2 py-1 text-[11px] text-ink-secondary hover:text-ink"
+                                >
+                                  Forward
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid h-full place-items-center text-[13px] text-ink-mute">
+                      Select a thread or compose a draft
+                    </div>
+                  )}
+                </div>
+              </div>
+              <aside className="hidden w-80 flex-none flex-col bg-canvas-soft lg:flex">
+                <InspectorPanel
+                  title="Inspector"
+                  recordId={selectedThreadId ?? activeAccountId ?? undefined}
+                  sections={[
+                    {
+                      title: "Account",
+                      fields: [
+                        { label: "Display", value: activeAccount?.displayName ?? "-" },
+                        { label: "Primary", value: activeAccount?.primaryEmail ?? "-" },
+                        { label: "Provider", value: activeAccount?.provider ?? "-" },
+                        { label: "Connection", value: activeAccount?.status ?? "-" },
+                        { label: "Sync state", value: activeAccount?.lastSyncStatus ?? "-" },
+                      ],
+                    },
+                    {
+                      title: "Thread",
+                      fields: [
+                        { label: "Subject", value: selectedThread?.subject ?? "-" },
+                        { label: "Messages", value: selectedThread?.messages.length ?? 0 },
+                        { label: "Attachments", value: threadAttachments.length },
+                        {
+                          label: "Unread",
+                          value: selectedThread && !selectedThread.isRead ? "Yes" : "No",
+                        },
+                      ],
+                    },
+                    {
+                      title: "Sync",
+                      fields: [
+                        { label: "Last error", value: accountSyncError ?? "-" },
+                        {
+                          label: "Watch",
+                          value: activeAccount?.watchExpiresAt
+                            ? formatMailboxDate(activeAccount.watchExpiresAt)
+                            : "-",
+                        },
+                        { label: "Label", value: selectedLabelId ?? "-" },
+                      ],
+                    },
+                  ]}
+                />
+              </aside>
+            </section>
+          )
+        }
+      />
+    </>
+  );
+}

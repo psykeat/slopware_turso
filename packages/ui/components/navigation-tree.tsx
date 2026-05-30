@@ -9,6 +9,7 @@ import { Skeleton } from "./skeleton";
 export interface TreeNode {
   id: string;
   label: string;
+  leadingIcon?: React.ReactNode;
   count?: number;
   children?: TreeNode[];
   level?: number;
@@ -160,13 +161,15 @@ export function NavigationTree({
               <span className="size-3 shrink-0" style={{ display: "inline-block", width: 12 }} />
             )}
 
-            <span className="flex size-3.5 shrink-0 items-center justify-center">
-              {isExpanded ? (
-                <FolderOpenIcon size={13} strokeWidth={1.4} />
-              ) : (
-                <FolderIcon size={13} strokeWidth={1.4} />
-              )}
-            </span>
+            {node.leadingIcon ?? (
+              <span className="flex size-3.5 shrink-0 items-center justify-center">
+                {isExpanded ? (
+                  <FolderOpenIcon size={13} strokeWidth={1.4} />
+                ) : (
+                  <FolderIcon size={13} strokeWidth={1.4} />
+                )}
+              </span>
+            )}
 
             <span className="flex-1 truncate">{node.label}</span>
 

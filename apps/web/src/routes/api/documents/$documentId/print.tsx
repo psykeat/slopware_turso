@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { auth } from "@repo/auth/auth";
@@ -95,7 +96,7 @@ export const Route = createFileRoute("/api/documents/$documentId/print")({
                 ),
               );
 
-            const storageRoot = process.env.STORAGE_PATH || "/home/joerg/slopware/storage";
+            const storageRoot = process.env.STORAGE_PATH || join(homedir(), "slopware/storage");
             const baseDir = join(storageRoot, "..");
 
             for (const imgRec of imageRecords) {
@@ -128,6 +129,7 @@ export const Route = createFileRoute("/api/documents/$documentId/print")({
             postText?: boolean;
             stornoText?: boolean;
             lineTexts?: boolean;
+            lineImages?: boolean;
           };
 
           const docForPrint: DocumentForPrint = {
@@ -151,6 +153,7 @@ export const Route = createFileRoute("/api/documents/$documentId/print")({
               postText: printOptions.postText ?? co.printPostText ?? true,
               stornoText: printOptions.stornoText ?? true,
               lineTexts: printOptions.lineTexts ?? co.printPositionTexts ?? true,
+              lineImages: printOptions.lineImages ?? co.showArticleImageOnDocuments ?? false,
             },
             lines: lines.map(
               (line): DocumentLine => ({

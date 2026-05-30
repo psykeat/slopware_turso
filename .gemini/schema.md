@@ -1,7 +1,7 @@
 # Slopware — Live Schema
 
-> Generated: 2026-05-24 23:36:46 UTC
-> Tables: 71
+> Generated: 2026-05-27 12:28:13 UTC
+> Tables: 88
 
 ## Module: uncategorized
 
@@ -104,6 +104,24 @@
 | company_name                | company_name                | text                     | —     |                            |             |
 | first_name                  | first_name                  | text                     | —     |                            |             |
 | last_name                   | last_name                   | text                     | —     |                            |             |
+| notiztext                   | notiztext                   | text                     | —     |                            |             |
+| notiztext_source_entity     | notiztext_source_entity     | text                     | —     |                            |             |
+| notiztext_source_id         | notiztext_source_id         | uuid                     | —     |                            |             |
+| notiztext_source_field      | notiztext_source_field      | text                     | —     |                            |             |
+| notiztext_linked_at         | notiztext_linked_at         | timestamp with time zone | —     |                            |             |
+| notiztext_overridden_at     | notiztext_overridden_at     | timestamp with time zone | —     |                            |             |
+| langtext                    | langtext                    | text                     | —     |                            |             |
+| langtext_source_entity      | langtext_source_entity      | text                     | —     |                            |             |
+| langtext_source_id          | langtext_source_id          | uuid                     | —     |                            |             |
+| langtext_source_field       | langtext_source_field       | text                     | —     |                            |             |
+| langtext_linked_at          | langtext_linked_at          | timestamp with time zone | —     |                            |             |
+| langtext_overridden_at      | langtext_overridden_at      | timestamp with time zone | —     |                            |             |
+| warntext                    | warntext                    | text                     | —     |                            |             |
+| warntext_source_entity      | warntext_source_entity      | text                     | —     |                            |             |
+| warntext_source_id          | warntext_source_id          | uuid                     | —     |                            |             |
+| warntext_source_field       | warntext_source_field       | text                     | —     |                            |             |
+| warntext_linked_at          | warntext_linked_at          | timestamp with time zone | —     |                            |             |
+| warntext_overridden_at      | warntext_overridden_at      | timestamp with time zone | —     |                            |             |
 | address_line_1              | address_line_1              | text                     | —     | NOT NULL                   |             |
 | address_line_2              | address_line_2              | text                     | —     |                            |             |
 | postal_code                 | postal_code                 | text                     | —     | NOT NULL                   |             |
@@ -149,20 +167,26 @@
 
 > _⚠ pending annotation_
 
-| Column         | Business Name  | Type                     | Class | Constraints                | Description |
-| :------------- | :------------- | :----------------------- | :---- | :------------------------- | :---------- |
-| contact_id     | contact_id     | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
-| tenant_id      | tenant_id      | uuid                     | —     | NOT NULL                   |             |
-| address_id     | address_id     | uuid                     | —     | NOT NULL                   |             |
-| first_name     | first_name     | text                     | —     |                            |             |
-| last_name      | last_name      | text                     | —     | NOT NULL                   |             |
-| email          | email          | text                     | —     |                            |             |
-| phone_mobile   | phone_mobile   | text                     | —     |                            |             |
-| phone_landline | phone_landline | text                     | —     |                            |             |
-| role_function  | role_function  | text                     | —     |                            |             |
-| is_primary     | is_primary     | boolean                  | —     | NOT NULL                   |             |
-| archived       | archived       | boolean                  | —     | NOT NULL                   |             |
-| created_at     | created_at     | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| Column                  | Business Name           | Type                     | Class | Constraints                | Description |
+| :---------------------- | :---------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| contact_id              | contact_id              | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id               | tenant_id               | uuid                     | —     | NOT NULL                   |             |
+| address_id              | address_id              | uuid                     | —     | NOT NULL                   |             |
+| first_name              | first_name              | text                     | —     |                            |             |
+| last_name               | last_name               | text                     | —     | NOT NULL                   |             |
+| notiztext               | notiztext               | text                     | —     |                            |             |
+| notiztext_source_entity | notiztext_source_entity | text                     | —     |                            |             |
+| notiztext_source_id     | notiztext_source_id     | uuid                     | —     |                            |             |
+| notiztext_source_field  | notiztext_source_field  | text                     | —     |                            |             |
+| notiztext_linked_at     | notiztext_linked_at     | timestamp with time zone | —     |                            |             |
+| notiztext_overridden_at | notiztext_overridden_at | timestamp with time zone | —     |                            |             |
+| email                   | email                   | text                     | —     |                            |             |
+| phone_mobile            | phone_mobile            | text                     | —     |                            |             |
+| phone_landline          | phone_landline          | text                     | —     |                            |             |
+| role_function           | role_function           | text                     | —     |                            |             |
+| is_primary              | is_primary              | boolean                  | —     | NOT NULL                   |             |
+| archived                | archived                | boolean                  | —     | NOT NULL                   |             |
+| created_at              | created_at              | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
 
 > INDEX `idx_address_contact_address` (address_id) [btree]
 > INDEX `idx_address_contact_tenant` (tenant_id) [btree]
@@ -182,25 +206,51 @@
 
 > _⚠ pending annotation_
 
-| Column               | Business Name        | Type                     | Class | Constraints                | Description |
-| :------------------- | :------------------- | :----------------------- | :---- | :------------------------- | :---------- |
-| article_id           | article_id           | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
-| tenant_id            | tenant_id            | uuid                     | —     | NOT NULL                   |             |
-| article_no           | article_no           | text                     | —     | NOT NULL                   |             |
-| name                 | name                 | text                     | —     | NOT NULL                   |             |
-| description          | description          | text                     | —     |                            |             |
-| article_group_id     | article_group_id     | uuid                     | —     |                            |             |
-| tax_class_id         | tax_class_id         | uuid                     | —     |                            |             |
-| base_unit_id         | base_unit_id         | uuid                     | —     |                            |             |
-| sales_unit_id        | sales_unit_id        | uuid                     | —     |                            |             |
-| purchase_unit_id     | purchase_unit_id     | uuid                     | —     |                            |             |
-| archived_at          | archived_at          | timestamp with time zone | —     |                            |             |
-| custom_attributes    | custom_attributes    | jsonb                    | —     |                            |             |
-| created_at           | created_at           | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
-| updated_at           | updated_at           | timestamp with time zone | —     |                            |             |
-| default_warehouse_id | default_warehouse_id | uuid                     | —     |                            |             |
-| tracking_mode        | tracking_mode        | text                     | —     |                            |             |
-| bom_type             | bom_type             | text                     | —     | NOT NULL, DEFAULT none     |             |
+| Column                         | Business Name                  | Type                     | Class | Constraints                | Description |
+| :----------------------------- | :----------------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| article_id                     | article_id                     | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                      | tenant_id                      | uuid                     | —     | NOT NULL                   |             |
+| article_no                     | article_no                     | text                     | —     | NOT NULL                   |             |
+| name                           | name                           | text                     | —     | NOT NULL                   |             |
+| notiztext                      | notiztext                      | text                     | —     |                            |             |
+| langtext                       | langtext                       | text                     | —     |                            |             |
+| kurzbeschreibung               | kurzbeschreibung               | text                     | —     |                            |             |
+| warntext                       | warntext                       | text                     | —     |                            |             |
+| notiztext_source_entity        | notiztext_source_entity        | text                     | —     |                            |             |
+| notiztext_source_id            | notiztext_source_id            | uuid                     | —     |                            |             |
+| notiztext_source_field         | notiztext_source_field         | text                     | —     |                            |             |
+| notiztext_linked_at            | notiztext_linked_at            | timestamp with time zone | —     |                            |             |
+| notiztext_overridden_at        | notiztext_overridden_at        | timestamp with time zone | —     |                            |             |
+| langtext_source_entity         | langtext_source_entity         | text                     | —     |                            |             |
+| langtext_source_id             | langtext_source_id             | uuid                     | —     |                            |             |
+| langtext_source_field          | langtext_source_field          | text                     | —     |                            |             |
+| langtext_linked_at             | langtext_linked_at             | timestamp with time zone | —     |                            |             |
+| langtext_overridden_at         | langtext_overridden_at         | timestamp with time zone | —     |                            |             |
+| kurzbeschreibung_source_entity | kurzbeschreibung_source_entity | text                     | —     |                            |             |
+| kurzbeschreibung_source_id     | kurzbeschreibung_source_id     | uuid                     | —     |                            |             |
+| kurzbeschreibung_source_field  | kurzbeschreibung_source_field  | text                     | —     |                            |             |
+| kurzbeschreibung_linked_at     | kurzbeschreibung_linked_at     | timestamp with time zone | —     |                            |             |
+| kurzbeschreibung_overridden_at | kurzbeschreibung_overridden_at | timestamp with time zone | —     |                            |             |
+| warntext_source_entity         | warntext_source_entity         | text                     | —     |                            |             |
+| warntext_source_id             | warntext_source_id             | uuid                     | —     |                            |             |
+| warntext_source_field          | warntext_source_field          | text                     | —     |                            |             |
+| warntext_linked_at             | warntext_linked_at             | timestamp with time zone | —     |                            |             |
+| warntext_overridden_at         | warntext_overridden_at         | timestamp with time zone | —     |                            |             |
+| description                    | description                    | text                     | —     |                            |             |
+| article_group_id               | article_group_id               | uuid                     | —     |                            |             |
+| tax_class_id                   | tax_class_id                   | uuid                     | —     |                            |             |
+| base_unit_id                   | base_unit_id                   | uuid                     | —     |                            |             |
+| sales_unit_id                  | sales_unit_id                  | uuid                     | —     |                            |             |
+| purchase_unit_id               | purchase_unit_id               | uuid                     | —     |                            |             |
+| archived_at                    | archived_at                    | timestamp with time zone | —     |                            |             |
+| custom_attributes              | custom_attributes              | jsonb                    | —     |                            |             |
+| created_at                     | created_at                     | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at                     | updated_at                     | timestamp with time zone | —     |                            |             |
+| default_warehouse_id           | default_warehouse_id           | uuid                     | —     |                            |             |
+| tracking_mode                  | tracking_mode                  | text                     | —     |                            |             |
+| bom_type                       | bom_type                       | text                     | —     | NOT NULL, DEFAULT none     |             |
+| print_position_texts           | print_position_texts           | boolean                  | —     |                            |             |
+| primary_image_id               | primary_image_id               | uuid                     | —     |                            |             |
 
 > INDEX `idx_article_default_wh` (tenant_id, default_warehouse_id) [btree]
 > INDEX `idx_article_group_fk` (article_group_id) [btree]
@@ -232,22 +282,46 @@
 
 > _⚠ pending annotation_
 
+| Column               | Business Name        | Type                     | Class | Constraints                | Description |
+| :------------------- | :------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| article_group_id     | article_group_id     | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id            | tenant_id            | uuid                     | —     | NOT NULL                   |             |
+| code                 | code                 | text                     | —     | NOT NULL                   |             |
+| name                 | name                 | text                     | —     | NOT NULL                   |             |
+| tax_class_id         | tax_class_id         | uuid                     | —     |                            |             |
+| base_unit_id         | base_unit_id         | uuid                     | —     |                            |             |
+| sales_unit_id        | sales_unit_id        | uuid                     | —     |                            |             |
+| purchase_unit_id     | purchase_unit_id     | uuid                     | —     |                            |             |
+| tracking_mode        | tracking_mode        | text                     | —     |                            |             |
+| bom_type             | bom_type             | text                     | —     | NOT NULL, DEFAULT none     |             |
+| print_position_texts | print_position_texts | boolean                  | —     |                            |             |
+| archived             | archived             | boolean                  | —     | NOT NULL                   |             |
+| created_at           | created_at           | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+
+> INDEX `idx_article_group_tenant` (tenant_id) [btree]
+
+### `article_image`
+
+> _⚠ pending annotation_
+
 | Column           | Business Name    | Type                     | Class | Constraints                | Description |
 | :--------------- | :--------------- | :----------------------- | :---- | :------------------------- | :---------- |
-| article_group_id | article_group_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| article_image_id | article_image_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
 | tenant_id        | tenant_id        | uuid                     | —     | NOT NULL                   |             |
-| code             | code             | text                     | —     | NOT NULL                   |             |
-| name             | name             | text                     | —     | NOT NULL                   |             |
-| tax_class_id     | tax_class_id     | uuid                     | —     |                            |             |
-| base_unit_id     | base_unit_id     | uuid                     | —     |                            |             |
-| sales_unit_id    | sales_unit_id    | uuid                     | —     |                            |             |
-| purchase_unit_id | purchase_unit_id | uuid                     | —     |                            |             |
-| tracking_mode    | tracking_mode    | text                     | —     |                            |             |
-| bom_type         | bom_type         | text                     | —     | NOT NULL, DEFAULT none     |             |
+| article_id       | article_id       | uuid                     | —     | NOT NULL                   |             |
+| storage_key      | storage_key      | text                     | —     | NOT NULL                   |             |
+| file_name        | file_name        | text                     | —     | NOT NULL                   |             |
+| mime_type        | mime_type        | text                     | —     | NOT NULL                   |             |
+| file_size        | file_size        | integer                  | —     | NOT NULL                   |             |
+| width            | width            | integer                  | —     |                            |             |
+| height           | height           | integer                  | —     |                            |             |
+| alt_text         | alt_text         | text                     | —     |                            |             |
+| sort_order       | sort_order       | integer                  | —     | NOT NULL                   |             |
 | archived         | archived         | boolean                  | —     | NOT NULL                   |             |
 | created_at       | created_at       | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
 
-> INDEX `idx_article_group_tenant` (tenant_id) [btree]
+> INDEX `idx_article_image_tenant_article` (tenant_id, article_id) [btree]
+> INDEX `idx_article_image_tenant_archived` (tenant_id, archived) [btree]
 
 ### `bank_account`
 
@@ -274,37 +348,44 @@
 
 > _⚠ pending annotation_
 
-| Column                  | Business Name           | Type                     | Class | Constraints                | Description |
-| :---------------------- | :---------------------- | :----------------------- | :---- | :------------------------- | :---------- |
-| company_id              | company_id              | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
-| tenant_id               | tenant_id               | uuid                     | —     | NOT NULL                   |             |
-| company_no              | company_no              | text                     | —     | NOT NULL                   |             |
-| name                    | name                    | text                     | —     | NOT NULL                   |             |
-| legal_name              | legal_name              | text                     | —     |                            |             |
-| country_code            | country_code            | char(2)                  | —     | NOT NULL                   |             |
-| currency_id             | currency_id             | char(3)                  | —     | NOT NULL                   |             |
-| vat_id                  | vat_id                  | text                     | —     |                            |             |
-| archived                | archived                | boolean                  | —     | NOT NULL                   |             |
-| created_at              | created_at              | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
-| address_line_1          | address_line_1          | text                     | —     |                            |             |
-| address_line_2          | address_line_2          | text                     | —     |                            |             |
-| city                    | city                    | text                     | —     |                            |             |
-| postal_code             | postal_code             | text                     | —     |                            |             |
-| phone_landline          | phone_landline          | text                     | —     |                            |             |
-| phone_mobile            | phone_mobile            | text                     | —     |                            |             |
-| email                   | email                   | text                     | —     |                            |             |
-| homepage                | homepage                | text                     | —     |                            |             |
-| tax_number              | tax_number              | text                     | —     |                            |             |
-| tax_authority           | tax_authority           | text                     | —     |                            |             |
-| gln                     | gln                     | text                     | —     |                            |             |
-| eori_no                 | eori_no                 | text                     | —     |                            |             |
-| duns_no                 | duns_no                 | text                     | —     |                            |             |
-| custom_attributes       | custom_attributes       | jsonb                    | —     |                            |             |
-| bank_name               | bank_name               | text                     | —     |                            |             |
-| bank_bic                | bank_bic                | text                     | —     |                            |             |
-| bank_iban               | bank_iban               | text                     | —     |                            |             |
-| fiscal_year_start_month | fiscal_year_start_month | integer                  | —     | NOT NULL, DEFAULT 1        |             |
-| default_warehouse_id    | default_warehouse_id    | uuid                     | —     |                            |             |
+| Column                          | Business Name                   | Type                     | Class | Constraints                | Description |
+| :------------------------------ | :------------------------------ | :----------------------- | :---- | :------------------------- | :---------- |
+| company_id                      | company_id                      | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                       | tenant_id                       | uuid                     | —     | NOT NULL                   |             |
+| company_no                      | company_no                      | text                     | —     | NOT NULL                   |             |
+| name                            | name                            | text                     | —     | NOT NULL                   |             |
+| legal_name                      | legal_name                      | text                     | —     |                            |             |
+| country_code                    | country_code                    | char(2)                  | —     | NOT NULL                   |             |
+| currency_id                     | currency_id                     | char(3)                  | —     | NOT NULL                   |             |
+| vat_id                          | vat_id                          | text                     | —     |                            |             |
+| archived                        | archived                        | boolean                  | —     | NOT NULL                   |             |
+| created_at                      | created_at                      | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| address_line_1                  | address_line_1                  | text                     | —     |                            |             |
+| address_line_2                  | address_line_2                  | text                     | —     |                            |             |
+| city                            | city                            | text                     | —     |                            |             |
+| postal_code                     | postal_code                     | text                     | —     |                            |             |
+| phone_landline                  | phone_landline                  | text                     | —     |                            |             |
+| phone_mobile                    | phone_mobile                    | text                     | —     |                            |             |
+| email                           | email                           | text                     | —     |                            |             |
+| homepage                        | homepage                        | text                     | —     |                            |             |
+| tax_number                      | tax_number                      | text                     | —     |                            |             |
+| tax_authority                   | tax_authority                   | text                     | —     |                            |             |
+| gln                             | gln                             | text                     | —     |                            |             |
+| eori_no                         | eori_no                         | text                     | —     |                            |             |
+| duns_no                         | duns_no                         | text                     | —     |                            |             |
+| custom_attributes               | custom_attributes               | jsonb                    | —     |                            |             |
+| bank_name                       | bank_name                       | text                     | —     |                            |             |
+| bank_bic                        | bank_bic                        | text                     | —     |                            |             |
+| bank_iban                       | bank_iban                       | text                     | —     |                            |             |
+| fiscal_year_start_month         | fiscal_year_start_month         | integer                  | —     | NOT NULL, DEFAULT 1        |             |
+| default_warehouse_id            | default_warehouse_id            | uuid                     | —     |                            |             |
+| copy_long_texts_only_on_change  | copy_long_texts_only_on_change  | boolean                  | —     | NOT NULL, DEFAULT true     |             |
+| print_address_long_text         | print_address_long_text         | boolean                  | —     | NOT NULL                   |             |
+| print_pre_text                  | print_pre_text                  | boolean                  | —     | NOT NULL                   |             |
+| print_post_text                 | print_post_text                 | boolean                  | —     | NOT NULL                   |             |
+| print_position_texts            | print_position_texts            | boolean                  | —     | NOT NULL                   |             |
+| show_article_image_in_entry     | show_article_image_in_entry     | boolean                  | —     | NOT NULL                   |             |
+| show_article_image_on_documents | show_article_image_on_documents | boolean                  | —     | NOT NULL                   |             |
 
 > INDEX `idx_company_tenant` (tenant_id) [btree]
 > INDEX `idx_company_tenant_archived` (tenant_id, archived) [btree]
@@ -439,45 +520,70 @@
 
 > _⚠ pending annotation_
 
-| Column              | Business Name       | Type                     | Class | Constraints                | Description |
-| :------------------ | :------------------ | :----------------------- | :---- | :------------------------- | :---------- |
-| document_id         | document_id         | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
-| tenant_id           | tenant_id           | uuid                     | —     | NOT NULL                   |             |
-| company_id          | company_id          | uuid                     | —     | NOT NULL                   |             |
-| document_type       | document_type       | char(1)                  | —     | NOT NULL                   |             |
-| document_direction  | document_direction  | text                     | —     | NOT NULL                   |             |
-| document_no         | document_no         | text                     | —     | NOT NULL                   |             |
-| status              | status              | text                     | —     | NOT NULL                   |             |
-| customer_id         | customer_id         | uuid                     | —     |                            |             |
-| currency_id         | currency_id         | char(3)                  | —     |                            |             |
-| document_date       | document_date       | date                     | —     | NOT NULL                   |             |
-| posting_date        | posting_date        | date                     | —     |                            |             |
-| total_net           | total_net           | numeric                  | —     |                            |             |
-| total_tax           | total_tax           | numeric                  | —     |                            |             |
-| total_gross         | total_gross         | numeric                  | —     |                            |             |
-| version_no          | version_no          | integer                  | —     | NOT NULL, DEFAULT 1        |             |
-| posted_at           | posted_at           | timestamp with time zone | —     |                            |             |
-| posted_by           | posted_by           | text                     | —     |                            |             |
-| cancelled_at        | cancelled_at        | timestamp with time zone | —     |                            |             |
-| storno_document_id  | storno_document_id  | uuid                     | —     |                            |             |
-| custom_attributes   | custom_attributes   | jsonb                    | —     |                            |             |
-| created_at          | created_at          | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
-| updated_at          | updated_at          | timestamp with time zone | —     |                            |             |
-| transaction_id      | transaction_id      | uuid                     | —     | NOT NULL                   |             |
-| parent_document_id  | parent_document_id  | uuid                     | —     |                            |             |
-| document_group_id   | document_group_id   | uuid                     | —     |                            |             |
-| archived_at         | archived_at         | timestamp with time zone | —     |                            |             |
-| billing_address     | billing_address     | jsonb                    | —     |                            |             |
-| delivery_address    | delivery_address    | jsonb                    | —     |                            |             |
-| delivery_address_id | delivery_address_id | uuid                     | —     |                            |             |
-| payment_term_id     | payment_term_id     | uuid                     | —     |                            |             |
-| shipping_method_id  | shipping_method_id  | uuid                     | —     |                            |             |
-| document_type_id    | document_type_id    | uuid                     | —     |                            |             |
-| warehouse_id        | warehouse_id        | uuid                     | —     |                            |             |
-| target_warehouse_id | target_warehouse_id | uuid                     | —     |                            |             |
-| is_paid             | is_paid             | boolean                  | —     | NOT NULL                   |             |
-| paid_at             | paid_at             | timestamp with time zone | —     |                            |             |
-| paid_amount         | paid_amount         | numeric                  | —     |                            |             |
+| Column                    | Business Name             | Type                     | Class | Constraints                | Description |
+| :------------------------ | :------------------------ | :----------------------- | :---- | :------------------------- | :---------- |
+| document_id               | document_id               | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                 | tenant_id                 | uuid                     | —     | NOT NULL                   |             |
+| company_id                | company_id                | uuid                     | —     | NOT NULL                   |             |
+| document_type             | document_type             | char(1)                  | —     | NOT NULL                   |             |
+| document_direction        | document_direction        | text                     | —     | NOT NULL                   |             |
+| document_no               | document_no               | text                     | —     | NOT NULL                   |             |
+| status                    | status                    | text                     | —     | NOT NULL                   |             |
+| customer_id               | customer_id               | uuid                     | —     |                            |             |
+| currency_id               | currency_id               | char(3)                  | —     |                            |             |
+| print_options             | print_options             | jsonb                    | —     |                            |             |
+| document_date             | document_date             | date                     | —     | NOT NULL                   |             |
+| posting_date              | posting_date              | date                     | —     |                            |             |
+| total_net                 | total_net                 | numeric                  | —     |                            |             |
+| total_tax                 | total_tax                 | numeric                  | —     |                            |             |
+| total_gross               | total_gross               | numeric                  | —     |                            |             |
+| version_no                | version_no                | integer                  | —     | NOT NULL, DEFAULT 1        |             |
+| posted_at                 | posted_at                 | timestamp with time zone | —     |                            |             |
+| posted_by                 | posted_by                 | text                     | —     |                            |             |
+| cancelled_at              | cancelled_at              | timestamp with time zone | —     |                            |             |
+| storno_document_id        | storno_document_id        | uuid                     | —     |                            |             |
+| custom_attributes         | custom_attributes         | jsonb                    | —     |                            |             |
+| created_at                | created_at                | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at                | updated_at                | timestamp with time zone | —     |                            |             |
+| transaction_id            | transaction_id            | uuid                     | —     | NOT NULL                   |             |
+| parent_document_id        | parent_document_id        | uuid                     | —     |                            |             |
+| document_group_id         | document_group_id         | uuid                     | —     |                            |             |
+| archived_at               | archived_at               | timestamp with time zone | —     |                            |             |
+| billing_address           | billing_address           | jsonb                    | —     |                            |             |
+| delivery_address          | delivery_address          | jsonb                    | —     |                            |             |
+| delivery_address_id       | delivery_address_id       | uuid                     | —     |                            |             |
+| note_text                 | note_text                 | text                     | —     |                            |             |
+| note_text_source_entity   | note_text_source_entity   | text                     | —     |                            |             |
+| note_text_source_id       | note_text_source_id       | uuid                     | —     |                            |             |
+| note_text_source_field    | note_text_source_field    | text                     | —     |                            |             |
+| note_text_linked_at       | note_text_linked_at       | timestamp with time zone | —     |                            |             |
+| note_text_overridden_at   | note_text_overridden_at   | timestamp with time zone | —     |                            |             |
+| pre_text                  | pre_text                  | text                     | —     |                            |             |
+| pre_text_source_entity    | pre_text_source_entity    | text                     | —     |                            |             |
+| pre_text_source_id        | pre_text_source_id        | uuid                     | —     |                            |             |
+| pre_text_source_field     | pre_text_source_field     | text                     | —     |                            |             |
+| pre_text_linked_at        | pre_text_linked_at        | timestamp with time zone | —     |                            |             |
+| pre_text_overridden_at    | pre_text_overridden_at    | timestamp with time zone | —     |                            |             |
+| post_text                 | post_text                 | text                     | —     |                            |             |
+| post_text_source_entity   | post_text_source_entity   | text                     | —     |                            |             |
+| post_text_source_id       | post_text_source_id       | uuid                     | —     |                            |             |
+| post_text_source_field    | post_text_source_field    | text                     | —     |                            |             |
+| post_text_linked_at       | post_text_linked_at       | timestamp with time zone | —     |                            |             |
+| post_text_overridden_at   | post_text_overridden_at   | timestamp with time zone | —     |                            |             |
+| storno_text               | storno_text               | text                     | —     |                            |             |
+| storno_text_source_entity | storno_text_source_entity | text                     | —     |                            |             |
+| storno_text_source_id     | storno_text_source_id     | uuid                     | —     |                            |             |
+| storno_text_source_field  | storno_text_source_field  | text                     | —     |                            |             |
+| storno_text_linked_at     | storno_text_linked_at     | timestamp with time zone | —     |                            |             |
+| storno_text_overridden_at | storno_text_overridden_at | timestamp with time zone | —     |                            |             |
+| payment_term_id           | payment_term_id           | uuid                     | —     |                            |             |
+| shipping_method_id        | shipping_method_id        | uuid                     | —     |                            |             |
+| document_type_id          | document_type_id          | uuid                     | —     |                            |             |
+| warehouse_id              | warehouse_id              | uuid                     | —     |                            |             |
+| target_warehouse_id       | target_warehouse_id       | uuid                     | —     |                            |             |
+| is_paid                   | is_paid                   | boolean                  | —     | NOT NULL                   |             |
+| paid_at                   | paid_at                   | timestamp with time zone | —     |                            |             |
+| paid_amount               | paid_amount               | numeric                  | —     |                            |             |
 
 > INDEX `idx_document_company` (tenant_id, company_id) [btree]
 > INDEX `idx_document_customer` (tenant_id, customer_id) [btree]
@@ -533,29 +639,35 @@
 
 > _⚠ pending annotation_
 
-| Column                | Business Name         | Type                     | Class | Constraints                | Description |
-| :-------------------- | :-------------------- | :----------------------- | :---- | :------------------------- | :---------- |
-| document_line_id      | document_line_id      | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
-| tenant_id             | tenant_id             | uuid                     | —     | NOT NULL                   |             |
-| document_id           | document_id           | uuid                     | —     | NOT NULL                   |             |
-| line_no               | line_no               | integer                  | —     | NOT NULL                   |             |
-| article_id            | article_id            | uuid                     | —     |                            |             |
-| article_text_snapshot | article_text_snapshot | text                     | —     |                            |             |
-| quantity              | quantity              | numeric                  | —     | NOT NULL                   |             |
-| unit                  | unit                  | text                     | —     |                            |             |
-| net_price             | net_price             | numeric                  | —     | NOT NULL                   |             |
-| discount_percentage   | discount_percentage   | numeric                  | —     |                            |             |
-| tax_code_id           | tax_code_id           | uuid                     | —     |                            |             |
-| tax_amount            | tax_amount            | numeric                  | —     |                            |             |
-| line_total_net        | line_total_net        | numeric                  | —     |                            |             |
-| warehouse_id          | warehouse_id          | uuid                     | —     |                            |             |
-| cost_center_id        | cost_center_id        | uuid                     | —     |                            |             |
-| created_at            | created_at            | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
-| archived_at           | archived_at           | timestamp with time zone | —     |                            |             |
-| transaction_id        | transaction_id        | uuid                     | —     |                            |             |
-| movement_type         | movement_type         | char(1)                  | —     |                            |             |
-| line_type             | line_type             | varchar(20)              | —     | NOT NULL, DEFAULT article  |             |
-| bom_group_id          | bom_group_id          | uuid                     | —     |                            |             |
+| Column                  | Business Name           | Type                     | Class | Constraints                | Description |
+| :---------------------- | :---------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| document_line_id        | document_line_id        | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id               | tenant_id               | uuid                     | —     | NOT NULL                   |             |
+| document_id             | document_id             | uuid                     | —     | NOT NULL                   |             |
+| line_no                 | line_no                 | integer                  | —     | NOT NULL                   |             |
+| article_id              | article_id              | uuid                     | —     |                            |             |
+| article_text_snapshot   | article_text_snapshot   | text                     | —     |                            |             |
+| lang_text               | lang_text               | text                     | —     |                            |             |
+| lang_text_source_entity | lang_text_source_entity | text                     | —     |                            |             |
+| lang_text_source_id     | lang_text_source_id     | uuid                     | —     |                            |             |
+| lang_text_source_field  | lang_text_source_field  | text                     | —     |                            |             |
+| lang_text_linked_at     | lang_text_linked_at     | timestamp with time zone | —     |                            |             |
+| lang_text_overridden_at | lang_text_overridden_at | timestamp with time zone | —     |                            |             |
+| quantity                | quantity                | numeric                  | —     | NOT NULL                   |             |
+| unit                    | unit                    | text                     | —     |                            |             |
+| net_price               | net_price               | numeric                  | —     | NOT NULL                   |             |
+| discount_percentage     | discount_percentage     | numeric                  | —     |                            |             |
+| tax_code_id             | tax_code_id             | uuid                     | —     |                            |             |
+| tax_amount              | tax_amount              | numeric                  | —     |                            |             |
+| line_total_net          | line_total_net          | numeric                  | —     |                            |             |
+| warehouse_id            | warehouse_id            | uuid                     | —     |                            |             |
+| cost_center_id          | cost_center_id          | uuid                     | —     |                            |             |
+| created_at              | created_at              | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| archived_at             | archived_at             | timestamp with time zone | —     |                            |             |
+| transaction_id          | transaction_id          | uuid                     | —     |                            |             |
+| movement_type           | movement_type           | char(1)                  | —     |                            |             |
+| line_type               | line_type               | varchar(20)              | —     | NOT NULL, DEFAULT article  |             |
+| bom_group_id            | bom_group_id            | uuid                     | —     |                            |             |
 
 > INDEX `idx_document_line_article` (article_id) [btree]
 > INDEX `idx_document_line_document` (document_id) [btree]
@@ -604,6 +716,52 @@
 
 > CHECK `document_line_tracking_check`: [object Object]
 
+### `document_shipment`
+
+> _⚠ pending annotation_
+
+| Column               | Business Name        | Type                     | Class | Constraints                | Description |
+| :------------------- | :------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| document_shipment_id | document_shipment_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id            | tenant_id            | uuid                     | —     | NOT NULL                   |             |
+| document_id          | document_id          | uuid                     | —     | NOT NULL                   |             |
+| shipment_status      | shipment_status      | text                     | —     | NOT NULL, DEFAULT open     |             |
+| carrier_key          | carrier_key          | text                     | —     | NOT NULL, DEFAULT dhl      |             |
+| carrier_service_key  | carrier_service_key  | text                     | —     | NOT NULL, DEFAULT paket    |             |
+| tracking_id          | tracking_id          | text                     | —     |                            |             |
+| recipient_name       | recipient_name       | text                     | —     | NOT NULL                   |             |
+| company              | company              | text                     | —     |                            |             |
+| street               | street               | text                     | —     | NOT NULL                   |             |
+| house_number         | house_number         | text                     | —     | NOT NULL                   |             |
+| postal_code          | postal_code          | text                     | —     | NOT NULL                   |             |
+| city                 | city                 | text                     | —     | NOT NULL                   |             |
+| country_code         | country_code         | char(2)                  | —     | NOT NULL, DEFAULT DE       |             |
+| email                | email                | text                     | —     |                            |             |
+| phone                | phone                | text                     | —     |                            |             |
+| exported_at          | exported_at          | timestamp with time zone | —     |                            |             |
+| label_created_at     | label_created_at     | timestamp with time zone | —     |                            |             |
+| shipped_at           | shipped_at           | timestamp with time zone | —     |                            |             |
+| created_at           | created_at           | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at           | updated_at           | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_shipment_document` (document_id) [btree]
+> INDEX `idx_shipment_status` (shipment_status) [btree]
+
+### `document_shipment_package`
+
+> _⚠ pending annotation_
+
+| Column                       | Business Name                | Type                     | Class | Constraints                | Description |
+| :--------------------------- | :--------------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| document_shipment_package_id | document_shipment_package_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                    | tenant_id                    | uuid                     | —     | NOT NULL                   |             |
+| document_shipment_id         | document_shipment_id         | uuid                     | —     | NOT NULL                   |             |
+| seq                          | seq                          | integer                  | —     | NOT NULL, DEFAULT 1        |             |
+| weight_kg                    | weight_kg                    | numeric                  | —     | NOT NULL, DEFAULT 1.0      |             |
+| created_at                   | created_at                   | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+
+> INDEX `idx_shipment_package_shipment` (document_shipment_id) [btree]
+
 ### `document_type`
 
 > _⚠ pending annotation_
@@ -626,6 +784,327 @@
 > INDEX `idx_document_type_tenant` (tenant_id) [btree]
 
 > CHECK `document_type_movement_type_check`: [object Object]
+
+### `email_account`
+
+> _⚠ pending annotation_
+
+| Column                | Business Name         | Type                     | Class | Constraints                 | Description |
+| :-------------------- | :-------------------- | :----------------------- | :---- | :-------------------------- | :---------- |
+| email_account_id      | email_account_id      | uuid                     | PK    | NOT NULL, DEFAULT uuidv7()  |             |
+| tenant_id             | tenant_id             | uuid                     | —     | NOT NULL                    |             |
+| provider              | provider              | text                     | —     | NOT NULL                    |             |
+| provider_account_id   | provider_account_id   | text                     | —     | NOT NULL                    |             |
+| display_name          | display_name          | text                     | —     | NOT NULL                    |             |
+| primary_email         | primary_email         | text                     | —     | NOT NULL                    |             |
+| status                | status                | text                     | —     | NOT NULL, DEFAULT connected |             |
+| credentials_encrypted | credentials_encrypted | text                     | —     | NOT NULL                    |             |
+| scopes                | scopes                | jsonb                    | —     | NOT NULL, DEFAULT           |             |
+| last_sync_at          | last_sync_at          | timestamp with time zone | —     |                             |             |
+| last_sync_status      | last_sync_status      | text                     | —     | NOT NULL, DEFAULT idle      |             |
+| last_sync_error       | last_sync_error       | text                     | —     |                             |             |
+| watch_expires_at      | watch_expires_at      | timestamp with time zone | —     |                             |             |
+| archived              | archived              | boolean                  | —     | NOT NULL                    |             |
+| created_at            | created_at            | timestamp with time zone | —     | NOT NULL, DEFAULT now()     |             |
+| updated_at            | updated_at            | timestamp with time zone | —     |                             |             |
+
+> INDEX `idx_email_account_tenant` (tenant_id) [btree]
+> INDEX `idx_email_account_status` (tenant_id, status) [btree]
+
+> CHECK `chk_email_account_provider`: [object Object]
+> CHECK `chk_email_account_status`: [object Object]
+> CHECK `chk_email_account_sync_status`: [object Object]
+
+### `email_account_user_grant`
+
+> _⚠ pending annotation_
+
+| Column                      | Business Name               | Type                     | Class | Constraints                | Description |
+| :-------------------------- | :-------------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| email_account_user_grant_id | email_account_user_grant_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                   | tenant_id                   | uuid                     | —     | NOT NULL                   |             |
+| email_account_id            | email_account_id            | uuid                     | —     | NOT NULL                   |             |
+| user_id                     | user_id                     | text                     | —     | NOT NULL                   |             |
+| can_read                    | can_read                    | boolean                  | —     | NOT NULL, DEFAULT true     |             |
+| can_send                    | can_send                    | boolean                  | —     | NOT NULL                   |             |
+| can_manage                  | can_manage                  | boolean                  | —     | NOT NULL                   |             |
+| created_at                  | created_at                  | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+
+> INDEX `idx_email_account_grant_user` (tenant_id, user_id) [btree]
+
+### `email_attachment`
+
+> _⚠ pending annotation_
+
+| Column                 | Business Name          | Type                     | Class | Constraints                | Description |
+| :--------------------- | :--------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| email_attachment_id    | email_attachment_id    | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id              | tenant_id              | uuid                     | —     | NOT NULL                   |             |
+| email_message_id       | email_message_id       | uuid                     | —     | NOT NULL                   |             |
+| provider_attachment_id | provider_attachment_id | text                     | —     |                            |             |
+| file_name              | file_name              | text                     | —     | NOT NULL                   |             |
+| content_type           | content_type           | text                     | —     |                            |             |
+| size_bytes             | size_bytes             | integer                  | —     |                            |             |
+| storage_key            | storage_key            | text                     | —     |                            |             |
+| inline_content_id      | inline_content_id      | text                     | —     |                            |             |
+| fetched_at             | fetched_at             | timestamp with time zone | —     |                            |             |
+| created_at             | created_at             | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+
+> INDEX `idx_email_attachment_message` (tenant_id, email_message_id) [btree]
+> INDEX `idx_email_attachment_storage` (tenant_id, storage_key) [btree]
+
+### `email_identity`
+
+> _⚠ pending annotation_
+
+| Column               | Business Name        | Type                     | Class | Constraints                | Description |
+| :------------------- | :------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| email_identity_id    | email_identity_id    | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id            | tenant_id            | uuid                     | —     | NOT NULL                   |             |
+| email_account_id     | email_account_id     | uuid                     | —     | NOT NULL                   |             |
+| email                | email                | text                     | —     | NOT NULL                   |             |
+| display_name         | display_name         | text                     | —     |                            |             |
+| provider_identity_id | provider_identity_id | text                     | —     |                            |             |
+| is_primary           | is_primary           | boolean                  | —     | NOT NULL                   |             |
+| can_send             | can_send             | boolean                  | —     | NOT NULL, DEFAULT true     |             |
+| archived             | archived             | boolean                  | —     | NOT NULL                   |             |
+| created_at           | created_at           | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+
+> INDEX `idx_email_identity_account` (tenant_id, email_account_id) [btree]
+
+### `email_job`
+
+> _⚠ pending annotation_
+
+| Column           | Business Name    | Type                     | Class | Constraints                       | Description |
+| :--------------- | :--------------- | :----------------------- | :---- | :-------------------------------- | :---------- |
+| email_job_id     | email_job_id     | uuid                     | PK    | NOT NULL, DEFAULT uuidv7()        |             |
+| tenant_id        | tenant_id        | uuid                     | —     | NOT NULL                          |             |
+| email_account_id | email_account_id | uuid                     | —     |                                   |             |
+| job_type         | job_type         | text                     | —     | NOT NULL                          |             |
+| idempotency_key  | idempotency_key  | text                     | —     | NOT NULL                          |             |
+| payload          | payload          | jsonb                    | —     | NOT NULL, DEFAULT [object Object] |             |
+| status           | status           | text                     | —     | NOT NULL, DEFAULT queued          |             |
+| attempts         | attempts         | integer                  | —     | NOT NULL                          |             |
+| max_attempts     | max_attempts     | integer                  | —     | NOT NULL, DEFAULT 5               |             |
+| run_after        | run_after        | timestamp with time zone | —     | NOT NULL, DEFAULT now()           |             |
+| locked_at        | locked_at        | timestamp with time zone | —     |                                   |             |
+| locked_by        | locked_by        | text                     | —     |                                   |             |
+| last_error       | last_error       | text                     | —     |                                   |             |
+| created_at       | created_at       | timestamp with time zone | —     | NOT NULL, DEFAULT now()           |             |
+| updated_at       | updated_at       | timestamp with time zone | —     |                                   |             |
+
+> INDEX `idx_email_job_queue` (status, run_after) [btree]
+> INDEX `idx_email_job_account` (tenant_id, email_account_id) [btree]
+
+> CHECK `chk_email_job_type`: [object Object]
+> CHECK `chk_email_job_status`: [object Object]
+
+### `email_label`
+
+> _⚠ pending annotation_
+
+| Column                   | Business Name            | Type                     | Class | Constraints                | Description |
+| :----------------------- | :----------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| email_label_id           | email_label_id           | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                | tenant_id                | uuid                     | —     | NOT NULL                   |             |
+| email_account_id         | email_account_id         | uuid                     | —     | NOT NULL                   |             |
+| provider_label_id        | provider_label_id        | text                     | —     | NOT NULL                   |             |
+| name                     | name                     | text                     | —     | NOT NULL                   |             |
+| kind                     | kind                     | text                     | —     | NOT NULL, DEFAULT label    |             |
+| color                    | color                    | text                     | —     |                            |             |
+| parent_provider_label_id | parent_provider_label_id | text                     | —     |                            |             |
+| message_count            | message_count            | integer                  | —     | NOT NULL                   |             |
+| unread_count             | unread_count             | integer                  | —     | NOT NULL                   |             |
+| archived                 | archived                 | boolean                  | —     | NOT NULL                   |             |
+| created_at               | created_at               | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at               | updated_at               | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_email_label_account` (tenant_id, email_account_id) [btree]
+
+> CHECK `chk_email_label_kind`: [object Object]
+
+### `email_message`
+
+> _⚠ pending annotation_
+
+| Column              | Business Name       | Type                     | Class | Constraints                       | Description |
+| :------------------ | :------------------ | :----------------------- | :---- | :-------------------------------- | :---------- |
+| email_message_id    | email_message_id    | uuid                     | PK    | NOT NULL, DEFAULT uuidv7()        |             |
+| tenant_id           | tenant_id           | uuid                     | —     | NOT NULL                          |             |
+| email_account_id    | email_account_id    | uuid                     | —     | NOT NULL                          |             |
+| email_thread_id     | email_thread_id     | uuid                     | —     | NOT NULL                          |             |
+| provider_message_id | provider_message_id | text                     | —     | NOT NULL                          |             |
+| provider_draft_id   | provider_draft_id   | text                     | —     |                                   |             |
+| internet_message_id | internet_message_id | text                     | —     |                                   |             |
+| direction           | direction           | text                     | —     | NOT NULL                          |             |
+| from_json           | from_json           | jsonb                    | —     | NOT NULL, DEFAULT [object Object] |             |
+| to_json             | to_json             | jsonb                    | —     | NOT NULL, DEFAULT                 |             |
+| cc_json             | cc_json             | jsonb                    | —     | NOT NULL, DEFAULT                 |             |
+| bcc_json            | bcc_json            | jsonb                    | —     | NOT NULL, DEFAULT                 |             |
+| subject             | subject             | text                     | —     |                                   |             |
+| snippet             | snippet             | text                     | —     |                                   |             |
+| body_html           | body_html           | text                     | —     |                                   |             |
+| body_text           | body_text           | text                     | —     |                                   |             |
+| sent_at             | sent_at             | timestamp with time zone | —     |                                   |             |
+| received_at         | received_at         | timestamp with time zone | —     |                                   |             |
+| is_read             | is_read             | boolean                  | —     | NOT NULL                          |             |
+| has_attachments     | has_attachments     | boolean                  | —     | NOT NULL                          |             |
+| raw_headers         | raw_headers         | jsonb                    | —     | NOT NULL, DEFAULT [object Object] |             |
+| created_at          | created_at          | timestamp with time zone | —     | NOT NULL, DEFAULT now()           |             |
+| updated_at          | updated_at          | timestamp with time zone | —     |                                   |             |
+
+> INDEX `idx_email_message_thread` (tenant_id, email_thread_id) [btree]
+> INDEX `idx_email_message_account_date` (tenant_id, email_account_id, received_at) [btree]
+
+> CHECK `chk_email_message_direction`: [object Object]
+
+### `email_message_label`
+
+> _⚠ pending annotation_
+
+| Column                 | Business Name          | Type                     | Class | Constraints                | Description |
+| :--------------------- | :--------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| email_message_label_id | email_message_label_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id              | tenant_id              | uuid                     | —     | NOT NULL                   |             |
+| email_message_id       | email_message_id       | uuid                     | —     | NOT NULL                   |             |
+| email_label_id         | email_label_id         | uuid                     | —     | NOT NULL                   |             |
+| created_at             | created_at             | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+
+> INDEX `idx_email_message_label_label` (tenant_id, email_label_id) [btree]
+
+### `email_outbox`
+
+> _⚠ pending annotation_
+
+| Column            | Business Name     | Type                     | Class | Constraints                       | Description |
+| :---------------- | :---------------- | :----------------------- | :---- | :-------------------------------- | :---------- |
+| email_outbox_id   | email_outbox_id   | uuid                     | PK    | NOT NULL, DEFAULT uuidv7()        |             |
+| tenant_id         | tenant_id         | uuid                     | —     | NOT NULL                          |             |
+| email_account_id  | email_account_id  | uuid                     | —     | NOT NULL                          |             |
+| email_identity_id | email_identity_id | uuid                     | —     | NOT NULL                          |             |
+| email_message_id  | email_message_id  | uuid                     | —     |                                   |             |
+| provider_draft_id | provider_draft_id | text                     | —     |                                   |             |
+| status            | status            | text                     | —     | NOT NULL, DEFAULT draft           |             |
+| payload           | payload           | jsonb                    | —     | NOT NULL, DEFAULT [object Object] |             |
+| scheduled_for     | scheduled_for     | timestamp with time zone | —     |                                   |             |
+| sent_at           | sent_at           | timestamp with time zone | —     |                                   |             |
+| last_error        | last_error        | text                     | —     |                                   |             |
+| created_at        | created_at        | timestamp with time zone | —     | NOT NULL, DEFAULT now()           |             |
+| updated_at        | updated_at        | timestamp with time zone | —     |                                   |             |
+| created_by        | created_by        | text                     | —     |                                   |             |
+
+> INDEX `idx_email_outbox_tenant_status` (tenant_id, status) [btree]
+> INDEX `idx_email_outbox_message` (tenant_id, email_message_id) [btree]
+
+> CHECK `chk_email_outbox_status`: [object Object]
+
+### `email_sync_state`
+
+> _⚠ pending annotation_
+
+| Column              | Business Name       | Type                     | Class | Constraints                | Description |
+| :------------------ | :------------------ | :----------------------- | :---- | :------------------------- | :---------- |
+| email_sync_state_id | email_sync_state_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id           | tenant_id           | uuid                     | —     | NOT NULL                   |             |
+| email_account_id    | email_account_id    | uuid                     | —     | NOT NULL                   |             |
+| scope               | scope               | text                     | —     | NOT NULL, DEFAULT mailbox  |             |
+| cursor              | cursor              | text                     | —     |                            |             |
+| cursor_json         | cursor_json         | jsonb                    | —     |                            |             |
+| status              | status              | text                     | —     | NOT NULL, DEFAULT idle     |             |
+| last_synced_at      | last_synced_at      | timestamp with time zone | —     |                            |             |
+| last_error          | last_error          | text                     | —     |                            |             |
+| updated_at          | updated_at          | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+
+> INDEX `idx_email_sync_state_account` (tenant_id, email_account_id) [btree]
+
+> CHECK `chk_email_sync_state_status`: [object Object]
+
+### `email_template`
+
+> _⚠ pending annotation_
+
+| Column             | Business Name      | Type                     | Class | Constraints                | Description |
+| :----------------- | :----------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| email_template_id  | email_template_id  | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id          | tenant_id          | uuid                     | —     | NOT NULL                   |             |
+| code               | code               | text                     | —     | NOT NULL                   |             |
+| name               | name               | text                     | —     | NOT NULL                   |             |
+| subject_template   | subject_template   | text                     | —     | NOT NULL                   |             |
+| body_html_template | body_html_template | text                     | —     | NOT NULL                   |             |
+| body_text_template | body_text_template | text                     | —     |                            |             |
+| language           | language           | char(2)                  | —     |                            |             |
+| archived           | archived           | boolean                  | —     | NOT NULL                   |             |
+| created_at         | created_at         | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at         | updated_at         | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_email_template_tenant` (tenant_id) [btree]
+
+### `email_template_binding`
+
+> _⚠ pending annotation_
+
+| Column                    | Business Name             | Type                     | Class | Constraints                | Description |
+| :------------------------ | :------------------------ | :----------------------- | :---- | :------------------------- | :---------- |
+| email_template_binding_id | email_template_binding_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                 | tenant_id                 | uuid                     | —     | NOT NULL                   |             |
+| email_template_id         | email_template_id         | uuid                     | —     | NOT NULL                   |             |
+| document_type             | document_type             | char(1)                  | —     |                            |             |
+| company_id                | company_id                | uuid                     | —     |                            |             |
+| language                  | language                  | char(2)                  | —     |                            |             |
+| email_identity_id         | email_identity_id         | uuid                     | —     |                            |             |
+| priority                  | priority                  | integer                  | —     | NOT NULL, DEFAULT 100      |             |
+| archived                  | archived                  | boolean                  | —     | NOT NULL                   |             |
+| created_at                | created_at                | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+
+> INDEX `idx_email_template_binding_lookup` (tenant_id, document_type, company_id, language, email_identity_id) [btree]
+
+### `email_template_render_log`
+
+> _⚠ pending annotation_
+
+| Column                       | Business Name                | Type                     | Class | Constraints                | Description |
+| :--------------------------- | :--------------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| email_template_render_log_id | email_template_render_log_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                    | tenant_id                    | uuid                     | —     | NOT NULL                   |             |
+| email_template_id            | email_template_id            | uuid                     | —     |                            |             |
+| email_template_binding_id    | email_template_binding_id    | uuid                     | —     |                            |             |
+| document_id                  | document_id                  | uuid                     | —     |                            |             |
+| email_identity_id            | email_identity_id            | uuid                     | —     |                            |             |
+| language                     | language                     | char(2)                  | —     |                            |             |
+| subject                      | subject                      | text                     | —     | NOT NULL                   |             |
+| rendered_hash                | rendered_hash                | text                     | —     |                            |             |
+| created_at                   | created_at                   | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| created_by                   | created_by                   | text                     | —     |                            |             |
+
+> INDEX `idx_email_template_render_log_document` (tenant_id, document_id) [btree]
+> INDEX `idx_email_template_render_log_template` (tenant_id, email_template_id) [btree]
+
+### `email_thread`
+
+> _⚠ pending annotation_
+
+| Column              | Business Name       | Type                     | Class | Constraints                | Description |
+| :------------------ | :------------------ | :----------------------- | :---- | :------------------------- | :---------- |
+| email_thread_id     | email_thread_id     | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id           | tenant_id           | uuid                     | —     | NOT NULL                   |             |
+| email_account_id    | email_account_id    | uuid                     | —     | NOT NULL                   |             |
+| provider_thread_id  | provider_thread_id  | text                     | —     | NOT NULL                   |             |
+| subject             | subject             | text                     | —     |                            |             |
+| snippet             | snippet             | text                     | —     |                            |             |
+| last_message_at     | last_message_at     | timestamp with time zone | —     |                            |             |
+| is_read             | is_read             | boolean                  | —     | NOT NULL                   |             |
+| is_starred          | is_starred          | boolean                  | —     | NOT NULL                   |             |
+| message_count       | message_count       | integer                  | —     | NOT NULL                   |             |
+| related_address_id  | related_address_id  | uuid                     | —     |                            |             |
+| related_document_id | related_document_id | uuid                     | —     |                            |             |
+| archived            | archived            | boolean                  | —     | NOT NULL                   |             |
+| created_at          | created_at          | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at          | updated_at          | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_email_thread_account_date` (tenant_id, email_account_id, last_message_at) [btree]
+> INDEX `idx_email_thread_document` (tenant_id, related_document_id) [btree]
+> INDEX `idx_email_thread_address` (tenant_id, related_address_id) [btree]
 
 ### `entity_commands`
 

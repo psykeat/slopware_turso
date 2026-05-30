@@ -14,7 +14,7 @@ export interface FieldDef {
   key: string;
   label: string;
   labelDe?: string;
-  type: "text" | "number" | "date" | "boolean" | "lookup" | "textarea" | "select";
+  type: "text" | "number" | "date" | "boolean" | "lookup" | "textarea" | "select" | "password";
   required?: boolean;
   readonly?: boolean;
   value?: any;
@@ -161,7 +161,14 @@ function FieldInput({
     );
   }
 
-  const inputType = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
+  const inputType =
+    field.type === "number"
+      ? "number"
+      : field.type === "date"
+        ? "date"
+        : field.type === "password"
+          ? "password"
+          : "text";
 
   return (
     <input

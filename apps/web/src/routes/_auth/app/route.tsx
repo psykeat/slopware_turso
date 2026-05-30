@@ -21,6 +21,7 @@ import {
   FileTextIcon,
   LandmarkIcon,
   UploadCloudIcon,
+  MailIcon,
   SettingsIcon,
   ShieldCheckIcon,
   GlobeIcon,
@@ -79,6 +80,20 @@ const PRIMARY_MODULES = [
     to: "/app/import" as const,
     icon: UploadCloudIcon,
     kbd: "⌥5",
+  },
+  {
+    label: "Email",
+    labelKey: "nav.email" as const,
+    to: "/app/email" as const,
+    icon: MailIcon,
+    kbd: "⌥6",
+  },
+  {
+    label: "Email Templates",
+    labelKey: "nav.emailTemplates" as const,
+    to: "/app/email-templates" as const,
+    icon: FileTextIcon,
+    kbd: "⌥7",
   },
 ] as const;
 

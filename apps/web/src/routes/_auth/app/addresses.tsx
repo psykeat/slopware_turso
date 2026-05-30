@@ -139,6 +139,11 @@ function AddressesModule() {
     placeholderData: keepPreviousData,
   });
 
+  const treeNodes = useMemo<TreeNode[]>(
+    () => [{ id: "ALL", label: t("tree.all", { defaultValue: "All" }) }, ...categories],
+    [categories, t],
+  );
+
   // Fetch address stats for selected address
   const { data: addressStats } = useQuery<{
     revenueByPeriod: Array<{
@@ -565,13 +570,61 @@ function AddressesModule() {
 
   const selectCategoryNode = useCallback(
     (id: string) => {
-      const cat = categories.find((c: TreeNode) => c.id === id);
+      const cat = treeNodes.find((c: TreeNode) => c.id === id);
       setSubCrumb(cat?.label);
-      setSelectedCategoryId(id);
+      setSelectedCategoryId(id === "ALL" ? null : id);
       gridState.setPage(1);
     },
-    [categories, gridState, setSubCrumb],
+    [treeNodes, gridState, setSubCrumb],
   );
+
+  const modalOpen = showCreate || showEdit || deleteConfirm;
+
+  useEffect(() => {
+    const navigateTree = (delta: number) => {
+      if (treeNodes.length === 0) return;
+      const currentId = selectedCategoryId ?? "ALL";
+      const currentIndex = treeNodes.findIndex((node) => node.id === currentId);
+      const base = currentIndex < 0 ? (delta > 0 ? -1 : treeNodes.length) : currentIndex;
+      const nextIndex = (base + delta + treeNodes.length) % treeNodes.length;
+      const nextNode = treeNodes[nextIndex];
+      if (!nextNode) return;
+      selectCategoryNode(nextNode.id);
+      restoreAddressGrid();
+    };
+
+    const unregDown = registerCommand({
+      id: "address-tree-nav-down",
+      scope: "context",
+      group: "navigation",
+      label: { en: "Next Tree Item", de: "Nächster Eintrag" },
+      shortcut: "Ctrl+ArrowDown",
+      isEnabled: () => !modalOpen && treeNodes.length > 0,
+      handler: () => navigateTree(1),
+    });
+    const unregUp = registerCommand({
+      id: "address-tree-nav-up",
+      scope: "context",
+      group: "navigation",
+      label: { en: "Previous Tree Item", de: "Vorheriger Eintrag" },
+      shortcut: "Ctrl+ArrowUp",
+      isEnabled: () => !modalOpen && treeNodes.length > 0,
+      handler: () => navigateTree(-1),
+    });
+
+    return () => {
+      unregDown();
+      unregUp();
+    };
+  }, [
+    modalOpen,
+    registerCommand,
+    restoreAddressGrid,
+    selectCategoryNode,
+    selectedCategoryId,
+    treeNodes,
+    treeNodes.length,
+  ]);
 
   const handleCreateSaved = useCallback(
     (record: any) => {
@@ -598,7 +651,7 @@ function AddressesModule() {
           <NavigationTree
             entityName="addressCategory"
             panelId="address-tree"
-            data={categories}
+            data={treeNodes}
             header={t("tree.categories")}
             isLoading={isTreeLoading}
             onSelect={selectCategoryNode}

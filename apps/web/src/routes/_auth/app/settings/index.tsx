@@ -36,6 +36,7 @@ const COMPANY_SCOPED_SETTINGS = new Set([
   "accountDeterminationRule",
   "costCenter",
   "glAccount",
+  "tenantLlmConfig",
 ]);
 
 const COMPANY_FIELD_OVERRIDES: Partial<FieldDef>[] = [
@@ -328,6 +329,31 @@ function SettingsView() {
       ];
     }
 
+    if (selectedKey === "tenantLlmConfig") {
+      return [
+        { key: "endpointUrl", header: "Endpoint URL", sortable: true },
+        { key: "model", header: "Model", sortable: true },
+        {
+          key: "apiKey",
+          header: "API Key",
+          render: (row: any) => (
+            <span className="font-mono text-[11px] text-ink-mute">
+              {row.apiKey ? "••••••••" : "—"}
+            </span>
+          ),
+        },
+        {
+          key: "isActive",
+          header: "Active",
+          render: (row: any) => (
+            <span className="font-mono text-[11px] text-ink-mute">
+              {row.isActive ? "Yes" : "—"}
+            </span>
+          ),
+        },
+      ];
+    }
+
     return undefined;
   }, [
     currencyLabelMap,
@@ -338,7 +364,16 @@ function SettingsView() {
     unitLabelMap,
   ]);
 
-  const selectedFieldOverrides = useMemo(() => {
+  const selectedFieldOverrides = useMemo<Partial<FieldDef>[] | undefined>(() => {
+    if (selectedKey === "tenantLlmConfig") {
+      return [
+        {
+          key: "apiKey",
+          type: "password" as const,
+        },
+      ];
+    }
+
     if (selectedKey !== "articleGroup") return undefined;
     return [
       {

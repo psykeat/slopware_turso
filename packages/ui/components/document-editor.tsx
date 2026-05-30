@@ -258,11 +258,6 @@ const inputBase =
 
 const MOVEMENT_DOCUMENT_TYPES = new Set(["V", "Z", "E", "U", "q", "p"]);
 
-interface AddressLockState {
-  billingAddress?: boolean;
-  deliveryAddress?: boolean;
-}
-
 type DocumentTextField = "noteText" | "preText" | "postText" | "stornoText";
 interface DocumentPrintOptions {
   noteText: boolean;
@@ -270,6 +265,7 @@ interface DocumentPrintOptions {
   postText: boolean;
   stornoText: boolean;
   lineTexts: boolean;
+  lineImages: boolean;
 }
 
 function lineNet(qty: number, price: number, disc: number | null): number {
@@ -398,28 +394,6 @@ function normalizeHeaderForSave(header: DocHeader, hidePartyFields: boolean) {
   };
 }
 
-function getAddressLocks(customAttributes: DocHeader["customAttributes"]): AddressLockState {
-  const addressLocks = (customAttributes as { addressLocks?: AddressLockState } | null | undefined)
-    ?.addressLocks;
-  return addressLocks ?? {};
-}
-
-function setAddressLock(
-  customAttributes: DocHeader["customAttributes"],
-  field: keyof AddressLockState,
-  locked: boolean,
-): Record<string, unknown> {
-  const next = {
-    ...(customAttributes ?? {}),
-    addressLocks: {
-      ...getAddressLocks(customAttributes),
-      [field]: locked,
-    },
-  };
-
-  return next;
-}
-
 function getDocumentPrintOptions(
   customAttributes: DocHeader["customAttributes"],
   defaults: DocumentPrintOptions,
@@ -433,6 +407,7 @@ function getDocumentPrintOptions(
     postText: raw?.postText ?? defaults.postText,
     stornoText: raw?.stornoText ?? defaults.stornoText,
     lineTexts: raw?.lineTexts ?? defaults.lineTexts,
+    lineImages: raw?.lineImages ?? defaults.lineImages,
   };
 }
 
@@ -2178,15 +2153,26 @@ export function DocumentEditor({
     staleTime: 0,
   });
 
+  const { data: activeArticleMeta } = useQuery<ArticleMetaRow | null>({
+    queryKey: ["data", "article", activeLine?.articleId],
+    queryFn: async () => {
+      const articleId = activeLine?.articleId;
+      if (!articleId) return null;
+      const res = await fetch(`/api/data/article/${articleId}`);
+      if (!res.ok) return null;
+      return res.json() as Promise<ArticleMetaRow>;
+    },
+    enabled: !!activeLine?.articleId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const activeDocumentType =
     header.documentType ?? groupData?.documentType ?? (docData as any)?.documentType ?? null;
   const hidePartyFields = !!activeDocumentType && MOVEMENT_DOCUMENT_TYPES.has(activeDocumentType);
   const requireSerialTracking = !!groupData?.requireSerialTracking;
   const requireBatchTracking = !!groupData?.requireBatchTracking;
   const requiresGroupTracking = requireSerialTracking || requireBatchTracking;
-  const addressLocks = getAddressLocks(header.customAttributes);
-  const billingAddressLocked = !!addressLocks.billingAddress;
-  const deliveryAddressLocked = !!addressLocks.deliveryAddress;
+
   const headerSnapshot = useMemo(
     () => JSON.stringify(normalizeHeaderForSave(header, hidePartyFields)),
     [header, hidePartyFields],
@@ -2266,13 +2252,6 @@ export function DocumentEditor({
 
   const patchHeader = (fields: Partial<DocHeader>) => {
     setHeader((prev) => ({ ...prev, ...fields }));
-  };
-
-  const setAddressFieldLock = (field: keyof AddressLockState, locked: boolean) => {
-    setHeader((prev) => ({
-      ...prev,
-      customAttributes: setAddressLock(prev.customAttributes, field, locked),
-    }));
   };
 
   // ── mutations ──
@@ -2532,6 +2511,7 @@ export function DocumentEditor({
   }, [documentId, t]);
 
   const docStatus = (header as any).status ?? (isNew ? "draft" : "—");
+  const isPosted = docStatus === "posted";
   const docNo = isNew ? "wird vergeben" : (header.documentNo ?? documentId);
   const groupLabel = groupData
     ? `${groupData.documentType}${String(groupData.documentGroupId).slice(-2)} · ${groupData.name}`
@@ -2548,6 +2528,7 @@ export function DocumentEditor({
         postText: companySettings?.printPostText ?? true,
         stornoText: true,
         lineTexts: companySettings?.printPositionTexts ?? true,
+        lineImages: companySettings?.showArticleImageOnDocuments ?? false,
       }),
     [companySettings, header.customAttributes],
   );
@@ -2573,19 +2554,19 @@ export function DocumentEditor({
     const root = editorRootRef.current;
     if (!root) return;
 
-    const selector = [
-      'input:not([type="hidden"]):not([disabled])',
-      "select:not([disabled])",
-      "textarea:not([disabled])",
-    ].join(", ");
-    const first = root.querySelector<HTMLElement>(selector);
     didAutoFocusRef.current = true;
 
     requestAnimationFrame(() => {
-      if (first) {
-        first.focus();
-        if (first instanceof HTMLInputElement && typeof first.select === "function") {
-          first.select();
+      if (isNew) {
+        const billingAddressPicker = root.querySelector<HTMLElement>("#billing-address-picker");
+        if (billingAddressPicker) {
+          billingAddressPicker.focus();
+          if (
+            billingAddressPicker instanceof HTMLInputElement &&
+            typeof billingAddressPicker.select === "function"
+          ) {
+            billingAddressPicker.select();
+          }
         }
       } else {
         linesEditorRef.current?.focusFirstLine();
@@ -2874,7 +2855,7 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.documentType")}
                   focusField="documentType"
-                  tabIndex={0}
+                  tabIndex={-1}
                   value={header.documentType ?? null}
                   onChange={(id) =>
                     patchHeader({ documentType: id ?? undefined, documentGroupId: undefined })
@@ -2888,7 +2869,7 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.documentGroup")}
                   focusField="documentGroupId"
-                  tabIndex={0}
+                  tabIndex={-1}
                   value={header.documentGroupId ?? null}
                   onChange={(id) => {
                     const grp = (docGroupsForType as any[]).find(
@@ -2933,18 +2914,14 @@ export function DocumentEditor({
                 <>
                   {/* Col 1: Invoice address */}
                   <AddressPickerField
+                    id="billing-address-picker"
                     label={t("document.fields.billingAddress")}
-                    tabIndex={0}
+                    tabIndex={-1}
                     value={header.customerId ?? null}
                     addressData={header.billingAddress ?? null}
-                    locked={billingAddressLocked}
-                    lockLabel={t("document.actions.lock")}
-                    unlockLabel={t("document.actions.unlock")}
-                    onToggleLock={() =>
-                      setAddressFieldLock("billingAddress", !billingAddressLocked)
-                    }
+                    locked={isPosted}
                     onChange={(id, json, raw) => {
-                      if (billingAddressLocked) return;
+                      if (isPosted) return;
                       const update: Partial<DocHeader> = {
                         customerId: id,
                         billingAddress: json,
@@ -2954,11 +2931,7 @@ export function DocumentEditor({
                       if (raw?.paymentTermId && !header.paymentTermId)
                         update.paymentTermId = raw.paymentTermId;
                       // Auto-fill delivery address from address default
-                      if (
-                        raw?.defaultDeliveryAddressId &&
-                        !header.deliveryAddressId &&
-                        !deliveryAddressLocked
-                      ) {
+                      if (raw?.defaultDeliveryAddressId && !header.deliveryAddressId && !isPosted) {
                         update.deliveryAddressId = raw.defaultDeliveryAddressId;
                       }
                       patchHeader(update);
@@ -3004,18 +2977,13 @@ export function DocumentEditor({
                   {/* Col 2: Delivery address */}
                   <DeliveryAddressPickerField
                     label={t("document.fields.deliveryAddress")}
-                    tabIndex={0}
+                    tabIndex={-1}
                     value={header.deliveryAddressId ?? null}
                     addressId={header.customerId ?? null}
                     addressData={header.deliveryAddress ?? null}
-                    locked={deliveryAddressLocked}
-                    lockLabel={t("document.actions.lock")}
-                    unlockLabel={t("document.actions.unlock")}
-                    onToggleLock={() =>
-                      setAddressFieldLock("deliveryAddress", !deliveryAddressLocked)
-                    }
+                    locked={isPosted}
                     onChange={(id, json) => {
-                      if (deliveryAddressLocked) return;
+                      if (isPosted) return;
                       patchHeader({ deliveryAddressId: id, deliveryAddress: json });
                     }}
                   />
@@ -3027,7 +2995,7 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.warehouse")}
                   focusField="warehouseId"
-                  tabIndex={0}
+                  tabIndex={-1}
                   value={header.warehouseId ?? null}
                   onChange={(id) => patchHeader({ warehouseId: id })}
                   items={warehouseItems}
@@ -3036,7 +3004,7 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.paymentTerm")}
                   focusField="paymentTermId"
-                  tabIndex={0}
+                  tabIndex={-1}
                   value={header.paymentTermId ?? null}
                   onChange={(id) => patchHeader({ paymentTermId: id })}
                   items={paymentTermItems}
@@ -3045,7 +3013,7 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.shippingMethod")}
                   focusField="shippingMethodId"
-                  tabIndex={0}
+                  tabIndex={-1}
                   value={header.shippingMethodId ?? null}
                   onChange={(id) => patchHeader({ shippingMethodId: id })}
                   items={shippingItems}
@@ -3060,7 +3028,7 @@ export function DocumentEditor({
                     {t("document.fields.date")}
                   </label>
                   <input
-                    tabIndex={0}
+                    tabIndex={-1}
                     type="date"
                     className={cn(inputBase, "h-8")}
                     value={header.documentDate ?? ""}
@@ -3081,7 +3049,7 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.currency")}
                   focusField="currencyId"
-                  tabIndex={0}
+                  tabIndex={-1}
                   value={header.currencyId ?? null}
                   onChange={(id) => patchHeader({ currencyId: id })}
                   items={currencyItems}
@@ -3166,98 +3134,15 @@ export function DocumentEditor({
 
         <aside className="max-h-72 shrink-0 overflow-hidden border-t border-hairline bg-canvas-soft/60 xl:max-h-none xl:w-80 xl:border-t-0 xl:border-l">
           <div className="flex h-full min-h-0 flex-col">
-            <div className="shrink-0 border-b border-hairline px-4 py-3">
-              <div className="text-[11px] font-semibold tracking-[0.18em] text-ink-mute uppercase">
-                {t("document.audit.title", { defaultValue: "Audit-Verlauf" })}
-              </div>
-              <div className="mt-1 text-[12px] text-ink-mute">
-                {t("document.audit.transaction", { defaultValue: "Transaction" })}:{" "}
-                <span className="font-mono text-[11px] text-ink">
-                  {auditTrail?.transactionId ?? "—"}
-                </span>
-              </div>
-            </div>
-
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
-              <div className="rounded border border-hairline bg-canvas p-2">
-                <LangtextEditor
-                  title={t("document.langtexts.title", { defaultValue: "Langtexte" })}
-                  entries={[
-                    {
-                      key: "noteText",
-                      label: t("document.langtexts.note", { defaultValue: "Notiztext" }),
-                      value: header.noteText ?? "",
-                      sourceLabel: resolveTextSourceLabel(
-                        header.noteTextSourceEntity,
-                        header.noteTextSourceField,
-                      ),
-                      linked: !!header.noteTextSourceEntity || !!header.noteTextSourceId,
-                      overridden: !!header.noteTextOverriddenAt,
-                    },
-                    {
-                      key: "preText",
-                      label: t("document.langtexts.pre", { defaultValue: "Vortext" }),
-                      value: header.preText ?? "",
-                      sourceLabel: resolveTextSourceLabel(
-                        header.preTextSourceEntity,
-                        header.preTextSourceField,
-                      ),
-                      linked: !!header.preTextSourceEntity || !!header.preTextSourceId,
-                      overridden: !!header.preTextOverriddenAt,
-                    },
-                    {
-                      key: "postText",
-                      label: t("document.langtexts.post", { defaultValue: "Nachtext" }),
-                      value: header.postText ?? "",
-                      sourceLabel: resolveTextSourceLabel(
-                        header.postTextSourceEntity,
-                        header.postTextSourceField,
-                      ),
-                      linked: !!header.postTextSourceEntity || !!header.postTextSourceId,
-                      overridden: !!header.postTextOverriddenAt,
-                    },
-                    {
-                      key: "stornoText",
-                      label: t("document.langtexts.reverse", { defaultValue: "Stornotext" }),
-                      value: header.stornoText ?? "",
-                      sourceLabel: resolveTextSourceLabel(
-                        header.stornoTextSourceEntity,
-                        header.stornoTextSourceField,
-                      ),
-                      linked: !!header.stornoTextSourceEntity || !!header.stornoTextSourceId,
-                      overridden: !!header.stornoTextOverriddenAt,
-                    },
-                  ]}
-                  activeKey={undefined}
-                  syncKey={documentId ? `document:${documentId}:header` : "document:new:header"}
-                  onChange={(fieldKey, html) => {
-                    if (fieldKey === "noteText") {
-                      setHeader((prev) => applyHeaderTextOverride(prev, "noteText", html));
-                    } else if (fieldKey === "preText") {
-                      setHeader((prev) => applyHeaderTextOverride(prev, "preText", html));
-                    } else if (fieldKey === "postText") {
-                      setHeader((prev) => applyHeaderTextOverride(prev, "postText", html));
-                    } else if (fieldKey === "stornoText") {
-                      setHeader((prev) => applyHeaderTextOverride(prev, "stornoText", html));
-                    }
-                  }}
-                  className="h-[420px]"
-                />
-                <div className="mt-2 flex items-center justify-between gap-2 px-1">
-                  <div className="text-[11px] text-ink-mute">
-                    {t("document.langtexts.savedPerDocument", {
-                      defaultValue: "Die Auswahl wird pro Beleg gespeichert.",
-                    })}
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex h-8 items-center gap-2 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-primary hover:text-primary"
-                    onClick={() => setPrintDialogOpen(true)}
-                  >
-                    {t("document.actions.printOptions", { defaultValue: "Druckoptionen" })}
-                  </button>
+              {/* ── TRANSACTION ID & AUDIT TRAIL BLOCK (AT THE VERY TOP) ── */}
+              {!isNew && auditTrail?.transactionId && (
+                <div className="flex items-center justify-between px-1 text-[11px] text-ink-mute">
+                  <span>{t("document.audit.transaction", { defaultValue: "Transaction" })}:</span>
+                  <span className="font-mono text-ink">{auditTrail.transactionId}</span>
                 </div>
-              </div>
+              )}
+
               {isNew ? (
                 <div className="rounded border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
                   {t("document.audit.noDraft", {
@@ -3415,47 +3300,148 @@ export function DocumentEditor({
                       </div>
                     </div>
                   ) : null}
-
-                  <div className="rounded border border-hairline bg-canvas p-2">
-                    <LangtextEditor
-                      title={t("document.langtexts.lineTitle", {
-                        defaultValue: "Positionslangtext",
-                      })}
-                      entries={[
-                        {
-                          key: "langText",
-                          label: t("document.langtexts.line", {
-                            defaultValue: "Langtext",
-                          }),
-                          value: activeLine?.langText ?? "",
-                          sourceLabel: resolveTextSourceLabel(
-                            activeLine?.langTextSourceEntity ?? null,
-                            activeLine?.langTextSourceField ?? null,
-                          ),
-                          linked:
-                            !!activeLine?.langTextSourceEntity || !!activeLine?.langTextSourceId,
-                          overridden: !!activeLine?.langTextOverriddenAt,
-                        },
-                      ]}
-                      onChange={(_, html) => {
-                        linesEditorRef.current?.setActiveLineLangText(html);
-                      }}
-                      className="h-[320px]"
-                      syncKey={
-                        activeLine?.documentLineId ?? activeLine?._id ?? "document-line:none"
-                      }
-                    />
-                    <div className="mt-2 px-1 text-[11px] text-ink-mute">
-                      {activeLine
-                        ? `${String(activeLine.lineNo).padStart(3, "0")} · ${
-                            activeLine.articleTextSnapshot ?? activeLine.articleNo ?? "—"
-                          }`
-                        : t("document.langtexts.noLine", {
-                            defaultValue: "Wähle eine Position, um den Langtext zu bearbeiten.",
-                          })}
-                    </div>
-                  </div>
                 </>
+              )}
+
+              {/* ── BELEG-LANGTEXTE ── */}
+              <div className="rounded border border-hairline bg-canvas p-2">
+                <LangtextEditor
+                  title={t("document.langtexts.title", { defaultValue: "Langtexte" })}
+                  entries={[
+                    {
+                      key: "noteText",
+                      label: t("document.langtexts.note", { defaultValue: "Notiztext" }),
+                      value: header.noteText ?? "",
+                      sourceLabel: resolveTextSourceLabel(
+                        header.noteTextSourceEntity,
+                        header.noteTextSourceField,
+                      ),
+                      linked: !!header.noteTextSourceEntity || !!header.noteTextSourceId,
+                      overridden: !!header.noteTextOverriddenAt,
+                    },
+                    {
+                      key: "preText",
+                      label: t("document.langtexts.pre", { defaultValue: "Vortext" }),
+                      value: header.preText ?? "",
+                      sourceLabel: resolveTextSourceLabel(
+                        header.preTextSourceEntity,
+                        header.preTextSourceField,
+                      ),
+                      linked: !!header.preTextSourceEntity || !!header.preTextSourceId,
+                      overridden: !!header.preTextOverriddenAt,
+                    },
+                    {
+                      key: "postText",
+                      label: t("document.langtexts.post", { defaultValue: "Nachtext" }),
+                      value: header.postText ?? "",
+                      sourceLabel: resolveTextSourceLabel(
+                        header.postTextSourceEntity,
+                        header.postTextSourceField,
+                      ),
+                      linked: !!header.postTextSourceEntity || !!header.postTextSourceId,
+                      overridden: !!header.postTextOverriddenAt,
+                    },
+                    {
+                      key: "stornoText",
+                      label: t("document.langtexts.reverse", { defaultValue: "Stornotext" }),
+                      value: header.stornoText ?? "",
+                      sourceLabel: resolveTextSourceLabel(
+                        header.stornoTextSourceEntity,
+                        header.stornoTextSourceField,
+                      ),
+                      linked: !!header.stornoTextSourceEntity || !!header.stornoTextSourceId,
+                      overridden: !!header.stornoTextOverriddenAt,
+                    },
+                  ]}
+                  activeKey={undefined}
+                  syncKey={documentId ? `document:${documentId}:header` : "document:new:header"}
+                  onChange={(fieldKey, html) => {
+                    if (fieldKey === "noteText") {
+                      setHeader((prev) => applyHeaderTextOverride(prev, "noteText", html));
+                    } else if (fieldKey === "preText") {
+                      setHeader((prev) => applyHeaderTextOverride(prev, "preText", html));
+                    } else if (fieldKey === "postText") {
+                      setHeader((prev) => applyHeaderTextOverride(prev, "postText", html));
+                    } else if (fieldKey === "stornoText") {
+                      setHeader((prev) => applyHeaderTextOverride(prev, "stornoText", html));
+                    }
+                  }}
+                  className="h-[420px]"
+                />
+                <div className="mt-2 flex items-center justify-between gap-2 px-1">
+                  <div className="text-[11px] text-ink-mute">
+                    {t("document.langtexts.savedPerDocument", {
+                      defaultValue: "Die Auswahl wird pro Beleg gespeichert.",
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-2 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-primary hover:text-primary"
+                    onClick={() => setPrintDialogOpen(true)}
+                  >
+                    {t("document.actions.printOptions", { defaultValue: "Druckoptionen" })}
+                  </button>
+                </div>
+              </div>
+
+              {/* ── POSITIONS-LANGTEXT ── */}
+              <div className="rounded border border-hairline bg-canvas p-2">
+                <LangtextEditor
+                  title={t("document.langtexts.lineTitle", {
+                    defaultValue: "Positionslangtext",
+                  })}
+                  entries={[
+                    {
+                      key: "langText",
+                      label: t("document.langtexts.line", {
+                        defaultValue: "Langtext",
+                      }),
+                      value: activeLine?.langText ?? "",
+                      sourceLabel: resolveTextSourceLabel(
+                        activeLine?.langTextSourceEntity ?? null,
+                        activeLine?.langTextSourceField ?? null,
+                      ),
+                      linked: !!activeLine?.langTextSourceEntity || !!activeLine?.langTextSourceId,
+                      overridden: !!activeLine?.langTextOverriddenAt,
+                    },
+                  ]}
+                  onChange={(_, html) => {
+                    linesEditorRef.current?.setActiveLineLangText(html);
+                  }}
+                  className="h-[320px]"
+                  syncKey={activeLine?.documentLineId ?? activeLine?._id ?? "document-line:none"}
+                />
+                <div className="mt-2 px-1 text-[11px] text-ink-mute">
+                  {activeLine
+                    ? `${String(activeLine.lineNo).padStart(3, "0")} · ${
+                        activeLine.articleTextSnapshot ?? activeLine.articleNo ?? "—"
+                      }`
+                    : t("document.langtexts.noLine", {
+                        defaultValue: "Wähle eine Position, um den Langtext zu bearbeiten.",
+                      })}
+                </div>
+              </div>
+
+              {/* ── POSITIONSBILD PREVIEW ── */}
+              {activeLine?.articleId && (
+                <div className="rounded border border-hairline bg-canvas p-3">
+                  <div className="mb-2 text-[12px] font-semibold text-ink">
+                    {t("document.media.positionImage", { defaultValue: "Positionsbild" })}
+                  </div>
+                  {activeArticleMeta?.primaryImageId ? (
+                    <div className="flex items-center justify-center rounded-lg border border-hairline bg-canvas-soft p-4 transition-all hover:bg-canvas-soft/80">
+                      <img
+                        src={`/api/storage/article-images/${activeArticleMeta.primaryImageId}?v=${encodeURIComponent(activeArticleMeta.primaryImageId)}`}
+                        alt={activeLine.articleTextSnapshot ?? "Positionsbild"}
+                        className="max-h-[160px] rounded-md border border-hairline object-contain shadow-sm"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-hairline bg-canvas-soft/30 text-[11px] text-ink-mute">
+                      {t("document.media.noImage", { defaultValue: "Kein Bild hinterlegt" })}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -3526,6 +3512,10 @@ export function DocumentEditor({
                 [
                   "lineTexts",
                   t("document.langtexts.lineToggle", { defaultValue: "Positionstexte" }),
+                ],
+                [
+                  "lineImages",
+                  t("document.langtexts.lineImagesToggle", { defaultValue: "Positionsbilder" }),
                 ],
               ] as const
             ).map(([key, label]) => (

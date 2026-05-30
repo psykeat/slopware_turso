@@ -18,23 +18,23 @@ CREATE TABLE "article_image" (
 ALTER TABLE "article" ADD COLUMN "primary_image_id" uuid;--> statement-breakpoint
 ALTER TABLE "company" ADD COLUMN "show_article_image_in_entry" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "company" ADD COLUMN "show_article_image_on_documents" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "notiztext";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "notiztext_source_entity";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "notiztext_source_id";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "notiztext_source_field";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "notiztext_linked_at";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "notiztext_overridden_at";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "vortext";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "vortext_source_entity";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "vortext_source_id";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "vortext_source_field";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "vortext_linked_at";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "vortext_overridden_at";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "nachtext";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "stornotext";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "stornotext_erzeugt_am";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "stornotext_erzeugt_von";--> statement-breakpoint
-ALTER TABLE "document" DROP COLUMN "stornotext_stornogrund";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "notiztext";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "notiztext_source_entity";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "notiztext_source_id";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "notiztext_source_field";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "notiztext_linked_at";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "notiztext_overridden_at";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "vortext";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "vortext_source_entity";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "vortext_source_id";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "vortext_source_field";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "vortext_linked_at";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "vortext_overridden_at";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "nachtext";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "stornotext";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "stornotext_erzeugt_am";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "stornotext_erzeugt_von";--> statement-breakpoint
+ALTER TABLE "document" DROP COLUMN IF EXISTS "stornotext_stornogrund";--> statement-breakpoint
 CREATE INDEX "idx_article_image_tenant_article" ON "article_image" ("tenant_id","article_id");--> statement-breakpoint
 CREATE INDEX "idx_article_image_tenant_archived" ON "article_image" ("tenant_id","archived");--> statement-breakpoint
 ALTER TABLE "article_image" ADD CONSTRAINT "article_image_tenant_id_tenant_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenant"("tenant_id");--> statement-breakpoint

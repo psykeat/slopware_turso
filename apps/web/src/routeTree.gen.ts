@@ -31,6 +31,7 @@ import { Route as ApiImportProfilesRouteImport } from './routes/api/import/profi
 import { Route as ApiImportConnectorsRouteImport } from './routes/api/import/connectors'
 import { Route as ApiImportBatchesRouteImport } from './routes/api/import/batches'
 import { Route as ApiFeedbackSubmitRouteImport } from './routes/api/feedback/submit'
+import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
 import { Route as ApiDocumentsTreeRouteImport } from './routes/api/documents/tree'
 import { Route as ApiDocumentsImportTrackingRouteImport } from './routes/api/documents/import-tracking'
 import { Route as ApiDocumentsExportRouteImport } from './routes/api/documents/export'
@@ -40,11 +41,14 @@ import { Route as ApiDeliveryAddressesDeliveryAddressIdRouteImport } from './rou
 import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiArticlesSearchRouteImport } from './routes/api/articles/search'
+import { Route as ApiAiSplatRouteImport } from './routes/api/ai/$'
 import { Route as ApiAdminLlmConfigRouteImport } from './routes/api/admin/llm-config'
 import { Route as ApiAdminCyclesRouteImport } from './routes/api/admin/cycles'
 import { Route as ApiAddressesSearchRouteImport } from './routes/api/addresses/search'
 import { Route as ApiAccountingBatchesRouteImport } from './routes/api/accounting/batches'
 import { Route as AuthAppImportRouteImport } from './routes/_auth/app/import'
+import { Route as AuthAppEmailTemplatesRouteImport } from './routes/_auth/app/email-templates'
+import { Route as AuthAppEmailRouteImport } from './routes/_auth/app/email'
 import { Route as AuthAppDocumentsRouteImport } from './routes/_auth/app/documents'
 import { Route as AuthAppArticlesRouteImport } from './routes/_auth/app/articles'
 import { Route as AuthAppAddressesRouteImport } from './routes/_auth/app/addresses'
@@ -199,6 +203,11 @@ const ApiFeedbackSubmitRoute = ApiFeedbackSubmitRouteImport.update({
   path: '/api/feedback/submit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiEmailSplatRoute = ApiEmailSplatRouteImport.update({
+  id: '/api/email/$',
+  path: '/api/email/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDocumentsTreeRoute = ApiDocumentsTreeRouteImport.update({
   id: '/api/documents/tree',
   path: '/api/documents/tree',
@@ -247,6 +256,11 @@ const ApiArticlesSearchRoute = ApiArticlesSearchRouteImport.update({
   path: '/api/articles/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAiSplatRoute = ApiAiSplatRouteImport.update({
+  id: '/api/ai/$',
+  path: '/api/ai/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminLlmConfigRoute = ApiAdminLlmConfigRouteImport.update({
   id: '/api/admin/llm-config',
   path: '/api/admin/llm-config',
@@ -270,6 +284,16 @@ const ApiAccountingBatchesRoute = ApiAccountingBatchesRouteImport.update({
 const AuthAppImportRoute = AuthAppImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => AuthAppRouteRoute,
+} as any)
+const AuthAppEmailTemplatesRoute = AuthAppEmailTemplatesRouteImport.update({
+  id: '/email-templates',
+  path: '/email-templates',
+  getParentRoute: () => AuthAppRouteRoute,
+} as any)
+const AuthAppEmailRoute = AuthAppEmailRouteImport.update({
+  id: '/email',
+  path: '/email',
   getParentRoute: () => AuthAppRouteRoute,
 } as any)
 const AuthAppDocumentsRoute = AuthAppDocumentsRouteImport.update({
@@ -544,11 +568,14 @@ export interface FileRoutesByFullPath {
   '/app/addresses': typeof AuthAppAddressesRoute
   '/app/articles': typeof AuthAppArticlesRoute
   '/app/documents': typeof AuthAppDocumentsRoute
+  '/app/email': typeof AuthAppEmailRoute
+  '/app/email-templates': typeof AuthAppEmailTemplatesRoute
   '/app/import': typeof AuthAppImportRoute
   '/api/accounting/batches': typeof ApiAccountingBatchesRouteWithChildren
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/ai/$': typeof ApiAiSplatRoute
   '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
@@ -558,6 +585,7 @@ export interface FileRoutesByFullPath {
   '/api/documents/export': typeof ApiDocumentsExportRoute
   '/api/documents/import-tracking': typeof ApiDocumentsImportTrackingRoute
   '/api/documents/tree': typeof ApiDocumentsTreeRoute
+  '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
   '/api/import/connectors': typeof ApiImportConnectorsRoute
@@ -623,11 +651,14 @@ export interface FileRoutesByTo {
   '/app/addresses': typeof AuthAppAddressesRoute
   '/app/articles': typeof AuthAppArticlesRoute
   '/app/documents': typeof AuthAppDocumentsRoute
+  '/app/email': typeof AuthAppEmailRoute
+  '/app/email-templates': typeof AuthAppEmailTemplatesRoute
   '/app/import': typeof AuthAppImportRoute
   '/api/accounting/batches': typeof ApiAccountingBatchesRouteWithChildren
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/ai/$': typeof ApiAiSplatRoute
   '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
@@ -637,6 +668,7 @@ export interface FileRoutesByTo {
   '/api/documents/export': typeof ApiDocumentsExportRoute
   '/api/documents/import-tracking': typeof ApiDocumentsImportTrackingRoute
   '/api/documents/tree': typeof ApiDocumentsTreeRoute
+  '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
   '/api/import/connectors': typeof ApiImportConnectorsRoute
@@ -707,11 +739,14 @@ export interface FileRoutesById {
   '/_auth/app/addresses': typeof AuthAppAddressesRoute
   '/_auth/app/articles': typeof AuthAppArticlesRoute
   '/_auth/app/documents': typeof AuthAppDocumentsRoute
+  '/_auth/app/email': typeof AuthAppEmailRoute
+  '/_auth/app/email-templates': typeof AuthAppEmailTemplatesRoute
   '/_auth/app/import': typeof AuthAppImportRoute
   '/api/accounting/batches': typeof ApiAccountingBatchesRouteWithChildren
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/ai/$': typeof ApiAiSplatRoute
   '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
@@ -721,6 +756,7 @@ export interface FileRoutesById {
   '/api/documents/export': typeof ApiDocumentsExportRoute
   '/api/documents/import-tracking': typeof ApiDocumentsImportTrackingRoute
   '/api/documents/tree': typeof ApiDocumentsTreeRoute
+  '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
   '/api/import/connectors': typeof ApiImportConnectorsRoute
@@ -790,11 +826,14 @@ export interface FileRouteTypes {
     | '/app/addresses'
     | '/app/articles'
     | '/app/documents'
+    | '/app/email'
+    | '/app/email-templates'
     | '/app/import'
     | '/api/accounting/batches'
     | '/api/addresses/search'
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
+    | '/api/ai/$'
     | '/api/articles/search'
     | '/api/auth/$'
     | '/api/data/$'
@@ -804,6 +843,7 @@ export interface FileRouteTypes {
     | '/api/documents/export'
     | '/api/documents/import-tracking'
     | '/api/documents/tree'
+    | '/api/email/$'
     | '/api/feedback/submit'
     | '/api/import/batches'
     | '/api/import/connectors'
@@ -869,11 +909,14 @@ export interface FileRouteTypes {
     | '/app/addresses'
     | '/app/articles'
     | '/app/documents'
+    | '/app/email'
+    | '/app/email-templates'
     | '/app/import'
     | '/api/accounting/batches'
     | '/api/addresses/search'
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
+    | '/api/ai/$'
     | '/api/articles/search'
     | '/api/auth/$'
     | '/api/data/$'
@@ -883,6 +926,7 @@ export interface FileRouteTypes {
     | '/api/documents/export'
     | '/api/documents/import-tracking'
     | '/api/documents/tree'
+    | '/api/email/$'
     | '/api/feedback/submit'
     | '/api/import/batches'
     | '/api/import/connectors'
@@ -952,11 +996,14 @@ export interface FileRouteTypes {
     | '/_auth/app/addresses'
     | '/_auth/app/articles'
     | '/_auth/app/documents'
+    | '/_auth/app/email'
+    | '/_auth/app/email-templates'
     | '/_auth/app/import'
     | '/api/accounting/batches'
     | '/api/addresses/search'
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
+    | '/api/ai/$'
     | '/api/articles/search'
     | '/api/auth/$'
     | '/api/data/$'
@@ -966,6 +1013,7 @@ export interface FileRouteTypes {
     | '/api/documents/export'
     | '/api/documents/import-tracking'
     | '/api/documents/tree'
+    | '/api/email/$'
     | '/api/feedback/submit'
     | '/api/import/batches'
     | '/api/import/connectors'
@@ -1032,6 +1080,7 @@ export interface RootRouteChildren {
   ApiAddressesSearchRoute: typeof ApiAddressesSearchRoute
   ApiAdminCyclesRoute: typeof ApiAdminCyclesRoute
   ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRoute
+  ApiAiSplatRoute: typeof ApiAiSplatRoute
   ApiArticlesSearchRoute: typeof ApiArticlesSearchRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDataSplatRoute: typeof ApiDataSplatRoute
@@ -1041,6 +1090,7 @@ export interface RootRouteChildren {
   ApiDocumentsExportRoute: typeof ApiDocumentsExportRoute
   ApiDocumentsImportTrackingRoute: typeof ApiDocumentsImportTrackingRoute
   ApiDocumentsTreeRoute: typeof ApiDocumentsTreeRoute
+  ApiEmailSplatRoute: typeof ApiEmailSplatRoute
   ApiFeedbackSubmitRoute: typeof ApiFeedbackSubmitRoute
   ApiImportBatchesRoute: typeof ApiImportBatchesRouteWithChildren
   ApiImportConnectorsRoute: typeof ApiImportConnectorsRoute
@@ -1232,6 +1282,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiFeedbackSubmitRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/email/$': {
+      id: '/api/email/$'
+      path: '/api/email/$'
+      fullPath: '/api/email/$'
+      preLoaderRoute: typeof ApiEmailSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/documents/tree': {
       id: '/api/documents/tree'
       path: '/api/documents/tree'
@@ -1295,6 +1352,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiArticlesSearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/ai/$': {
+      id: '/api/ai/$'
+      path: '/api/ai/$'
+      fullPath: '/api/ai/$'
+      preLoaderRoute: typeof ApiAiSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/llm-config': {
       id: '/api/admin/llm-config'
       path: '/api/admin/llm-config'
@@ -1328,6 +1392,20 @@ declare module '@tanstack/react-router' {
       path: '/import'
       fullPath: '/app/import'
       preLoaderRoute: typeof AuthAppImportRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
+    '/_auth/app/email-templates': {
+      id: '/_auth/app/email-templates'
+      path: '/email-templates'
+      fullPath: '/app/email-templates'
+      preLoaderRoute: typeof AuthAppEmailTemplatesRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
+    '/_auth/app/email': {
+      id: '/_auth/app/email'
+      path: '/email'
+      fullPath: '/app/email'
+      preLoaderRoute: typeof AuthAppEmailRouteImport
       parentRoute: typeof AuthAppRouteRoute
     }
     '/_auth/app/documents': {
@@ -1665,6 +1743,8 @@ interface AuthAppRouteRouteChildren {
   AuthAppAddressesRoute: typeof AuthAppAddressesRoute
   AuthAppArticlesRoute: typeof AuthAppArticlesRoute
   AuthAppDocumentsRoute: typeof AuthAppDocumentsRoute
+  AuthAppEmailRoute: typeof AuthAppEmailRoute
+  AuthAppEmailTemplatesRoute: typeof AuthAppEmailTemplatesRoute
   AuthAppImportRoute: typeof AuthAppImportRoute
   AuthAppIndexRoute: typeof AuthAppIndexRoute
   AuthAppSettingsAccountRoute: typeof AuthAppSettingsAccountRoute
@@ -1679,6 +1759,8 @@ const AuthAppRouteRouteChildren: AuthAppRouteRouteChildren = {
   AuthAppAddressesRoute: AuthAppAddressesRoute,
   AuthAppArticlesRoute: AuthAppArticlesRoute,
   AuthAppDocumentsRoute: AuthAppDocumentsRoute,
+  AuthAppEmailRoute: AuthAppEmailRoute,
+  AuthAppEmailTemplatesRoute: AuthAppEmailTemplatesRoute,
   AuthAppImportRoute: AuthAppImportRoute,
   AuthAppIndexRoute: AuthAppIndexRoute,
   AuthAppSettingsAccountRoute: AuthAppSettingsAccountRoute,
@@ -1858,6 +1940,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAddressesSearchRoute: ApiAddressesSearchRoute,
   ApiAdminCyclesRoute: ApiAdminCyclesRoute,
   ApiAdminLlmConfigRoute: ApiAdminLlmConfigRoute,
+  ApiAiSplatRoute: ApiAiSplatRoute,
   ApiArticlesSearchRoute: ApiArticlesSearchRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDataSplatRoute: ApiDataSplatRoute,
@@ -1868,6 +1951,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDocumentsExportRoute: ApiDocumentsExportRoute,
   ApiDocumentsImportTrackingRoute: ApiDocumentsImportTrackingRoute,
   ApiDocumentsTreeRoute: ApiDocumentsTreeRoute,
+  ApiEmailSplatRoute: ApiEmailSplatRoute,
   ApiFeedbackSubmitRoute: ApiFeedbackSubmitRoute,
   ApiImportBatchesRoute: ApiImportBatchesRouteWithChildren,
   ApiImportConnectorsRoute: ApiImportConnectorsRoute,

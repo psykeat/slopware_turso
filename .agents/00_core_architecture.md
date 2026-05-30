@@ -97,6 +97,12 @@ Escape handling must follow a deterministic platform order. It should first clos
 
 A recommended priority is: shortcut overlay, lookup popup, dialog or drawer, inline edit helper, unsaved edit cancel confirmation, panel-level back action, workspace-level close or previous intent.[cite:1][cite:2]
 
+## AI overlay standard
+
+AI-assisted workflows must use a shared overlay host that behaves like the rest of the platform's transient UI. The host is context-bound, zero-footprint by default, and opened only through registered commands in `CommandProvider`; it must close through the same escape and focus rules as other overlays.[cite:1][cite:2]
+
+AI surfaces are module-scoped by context, not by separate layout reservations or bespoke sidebars. Modules may vary their review and apply content, but they must reuse the shared overlay runtime and may not introduce local AI-only shell regions, permanent inspector columns, or ad hoc keyboard handlers.[cite:1][cite:2]
+
 ### Enforcing consistency
 
 Consistency must be enforced structurally:

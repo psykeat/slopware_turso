@@ -55,6 +55,7 @@ import { CommandPalette } from "@repo/ui/components/command-palette";
 import { ShortcutHelp } from "@repo/ui/components/shortcut-help";
 import { StatisticsModule } from "@repo/ui/components/statistics-module";
 import { TooltipProvider } from "@repo/ui/components/tooltip";
+import { AiOverlayProvider } from "@repo/ui/platform/ai-overlay";
 import { CommandProvider } from "@repo/ui/platform/command-registry";
 import { FocusProvider } from "@repo/ui/platform/focus-manager";
 import { GlobalCommands } from "@repo/ui/platform/global-commands";
@@ -75,11 +76,13 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
             <TooltipProvider>
               <FocusProvider>
                 <CommandProvider>
-                  <GlobalCommands />
-                  <ShortcutHelp />
-                  <StatisticsModule />
-                  <CommandPalette />
-                  {children}
+                  <AiOverlayProvider>
+                    <GlobalCommands />
+                    <ShortcutHelp />
+                    <StatisticsModule />
+                    <CommandPalette />
+                    {children}
+                  </AiOverlayProvider>
                 </CommandProvider>
               </FocusProvider>
             </TooltipProvider>

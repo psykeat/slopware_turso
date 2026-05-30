@@ -25,9 +25,9 @@ export function ContextTabs({ tabs, defaultValue, className }: ContextTabsProps)
 
   return (
     <div className={cn("flex h-full w-full flex-col", className)}>
-      {/* Tab bar — 32px */}
+      {/* Tab bar — 36px */}
       <div
-        className="flex h-8 shrink-0 items-center overflow-x-auto border-b border-hairline bg-canvas-soft"
+        className="flex h-9 shrink-0 items-center overflow-x-auto border-b border-hairline bg-canvas-soft"
         style={{ scrollbarWidth: "none" }}
       >
         {tabs.map((tab) => (
@@ -35,7 +35,7 @@ export function ContextTabs({ tabs, defaultValue, className }: ContextTabsProps)
             key={tab.id}
             onClick={() => setActive(tab.id)}
             className={cn(
-              "flex h-8 shrink-0 items-center gap-1 border-b-2 px-3 text-[13px] whitespace-nowrap transition-colors select-none",
+              "flex h-9 shrink-0 items-center gap-1 border-b-2 px-3 text-[13px] whitespace-nowrap transition-colors select-none",
               active === tab.id
                 ? "border-primary text-ink"
                 : "border-transparent text-ink-mute hover:text-ink",
@@ -47,7 +47,7 @@ export function ContextTabs({ tabs, defaultValue, className }: ContextTabsProps)
         ))}
         {/* More actions button */}
         <div className="ml-auto flex shrink-0 items-center pr-1">
-          <button className="grid size-7 place-items-center rounded-sm text-ink-mute transition-colors hover:bg-canvas hover:text-ink">
+          <button className="grid size-8 place-items-center rounded-sm text-ink-mute transition-colors hover:bg-canvas hover:text-ink">
             <MoreHorizontalIcon className="size-3.5" />
           </button>
         </div>

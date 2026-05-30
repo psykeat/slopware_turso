@@ -203,7 +203,7 @@ export function NavigationTree({
         className,
       )}
     >
-      <div className="flex h-8 shrink-0 items-center border-b border-hairline px-3 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+      <div className="flex h-9 shrink-0 items-center border-b border-hairline px-3 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
         {resolvedHeader}
       </div>
 

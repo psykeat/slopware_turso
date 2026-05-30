@@ -1957,18 +1957,20 @@ const DocumentLinesEditor = forwardRef<
           onClick={addLine}
         >
           <PlusIcon className="size-3.5" />
-          Position hinzufügen
+          {t("documentEditor.addLine", { defaultValue: "Position hinzufügen" })}
         </button>
         <div className="flex-1" />
         <div className="flex items-center gap-6 text-[13px] tabular-nums">
           <span className="text-ink-mute">
-            Netto <span className="ml-1 font-medium text-ink">{formatMoney(totals.net)}</span>
+            {t("documentEditor.net", { defaultValue: "Netto" })}{" "}
+            <span className="ml-1 font-medium text-ink">{formatMoney(totals.net)}</span>
           </span>
           <span className="text-ink-mute">
-            MwSt <span className="ml-1 font-medium text-ink">{formatMoney(totals.tax)}</span>
+            {t("documentEditor.tax", { defaultValue: "MwSt" })}{" "}
+            <span className="ml-1 font-medium text-ink">{formatMoney(totals.tax)}</span>
           </span>
           <span className="font-medium text-ink-mute">
-            Brutto{" "}
+            {t("documentEditor.gross", { defaultValue: "Brutto" })}{" "}
             <span className="ml-1.5 text-[15px] font-semibold text-ink">
               {formatMoney(totals.gross)}
             </span>
@@ -3104,7 +3106,11 @@ export function DocumentEditor({
           <div className="min-h-0 flex-1 overflow-hidden">
             {requiresGroupTracking && (
               <div className="mx-4 mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-                <div className="font-medium">Beleggruppe erzwingt Tracking vor dem Buchen.</div>
+                <div className="font-medium">
+                  {t("documentEditor.trackingRequired", {
+                    defaultValue: "Beleggruppe erzwingt Tracking vor dem Buchen.",
+                  })}
+                </div>
                 <div className="mt-0.5 text-[12px] text-amber-800">
                   {[
                     requireSerialTracking ? "Seriennummern" : null,

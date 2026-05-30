@@ -149,7 +149,7 @@ function DocumentNavigationTree({
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden border-r border-hairline bg-canvas-soft">
-      <div className="flex h-8 shrink-0 items-center border-b border-hairline px-3 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+      <div className="flex h-9 shrink-0 items-center border-b border-hairline px-3 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
         {header ?? "Belegtypen"}
       </div>
 
@@ -999,19 +999,6 @@ function DocumentsModule() {
     };
   }, [companies, me?.lastCompanyId]);
 
-  const persistSelectedCompany = useCallback(
-    async (companyId: string) => {
-      setSelectedCompanyId(companyId);
-      await fetch("/api/me/company", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["me"] });
-    },
-    [queryClient],
-  );
-
   useEffect(() => {
     if (
       focusState.entity === "document" &&
@@ -1852,33 +1839,6 @@ function DocumentsModule() {
         onSubmit={submitDocumentMail}
       />
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-hairline bg-canvas px-4">
-          <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-            Company
-          </span>
-          <select
-            value={selectedCompanyId ?? ""}
-            disabled={companies.length === 0}
-            onChange={(event) => {
-              if (event.target.value) void persistSelectedCompany(event.target.value);
-            }}
-            className="h-7 min-w-56 rounded border border-hairline-input bg-canvas px-2 text-[12px] text-ink outline-none focus-visible:border-primary"
-          >
-            {companies.map((row: any) => (
-              <option key={row.companyId} value={row.companyId}>
-                {[row.companyNo, row.name].filter(Boolean).join(" - ")}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => void openDocumentMail()}
-            disabled={!activeDocumentId || documentMailBusy}
-            className="ml-auto flex h-7 items-center gap-1.5 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
-          >
-            <ExternalLinkIcon className="size-3.5" />
-            {documentMailBusy ? "Preparing…" : "Email"}
-          </button>
-        </div>
         <div className="min-h-0 flex-1">
           <TriViewWorkspace
             navigationTree={
@@ -1927,7 +1887,7 @@ function DocumentsModule() {
                   columns={[
                     {
                       key: "documentNo",
-                      header: "Beleg-Nr.",
+                      header: t("document.fields.documentNo"),
                       sortable: true,
                       render: (r: any) => (
                         <span className="font-mono tabular-nums">{r.documentNo}</span>
@@ -1935,7 +1895,7 @@ function DocumentsModule() {
                     },
                     {
                       key: "documentType",
-                      header: "Typ",
+                      header: t("document.fields.documentType"),
                       render: (r: any) => (
                         <span
                           className="font-mono text-[11px]"
@@ -1947,14 +1907,14 @@ function DocumentsModule() {
                     },
                     {
                       key: "documentGroupId",
-                      header: "Gruppe",
+                      header: t("document.fields.documentGroup"),
                       render: (r: any) => (
                         <span>{groupMap.get(r.documentGroupId)?.name ?? ""}</span>
                       ),
                     },
                     {
                       key: "documentDate",
-                      header: "Datum",
+                      header: t("document.fields.date"),
                       isNumeric: true,
                       sortable: true,
                       render: (r: any) => (
@@ -1963,22 +1923,22 @@ function DocumentsModule() {
                     },
                     {
                       key: "customerId",
-                      header: "Adresse",
+                      header: t("document.fields.address"),
                       render: (r: any) => (
                         <span>{addressDisplayName(addressMap.get(r.customerId))}</span>
                       ),
                     },
                     {
                       key: "warehouseId",
-                      header: "Lager",
+                      header: t("document.fields.warehouse"),
                       render: (r: any) => (
                         <span>{warehouseMap.get(r.warehouseId)?.name ?? ""}</span>
                       ),
                     },
-                    { key: "currencyId", header: "Währung" },
+                    { key: "currencyId", header: t("document.fields.currency") },
                     {
                       key: "totalNet",
-                      header: "Netto",
+                      header: t("document.fields.net"),
                       isNumeric: true,
                       sortable: true,
                       render: (r: any) => (
@@ -1989,7 +1949,7 @@ function DocumentsModule() {
                     },
                     {
                       key: "totalGross",
-                      header: "Gesamt",
+                      header: t("document.fields.gross"),
                       isNumeric: true,
                       sortable: true,
                       render: (r: any) => (
@@ -2000,7 +1960,7 @@ function DocumentsModule() {
                     },
                     {
                       key: "status",
-                      header: "Status",
+                      header: t("document.fields.status"),
                       sortable: true,
                       render: (r: any) => <StatusDot status={r.status ?? "draft"} />,
                     },

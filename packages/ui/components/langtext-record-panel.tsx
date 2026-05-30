@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { cn } from "../lib/utils";
@@ -65,6 +66,7 @@ function LangTextRecordPanelView({
   isControlled?: boolean;
   onControlledChange?: (field: string, value: string) => void;
 }) {
+  const { t } = useTranslation("ui");
   const queryClient = useQueryClient();
   const [activeKey, setActiveKey] = useState(fields[0]?.field ?? "");
   const [drafts, setDrafts] = useState<Record<string, string>>(() => buildDraftMap(record, fields));
@@ -110,10 +112,15 @@ function LangTextRecordPanelView({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["data", entityName, recordId] });
-      toast.success("Langtexte gespeichert");
+      toast.success(t("langtextEditor.saved", { defaultValue: "Langtexte gespeichert" }));
     },
     onError: (err: any) => {
-      toast.error(err?.message ?? "Langtexte konnten nicht gespeichert werden");
+      toast.error(
+        err?.message ??
+          t("langtextEditor.saveError", {
+            defaultValue: "Langtexte konnten nicht gespeichert werden",
+          }),
+      );
     },
   });
 
@@ -122,7 +129,7 @@ function LangTextRecordPanelView({
       <div className="min-h-[14rem] flex-1">
         <LangtextEditor
           key={`${entityName}:${recordId ?? "none"}`}
-          title={title ?? "Langtexte"}
+          title={title ?? t("langtextEditor.title", { defaultValue: "Langtexte" })}
           entries={entries}
           activeKey={resolvedActiveKey}
           onActiveKeyChange={setActiveKey}

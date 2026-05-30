@@ -3,6 +3,7 @@
     "addresses": "Adressen",
     "articles": "Artikel",
     "documents": "Belege",
+    "categories": "Kategorien",
     "accounting": "Buchhaltung",
     "import": "Import",
     "email": "E-Mail",
@@ -169,6 +170,7 @@
     "groups": {
       "organisation": "Organisation",
       "vertrieb": "Vertrieb",
+      "email": "E-Mail",
       "lager_artikel": "Lager & Artikel",
       "finanzen": "Finanzen",
       "geodaten": "Geodaten"
@@ -203,11 +205,21 @@
       "addressCategory": "Adresskategorien",
       "documentGroup": "Beleggruppen",
       "articleGroup": "Artikelgruppen",
+      "emailTemplate": "E-Mail-Vorlagen",
       "taxClass": "Steuerklassen",
       "taxCode": "Steuerschlüssel",
       "costCenter": "Kostenstellen",
       "glAccount": "Sachkonten",
       "postalCode": "PLZ-Ort Verzeichnis"
+    }
+  },
+  "emailTemplate": {
+    "columns": {
+      "category": "Kategorie",
+      "code": "Code",
+      "name": "Name",
+      "language": "Sprache",
+      "archived": "Archiviert"
     }
   },
   "feedback": {
@@ -256,6 +268,7 @@
     "fields": {
       "documentType": "Belegart",
       "documentGroup": "Beleggruppe",
+      "address": "Adresse",
       "billingAddress": "Rechnungsadresse",
       "deliveryAddress": "Lieferadresse",
       "warehouse": "Lager",
@@ -263,7 +276,7 @@
       "shippingMethod": "Versandart",
       "date": "Datum",
       "currency": "Währung",
-      "documentNo": "Belegnr.",
+      "documentNo": "Beleg-Nr.",
       "status": "Status",
       "customerId": "Kunde",
       "net": "Netto",
@@ -324,7 +337,142 @@
     },
     "duplicate": {
       "noTargets": "Keine passenden Zielgruppen zum Duplizieren"
+    },
+    "langtexts": {
+      "title": "Langtexte",
+      "note": "Notiztext",
+      "pre": "Vortext",
+      "post": "Nachtext",
+      "reverse": "Stornotext",
+      "savedPerDocument": "Die Auswahl wird pro Beleg gespeichert.",
+      "lineTitle": "Positionslangtext",
+      "line": "Langtext",
+      "noLine": "Wähle eine Position, um den Langtext zu bearbeiten.",
+      "lineToggle": "Positionstexte",
+      "lineImagesToggle": "Positionsbilder"
+    },
+    "print": {
+      "title": "Druckoptionen",
+      "description": "Die Auswahl wird am Beleg gespeichert."
+    },
+    "media": {
+      "positionImage": "Positionsbild",
+      "noImage": "Kein Bild hinterlegt"
     }
+  },
+  "langtextEditor": {
+    "title": "Langtexte",
+    "placeholder": "Langtext eingeben …",
+    "color": "Farbe…",
+    "saved": "Langtexte gespeichert",
+    "saveError": "Langtexte konnten nicht gespeichert werden"
+  },
+  "addressPicker": {
+    "search": "Suchen…",
+    "searchFirst": "Bitte zuerst Adresse wählen",
+    "manualEdit": "Manuelle Bearbeitung",
+    "companyName": "Firma / Name",
+    "street": "Straße",
+    "zip": "PLZ",
+    "city": "Ort",
+    "noBillingAddress": "Keine Rechnungsadresse ausgewählt",
+    "noDeliveryAddress": "Keine Lieferadresse ausgewählt"
+  },
+  "documentEditor": {
+    "addLine": "Position hinzufügen",
+    "net": "Netto",
+    "tax": "MwSt",
+    "gross": "Brutto",
+    "trackingRequired": "Beleggruppe erzwingt Tracking vor dem Buchen."
+  },
+  "addressView": {
+    "tabs": {
+      "details": "Details",
+      "langtexts": "Langtexte",
+      "contacts": "Kontakte",
+      "deliveryAddresses": "Lieferadressen",
+      "relatedDocuments": "Verknüpfte Belege",
+      "openItems": "Offene Posten"
+    },
+    "inspector": {
+      "title": "Adresse",
+      "identification": "Identifikation",
+      "postalAddress": "Postanschrift",
+      "commercial": "Kaufmännisch",
+      "no": "Nr.",
+      "company": "Firma",
+      "type": "Typ",
+      "street": "Straße",
+      "city": "Ort",
+      "postalCode": "PLZ",
+      "country": "Land",
+      "paymentTerms": "Zahlungsbedingungen",
+      "taxClass": "Steuerklasse",
+      "vatId": "USt-IdNr."
+    },
+    "tables": {
+      "contacts": "Kontakte",
+      "deliveryAddresses": "Lieferadressen",
+      "relatedDocuments": "Verknüpfte Belege",
+      "openItems": "Offene Posten",
+      "no": "Nr.",
+      "company": "Firma",
+      "city": "Ort",
+      "country": "Land",
+      "type": "Typ",
+      "segment": "Segment"
+    }
+  },
+  "articleView": {
+    "tabs": {
+      "details": "Details",
+      "inventory": "Lager",
+      "langtexts": "Langtexte"
+    },
+    "table": {
+      "no": "Nr.",
+      "name": "Name",
+      "unit": "Einheit",
+      "group": "Gruppe",
+      "tracking": "Tracking"
+    },
+    "inventory": {
+      "title": "Lager"
+    }
+  },
+  "email": {
+    "tree": {
+      "categories": "Kategorien",
+      "inbox": "Posteingang",
+      "sent": "Gesendet",
+      "drafts": "Entwürfe",
+      "archive": "Archiv"
+    },
+    "actions": {
+      "compose": "Verfassen"
+    },
+    "panels": {
+      "inspector": "Inspector",
+      "display": "Anzeige",
+      "primary": "Primär",
+      "provider": "Anbieter",
+      "connection": "Verbindung",
+      "syncState": "Sync-Status",
+      "thread": "Thread",
+      "messages": "Nachrichten",
+      "attachments": "Anhänge",
+      "unread": "Ungelesen",
+      "lastError": "Letzter Fehler",
+      "watch": "Watch",
+      "label": "Label"
+    },
+    "system": {
+      "syncStatus": "Sync-Status"
+    }
+  },
+  "article": {
+    "image": "Bild",
+    "movements": "Lagerbewegungen"
   },
   "devCycles": {
     "title": "Dev Cycles",

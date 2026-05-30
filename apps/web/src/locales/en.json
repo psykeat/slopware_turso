@@ -3,6 +3,7 @@
     "addresses": "Addresses",
     "articles": "Articles",
     "documents": "Documents",
+    "categories": "Categories",
     "accounting": "Accounting",
     "import": "Import",
     "email": "Email",
@@ -169,6 +170,7 @@
     "groups": {
       "organisation": "Organisation",
       "vertrieb": "Sales",
+      "email": "Email",
       "lager_artikel": "Inventory & Articles",
       "finanzen": "Finance",
       "geodaten": "Geodata"
@@ -203,11 +205,21 @@
       "addressCategory": "Address Categories",
       "documentGroup": "Document Groups",
       "articleGroup": "Article Groups",
+      "emailTemplate": "Email Templates",
       "taxClass": "Tax Classes",
       "taxCode": "Tax Codes",
       "costCenter": "Cost Centers",
       "glAccount": "GL Accounts",
       "postalCode": "Postal Codes"
+    }
+  },
+  "emailTemplate": {
+    "columns": {
+      "category": "Category",
+      "code": "Code",
+      "name": "Name",
+      "language": "Language",
+      "archived": "Archived"
     }
   },
   "feedback": {
@@ -256,6 +268,7 @@
     "fields": {
       "documentType": "Document Type",
       "documentGroup": "Document Group",
+      "address": "Address",
       "billingAddress": "Billing Address",
       "deliveryAddress": "Delivery Address",
       "warehouse": "Warehouse",
@@ -324,7 +337,142 @@
     },
     "duplicate": {
       "noTargets": "No valid duplicate targets"
+    },
+    "langtexts": {
+      "title": "Langtexts",
+      "note": "Note text",
+      "pre": "Pre-text",
+      "post": "Post-text",
+      "reverse": "Reversal text",
+      "savedPerDocument": "The selection is saved per document.",
+      "lineTitle": "Line text",
+      "line": "Text",
+      "noLine": "Select a line to edit the text.",
+      "lineToggle": "Line texts",
+      "lineImagesToggle": "Line images"
+    },
+    "print": {
+      "title": "Print options",
+      "description": "The selection is saved on the document."
+    },
+    "media": {
+      "positionImage": "Position image",
+      "noImage": "No image on file"
     }
+  },
+  "langtextEditor": {
+    "title": "Langtexts",
+    "placeholder": "Enter text …",
+    "color": "Color…",
+    "saved": "Langtexts saved",
+    "saveError": "Langtexts could not be saved"
+  },
+  "addressPicker": {
+    "search": "Search…",
+    "searchFirst": "Select an address first",
+    "manualEdit": "Manual editing",
+    "companyName": "Company / name",
+    "street": "Street",
+    "zip": "ZIP",
+    "city": "City",
+    "noBillingAddress": "No billing address selected",
+    "noDeliveryAddress": "No delivery address selected"
+  },
+  "documentEditor": {
+    "addLine": "Add line",
+    "net": "Net",
+    "tax": "Tax",
+    "gross": "Gross",
+    "trackingRequired": "The document group requires tracking before posting."
+  },
+  "addressView": {
+    "tabs": {
+      "details": "Details",
+      "langtexts": "Langtexts",
+      "contacts": "Contacts",
+      "deliveryAddresses": "Delivery addresses",
+      "relatedDocuments": "Related documents",
+      "openItems": "Open items"
+    },
+    "inspector": {
+      "title": "Address",
+      "identification": "Identification",
+      "postalAddress": "Postal address",
+      "commercial": "Commercial",
+      "no": "No.",
+      "company": "Company",
+      "type": "Type",
+      "street": "Street",
+      "city": "City",
+      "postalCode": "Postal code",
+      "country": "Country",
+      "paymentTerms": "Payment terms",
+      "taxClass": "Tax class",
+      "vatId": "VAT ID"
+    },
+    "tables": {
+      "contacts": "Contacts",
+      "deliveryAddresses": "Delivery addresses",
+      "relatedDocuments": "Related documents",
+      "openItems": "Open items",
+      "no": "No.",
+      "company": "Company",
+      "city": "City",
+      "country": "Country",
+      "type": "Type",
+      "segment": "Segment"
+    }
+  },
+  "articleView": {
+    "tabs": {
+      "details": "Details",
+      "inventory": "Inventory",
+      "langtexts": "Langtexts"
+    },
+    "table": {
+      "no": "No.",
+      "name": "Name",
+      "unit": "Unit",
+      "group": "Group",
+      "tracking": "Tracking"
+    },
+    "inventory": {
+      "title": "Inventory"
+    }
+  },
+  "email": {
+    "tree": {
+      "categories": "Categories",
+      "inbox": "Inbox",
+      "sent": "Sent",
+      "drafts": "Drafts",
+      "archive": "Archive"
+    },
+    "actions": {
+      "compose": "Compose"
+    },
+    "panels": {
+      "inspector": "Inspector",
+      "display": "Display",
+      "primary": "Primary",
+      "provider": "Provider",
+      "connection": "Connection",
+      "syncState": "Sync state",
+      "thread": "Thread",
+      "messages": "Messages",
+      "attachments": "Attachments",
+      "unread": "Unread",
+      "lastError": "Last error",
+      "watch": "Watch",
+      "label": "Label"
+    },
+    "system": {
+      "syncStatus": "Sync status"
+    }
+  },
+  "article": {
+    "image": "Image",
+    "movements": "Stock movements"
   },
   "devCycles": {
     "title": "Dev Cycles",

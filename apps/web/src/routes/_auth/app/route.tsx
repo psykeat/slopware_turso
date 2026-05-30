@@ -88,13 +88,6 @@ const PRIMARY_MODULES = [
     icon: MailIcon,
     kbd: "⌥6",
   },
-  {
-    label: "Email Templates",
-    labelKey: "nav.emailTemplates" as const,
-    to: "/app/email-templates" as const,
-    icon: FileTextIcon,
-    kbd: "⌥7",
-  },
 ] as const;
 
 const ACCENT_THEMES: { id: AccentTheme; label: string; primary: string }[] = [
@@ -608,7 +601,6 @@ function AppLayoutInner({
   userName,
   userEmail,
   tenantName,
-  moduleCrumb,
   userId,
   tenantId,
 }: {
@@ -616,7 +608,6 @@ function AppLayoutInner({
   userName: string;
   userEmail: string;
   tenantName: string;
-  moduleCrumb: string | undefined;
   userId: string;
   tenantId: string;
 }) {
@@ -809,11 +800,7 @@ function AppLayoutInner({
         onFeedbackClick={handleFeedbackClick}
       />
 
-      <ActionBar
-        crumbs={moduleCrumb ? [moduleCrumb] : undefined}
-        subCrumb={subCrumb}
-        className="shrink-0"
-      />
+      <ActionBar subCrumb={subCrumb} className="shrink-0" />
 
       <main className="min-h-0 flex-1 overflow-hidden">
         <Outlet />
@@ -834,8 +821,6 @@ function AppLayoutInner({
 
 function AppLayout() {
   const { user } = Route.useRouteContext();
-  const location = useLocation();
-  const { t } = useTranslation("ui");
 
   const userName = (user as any)?.name ?? (user as any)?.user?.name ?? "User";
   const userEmail = (user as any)?.email ?? (user as any)?.user?.email ?? "";
@@ -855,9 +840,6 @@ function AppLayout() {
   const tenantName = tenantInfo?.tenantName ?? "";
   const tenantId = tenantInfo?.tenantId ?? "";
 
-  const activeModule = PRIMARY_MODULES.find((m) => location.pathname.startsWith(m.to));
-  const moduleCrumb = activeModule ? t(activeModule.labelKey) : undefined;
-
   return (
     <TelemetryProvider>
       <ActionBarProvider>
@@ -867,7 +849,6 @@ function AppLayout() {
             userName={userName}
             userEmail={userEmail}
             tenantName={tenantName}
-            moduleCrumb={moduleCrumb}
             userId={userId}
             tenantId={tenantId}
           />

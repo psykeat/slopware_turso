@@ -23,6 +23,7 @@ import {
   SparklesIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { EmailAiAssistantPanel } from "#/components/email/EmailAiAssistantPanel";
@@ -308,6 +309,7 @@ function EmailWorkspace() {
   const { registerCommand } = useCommands();
   const { openAiOverlay, closeAiOverlay } = useAiOverlay();
   const { setFocus } = useFocus();
+  const { t } = useTranslation("ui");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -330,9 +332,9 @@ function EmailWorkspace() {
   });
 
   useEffect(() => {
-    setSubCrumb("Email");
+    setSubCrumb(t("nav.email"));
     return () => setSubCrumb(undefined);
-  }, [setSubCrumb]);
+  }, [setSubCrumb, t]);
 
   const { data: accounts = EMPTY } = useQuery<EmailAccount[]>({
     queryKey: ["email", "accounts"],
@@ -468,17 +470,17 @@ function EmailWorkspace() {
     () => [
       {
         id: "accounts",
-        label: "Accounts",
+        label: t("email.tree.categories"),
         children: accounts.map((account) => ({
           id: `account:${account.emailAccountId}`,
           label: `${account.displayName || account.primaryEmail} (${account.primaryEmail})`,
           leadingIcon: accountBrandIcon(account.provider),
           count: account.lastSyncStatus === "error" ? 1 : undefined,
           children: [
-            { id: `account:${account.emailAccountId}:inbox`, label: "Inbox" },
-            { id: `account:${account.emailAccountId}:sent`, label: "Sent" },
-            { id: `account:${account.emailAccountId}:drafts`, label: "Drafts" },
-            { id: `account:${account.emailAccountId}:archive`, label: "Archive" },
+            { id: `account:${account.emailAccountId}:inbox`, label: t("email.tree.inbox") },
+            { id: `account:${account.emailAccountId}:sent`, label: t("email.tree.sent") },
+            { id: `account:${account.emailAccountId}:drafts`, label: t("email.tree.drafts") },
+            { id: `account:${account.emailAccountId}:archive`, label: t("email.tree.archive") },
             ...(labels
               .filter((label) => label.emailAccountId === account.emailAccountId)
               .map((label) => ({
@@ -491,14 +493,11 @@ function EmailWorkspace() {
       },
       {
         id: "system",
-        label: "Mailbox",
-        children: [
-          { id: "system:sync", label: "Sync status" },
-          { id: "system:templates", label: "Templates" },
-        ],
+        label: t("nav.email"),
+        children: [{ id: "system:sync", label: t("email.system.syncStatus") }],
       },
     ],
-    [accounts, labels],
+    [accounts, labels, t],
   );
 
   const selectedTemplate =
@@ -512,12 +511,7 @@ function EmailWorkspace() {
   const accountNeedsRecovery =
     activeAccount?.status === "reauth_required" ||
     activeAccount?.lastSyncStatus === "recovery_required";
-  const selectedSystemLabel =
-    selectedSystemView === "sync"
-      ? "Sync status"
-      : selectedSystemView === "templates"
-        ? "Templates"
-        : null;
+  const selectedSystemLabel = selectedSystemView === "sync" ? t("email.system.syncStatus") : null;
 
   const connectProvider = async (provider: "google" | "microsoft") => {
     window.location.href = `/api/email/accounts/connect/${provider}`;
@@ -979,14 +973,14 @@ function EmailWorkspace() {
             <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
               <div className="flex items-center gap-2 text-[13px] text-ink">
                 <MailIcon className="size-4" />
-                <span>Mailbox</span>
+                <span>{t("nav.email")}</span>
               </div>
               <button
                 className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas hover:text-ink"
                 onClick={() => {
                   openBlankComposer();
                 }}
-                title="Compose"
+                title={t("email.actions.compose")}
               >
                 <PlusIcon className="size-4" />
               </button>
@@ -1024,7 +1018,7 @@ function EmailWorkspace() {
                   setSelectedLabelId(null);
                   setSelectedThreadId(null);
                   setComposerOpen(false);
-                  openSystemView(id === "system:templates" ? "templates" : "sync");
+                  openSystemView("sync");
                   return;
                 }
               }}
@@ -1053,7 +1047,9 @@ function EmailWorkspace() {
           <section className="flex h-full flex-col bg-canvas">
             <div className="flex h-10 items-center justify-between border-b border-hairline px-3">
               <div className="flex items-center gap-2 text-[13px] text-ink-secondary">
-                <span>{selectedSystemLabel ?? activeAccount?.primaryEmail ?? "No account"}</span>
+                <span>
+                  {selectedSystemLabel ?? activeAccount?.primaryEmail ?? t("email.panels.primary")}
+                </span>
                 {threadsLoading && <ClockIcon className="size-3.5 animate-spin" />}
               </div>
               <div className="flex items-center gap-2">
@@ -1080,7 +1076,7 @@ function EmailWorkspace() {
                   }
                   disabled={!activeAccountId}
                   className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
-                  title="Sync"
+                  title={t("email.system.syncStatus")}
                 >
                   <RefreshCcwIcon className="size-4" />
                 </button>
@@ -1089,7 +1085,7 @@ function EmailWorkspace() {
                     openBlankComposer();
                   }}
                   className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
-                  title="Compose"
+                  title={t("email.actions.compose")}
                 >
                   <PlusIcon className="size-4" />
                 </button>
@@ -1163,7 +1159,7 @@ function EmailWorkspace() {
             <div className="min-h-0 flex-1 overflow-auto">
               {threads.length === 0 ? (
                 <div className="grid h-full place-items-center text-[13px] text-ink-mute">
-                  No email threads
+                  {t("email.panels.thread")}
                 </div>
               ) : (
                 threads.map((thread) => (
@@ -1201,7 +1197,7 @@ function EmailWorkspace() {
                       <span className="mt-1 flex flex-wrap gap-1">
                         {selectedLabelId ? null : null}
                         <span className="rounded-full border border-hairline px-1.5 py-0.5 text-[10px] text-ink-mute">
-                          {thread.messageCount} msgs
+                          {thread.messageCount} {t("email.panels.messages")}
                         </span>
                         {!thread.isRead && (
                           <span className="rounded-full border border-hairline px-1.5 py-0.5 text-[10px] text-ink">
@@ -1351,7 +1347,7 @@ function EmailWorkspace() {
           ) : selectedSystemView === "sync" ? (
             <section className="flex h-full min-h-0 flex-col bg-canvas">
               <div className="flex h-10 items-center justify-between border-b border-hairline px-3">
-                <div className="text-[13px] text-ink-secondary">Sync status</div>
+                <div className="text-[13px] text-ink-secondary">{t("email.system.syncStatus")}</div>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() =>
@@ -1450,14 +1446,16 @@ function EmailWorkspace() {
                       queryClient.invalidateQueries({ queryKey: ["email"] });
                     }}
                     className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
-                    title={selectedThread?.isRead ? "Mark unread" : "Mark read"}
+                    title={
+                      selectedThread?.isRead ? t("email.panels.unread") : t("email.panels.thread")
+                    }
                   >
                     <MailOpenIcon className="size-4" />
                   </button>
                   <button
                     onClick={archiveThread}
                     className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
-                    title="Archive"
+                    title={t("actions.archive")}
                   >
                     <ArchiveIcon className="size-4" />
                   </button>
@@ -1476,7 +1474,7 @@ function EmailWorkspace() {
                     className="ml-auto flex h-7 items-center gap-1.5 rounded-sm bg-primary px-2 text-[12px] text-primary-fg"
                   >
                     <SendIcon className="size-3.5" />
-                    Compose
+                    {t("email.actions.compose")}
                   </button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-auto p-4">
@@ -1487,8 +1485,10 @@ function EmailWorkspace() {
                           {selectedThread.subject || "(no subject)"}
                         </h2>
                         <div className="mt-1 flex flex-wrap gap-2 text-[12px] text-ink-mute">
-                          <span>{selectedThread.messages.length} messages</span>
-                          <span>{selectedThread.isRead ? "Read" : "Unread"}</span>
+                          <span>
+                            {selectedThread.messages.length} {t("email.panels.messages")}
+                          </span>
+                          <span>{selectedThread.isRead ? "Read" : t("email.panels.unread")}</span>
                           <span>{selectedThread.messageCount} stored</span>
                         </div>
                       </div>
@@ -1580,42 +1580,60 @@ function EmailWorkspace() {
               </div>
               <aside className="hidden w-80 flex-none flex-col bg-canvas-soft lg:flex">
                 <InspectorPanel
-                  title="Inspector"
+                  title={t("email.panels.inspector")}
                   recordId={selectedThreadId ?? activeAccountId ?? undefined}
                   sections={[
                     {
-                      title: "Account",
+                      title: t("email.panels.primary"),
                       fields: [
-                        { label: "Display", value: activeAccount?.displayName ?? "-" },
-                        { label: "Primary", value: activeAccount?.primaryEmail ?? "-" },
-                        { label: "Provider", value: activeAccount?.provider ?? "-" },
-                        { label: "Connection", value: activeAccount?.status ?? "-" },
-                        { label: "Sync state", value: activeAccount?.lastSyncStatus ?? "-" },
+                        {
+                          label: t("email.panels.display"),
+                          value: activeAccount?.displayName ?? "-",
+                        },
+                        {
+                          label: t("email.panels.primary"),
+                          value: activeAccount?.primaryEmail ?? "-",
+                        },
+                        {
+                          label: t("email.panels.provider"),
+                          value: activeAccount?.provider ?? "-",
+                        },
+                        {
+                          label: t("email.panels.connection"),
+                          value: activeAccount?.status ?? "-",
+                        },
+                        {
+                          label: t("email.panels.syncState"),
+                          value: activeAccount?.lastSyncStatus ?? "-",
+                        },
                       ],
                     },
                     {
-                      title: "Thread",
+                      title: t("email.panels.thread"),
                       fields: [
                         { label: "Subject", value: selectedThread?.subject ?? "-" },
-                        { label: "Messages", value: selectedThread?.messages.length ?? 0 },
-                        { label: "Attachments", value: threadAttachments.length },
                         {
-                          label: "Unread",
+                          label: t("email.panels.messages"),
+                          value: selectedThread?.messages.length ?? 0,
+                        },
+                        { label: t("email.panels.attachments"), value: threadAttachments.length },
+                        {
+                          label: t("email.panels.unread"),
                           value: selectedThread && !selectedThread.isRead ? "Yes" : "No",
                         },
                       ],
                     },
                     {
-                      title: "Sync",
+                      title: t("email.system.syncStatus"),
                       fields: [
-                        { label: "Last error", value: accountSyncError ?? "-" },
+                        { label: t("email.panels.lastError"), value: accountSyncError ?? "-" },
                         {
-                          label: "Watch",
+                          label: t("email.panels.watch"),
                           value: activeAccount?.watchExpiresAt
                             ? formatMailboxDate(activeAccount.watchExpiresAt)
                             : "-",
                         },
-                        { label: "Label", value: selectedLabelId ?? "-" },
+                        { label: t("email.panels.label"), value: selectedLabelId ?? "-" },
                       ],
                     },
                   ]}

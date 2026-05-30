@@ -26,7 +26,15 @@ interface SettingsRegistryEntry {
   group: string | null;
 }
 
-const GROUP_ORDER = ["master", "organisation", "vertrieb", "lager_artikel", "finanzen", "geodaten"];
+const GROUP_ORDER = [
+  "master",
+  "organisation",
+  "vertrieb",
+  "email",
+  "lager_artikel",
+  "finanzen",
+  "geodaten",
+];
 const SETTINGS_GRID_PANEL_ID = "settings-grid";
 const COMPANY_SCOPED_SETTINGS = new Set([
   "bankAccount",
@@ -217,6 +225,14 @@ function SettingsView() {
       group: entry.group || "other",
     }));
 
+    if (!localized.some((entry) => entry.tableName === "emailTemplate")) {
+      localized.push({
+        tableName: "emailTemplate",
+        label: t("settings.entities.emailTemplate", { defaultValue: "E-Mail-Vorlagen" }),
+        group: "email",
+      });
+    }
+
     return localized.sort((a, b) => {
       const aGroup = GROUP_ORDER.indexOf(a.group);
       const bGroup = GROUP_ORDER.indexOf(b.group);
@@ -228,7 +244,7 @@ function SettingsView() {
       if (labelDelta !== 0) return labelDelta;
       return a.tableName.localeCompare(b.tableName);
     });
-  }, [registry, i18n.language]);
+  }, [registry, i18n.language, t]);
 
   const groupedEntries = useMemo(() => {
     const grouped = new Map<string, typeof orderedEntries>();
@@ -354,6 +370,31 @@ function SettingsView() {
       ];
     }
 
+    if (selectedKey === "emailTemplate") {
+      return [
+        {
+          key: "category",
+          header: t("emailTemplate.columns.category"),
+          sortable: true,
+          width: "110px",
+        },
+        { key: "code", header: t("emailTemplate.columns.code"), sortable: true, width: "140px" },
+        { key: "name", header: t("emailTemplate.columns.name"), sortable: true },
+        {
+          key: "language",
+          header: t("emailTemplate.columns.language"),
+          sortable: true,
+          width: "70px",
+        },
+        {
+          key: "archived",
+          header: t("emailTemplate.columns.archived"),
+          sortable: true,
+          width: "80px",
+        },
+      ];
+    }
+
     return undefined;
   }, [
     currencyLabelMap,
@@ -361,6 +402,7 @@ function SettingsView() {
     paymentTermLabelMap,
     selectedKey,
     taxClassLabelMap,
+    t,
     unitLabelMap,
   ]);
 
@@ -371,6 +413,36 @@ function SettingsView() {
           key: "apiKey",
           type: "password" as const,
         },
+      ];
+    }
+
+    if (selectedKey === "emailTemplate") {
+      return [
+        { key: "category", label: "Category", labelDe: "Kategorie" },
+        { key: "code", label: "Code", labelDe: "Code" },
+        { key: "name", label: "Name", labelDe: "Name" },
+        {
+          key: "subjectTemplate",
+          label: "Subject Template",
+          labelDe: "Betreffvorlage",
+          helpText: "Supports {{path}} placeholders.",
+          helpTextDe: "Unterstützt {{path}}-Platzhalter.",
+        },
+        {
+          key: "bodyHtmlTemplate",
+          label: "Body HTML Template",
+          labelDe: "HTML-Textvorlage",
+          helpText: "Rendered HTML body.",
+          helpTextDe: "Gerenderter HTML-Inhalt.",
+        },
+        {
+          key: "bodyTextTemplate",
+          label: "Body Text Template",
+          labelDe: "Textvorlage",
+          helpText: "Optional plain-text fallback.",
+          helpTextDe: "Optionale Klartext-Alternative.",
+        },
+        { key: "language", label: "Language", labelDe: "Sprache" },
       ];
     }
 
@@ -463,11 +535,22 @@ function SettingsView() {
     [queryClient],
   );
 
-  const createInitialValues = useMemo(
-    () =>
-      isCompanyScopedSetting && selectedCompanyId ? { companyId: selectedCompanyId } : undefined,
-    [isCompanyScopedSetting, selectedCompanyId],
-  );
+  const createInitialValues = useMemo(() => {
+    if (selectedKey === "emailTemplate") {
+      return {
+        category: "document",
+        code: "",
+        name: "",
+        subjectTemplate: "",
+        bodyHtmlTemplate: "<p></p>",
+        bodyTextTemplate: "",
+        language: null,
+      };
+    }
+    return isCompanyScopedSetting && selectedCompanyId
+      ? { companyId: selectedCompanyId }
+      : undefined;
+  }, [isCompanyScopedSetting, selectedCompanyId, selectedKey]);
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 

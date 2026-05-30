@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Edit2Icon, SearchIcon, XIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/utils";
 
@@ -153,6 +154,7 @@ export function AddressPickerField({
   unlockLabel = "Unlock",
   onToggleLock,
 }: AddressPickerFieldProps) {
+  const { t } = useTranslation("ui");
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -330,7 +332,7 @@ export function AddressPickerField({
           id={id}
           tabIndex={locked ? -1 : tabIndex}
           className={cn(inputBase, "pr-8", locked && "cursor-not-allowed opacity-80")}
-          placeholder="Suchen..."
+          placeholder={t("addressPicker.search", { defaultValue: "Suchen..." })}
           value={inputDisplayValue}
           readOnly={locked}
           aria-disabled={locked}
@@ -403,7 +405,7 @@ export function AddressPickerField({
             <div className="flex flex-col gap-2">
               <div className="mb-0.5 flex items-center justify-between">
                 <span className="text-[10px] font-medium tracking-wider text-primary uppercase">
-                  Manuelle Bearbeitung
+                  {t("addressPicker.manualEdit", { defaultValue: "Manuelle Bearbeitung" })}
                 </span>
                 <button
                   type="button"
@@ -420,7 +422,7 @@ export function AddressPickerField({
               <div className="grid grid-cols-2 gap-1.5">
                 <input
                   className={cn(inputBase, "col-span-2 h-7 text-[12px]")}
-                  placeholder="Firma / Name"
+                  placeholder={t("addressPicker.companyName", { defaultValue: "Firma / Name" })}
                   value={localSnap.companyName ?? ""}
                   readOnly={locked}
                   aria-disabled={locked}
@@ -428,7 +430,7 @@ export function AddressPickerField({
                 />
                 <input
                   className={cn(inputBase, "col-span-2 h-7 text-[12px]")}
-                  placeholder="Strasse"
+                  placeholder={t("addressPicker.street", { defaultValue: "Straße" })}
                   value={localSnap.addressLine1 ?? ""}
                   readOnly={locked}
                   aria-disabled={locked}
@@ -436,7 +438,7 @@ export function AddressPickerField({
                 />
                 <input
                   className={cn(inputBase, "h-7 text-[12px]")}
-                  placeholder="PLZ"
+                  placeholder={t("addressPicker.zip", { defaultValue: "PLZ" })}
                   value={localSnap.postalCode ?? ""}
                   readOnly={locked}
                   aria-disabled={locked}
@@ -444,7 +446,7 @@ export function AddressPickerField({
                 />
                 <input
                   className={cn(inputBase, "h-7 text-[12px]")}
-                  placeholder="Ort"
+                  placeholder={t("addressPicker.city", { defaultValue: "Ort" })}
                   value={localSnap.city ?? ""}
                   readOnly={locked}
                   aria-disabled={locked}
@@ -486,7 +488,11 @@ export function AddressPickerField({
                 </div>
               </>
             ) : (
-              <span className="text-ink-mute italic">Keine Rechnungsadresse ausgewählt</span>
+              <span className="text-ink-mute italic">
+                {t("addressPicker.noBillingAddress", {
+                  defaultValue: "Keine Rechnungsadresse ausgewählt",
+                })}
+              </span>
             )}
           </button>
         )}

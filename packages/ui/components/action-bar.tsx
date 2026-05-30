@@ -1,4 +1,3 @@
-import { ChevronRightIcon } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,17 +8,13 @@ import { useFocus } from "../platform/focus-manager";
 export interface ActionBarProps {
   className?: string;
   scope?: "global" | "context" | "local";
-  crumbs?: string[];
   subCrumb?: string;
 }
 
-export function ActionBar({ className, scope, crumbs, subCrumb }: ActionBarProps) {
+export function ActionBar({ className, scope, subCrumb }: ActionBarProps) {
   const { state: focusState } = useFocus();
   const { commands, executeCommand } = useCommands();
   const { t, i18n } = useTranslation("ui");
-
-  // Compute full breadcrumb array
-  const allCrumbs = [...(crumbs ?? []), ...(subCrumb ? [subCrumb] : [])];
 
   // Show context/local commands only (not global nav commands)
   const visibleCommands = commands.filter((c) => {
@@ -37,16 +32,9 @@ export function ActionBar({ className, scope, crumbs, subCrumb }: ActionBarProps
       style={{ scrollbarWidth: "none" }}
     >
       {/* Breadcrumbs */}
-      {allCrumbs.length > 0 && (
+      {subCrumb && (
         <div className="flex shrink-0 items-center gap-1.5 text-[13px]">
-          {allCrumbs.map((crumb, i) => (
-            <span key={i} className="flex items-center gap-1.5">
-              {i > 0 && <ChevronRightIcon className="size-3 shrink-0 text-hairline-input" />}
-              <span className={i === allCrumbs.length - 1 ? "text-ink" : "text-ink-mute"}>
-                {crumb}
-              </span>
-            </span>
-          ))}
+          <span className="text-ink">{subCrumb}</span>
         </div>
       )}
 

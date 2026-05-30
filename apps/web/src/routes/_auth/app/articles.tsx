@@ -299,7 +299,7 @@ function ArticlesModule() {
     () => [
       {
         key: "primaryImageId",
-        header: "Bild",
+        header: t("article.image", { defaultValue: "Bild" }),
         sortable: false,
         render: (r: any) => {
           if (!r.primaryImageId) {
@@ -321,26 +321,26 @@ function ArticlesModule() {
       },
       {
         key: "articleNo",
-        header: "No.",
+        header: t("articleView.table.no"),
         sortable: true,
         render: (r: any) => (
           <span className="font-mono text-ink-mute tabular-nums">{r.articleNo}</span>
         ),
       },
-      { key: "name", header: "Name", sortable: true },
+      { key: "name", header: t("articleView.table.name"), sortable: true },
       {
         key: "baseUnitId",
-        header: "Unit",
+        header: t("articleView.table.unit"),
         render: (r: any) => <span>{unitMap.get(r.baseUnitId) ?? "—"}</span>,
       },
       {
         key: "articleGroupId",
-        header: "Group",
+        header: t("articleView.table.group"),
         render: (r: any) => <span>{groupMap.get(r.articleGroupId) ?? "—"}</span>,
       },
       {
         key: "trackingMode",
-        header: "Tracking",
+        header: t("articleView.table.tracking"),
         render: (r: any) => (
           <span className="font-mono text-[11px] text-ink-mute">{r.trackingMode ?? "—"}</span>
         ),
@@ -353,7 +353,7 @@ function ArticlesModule() {
         ),
       },
     ],
-    [unitMap, groupMap],
+    [groupMap, t, unitMap],
   );
 
   const movementGridColumns = useMemo(
@@ -388,24 +388,24 @@ function ArticlesModule() {
     () => [
       {
         id: "details",
-        label: "Details",
+        label: t("articleView.tabs.details"),
         content: (
           <InspectorPanel
-            title={selectedArticle?.name ?? "Article"}
+            title={selectedArticle?.name ?? t("nav.articles")}
             recordId={activeArticleId ?? undefined}
             sections={[
               {
-                title: "Identification",
+                title: t("articleView.tabs.details"),
                 fields: [
                   {
-                    label: "No.",
+                    label: t("articleView.table.no"),
                     value: (
                       <span className="font-mono tabular-nums">{selectedArticle?.articleNo}</span>
                     ),
                   },
-                  { label: "Name", value: selectedArticle?.name },
+                  { label: t("articleView.table.name"), value: selectedArticle?.name },
                   {
-                    label: "Unit",
+                    label: t("articleView.table.unit"),
                     value: selectedArticle?.baseUnitId
                       ? (unitMap.get(selectedArticle.baseUnitId) ?? selectedArticle.baseUnitId)
                       : "—",
@@ -413,18 +413,21 @@ function ArticlesModule() {
                 ],
               },
               {
-                title: "Inventory",
+                title: t("articleView.inventory.title"),
                 fields: [
                   {
-                    label: "Article Group",
+                    label: t("articleView.table.group"),
                     value: selectedArticle?.articleGroupId
                       ? (groupMap.get(selectedArticle.articleGroupId) ??
                         selectedArticle.articleGroupId)
                       : "—",
                   },
-                  { label: "Warehouse", value: selectedArticle?.defaultWarehouseId },
                   {
-                    label: "Tracking",
+                    label: t("document.fields.warehouse"),
+                    value: selectedArticle?.defaultWarehouseId,
+                  },
+                  {
+                    label: t("articleView.table.tracking"),
                     value: selectedArticle?.trackingMode ? (
                       <span
                         className={
@@ -463,7 +466,7 @@ function ArticlesModule() {
       },
       {
         id: "inventory",
-        label: "Inventory",
+        label: t("articleView.tabs.inventory"),
         count: movements.length || undefined,
         content: (
           <DataGrid
@@ -471,11 +474,11 @@ function ArticlesModule() {
             panelId="inventory-grid"
             data={movements}
             keyExtractor={(row: any) => row.inventoryMovementId || row.id}
-            title="Inventory Movements"
+            title={t("articleView.inventory.title")}
             toolbar={false}
             columns={movementGridColumns}
-            emptyTitle="No movements recorded."
-            emptySubtitle="Inventory movements appear here when stock changes."
+            emptyTitle={t("empty.title")}
+            emptySubtitle={t("articleView.inventory.title")}
             className="h-full rounded-none border-none"
           />
         ),
@@ -545,13 +548,13 @@ function ArticlesModule() {
       },
       {
         id: "langtexte",
-        label: "Langtexte",
+        label: t("langtextEditor.title", { defaultValue: "Langtexte" }),
         content: (
           <div className="h-full p-2">
             <LangTextRecordPanel
               entityName="article"
               recordId={activeArticleId}
-              title="Langtexte"
+              title={t("langtextEditor.title", { defaultValue: "Langtexte" })}
               fields={ARTICLE_LANGTEXT_FIELDS}
               className="h-full"
             />
@@ -814,7 +817,7 @@ function ArticlesModule() {
                 <LangTextRecordPanel
                   entityName="article"
                   recordId={activeArticleId}
-                  title="Langtexte"
+                  title={t("langtextEditor.title", { defaultValue: "Langtexte" })}
                   fields={ARTICLE_LANGTEXT_FIELDS}
                   className="min-h-[220px]"
                   controlledValues={{
@@ -827,7 +830,7 @@ function ArticlesModule() {
                 />
                 <div>
                   <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    Lagerbewegungen
+                    {t("article.movements", { defaultValue: "Lagerbewegungen" })}
                   </div>
                   <div className="overflow-hidden rounded-md border border-hairline bg-canvas">
                     <Tabs defaultValue="bestand">

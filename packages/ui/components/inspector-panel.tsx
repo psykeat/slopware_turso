@@ -35,8 +35,8 @@ export function InspectorPanel({
 
   return (
     <div className={cn("flex h-full w-full flex-col bg-canvas", className)}>
-      {/* Header — 40px */}
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-hairline bg-canvas-soft px-4">
+      {/* Header — 36px */}
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-hairline bg-canvas-soft px-4">
         <span className="text-[13px] font-medium text-ink">{title}</span>
         {recordId && <span className="font-mono text-[10px] text-ink-mute">{recordId}</span>}
         {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}

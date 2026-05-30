@@ -302,40 +302,58 @@ function AddressesModule() {
     () => [
       {
         id: "details",
-        label: "Details",
+        label: t("addressView.tabs.details"),
         content: (
           <InspectorPanel
-            title={selectedAddress?.companyName ?? "Address"}
+            title={selectedAddress?.companyName ?? t("addressView.inspector.title")}
             recordId={activeAddressId ?? undefined}
             sections={[
               {
-                title: "Identification",
+                title: t("addressView.inspector.identification"),
                 fields: [
                   {
-                    label: "No.",
+                    label: t("addressView.inspector.no"),
                     value: (
                       <span className="font-mono tabular-nums">{selectedAddress?.addressNo}</span>
                     ),
                   },
-                  { label: "Company", value: selectedAddress?.companyName },
-                  { label: "Type", value: selectedAddress?.addressType },
+                  {
+                    label: t("addressView.inspector.company"),
+                    value: selectedAddress?.companyName,
+                  },
+                  { label: t("addressView.inspector.type"), value: selectedAddress?.addressType },
                 ],
               },
               {
-                title: "Postal Address",
+                title: t("addressView.inspector.postalAddress"),
                 fields: [
-                  { label: "Street", value: selectedAddress?.addressLine1 },
-                  { label: "City", value: selectedAddress?.city },
-                  { label: "Postal Code", value: selectedAddress?.postalCode },
-                  { label: "Country", value: selectedAddress?.countryCode },
+                  {
+                    label: t("addressView.inspector.street"),
+                    value: selectedAddress?.addressLine1,
+                  },
+                  { label: t("addressView.inspector.city"), value: selectedAddress?.city },
+                  {
+                    label: t("addressView.inspector.postalCode"),
+                    value: selectedAddress?.postalCode,
+                  },
+                  {
+                    label: t("addressView.inspector.country"),
+                    value: selectedAddress?.countryCode,
+                  },
                 ],
               },
               {
-                title: "Commercial",
+                title: t("addressView.inspector.commercial"),
                 fields: [
-                  { label: "Payment Terms", value: selectedAddress?.paymentTermId },
-                  { label: "Tax Class", value: selectedAddress?.taxClassId },
-                  { label: "VAT ID", value: selectedAddress?.vatId },
+                  {
+                    label: t("addressView.inspector.paymentTerms"),
+                    value: selectedAddress?.paymentTermId,
+                  },
+                  {
+                    label: t("addressView.inspector.taxClass"),
+                    value: selectedAddress?.taxClassId,
+                  },
+                  { label: t("addressView.inspector.vatId"), value: selectedAddress?.vatId },
                 ],
               },
             ]}
@@ -344,13 +362,13 @@ function AddressesModule() {
       },
       {
         id: "langtexte",
-        label: "Langtexte",
+        label: t("addressView.tabs.langtexts"),
         content: (
           <div className="h-full p-2">
             <LangTextRecordPanel
               entityName="address"
               recordId={activeAddressId}
-              title="Langtexte"
+              title={t("addressView.tabs.langtexts")}
               fields={ADDRESS_LANGTEXT_FIELDS}
               className="h-full"
             />
@@ -359,7 +377,7 @@ function AddressesModule() {
       },
       {
         id: "contacts",
-        label: "Contacts",
+        label: t("addressView.tabs.contacts"),
         count: contacts.length || undefined,
         content: (
           <DataGrid
@@ -367,7 +385,7 @@ function AddressesModule() {
             panelId="contacts-grid"
             data={contacts}
             keyExtractor={(row: any) => row.contactId || row.addressContactId || row.id}
-            title="Contacts"
+            title={t("addressView.tables.contacts")}
             toolbar={false}
             columns={[
               { key: "firstName", header: "First" },
@@ -393,7 +411,7 @@ function AddressesModule() {
       },
       {
         id: "deliveryAddresses",
-        label: "Delivery Addresses",
+        label: t("addressView.tabs.deliveryAddresses"),
         count: deliveryAddresses.length || undefined,
         content: (
           <DataGrid
@@ -401,7 +419,7 @@ function AddressesModule() {
             panelId="delivery-addresses-grid"
             data={deliveryAddresses}
             keyExtractor={(row: any) => row.deliveryAddressId || row.id}
-            title="Delivery Addresses"
+            title={t("addressView.tables.deliveryAddresses")}
             toolbar={false}
             columns={[
               { key: "name", header: "Name" },
@@ -418,7 +436,7 @@ function AddressesModule() {
       },
       {
         id: "relatedDocuments",
-        label: "Related Documents",
+        label: t("addressView.tabs.relatedDocuments"),
         count: addressStats?.recentDocuments?.length || undefined,
         content: (
           <DataGrid
@@ -426,12 +444,12 @@ function AddressesModule() {
             panelId="related-documents-grid"
             data={(addressStats?.recentDocuments ?? []) as any[]}
             keyExtractor={(row: any) => row.documentId || row.id}
-            title="Related Documents"
+            title={t("addressView.tables.relatedDocuments")}
             toolbar={false}
             columns={[
               {
                 key: "documentNo",
-                header: "No.",
+                header: t("addressView.tables.no"),
                 render: (r: any) => <span className="font-mono tabular-nums">{r.documentNo}</span>,
               },
               {
@@ -442,7 +460,7 @@ function AddressesModule() {
                   <span className="tabular-nums">{formatDate(r.documentDate)}</span>
                 ),
               },
-              { key: "documentType", header: "Type" },
+              { key: "documentType", header: t("addressView.tables.type") },
               {
                 key: "totalGross",
                 header: "Total",
@@ -520,14 +538,14 @@ function AddressesModule() {
       },
       {
         id: "open-items",
-        label: t("stats.openItems"),
+        label: t("addressView.tabs.openItems"),
         content: (
           <DataGrid
             entityName="document"
             panelId="open-items-grid"
             data={(addressStats?.recentDocuments ?? []).filter((d: any) => !d.isPaid) as any[]}
             keyExtractor={(row: any) => row.documentId || row.id}
-            title={t("stats.openItems")}
+            title={t("addressView.tabs.openItems")}
             toolbar={false}
             columns={[
               {
@@ -540,10 +558,10 @@ function AddressesModule() {
               },
               {
                 key: "documentNo",
-                header: "Beleg-Nr",
+                header: t("addressView.tables.no"),
                 render: (r: any) => <span className="font-mono tabular-nums">{r.documentNo}</span>,
               },
-              { key: "documentType", header: "Typ" },
+              { key: "documentType", header: t("addressView.tables.type") },
               {
                 key: "totalGross",
                 header: "Betrag",
@@ -671,24 +689,24 @@ function AddressesModule() {
             columns={[
               {
                 key: "addressNo",
-                header: "No.",
+                header: t("addressView.tables.no"),
                 sortable: true,
                 render: (r: any) => (
                   <span className="font-mono text-ink-mute tabular-nums">{r.addressNo}</span>
                 ),
               },
-              { key: "companyName", header: "Company", sortable: true },
-              { key: "city", header: "City", sortable: true },
-              { key: "countryCode", header: "Country" },
+              { key: "companyName", header: t("addressView.tables.company"), sortable: true },
+              { key: "city", header: t("addressView.tables.city"), sortable: true },
+              { key: "countryCode", header: t("addressView.tables.country") },
               {
                 key: "isCustomer",
-                header: "Type",
+                header: t("addressView.tables.type"),
                 render: (r: any) => {
                   const tags = [r.isCustomer && "C", r.isSupplier && "S"].filter(Boolean).join("/");
                   return <span className="font-mono text-[11px] text-ink-mute">{tags || "—"}</span>;
                 },
               },
-              { key: "addressType", header: "Segment", sortable: true },
+              { key: "addressType", header: t("addressView.tables.segment"), sortable: true },
             ]}
             totalCount={addressData?.total}
             page={gridState.page}
@@ -816,12 +834,12 @@ function AddressesModule() {
               <div className="flex flex-col gap-6">
                 <div>
                   <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    Langtexte
+                    {t("langtextEditor.title", { defaultValue: "Langtexte" })}
                   </div>
                   <LangTextRecordPanel
                     entityName="address"
                     recordId={activeAddressId}
-                    title="Langtexte"
+                    title={t("langtextEditor.title", { defaultValue: "Langtexte" })}
                     fields={ADDRESS_LANGTEXT_FIELDS}
                     className="min-h-[220px]"
                     controlledValues={{

@@ -615,7 +615,7 @@ function AppLayoutInner({
   const { state: focusState, setFocus, resetFocus } = useFocus();
   const { registerCommand } = useCommands();
   const { getSnapshot } = useTelemetry();
-  const { isDesignMode, toggleDesignMode, resetDelta } = useDesigner();
+  const { isDesignMode } = useDesigner();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<FeedbackSnapshot>(DEFAULT_SNAPSHOT);
   const prevFeedbackOpen = useRef(false);
@@ -659,35 +659,6 @@ function AppLayoutInner({
     prevFeedbackOpen.current = feedbackOpen;
   }, [feedbackOpen, userId, tenantId, focusState, getSnapshot]);
 
-  const openDesigner = useCallback(() => {
-    const currentFocus = focusSnapshotRef.current;
-    if (!isDesignMode) {
-      designerFocusSnapshotRef.current = currentFocus;
-      toggleDesignMode();
-    }
-    setFocus({ ...currentFocus, area: "designer" });
-  }, [isDesignMode, setFocus, toggleDesignMode]);
-
-  const closeDesigner = useCallback(() => {
-    if (!isDesignMode) return;
-    toggleDesignMode();
-    const restoredFocus = designerFocusSnapshotRef.current;
-    designerFocusSnapshotRef.current = null;
-    if (restoredFocus) {
-      setFocus(restoredFocus);
-      return;
-    }
-    resetFocus();
-  }, [isDesignMode, resetFocus, setFocus, toggleDesignMode]);
-
-  const toggleDesigner = useCallback(() => {
-    if (isDesignMode) {
-      closeDesigner();
-      return;
-    }
-    openDesigner();
-  }, [closeDesigner, isDesignMode, openDesigner]);
-
   // Register open-feedback command
   useEffect(() => {
     const unregister = registerCommand({
@@ -700,94 +671,6 @@ function AppLayoutInner({
     });
     return unregister;
   }, [registerCommand]);
-
-  // Register designer commands
-  useEffect(() => {
-    const unregisterToggle = registerCommand({
-      id: "designer.toggle",
-      scope: "global",
-      group: "workflow",
-      label: { en: "Toggle Designer", de: "Designer umschalten" },
-      shortcut: "Ctrl+Shift+F2",
-      handler: toggleDesigner,
-    });
-
-    const unregisterSave = registerCommand({
-      id: "designer.save",
-      scope: "local",
-      group: "workflow",
-      label: { en: "Save Designer", de: "Designer speichern" },
-      isEnabled: (state) => isDesignMode && state.area === "designer",
-      handler: () => {
-        if (!isDesignMode) return;
-        setFocus({ ...focusSnapshotRef.current, area: "designer" });
-      },
-    });
-
-    const unregisterReset = registerCommand({
-      id: "designer.reset",
-      scope: "local",
-      group: "workflow",
-      label: { en: "Reset Designer", de: "Designer zurücksetzen" },
-      isEnabled: (state) => isDesignMode && state.area === "designer",
-      handler: () => {
-        if (!isDesignMode) return;
-        resetDelta();
-        setFocus({ ...focusSnapshotRef.current, area: "designer" });
-      },
-    });
-
-    const unregisterApply = registerCommand({
-      id: "designer.apply",
-      scope: "local",
-      group: "workflow",
-      label: { en: "Apply Designer", de: "Designer anwenden" },
-      isEnabled: (state) => isDesignMode && state.area === "designer",
-      handler: () => {
-        if (!isDesignMode) return;
-        setFocus({ ...focusSnapshotRef.current, area: "designer" });
-      },
-    });
-
-    const unregisterReconcile = registerCommand({
-      id: "designer.reconcile",
-      scope: "local",
-      group: "workflow",
-      label: { en: "Reconcile Designer", de: "Designer abgleichen" },
-      isEnabled: (state) => isDesignMode && state.area === "designer",
-      handler: () => {
-        if (!isDesignMode) return;
-        setFocus({ ...focusSnapshotRef.current, area: "designer" });
-      },
-    });
-
-    const unregisterClose = registerCommand({
-      id: "designer.close",
-      scope: "local",
-      group: "workflow",
-      label: { en: "Close Designer", de: "Designer schließen" },
-      shortcut: "Escape",
-      isEnabled: (state) => isDesignMode && state.area === "designer",
-      handler: closeDesigner,
-    });
-
-    return () => {
-      unregisterToggle();
-      unregisterSave();
-      unregisterReset();
-      unregisterApply();
-      unregisterReconcile();
-      unregisterClose();
-    };
-  }, [
-    closeDesigner,
-    isDesignMode,
-    openDesigner,
-    registerCommand,
-    resetDelta,
-    setFocus,
-    toggleDesigner,
-  ]);
 
   const handleFeedbackClick = () => setFeedbackOpen(true);
 
@@ -813,7 +696,6 @@ function AppLayoutInner({
         onClose={() => setFeedbackOpen(false)}
         snapshot={snapshot}
       />
-
       <InlineDesigner />
     </div>
   );

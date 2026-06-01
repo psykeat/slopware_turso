@@ -1,6 +1,6 @@
 # Slopware — Live Schema
 
-> Generated: 2026-06-01 13:24:53 UTC
+> Generated: 2026-06-01 16:56:45 UTC
 > Tables: 96
 
 ## Module: uncategorized

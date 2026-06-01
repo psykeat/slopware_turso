@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 
 import { useCommands } from "./command-registry";
 import { type FocusContextState, useFocus } from "./focus-manager";
@@ -23,10 +24,15 @@ export interface FieldDesignConfig {
   key: string;
   visible: boolean;
   order: number;
+  frameKey?: string | null;
   labelEnOverride?: string;
   labelDeOverride?: string;
   readonlyOverride?: boolean;
   requiredOverride?: boolean;
+  labelStyle?: "normal" | "bold" | "italic";
+  labelTone?: "default" | "muted" | "accent" | "danger";
+  styleTokenBinding?: string | null;
+  path?: string | null;
 }
 
 export interface DesignerDelta {
@@ -77,6 +83,7 @@ export interface DesignerPlacement {
   mode: "flat" | "stack" | "grid" | "tabs";
   slot: string | null;
   index: number;
+  parentId?: string | null;
 }
 
 export interface DesignerNode {
@@ -94,6 +101,9 @@ export interface DesignerNode {
   required: boolean;
   width?: string;
   pin?: "left" | "right" | null;
+  path?: string | null;
+  labelStyle?: "normal" | "bold" | "italic";
+  labelTone?: "default" | "muted" | "accent" | "danger";
   styleTokenBinding: string | null;
   ruleBinding: string | null;
   conflictState: DesignerConflictState;
@@ -163,10 +173,20 @@ interface DesignerContextValue {
   updateColumn: (key: string, patch: Partial<ColumnDesignConfig>) => void;
   moveColumn: (key: string, targetKey: string) => void;
   updateField: (key: string, patch: Partial<FieldDesignConfig>) => void;
+  updateFrameLabel: (key: string, label: string) => void;
   moveField: (key: string, targetKey: string) => void;
-  addFieldDraft: (label?: string) => void;
+  moveFieldToStart: (key: string, frameKey?: string | null) => void;
+  moveFieldToEnd: (key: string, frameKey?: string | null) => void;
+  moveFieldToFrame: (key: string, frameKey: string, targetKey?: string | null) => void;
+  addFieldDraft: (
+    label?: string,
+    frameKey?: string | null,
+    patch?: Partial<FieldDesignConfig>,
+  ) => void;
   addColumnDraft: (label?: string) => void;
   addFrameDraft: (label?: string) => void;
+  removeFieldDraft: (key: string) => void;
+  removeFrameDraft: (key: string) => void;
   initColumns: (
     cols: {
       key: string;
@@ -294,6 +314,9 @@ function createSurfaceNode(
     required: overrides?.required ?? false,
     width: overrides?.width,
     pin: overrides?.pin ?? null,
+    path: overrides?.path ?? null,
+    labelStyle: overrides?.labelStyle ?? "normal",
+    labelTone: overrides?.labelTone ?? "default",
     styleTokenBinding: overrides?.styleTokenBinding ?? null,
     ruleBinding: overrides?.ruleBinding ?? null,
     conflictState: overrides?.conflictState ?? "clean",
@@ -328,12 +351,52 @@ function sortByDisplayOrder(nodes: DesignerNode[]) {
   return [...nodes].sort((a, b) => a.displayOrder - b.displayOrder || a.id.localeCompare(b.id));
 }
 
-function reindexNodes(nodes: DesignerNode[]) {
-  return sortByDisplayOrder(nodes).map((node, index) => ({
-    ...node,
-    displayOrder: index,
-    placement: { ...node.placement, index },
-  }));
+function normalizeTreeNodes(nodes: DesignerNode[]) {
+  const cloned = nodes.map((node) => ({ ...node, children: [...node.children] }));
+  const parentChildren = new Map<string | null, DesignerNode[]>();
+
+  for (const node of cloned) {
+    const parentKey = node.parentId ?? null;
+    const bucket = parentChildren.get(parentKey);
+    if (bucket) {
+      bucket.push(node);
+    } else {
+      parentChildren.set(parentKey, [node]);
+    }
+  }
+
+  for (const [parentId, siblings] of parentChildren) {
+    sortByDisplayOrder(siblings).forEach((node, index) => {
+      node.displayOrder = index;
+      node.placement = { ...node.placement, index, parentId };
+    });
+  }
+
+  for (const node of cloned) {
+    node.children = sortByDisplayOrder(cloned.filter((child) => child.parentId === node.id)).map(
+      (child) => child.id,
+    );
+  }
+
+  return cloned.sort((a, b) => {
+    const parentCompare = String(a.parentId ?? "").localeCompare(String(b.parentId ?? ""));
+    if (parentCompare !== 0) return parentCompare;
+    return a.displayOrder - b.displayOrder || a.id.localeCompare(b.id);
+  });
+}
+
+function getFrameNodes(nodes: DesignerNode[]) {
+  return sortByDisplayOrder(
+    nodes.filter(
+      (node) =>
+        node.kind === "group-frame" ||
+        (node.kind === "surface" && node.parentId === null && node.children.length > 0),
+    ),
+  );
+}
+
+function getPrimaryFrameId(nodes: DesignerNode[]) {
+  return getFrameNodes(nodes)[0]?.id ?? null;
 }
 
 function mergeNodePatch(
@@ -353,22 +416,62 @@ function mergeNodePatch(
     required,
     width: patch.width ?? node.width,
     pin: patch.pin ?? node.pin ?? null,
+    path: typeof patch.path === "string" ? patch.path : (node.path ?? null),
+    parentId: typeof patch.frameKey === "string" ? patch.frameKey : node.parentId,
+    labelStyle:
+      patch.labelStyle === "bold" || patch.labelStyle === "italic" || patch.labelStyle === "normal"
+        ? patch.labelStyle
+        : (node.labelStyle ?? "normal"),
+    labelTone:
+      patch.labelTone === "muted" ||
+      patch.labelTone === "accent" ||
+      patch.labelTone === "danger" ||
+      patch.labelTone === "default"
+        ? patch.labelTone
+        : (node.labelTone ?? "default"),
+    styleTokenBinding:
+      typeof patch.styleTokenBinding === "string"
+        ? patch.styleTokenBinding
+        : patch.styleTokenBinding === null
+          ? null
+          : node.styleTokenBinding,
     label:
       typeof patch.labelEnOverride === "string"
         ? patch.labelEnOverride
         : typeof patch.labelDeOverride === "string"
           ? patch.labelDeOverride
           : node.label,
-    styleTokenBinding: node.styleTokenBinding,
     ruleBinding: node.ruleBinding,
     conflictState: node.conflictState,
     versionInfo: nextVersionInfo,
   } satisfies DesignerNode;
 }
 
+function removeNodeFromTree(nodes: DesignerNode[], key: string) {
+  const target = nodes.find((node) => node.id === key);
+  if (!target) return nodes;
+  const descendants = new Set<string>([target.id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of nodes) {
+      if (descendants.has(node.id)) continue;
+      if (node.parentId && descendants.has(node.parentId)) {
+        descendants.add(node.id);
+        changed = true;
+      }
+    }
+  }
+  return nodes.filter((node) => !descendants.has(node.id));
+}
+
 function surfaceToDelta(surfaceState: DesignerSurfaceState | null, kind: "grid" | "detail") {
   if (!surfaceState) return [];
-  const nodes = sortByDisplayOrder(surfaceState.nodes);
+  const nodes = sortByDisplayOrder(surfaceState.nodes).filter((node) =>
+    kind === "grid"
+      ? node.kind === "grid-column"
+      : node.kind !== "group-frame" && node.kind !== "surface",
+  );
   if (kind === "grid") {
     return nodes.map<ColumnDesignConfig>((node, order) => ({
       key: node.id,
@@ -383,10 +486,15 @@ function surfaceToDelta(surfaceState: DesignerSurfaceState | null, kind: "grid" 
     key: node.id,
     visible: node.visible,
     order,
+    frameKey: node.parentId,
     labelEnOverride: node.label,
     labelDeOverride: undefined,
     readonlyOverride: node.readonly,
     requiredOverride: node.required,
+    labelStyle: node.labelStyle,
+    labelTone: node.labelTone,
+    styleTokenBinding: node.styleTokenBinding,
+    path: node.path ?? null,
   }));
 }
 
@@ -453,7 +561,7 @@ function applyNodePatch(
   };
   const nextBucket = {
     ...bucket,
-    nodes: reindexNodes(nextNodes),
+    nodes: normalizeTreeNodes(nextNodes),
     draftPatchOps: [...bucket.draftPatchOps, ...patchOps],
     versionInfo: nextVersion,
     conflicts: bucket.conflicts.map((conflict) =>
@@ -470,21 +578,27 @@ function applyNodePatch(
   });
 }
 
-function moveNodeInBucket(bucket: DesignerSurfaceState, key: string, targetKey: string) {
-  const nextNodes = [...bucket.nodes];
-  const fromIndex = nextNodes.findIndex((node) => node.id === key);
-  const toIndex = nextNodes.findIndex((node) => node.id === targetKey);
-  if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+function updateFrameLabelInBucket(bucket: DesignerSurfaceState, key: string, label: string) {
+  const nodeIndex = bucket.nodes.findIndex((node) => node.id === key);
+  const existing = nodeIndex >= 0 ? bucket.nodes[nodeIndex] : null;
+  if (!existing || existing.kind !== "group-frame") {
     return bucket;
   }
-  const [removed] = nextNodes.splice(fromIndex, 1);
-  nextNodes.splice(toIndex, 0, removed);
-  const reindexed = reindexNodes(nextNodes);
+
+  const nextNode = {
+    ...existing,
+    label,
+    versionInfo: {
+      ...existing.versionInfo,
+      clientRevision: nextRevision(existing.versionInfo.clientRevision),
+    },
+  };
+  const nextNodes = bucket.nodes.map((node, index) => (index === nodeIndex ? nextNode : node));
   const patchOp: DesignerPatchOp = {
-    op: "move",
+    op: "set",
     nodeKey: key,
-    parentKey: removed.parentId,
-    index: toIndex,
+    path: "label",
+    value: label,
   };
   const nextVersion = {
     ...bucket.versionInfo,
@@ -492,7 +606,76 @@ function moveNodeInBucket(bucket: DesignerSurfaceState, key: string, targetKey: 
   };
   const nextBucket = {
     ...bucket,
-    nodes: reindexed,
+    nodes: normalizeTreeNodes(nextNodes),
+    draftPatchOps: [...bucket.draftPatchOps, patchOp],
+    versionInfo: nextVersion,
+  };
+  return appendHistory(nextBucket, {
+    action: "set",
+    surface: bucket.surface,
+    nodeKey: key,
+    summary: `Renamed ${key}`,
+    patchOps: [patchOp],
+    revision: nextVersion.clientRevision,
+  });
+}
+
+function moveNodeInBucket(
+  bucket: DesignerSurfaceState,
+  key: string,
+  targetKey: string,
+  parentId?: string | null,
+) {
+  const nextNodes = bucket.nodes.map((node) => ({ ...node, children: [...node.children] }));
+  const sourceIndex = nextNodes.findIndex((node) => node.id === key);
+  const targetIndex = nextNodes.findIndex((node) => node.id === targetKey);
+  if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
+    return bucket;
+  }
+
+  const moving = nextNodes[sourceIndex];
+  const target = nextNodes[targetIndex];
+  const targetParentId = parentId ?? target.parentId ?? null;
+  const siblings = nextNodes
+    .filter((node) => node.id !== key && (node.parentId ?? null) === targetParentId)
+    .sort(
+      (left, right) => left.displayOrder - right.displayOrder || left.id.localeCompare(right.id),
+    );
+  const targetSiblingIndex = siblings.findIndex((node) => node.id === targetKey);
+  if (targetSiblingIndex === -1) {
+    return bucket;
+  }
+  siblings.splice(targetSiblingIndex, 0, moving);
+
+  siblings.forEach((node, index) => {
+    node.parentId = targetParentId;
+    node.displayOrder = index;
+    node.placement = { ...node.placement, index, parentId: targetParentId };
+  });
+
+  const orderedIds = new Set(siblings.map((node) => node.id));
+  const reorderedNodes = nextNodes.filter((node) => !orderedIds.has(node.id));
+  reorderedNodes.push(...siblings);
+
+  const patchOp: DesignerPatchOp = {
+    op: "move",
+    nodeKey: key,
+    parentKey: targetParentId,
+    index: targetSiblingIndex,
+  };
+  const nextVersion = {
+    ...bucket.versionInfo,
+    clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+  };
+  const parentNode = targetParentId
+    ? (reorderedNodes.find((node) => node.id === targetParentId) ?? null)
+    : null;
+  if (parentNode) {
+    parentNode.children = siblings.map((node) => node.id);
+  }
+  const nextBucket = {
+    ...bucket,
+    nodes: reorderedNodes,
     draftPatchOps: [...bucket.draftPatchOps, patchOp],
     versionInfo: nextVersion,
   };
@@ -506,21 +689,93 @@ function moveNodeInBucket(bucket: DesignerSurfaceState, key: string, targetKey: 
   });
 }
 
+function moveNodeToBoundaryInBucket(
+  bucket: DesignerSurfaceState,
+  key: string,
+  boundary: "first" | "last",
+  parentId?: string | null,
+) {
+  const nextNodes = bucket.nodes.map((node) => ({ ...node, children: [...node.children] }));
+  const sourceIndex = nextNodes.findIndex((node) => node.id === key);
+  if (sourceIndex === -1) {
+    return bucket;
+  }
+
+  const moving = nextNodes[sourceIndex];
+  const targetParentId = parentId ?? moving.parentId ?? null;
+  const siblings = nextNodes
+    .filter((node) => node.id !== key && (node.parentId ?? null) === targetParentId)
+    .sort(
+      (left, right) => left.displayOrder - right.displayOrder || left.id.localeCompare(right.id),
+    );
+  if (boundary === "first") {
+    siblings.unshift(moving);
+  } else {
+    siblings.push(moving);
+  }
+
+  siblings.forEach((node, index) => {
+    node.parentId = targetParentId;
+    node.displayOrder = index;
+    node.placement = { ...node.placement, index, parentId: targetParentId };
+  });
+
+  const orderedIds = new Set(siblings.map((node) => node.id));
+  const reorderedNodes = nextNodes.filter((node) => !orderedIds.has(node.id));
+  reorderedNodes.push(...siblings);
+
+  const patchOp: DesignerPatchOp = {
+    op: "move",
+    nodeKey: key,
+    parentKey: targetParentId,
+    index: boundary === "first" ? 0 : siblings.length - 1,
+  };
+  const nextVersion = {
+    ...bucket.versionInfo,
+    clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+  };
+  const parentNode = targetParentId
+    ? (reorderedNodes.find((node) => node.id === targetParentId) ?? null)
+    : null;
+  if (parentNode) {
+    parentNode.children = siblings.map((node) => node.id);
+  }
+  const nextBucket = {
+    ...bucket,
+    nodes: reorderedNodes,
+    draftPatchOps: [...bucket.draftPatchOps, patchOp],
+    versionInfo: nextVersion,
+  };
+  return appendHistory(nextBucket, {
+    action: "move",
+    surface: bucket.surface,
+    nodeKey: key,
+    summary: `Moved ${key} to ${boundary}`,
+    patchOps: [patchOp],
+    revision: nextVersion.clientRevision,
+  });
+}
+
 function insertNodeInBucket(
   bucket: DesignerSurfaceState,
   node: DesignerNode,
   targetKey?: string | null,
 ) {
-  const withoutExisting = bucket.nodes.filter((item) => item.id !== node.id);
+  const withoutExisting = bucket.nodes
+    .filter((item) => item.id !== node.id)
+    .map((item) => ({ ...item, children: [...item.children] }));
   const insertIndex =
     targetKey != null ? withoutExisting.findIndex((item) => item.id === targetKey) : -1;
   const nextNodes = [...withoutExisting];
   if (insertIndex >= 0) {
+    const target = nextNodes[insertIndex];
+    if (!node.parentId) {
+      node.parentId = target.parentId;
+    }
     nextNodes.splice(insertIndex + 1, 0, node);
   } else {
     nextNodes.push(node);
   }
-  const reindexed = reindexNodes(nextNodes);
   const nextVersion = {
     ...bucket.versionInfo,
     clientRevision: nextRevision(bucket.versionInfo.clientRevision),
@@ -534,7 +789,7 @@ function insertNodeInBucket(
   };
   const nextBucket = {
     ...bucket,
-    nodes: reindexed,
+    nodes: normalizeTreeNodes(nextNodes),
     selectedNodeIds: [node.id],
     draftPatchOps: [...bucket.draftPatchOps, patchOp],
     versionInfo: nextVersion,
@@ -626,6 +881,15 @@ function buildLegacyDelta(runtime: DesignerRuntimeState): DesignerDelta {
   };
 }
 
+function cloneDesignerNodes(nodes: DesignerNode[]) {
+  return nodes.map((node) => ({
+    ...node,
+    children: [...node.children],
+    placement: { ...node.placement },
+    versionInfo: { ...node.versionInfo },
+  }));
+}
+
 export function DesignerProvider({ children }: { children: React.ReactNode }) {
   const { state: focusState, setFocus, resetFocus } = useFocus();
   const { registerCommand } = useCommands();
@@ -682,45 +946,75 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     setIsDesignMode(false);
   }, []);
 
+  const persistActiveSurface = useCallback(
+    async (mode: "save" | "apply") => {
+      const entityName = focusState.entity;
+      const surface = runtimeState.activeSurface ?? inferSurfaceFromFocus(focusState.area);
+      if (!entityName) return;
+
+      const bucket = ensureSurfaceBucket(runtimeState, surface, entityName);
+      if (bucket.draftPatchOps.length === 0) return;
+
+      const response = await fetch(`/api/metadata/designer/${entityName}/${surface}/apply`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          baseVersion: bucket.versionInfo.baseVersion,
+          derivedFromVersion: bucket.versionInfo.derivedFromVersion,
+          surface: bucket.surface,
+          ops: bucket.draftPatchOps,
+          clientRevision: bucket.versionInfo.clientRevision,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${mode} designer surface (${response.status})`);
+      }
+
+      updateRuntime((prev) => {
+        const currentBucket = ensureSurfaceBucket(prev, surface, entityName);
+        const committedNodes = cloneDesignerNodes(currentBucket.nodes);
+        const nextBucket: DesignerSurfaceState = {
+          ...currentBucket,
+          baselineNodes: cloneDesignerNodes(committedNodes),
+          nodes: committedNodes,
+          draftPatchOps: [],
+          versionInfo: {
+            ...currentBucket.versionInfo,
+            clientRevision: nextRevision(currentBucket.versionInfo.clientRevision),
+          },
+        };
+        return {
+          ...prev,
+          activeSurface: surface,
+          surfaces: { ...prev.surfaces, [surface]: nextBucket },
+        };
+      });
+    },
+    [focusState.area, focusState.entity, runtimeState, updateRuntime],
+  );
+
   const saveDesign = useCallback(async () => {
-    updateRuntime((prev) => {
-      const surface = prev.activeSurface ?? inferSurfaceFromFocus(focusState.area);
-      const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
-      const nextBucket = persistBucketAction(
-        bucket,
-        "save",
-        `Saved ${surface}`,
-        (current) => current,
-      );
-      return {
-        ...prev,
-        activeSurface: surface,
-        surfaces: { ...prev.surfaces, [surface]: nextBucket },
-      };
-    });
-  }, [focusState.area, focusState.entity, updateRuntime]);
+    try {
+      await persistActiveSurface("save");
+      toast.success("Designer saved");
+    } catch (error) {
+      console.error("Failed to save designer surface:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to save designer surface");
+    }
+  }, [persistActiveSurface]);
 
   const applyDesign = useCallback(async () => {
-    updateRuntime((prev) => {
-      const surface = prev.activeSurface ?? inferSurfaceFromFocus(focusState.area);
-      const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
-      const nextBucket = persistBucketAction(bucket, "apply", `Applied ${surface}`, (current) => ({
-        ...current,
-        draftPatchOps: [],
-        conflicts: [],
-        versionInfo: {
-          ...current.versionInfo,
-          conflictState: "clean",
-          reconciliationRequired: false,
-        },
-      }));
-      return {
-        ...prev,
-        activeSurface: surface,
-        surfaces: { ...prev.surfaces, [surface]: nextBucket },
-      };
-    });
-  }, [focusState.area, focusState.entity, updateRuntime]);
+    try {
+      await persistActiveSurface("apply");
+      toast.success("Designer applied");
+    } catch (error) {
+      console.error("Failed to apply designer surface:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to apply designer surface");
+    }
+  }, [persistActiveSurface]);
 
   const reconcileDesign = useCallback(async () => {
     updateRuntime((prev) => {
@@ -812,12 +1106,114 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     [focusState.entity, updateRuntime],
   );
 
+  const updateFrameLabel = useCallback(
+    (key: string, label: string) => {
+      updateRuntime((prev) => {
+        const surface = "triview-detail";
+        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
+        return {
+          ...prev,
+          activeSurface: surface,
+          surfaces: {
+            ...prev.surfaces,
+            [surface]: updateFrameLabelInBucket(bucket, key, label),
+          },
+        };
+      });
+    },
+    [focusState.entity, updateRuntime],
+  );
+
   const moveField = useCallback(
     (key: string, targetKey: string) => {
       updateRuntime((prev) => {
         const surface = "triview-detail";
         const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
-        const nextBucket = moveNodeInBucket(bucket, key, targetKey);
+        const node = bucket.nodes.find((item) => item.id === key);
+        const nextBucket = moveNodeInBucket(bucket, key, targetKey, node?.parentId ?? null);
+        return {
+          ...prev,
+          activeSurface: surface,
+          surfaces: { ...prev.surfaces, [surface]: nextBucket },
+        };
+      });
+    },
+    [focusState.entity, updateRuntime],
+  );
+
+  const moveFieldToStart = useCallback(
+    (key: string, frameKey?: string | null) => {
+      updateRuntime((prev) => {
+        const surface = "triview-detail";
+        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
+        return {
+          ...prev,
+          activeSurface: surface,
+          surfaces: {
+            ...prev.surfaces,
+            [surface]: moveNodeToBoundaryInBucket(bucket, key, "first", frameKey),
+          },
+        };
+      });
+    },
+    [focusState.entity, updateRuntime],
+  );
+
+  const moveFieldToEnd = useCallback(
+    (key: string, frameKey?: string | null) => {
+      updateRuntime((prev) => {
+        const surface = "triview-detail";
+        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
+        return {
+          ...prev,
+          activeSurface: surface,
+          surfaces: {
+            ...prev.surfaces,
+            [surface]: moveNodeToBoundaryInBucket(bucket, key, "last", frameKey),
+          },
+        };
+      });
+    },
+    [focusState.entity, updateRuntime],
+  );
+
+  const moveFieldToFrame = useCallback(
+    (key: string, frameKey: string, targetKey?: string | null) => {
+      updateRuntime((prev) => {
+        const surface = "triview-detail";
+        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
+        const nextNodes = bucket.nodes.map((node) => ({ ...node, children: [...node.children] }));
+        const nodeIndex = nextNodes.findIndex((item) => item.id === key);
+        if (nodeIndex === -1) return prev;
+        const moving = nextNodes[nodeIndex];
+        moving.parentId = frameKey;
+        nextNodes.splice(nodeIndex, 1);
+        const insertIndex =
+          targetKey != null ? nextNodes.findIndex((item) => item.id === targetKey) : -1;
+        if (insertIndex >= 0) {
+          nextNodes.splice(insertIndex + 1, 0, moving);
+        } else {
+          nextNodes.push(moving);
+        }
+        const nextVersion = {
+          ...bucket.versionInfo,
+          clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+        };
+        const patchOp: DesignerPatchOp = {
+          op: "move",
+          nodeKey: key,
+          parentKey: frameKey,
+          index:
+            insertIndex >= 0
+              ? nextNodes.findIndex((item) => item.id === targetKey)
+              : moving.displayOrder,
+        };
+        const nextBucket = {
+          ...bucket,
+          nodes: normalizeTreeNodes(nextNodes),
+          draftPatchOps: [...bucket.draftPatchOps, patchOp],
+          versionInfo: nextVersion,
+        };
         return {
           ...prev,
           activeSurface: surface,
@@ -829,25 +1225,71 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addFieldDraft = useCallback(
-    (label?: string) => {
+    (label?: string, frameKey?: string | null, patch?: Partial<FieldDesignConfig>) => {
       updateRuntime((prev) => {
         const surface = "triview-detail";
         const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
         const nodeId = nextDraftId("field-ref");
+        let resolvedParentId = frameKey ?? getPrimaryFrameId(bucket.nodes);
+        const nextNodes = bucket.nodes.map((node) => ({ ...node, children: [...node.children] }));
+        if (!resolvedParentId) {
+          const frameId = nextDraftId("group-frame");
+          resolvedParentId = frameId;
+          nextNodes.push(
+            createSurfaceNode(
+              surface,
+              focusState.entity,
+              "group-frame",
+              frameId,
+              "New frame",
+              nextNodes.length,
+              {
+                visible: true,
+                placement: { mode: "stack", slot: null, index: nextNodes.length },
+                versionInfo: createBaseVersionInfo(
+                  `layout:${focusState.entity ?? "draft"}:${frameId}`,
+                ),
+              },
+            ),
+          );
+        }
         const node = createSurfaceNode(
           surface,
           focusState.entity,
           "field-ref",
           nodeId,
           label ?? "New field",
-          bucket.nodes.length,
+          nextNodes.length,
           {
             visible: true,
-            placement: { mode: "stack", slot: "body", index: bucket.nodes.length },
+            parentId: resolvedParentId,
+            placement: { mode: "stack", slot: "body", index: nextNodes.length },
             versionInfo: createBaseVersionInfo(`schema:${focusState.entity ?? "draft"}:${nodeId}`),
+            styleTokenBinding: patch?.styleTokenBinding ?? null,
+            path: patch?.path ?? null,
+            labelStyle: patch?.labelStyle ?? "normal",
+            labelTone: patch?.labelTone ?? "default",
           },
         );
-        const nextBucket = insertNodeInBucket(bucket, node);
+        nextNodes.push(node);
+        const nextVersion = {
+          ...bucket.versionInfo,
+          clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+        };
+        const patchOp: DesignerPatchOp = {
+          op: "add",
+          nodeKey: node.id,
+          node,
+          parentKey: node.parentId,
+          index: node.displayOrder,
+        };
+        const nextBucket = {
+          ...bucket,
+          nodes: normalizeTreeNodes(nextNodes),
+          selectedNodeIds: [node.id],
+          draftPatchOps: [...bucket.draftPatchOps, patchOp],
+          versionInfo: nextVersion,
+        };
         return {
           ...prev,
           activeSurface: surface,
@@ -891,7 +1333,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
   const addFrameDraft = useCallback(
     (label?: string) => {
       updateRuntime((prev) => {
-        const surface = prev.activeSurface ?? inferSurfaceFromFocus(focusState.area);
+        const surface = "triview-detail";
         const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
         const nodeId = nextDraftId("group-frame");
         const node = createSurfaceNode(
@@ -916,6 +1358,93 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       });
     },
     [focusState.area, focusState.entity, updateRuntime],
+  );
+
+  const removeFieldDraft = useCallback(
+    (key: string) => {
+      updateRuntime((prev) => {
+        const surface = "triview-detail";
+        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
+        const nextNodes = removeNodeFromTree(bucket.nodes, key);
+        const nextVersion = {
+          ...bucket.versionInfo,
+          clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+        };
+        const patchOp: DesignerPatchOp = { op: "remove", nodeKey: key };
+        const nextBucket = {
+          ...bucket,
+          nodes: normalizeTreeNodes(nextNodes),
+          draftPatchOps: [...bucket.draftPatchOps, patchOp],
+          versionInfo: nextVersion,
+          selectedNodeIds: bucket.selectedNodeIds.filter((nodeId) => nodeId !== key),
+        };
+        return {
+          ...prev,
+          activeSurface: surface,
+          surfaces: { ...prev.surfaces, [surface]: nextBucket },
+        };
+      });
+    },
+    [focusState.entity, updateRuntime],
+  );
+
+  const removeFrameDraft = useCallback(
+    (key: string) => {
+      updateRuntime((prev) => {
+        const surface = "triview-detail";
+        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
+        const frame = bucket.nodes.find((node) => node.id === key);
+        if (!frame || frame.kind !== "group-frame") return prev;
+        const fallbackFrameId =
+          bucket.nodes.find((node) => node.kind === "group-frame" && node.id !== key)?.id ?? null;
+        const nextNodes = bucket.nodes.map((node) => ({ ...node, children: [...node.children] }));
+        let resolvedFallbackFrameId = fallbackFrameId;
+        if (!resolvedFallbackFrameId) {
+          resolvedFallbackFrameId = nextDraftId("group-frame");
+          nextNodes.push(
+            createSurfaceNode(
+              surface,
+              focusState.entity,
+              "group-frame",
+              resolvedFallbackFrameId,
+              "New frame",
+              nextNodes.length,
+              {
+                visible: true,
+                placement: { mode: "stack", slot: null, index: nextNodes.length },
+                versionInfo: createBaseVersionInfo(
+                  `layout:${focusState.entity ?? "draft"}:${resolvedFallbackFrameId}`,
+                ),
+              },
+            ),
+          );
+        }
+        for (const node of nextNodes) {
+          if (node.parentId === key) {
+            node.parentId = resolvedFallbackFrameId;
+          }
+        }
+        const withoutFrame = removeNodeFromTree(nextNodes, key);
+        const nextVersion = {
+          ...bucket.versionInfo,
+          clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+        };
+        const patchOp: DesignerPatchOp = { op: "remove", nodeKey: key };
+        const nextBucket = {
+          ...bucket,
+          nodes: normalizeTreeNodes(withoutFrame),
+          draftPatchOps: [...bucket.draftPatchOps, patchOp],
+          versionInfo: nextVersion,
+          selectedNodeIds: bucket.selectedNodeIds.filter((nodeId) => nodeId !== key),
+        };
+        return {
+          ...prev,
+          activeSurface: surface,
+          surfaces: { ...prev.surfaces, [surface]: nextBucket },
+        };
+      });
+    },
+    [focusState.entity, updateRuntime],
   );
 
   const initColumns = useCallback(
@@ -992,7 +1521,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [focusState.area, focusState.entity, updateRuntime],
+    [focusState.entity, updateRuntime],
   );
 
   const initFields = useCallback(
@@ -1000,12 +1529,19 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       updateRuntime((prev) => {
         const surface = "triview-detail";
         const existing = ensureSurfaceBucket(prev, surface, focusState.entity);
-        const existingKeys = new Set(existing.nodes.map((node) => node.id));
+        const existingKeys = new Set(
+          existing.nodes
+            .filter((node) => node.kind !== "group-frame" && node.kind !== "surface")
+            .map((node) => node.id),
+        );
         const incomingKeys = new Set(fields.map((field) => field.key));
         const sameSet =
           existingKeys.size === incomingKeys.size &&
           [...incomingKeys].every((key) => existingKeys.has(key));
-        if (sameSet && existing.nodes.length > 0) {
+        const existingFieldCount = existing.nodes.filter(
+          (node) => node.kind !== "group-frame" && node.kind !== "surface",
+        ).length;
+        if (sameSet && existingFieldCount > 0) {
           return {
             ...prev,
             activeSurface: focusState.area === "form" ? surface : (prev.activeSurface ?? surface),
@@ -1013,29 +1549,50 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
-        const nodes = fields.map((field, index) =>
-          createSurfaceNode(
-            surface,
-            focusState.entity,
-            "field-ref",
-            field.key,
-            field.labelEn || field.labelDe || field.key,
-            index,
-            {
-              visible: field.visible !== false,
-              placement: { mode: "stack", slot: "body", index },
-              versionInfo: createBaseVersionInfo(
-                `schema:${focusState.entity ?? "unknown"}:${field.key}`,
-              ),
-            },
-          ),
+        const frameId = nextDraftId("group-frame");
+        const frameNode = createSurfaceNode(
+          surface,
+          focusState.entity,
+          "group-frame",
+          frameId,
+          "Main frame",
+          0,
+          {
+            visible: true,
+            placement: { mode: "stack", slot: null, index: 0 },
+            versionInfo: createBaseVersionInfo(
+              `layout:${focusState.entity ?? "unknown"}:${frameId}`,
+            ),
+          },
         );
+
+        const nodes = [
+          frameNode,
+          ...fields.map((field, index) =>
+            createSurfaceNode(
+              surface,
+              focusState.entity,
+              "field-ref",
+              field.key,
+              field.labelEn || field.labelDe || field.key,
+              index,
+              {
+                visible: field.visible !== false,
+                parentId: frameId,
+                placement: { mode: "stack", slot: "body", index },
+                versionInfo: createBaseVersionInfo(
+                  `schema:${focusState.entity ?? "unknown"}:${field.key}`,
+                ),
+              },
+            ),
+          ),
+        ];
 
         const bucket = {
           ...defaultSurfaceState(surface, focusState.entity),
-          baselineNodes: nodes.map((node) => ({ ...node })),
-          nodes,
-          selectedNodeIds: nodes.length > 0 ? [nodes[0].id] : [],
+          baselineNodes: nodes.map((node) => ({ ...node, children: [...node.children] })),
+          nodes: normalizeTreeNodes(nodes),
+          selectedNodeIds: fields.length > 0 ? [fields[0].key] : [frameId],
           versionInfo: {
             ...defaultVersionInfo,
             clientRevision: "rev-1",
@@ -1086,6 +1643,11 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
             requiredOverride: field.requiredOverride,
             labelEnOverride: field.labelEnOverride,
             labelDeOverride: field.labelDeOverride,
+            frameKey: field.frameKey ?? undefined,
+            labelStyle: field.labelStyle,
+            labelTone: field.labelTone,
+            styleTokenBinding: field.styleTokenBinding ?? undefined,
+            path: field.path ?? undefined,
           });
         });
       }
@@ -1253,10 +1815,16 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       updateColumn,
       moveColumn,
       updateField,
+      updateFrameLabel,
       moveField,
+      moveFieldToStart,
+      moveFieldToEnd,
+      moveFieldToFrame,
       addFieldDraft,
       addColumnDraft,
       addFrameDraft,
+      removeFieldDraft,
+      removeFrameDraft,
       initColumns,
       initFields,
       selectDesignerNodes,
@@ -1275,9 +1843,14 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       isDesignMode,
       moveColumn,
       moveField,
+      moveFieldToStart,
+      moveFieldToEnd,
+      moveFieldToFrame,
       addFieldDraft,
       addColumnDraft,
       addFrameDraft,
+      removeFieldDraft,
+      removeFrameDraft,
       reconcileDesign,
       resetDelta,
       runtimeState,
@@ -1289,6 +1862,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       updateColumn,
       updateDelta,
       updateField,
+      updateFrameLabel,
     ],
   );
 

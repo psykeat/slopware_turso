@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircleIcon, EyeIcon, EyeOffIcon, GripVerticalIcon, PlusIcon } from "lucide-react";
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -31,6 +32,10 @@ export interface FieldDef {
   lookupSortColumn?: string;
   lookupIsI18n?: boolean;
   lookupPkColumn?: string;
+  jsonPath?: string;
+  styleTokenBinding?: string | null;
+  labelStyle?: "normal" | "bold" | "italic";
+  labelTone?: "default" | "muted" | "accent" | "danger";
   /** Renders a visual section divider above this field */
   sectionLabel?: string;
   sectionLabelDe?: string;
@@ -76,6 +81,77 @@ const inputError =
 
 const shellClassName =
   "w-full rounded border px-3 py-2 transition-colors border-hairline-input bg-canvas";
+
+const LABEL_TONE_CLASSES: Record<NonNullable<FieldDesignConfig["labelTone"]>, string> = {
+  default: "text-ink-secondary",
+  muted: "text-ink-muted",
+  accent: "text-primary",
+  danger: "text-destructive",
+};
+
+function getFieldLabelClasses(field: FieldDef) {
+  return cn(
+    "truncate",
+    LABEL_TONE_CLASSES[field.labelTone ?? "default"],
+    field.labelStyle === "bold" && "font-semibold",
+    field.labelStyle === "italic" && "italic",
+  );
+}
+
+function splitPath(path: string) {
+  return path
+    .split(".")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function readValueAtPath(source: Record<string, any>, path: string) {
+  const segments = splitPath(path);
+  let current: any = source;
+  for (const segment of segments) {
+    if (current == null || typeof current !== "object") return undefined;
+    current = current[segment];
+  }
+  return current;
+}
+
+function writeValueAtPath(source: Record<string, any>, path: string, value: any) {
+  const segments = splitPath(path);
+  if (segments.length === 0) return { ...source };
+  const next = Array.isArray(source) ? [...source] : { ...source };
+  let current: any = next;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index];
+    const existing = current[segment];
+    current[segment] =
+      existing && typeof existing === "object" && !Array.isArray(existing) ? { ...existing } : {};
+    current = current[segment];
+  }
+  current[segments[segments.length - 1]] = value;
+  return next;
+}
+
+function readFieldValue(field: FieldDef, formData: Record<string, any>) {
+  const path = field.jsonPath ?? field.key;
+  if (!path.includes(".")) return formData[field.key];
+  return readValueAtPath(formData, path);
+}
+
+function writeFieldValue(field: FieldDef, formData: Record<string, any>, value: any) {
+  const path = field.jsonPath ?? field.key;
+  if (!path.includes(".")) {
+    return { ...formData, [field.key]: value };
+  }
+  return writeValueAtPath(formData, path, value);
+}
+
+function normalizeStyleBinding(field: FieldDef, config: FieldDesignConfig | null) {
+  const labelTone = config?.labelTone ?? "default";
+  const labelStyle = config?.labelStyle ?? "normal";
+  const toneToken = labelTone === "default" ? null : `label-${labelTone}`;
+  const styleToken = labelStyle === "normal" ? null : `label-${labelStyle}`;
+  return config?.styleTokenBinding ?? toneToken ?? styleToken ?? field.styleTokenBinding ?? null;
+}
 
 function FieldInput({
   field,
@@ -124,7 +200,7 @@ function FieldInput({
           onChange={(e) => onChange(e.target.checked)}
           className="h-4 w-4 cursor-pointer rounded border-hairline-input accent-[var(--primary)] disabled:opacity-50"
         />
-        <span className="text-[13px] text-ink-secondary">
+        <span className={cn("text-[13px]", getFieldLabelClasses(field))}>
           {i18n.language === "de" && field.labelDe ? field.labelDe : field.label}
         </span>
       </label>
@@ -204,15 +280,35 @@ export function EntityMask({
   const { t, i18n } = useTranslation("ui");
   const queryClient = useQueryClient();
   const formRef = useRef<HTMLDivElement>(null);
+  const fieldRefs = useRef(new Map<string, HTMLDivElement | null>());
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const didAutoFocusRef = useRef(false);
-  const { isDesignMode, delta, initFields, updateField, addFieldDraft, addFrameDraft } =
-    useDesigner();
+  const {
+    isDesignMode,
+    activeSurfaceState,
+    delta,
+    initFields,
+    updateField,
+    updateFrameLabel,
+    addFieldDraft,
+    addFrameDraft,
+    moveField,
+    moveFieldToStart,
+    moveFieldToEnd,
+    moveFieldToFrame,
+    removeFieldDraft,
+    removeFrameDraft,
+    selectDesignerNodes,
+  } = useDesigner();
   const { state: focusState, setFocus } = useFocus();
 
   const [metaFields, setMetaFields] = useState<FieldDef[]>([]);
   const [loading, setLoading] = useState(!propFields && !!entityName);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [editorFieldKey, setEditorFieldKey] = useState<string | null>(null);
+  const [editorMode, setEditorMode] = useState<"compact" | "expanded">("compact");
+  const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties | null>(null);
 
   // Reset form and fetch data when record changes
   useEffect(() => {
@@ -319,7 +415,7 @@ export function EntityMask({
     initFields(
       fields.map((f) => ({
         key: f.key,
-        visible: true,
+        visible: f.visible !== false,
         labelEn: f.label,
         labelDe: f.labelDe,
       })),
@@ -332,9 +428,20 @@ export function EntityMask({
     );
   }, [delta.fieldConfigs]);
 
+  const frameNodes = useMemo(
+    () =>
+      (activeSurfaceState?.nodes ?? [])
+        .filter((node) => node.kind === "group-frame")
+        .slice()
+        .sort(
+          (left, right) =>
+            left.displayOrder - right.displayOrder || left.id.localeCompare(right.id),
+        ),
+    [activeSurfaceState?.nodes],
+  );
+
   const effectiveFields = useMemo(() => {
     if (!isDesignMode || delta.fieldConfigs.length === 0) return fields;
-
     const orderedConfigs: FieldDesignConfig[] = delta.fieldConfigs
       .slice()
       .sort((a: FieldDesignConfig, b: FieldDesignConfig) => a.order - b.order)
@@ -352,6 +459,11 @@ export function EntityMask({
           labelDe: config.labelDeOverride ?? baseField.labelDe,
           readonly: config.readonlyOverride ?? baseField.readonly,
           required: config.requiredOverride ?? baseField.required,
+          visible: config.visible,
+          jsonPath: config.path ?? baseField.jsonPath,
+          styleTokenBinding: normalizeStyleBinding(baseField, config),
+          labelStyle: config.labelStyle ?? "normal",
+          labelTone: config.labelTone ?? "default",
         };
       })
       .filter(Boolean) as FieldDef[];
@@ -367,6 +479,11 @@ export function EntityMask({
           labelDe: config.labelDeOverride ?? field.labelDe,
           readonly: config.readonlyOverride ?? field.readonly,
           required: config.requiredOverride ?? field.required,
+          visible: config.visible,
+          jsonPath: config.path ?? field.jsonPath,
+          styleTokenBinding: normalizeStyleBinding(field, config),
+          labelStyle: config.labelStyle ?? "normal",
+          labelTone: config.labelTone ?? "default",
         };
       });
 
@@ -379,15 +496,36 @@ export function EntityMask({
         type: "text",
         required: config.requiredOverride ?? false,
         readonly: config.readonlyOverride ?? false,
+        visible: config.visible,
+        jsonPath: config.path ?? config.key,
+        styleTokenBinding: normalizeStyleBinding(
+          { key: config.key, label: config.labelEnOverride ?? config.key, type: "text" },
+          config,
+        ),
+        labelStyle: config.labelStyle ?? "normal",
+        labelTone: config.labelTone ?? "default",
       }));
 
     return [...orderedFields, ...remainingFields, ...draftOnlyFields];
-  }, [fields, designerFieldConfigs, delta.fieldConfigs, isDesignMode]);
+  }, [designerFieldConfigs, delta.fieldConfigs, fields, isDesignMode]);
 
-  const renderedFields = useMemo(
-    () => effectiveFields.filter((field) => isDesignMode || field.visible !== false),
-    [effectiveFields, isDesignMode],
+  const fieldByKey = useMemo(
+    () => new Map(effectiveFields.map((field) => [field.key, field])),
+    [effectiveFields],
   );
+
+  const visibleFieldInLiveView = useCallback(
+    (field: FieldDef) => {
+      if (isDesignMode) return true;
+      const designerConfig = designerFieldConfigs.get(field.key);
+      return (designerConfig?.visible ?? field.visible) !== false;
+    },
+    [designerFieldConfigs, isDesignMode],
+  );
+
+  const selectedDesignerKey = focusState.field ?? null;
+  const selectedFieldKey =
+    selectedDesignerKey && fieldByKey.has(selectedDesignerKey) ? selectedDesignerKey : null;
 
   const selectDesignerField = useCallback(
     (fieldKey: string) => {
@@ -399,8 +537,9 @@ export function EntityMask({
         mode: mode ?? (recordId ? "edit" : null),
         field: fieldKey,
       });
+      selectDesignerNodes("triview-detail", [fieldKey], entityName);
     },
-    [entityName, isDesignMode, mode, recordId, setFocus],
+    [entityName, isDesignMode, mode, recordId, selectDesignerNodes, setFocus],
   );
 
   useEffect(() => {
@@ -413,6 +552,18 @@ export function EntityMask({
       field: null,
     });
   }, [entityName, isDesignMode, mode, recordId, setFocus]);
+
+  useEffect(() => {
+    if (!selectedFieldKey) {
+      setEditorFieldKey(null);
+      setEditorMode("compact");
+      return;
+    }
+    if (editorFieldKey !== selectedFieldKey) {
+      setEditorFieldKey(selectedFieldKey);
+      setEditorMode("compact");
+    }
+  }, [editorFieldKey, selectedFieldKey]);
 
   useEffect(() => {
     didAutoFocusRef.current = false;
@@ -487,12 +638,15 @@ export function EntityMask({
 
   const handleChange = (key: string, val: any) => {
     let nextFormData: Record<string, any> | null = null;
+    const changedField = fieldByKey.get(key) ?? null;
 
     setFormData((prev) => {
-      const next = { ...prev, [key]: val };
+      const next = (
+        changedField ? writeFieldValue(changedField, prev, val) : { ...prev, [key]: val }
+      ) as Record<string, any>;
 
       // Auto-generate slug from name if slug exists in fields
-      if (key === "name" && effectiveFields.some((f) => f.key === "slug")) {
+      if (key === "name" && fieldByKey.has("slug")) {
         const generatedSlug = val
           .toString()
           .toLowerCase()
@@ -550,14 +704,94 @@ export function EntityMask({
 
   const showCancel = !inline && !!onCancel;
   const hasChildContent = !!childSection && !loading && Object.keys(formData).length > 0;
-  const isSingleColumn = _layout === "single" || (childLayout === "side" && hasChildContent);
-  const loadingGridClass = isSingleColumn ? "grid-cols-1" : "grid-cols-2";
+  const fieldGridClass = _layout === "single" ? "grid-cols-1" : "grid-cols-2";
+
+  const selectedDesignerFieldKey = selectedFieldKey;
+
+  useLayoutEffect(() => {
+    if (!editorFieldKey || !isDesignMode) {
+      setOverlayStyle(null);
+      return;
+    }
+    const sync = () => {
+      const anchor = fieldRefs.current.get(editorFieldKey);
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const width = Math.min(window.innerWidth - 24, editorMode === "expanded" ? 420 : 360);
+      const estimatedHeight = editorMode === "expanded" ? 320 : 220;
+      let top = rect.bottom + 10;
+      if (top + estimatedHeight > window.innerHeight - 12) {
+        top = Math.max(12, rect.top - estimatedHeight - 10);
+      }
+      const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+      setOverlayStyle({ position: "fixed", top, left, width, zIndex: 70 });
+    };
+    sync();
+    window.addEventListener("scroll", sync, true);
+    window.addEventListener("resize", sync);
+    return () => {
+      window.removeEventListener("scroll", sync, true);
+      window.removeEventListener("resize", sync);
+    };
+  }, [editorFieldKey, editorMode, isDesignMode, selectedFieldKey, formData, fields.length]);
+
+  useEffect(() => {
+    if (!editorFieldKey) return;
+    const handler = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (overlayRef.current?.contains(target)) return;
+      const anchor = fieldRefs.current.get(editorFieldKey);
+      if (anchor?.contains(target)) return;
+      setEditorFieldKey(null);
+      setEditorMode("compact");
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [editorFieldKey]);
+
+  useEffect(() => {
+    if (!editorFieldKey) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setEditorFieldKey(null);
+      setEditorMode("compact");
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [editorFieldKey]);
+
+  const setFieldRef = useCallback((key: string, node: HTMLDivElement | null) => {
+    fieldRefs.current.set(key, node);
+  }, []);
+
+  const openFieldEditor = useCallback(
+    (fieldKey: string, mode: "compact" | "expanded" = "compact") => {
+      selectDesignerField(fieldKey);
+      setEditorFieldKey(fieldKey);
+      setEditorMode(mode);
+    },
+    [selectDesignerField],
+  );
+
+  const cycleLabelTone = (current: FieldDesignConfig["labelTone"] | undefined) => {
+    const order: FieldDesignConfig["labelTone"][] = ["default", "muted", "accent", "danger"];
+    const nextIndex = (order.indexOf(current ?? "default") + 1) % order.length;
+    return order[nextIndex];
+  };
+
+  const cycleLabelStyle = (current: FieldDesignConfig["labelStyle"] | undefined) => {
+    const order: FieldDesignConfig["labelStyle"][] = ["normal", "bold", "italic"];
+    const nextIndex = (order.indexOf(current ?? "normal") + 1) % order.length;
+    return order[nextIndex];
+  };
 
   if (loading) {
     return (
       <div className={cn(shellClassName, className)}>
         <Skeleton className="mb-6 h-5 w-32" />
-        <div className={cn("grid gap-x-6 gap-y-5", loadingGridClass)}>
+        <div className={cn("grid gap-x-6 gap-y-5", fieldGridClass)}>
           {[1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-14 w-full" />
           ))}
@@ -566,10 +800,91 @@ export function EntityMask({
     );
   }
 
-  const selectedDesignerFieldKey =
-    isDesignMode && focusState.area === "designer" && focusState.entity === entityName
-      ? focusState.field
-      : null;
+  const renderFieldCard = (field: FieldDef) => {
+    const isSelected = selectedDesignerFieldKey === field.key;
+    const designerConfig = designerFieldConfigs.get(field.key);
+    const visibilityChecked = designerConfig?.visible ?? field.visible !== false;
+    const hiddenClass = isDesignMode && !visibilityChecked ? "opacity-55" : "";
+    const currentValue = readFieldValue(field, formData);
+
+    return (
+      <div
+        key={field.key}
+        ref={(node) => setFieldRef(field.key, node)}
+        onClick={isDesignMode ? () => openFieldEditor(field.key, "compact") : undefined}
+        onDoubleClick={isDesignMode ? () => openFieldEditor(field.key, "expanded") : undefined}
+        onFocusCapture={isDesignMode ? () => openFieldEditor(field.key, "compact") : undefined}
+        onKeyDown={
+          isDesignMode
+            ? (e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                openFieldEditor(field.key, "expanded");
+              }
+            : undefined
+        }
+        role="group"
+        tabIndex={isDesignMode ? 0 : undefined}
+        className={cn(
+          "relative flex min-w-0 flex-col gap-1.5 rounded-md transition-all",
+          field.fullWidth && fieldGridClass === "grid-cols-2" && "col-span-2",
+          hiddenClass,
+          isDesignMode &&
+            (isSelected
+              ? "bg-primary/[0.04] shadow-[0_0_0_1px_rgba(83,58,253,0.08)] ring-1 ring-primary/60 ring-inset"
+              : "ring-1 ring-primary/20 ring-inset hover:bg-primary/[0.02] hover:ring-primary/45"),
+        )}
+      >
+        {isDesignMode && (
+          <div className="pointer-events-none absolute top-1 left-2 z-10 flex items-center gap-1">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border bg-canvas px-1.5 py-0.5 font-mono text-[9px] font-medium tracking-[0.14em] shadow-sm",
+                isSelected ? "border-primary/40 text-primary" : "border-hairline text-ink-mute",
+              )}
+            >
+              <GripVerticalIcon className="size-2.5 shrink-0 opacity-70" />
+              {field.key}
+            </span>
+            {field.jsonPath ? (
+              <span className="text-ink-muted rounded-full border border-hairline bg-canvas px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] uppercase">
+                jsonb
+              </span>
+            ) : null}
+          </div>
+        )}
+
+        {field.type !== "boolean" && (
+          <div className="flex items-center gap-1 text-[12px] font-medium select-none">
+            <button
+              type="button"
+              onClick={isDesignMode ? () => openFieldEditor(field.key, "expanded") : undefined}
+              className={cn("truncate text-left", getFieldLabelClasses(field))}
+            >
+              {fieldLabel(field)}
+            </button>
+            {field.required && <span className="shrink-0 leading-none text-destructive">*</span>}
+          </div>
+        )}
+
+        <div className="w-full min-w-0">
+          <FieldInput
+            field={field}
+            value={currentValue ?? field.value ?? ""}
+            disabled={isSaving}
+            onChange={(val) => handleChange(field.key, val)}
+          />
+        </div>
+
+        {field.error && (
+          <span className="text-[11px] text-[var(--destructive)]">{field.error}</span>
+        )}
+        {!field.error && helpText(field) && (
+          <span className="text-[11px] text-ink-mute">{helpText(field)}</span>
+        )}
+      </div>
+    );
+  };
 
   const fieldsGrid = (
     <div className="flex flex-col gap-6">
@@ -582,194 +897,399 @@ export function EntityMask({
           </div>
         </div>
       )}
-      <div className={cn("grid gap-x-6 gap-y-5", isSingleColumn ? "grid-cols-1" : "grid-cols-2")}>
-        {renderedFields.map((field) => {
-          const isSelected = selectedDesignerFieldKey === field.key;
-          const designerConfig = designerFieldConfigs.get(field.key);
-          const visibilityChecked = designerConfig?.visible ?? field.visible !== false;
 
-          return (
-            <React.Fragment key={field.key}>
-              {field.sectionLabel && (
-                <div
-                  className={cn(
-                    "-mb-2 border-t border-hairline pt-2",
-                    !isSingleColumn ? "col-span-2" : "",
-                  )}
-                >
-                  <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    {i18n.language === "de" && field.sectionLabelDe
-                      ? field.sectionLabelDe
-                      : field.sectionLabel}
-                  </span>
-                </div>
-              )}
-              <div
-                onClick={isDesignMode ? () => selectDesignerField(field.key) : undefined}
-                onFocusCapture={isDesignMode ? () => selectDesignerField(field.key) : undefined}
-                onKeyDown={
-                  isDesignMode
-                    ? (e) => {
-                        if (e.key !== "Enter" && e.key !== " ") return;
-                        e.preventDefault();
-                        selectDesignerField(field.key);
-                      }
-                    : undefined
-                }
-                role="group"
-                tabIndex={isDesignMode ? 0 : undefined}
-                className={cn(
-                  "relative flex min-w-0 flex-col gap-1.5",
-                  field.fullWidth && !isSingleColumn && "col-span-2",
-                  isDesignMode && "rounded-md p-1 pt-7 ring-1 transition-all ring-inset",
-                  isDesignMode &&
-                    (isSelected
-                      ? "bg-primary/[0.04] shadow-[0_0_0_1px_rgba(83,58,253,0.08)] ring-primary/60"
-                      : "ring-primary/20 hover:bg-primary/[0.02] hover:ring-primary/45"),
-                )}
-              >
-                {isDesignMode && (
-                  <>
-                    <div className="pointer-events-none absolute top-1 left-2 z-10 flex items-center gap-1">
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-full border bg-canvas px-1.5 py-0.5 font-mono text-[9px] font-medium tracking-[0.14em] shadow-sm",
-                          isSelected
-                            ? "border-primary/40 text-primary"
-                            : "border-hairline text-ink-mute",
-                        )}
-                      >
-                        <GripVerticalIcon className="size-2.5 shrink-0 opacity-70" />
-                        {field.key}
-                      </span>
-                    </div>
-                    {isSelected && (
-                      <div className="pointer-events-none absolute top-1 right-2 z-10 flex items-center gap-1">
-                        <span className="rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium tracking-wide text-primary">
-                          selected
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateField(field.key, { visible: !visibilityChecked });
-                          }}
-                          className={cn(
-                            "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-medium tracking-wide uppercase transition-colors",
-                            visibilityChecked
-                              ? "border-primary/30 bg-primary/8 text-primary"
-                              : "text-ink-muted border-hairline bg-canvas",
-                          )}
-                          title={visibilityChecked ? "Hide field" : "Show field"}
-                        >
-                          {visibilityChecked ? (
-                            <EyeIcon className="size-3" />
-                          ) : (
-                            <EyeOffIcon className="size-3" />
-                          )}
-                          {visibilityChecked ? "visible" : "hidden"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateField(field.key, { readonlyOverride: !field.readonly });
-                          }}
-                          className={cn(
-                            "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-medium tracking-wide uppercase transition-colors",
-                            field.readonly
-                              ? "border-primary/30 bg-primary/8 text-primary"
-                              : "text-ink-muted border-hairline bg-canvas",
-                          )}
-                          title={field.readonly ? "Make editable" : "Make readonly"}
-                        >
-                          {field.readonly ? "readonly" : "editable"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateField(field.key, { requiredOverride: !field.required });
-                          }}
-                          className={cn(
-                            "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-medium tracking-wide uppercase transition-colors",
-                            field.required
-                              ? "border-primary/30 bg-primary/8 text-primary"
-                              : "text-ink-muted border-hairline bg-canvas",
-                          )}
-                          title={field.required ? "Make optional" : "Make required"}
-                        >
-                          {field.required ? "required" : "optional"}
-                        </button>
-                      </div>
+      <div className={cn("grid gap-x-6 gap-y-5", fieldGridClass)}>
+        {effectiveFields.filter(visibleFieldInLiveView).length > 0
+          ? effectiveFields.filter(visibleFieldInLiveView).map((field) => (
+              <React.Fragment key={field.key}>
+                {field.sectionLabel && (
+                  <div
+                    className={cn(
+                      "-mb-2 border-t border-hairline pt-2",
+                      fieldGridClass === "grid-cols-2" ? "col-span-2" : "",
                     )}
-                  </>
+                  >
+                    <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                      {i18n.language === "de" && field.sectionLabelDe
+                        ? field.sectionLabelDe
+                        : field.sectionLabel}
+                    </span>
+                  </div>
                 )}
-                {field.type !== "boolean" && (
-                  <label className="flex items-center gap-1 text-[12px] font-medium text-ink-secondary select-none">
-                    {isDesignMode && isSelected ? (
-                      <input
-                        type="text"
-                        value={fieldLabel(field)}
-                        onChange={(e) =>
-                          updateField(field.key, {
-                            labelEnOverride: e.target.value,
-                            labelDeOverride: e.target.value,
-                          })
-                        }
-                        onClick={(e) => e.stopPropagation()}
-                        onFocus={(e) => e.stopPropagation()}
-                        className="h-6 min-w-0 flex-1 rounded-md border border-hairline bg-canvas px-2 text-[12px] text-ink outline-none"
-                      />
-                    ) : (
-                      <span className="truncate">{fieldLabel(field)}</span>
-                    )}
-                    {field.required && (
-                      <span className="shrink-0 leading-none text-destructive">*</span>
-                    )}
-                  </label>
-                )}
-                <div className="w-full min-w-0">
-                  <FieldInput
-                    field={field}
-                    value={formData[field.key] ?? field.value ?? ""}
-                    disabled={isSaving}
-                    onChange={(val) => handleChange(field.key, val)}
-                  />
-                </div>
-                {field.error && (
-                  <span className="text-[11px] text-[var(--destructive)]">{field.error}</span>
-                )}
-                {!field.error && helpText(field) && (
-                  <span className="text-[11px] text-ink-mute">{helpText(field)}</span>
-                )}
+                {renderFieldCard(field)}
+              </React.Fragment>
+            ))
+          : isDesignMode && (
+              <div className="text-ink-muted col-span-full rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
+                No fields available.
               </div>
-            </React.Fragment>
-          );
-        })}
-        {isDesignMode && (
-          <div className="col-span-2 flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => addFieldDraft()}
-              className="text-ink-muted inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-dashed border-hairline px-3 text-[12px] transition-colors hover:border-primary/35 hover:text-primary"
-            >
-              <PlusIcon className="size-3.5" />
-              Add field
-            </button>
-            <button
-              type="button"
-              onClick={() => addFrameDraft()}
-              className="text-ink-muted inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-dashed border-hairline px-3 text-[12px] transition-colors hover:border-primary/35 hover:text-primary"
-            >
-              <PlusIcon className="size-3.5" />
-              Add frame
-            </button>
-          </div>
-        )}
+            )}
       </div>
+
+      {isDesignMode && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => addFieldDraft("New field")}
+            className="text-ink-muted inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-dashed border-hairline px-3 text-[12px] transition-colors hover:border-primary/35 hover:text-primary"
+          >
+            <PlusIcon className="size-3.5" />
+            Add field
+          </button>
+        </div>
+      )}
     </div>
   );
+
+  const editorField = editorFieldKey ? (fieldByKey.get(editorFieldKey) ?? null) : null;
+  const editorConfig = editorFieldKey ? (designerFieldConfigs.get(editorFieldKey) ?? null) : null;
+  const editorValuePath = editorField?.jsonPath ?? editorField?.key ?? editorFieldKey;
+  const editorIsJsonb = !!editorField?.jsonPath && editorField.jsonPath !== editorField.key;
+  const editorFrameId = editorFieldKey
+    ? (delta.fieldConfigs.find((config) => config.key === editorFieldKey)?.frameKey ??
+      frameNodes[0]?.id ??
+      "frame:main")
+    : (frameNodes[0]?.id ?? "frame:main");
+  const editorFrameLabel =
+    frameNodes.find((frame) => frame.id === editorFrameId)?.label ?? "Main frame";
+  const editorSiblings = effectiveFields.filter(visibleFieldInLiveView);
+  const editorIndex = editorFieldKey
+    ? editorSiblings.findIndex((field) => field.key === editorFieldKey)
+    : -1;
+
+  const editorOverlay =
+    isDesignMode && editorField && overlayStyle && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={overlayRef}
+            className="pointer-events-auto rounded-2xl border border-hairline bg-canvas shadow-[0_24px_48px_rgba(13,37,61,0.18)]"
+            style={overlayStyle}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-hairline bg-canvas-soft px-3 py-2.5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="truncate text-[13px] font-semibold text-ink">
+                    {fieldLabel(editorField)}
+                  </div>
+                  <span className="text-ink-muted rounded-full border border-hairline bg-canvas px-1.5 py-0.5 font-mono text-[9px]">
+                    {editorField.key}
+                  </span>
+                </div>
+                <div className="text-ink-muted mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+                  <span className="rounded-full border border-hairline bg-canvas px-1.5 py-0.5">
+                    {editorFrameLabel}
+                  </span>
+                  <span className="rounded-full border border-hairline bg-canvas px-1.5 py-0.5">
+                    {editorMode}
+                  </span>
+                  {editorIsJsonb ? (
+                    <span className="rounded-full border border-hairline bg-canvas px-1.5 py-0.5">
+                      jsonb
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditorFieldKey(null);
+                  setEditorMode("compact");
+                }}
+                className="grid size-7 shrink-0 place-items-center rounded-full border border-hairline transition-colors hover:border-hairline-input hover:text-ink"
+                title="Close field editor"
+              >
+                <PlusIcon className="size-3.5 rotate-45" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-3">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateField(editorField.key, {
+                      visible: !((editorConfig?.visible ?? editorField.visible) !== false),
+                    })
+                  }
+                  className={cn(
+                    "inline-flex h-7 items-center justify-center gap-1 rounded-full border px-2 text-[11px] transition-colors",
+                    (editorConfig?.visible ?? editorField.visible) !== false
+                      ? "border-primary/30 bg-primary/8 text-primary"
+                      : "text-ink-muted border-hairline bg-canvas",
+                  )}
+                >
+                  {(editorConfig?.visible ?? editorField.visible) !== false ? (
+                    <EyeIcon className="size-3.5" />
+                  ) : (
+                    <EyeOffIcon className="size-3.5" />
+                  )}
+                  {(editorConfig?.visible ?? editorField.visible) !== false ? "visible" : "hidden"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateField(editorField.key, { readonlyOverride: !editorField.readonly })
+                  }
+                  className={cn(
+                    "inline-flex h-7 items-center justify-center rounded-full border px-2 text-[11px] transition-colors",
+                    editorField.readonly
+                      ? "border-primary/30 bg-primary/8 text-primary"
+                      : "text-ink-muted border-hairline bg-canvas",
+                  )}
+                >
+                  {editorField.readonly ? "readonly" : "editable"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateField(editorField.key, { requiredOverride: !editorField.required })
+                  }
+                  className={cn(
+                    "inline-flex h-7 items-center justify-center rounded-full border px-2 text-[11px] transition-colors",
+                    editorField.required
+                      ? "border-primary/30 bg-primary/8 text-primary"
+                      : "text-ink-muted border-hairline bg-canvas",
+                  )}
+                >
+                  {editorField.required ? "required" : "optional"}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {(["normal", "bold", "italic"] as const).map((style) => (
+                  <button
+                    key={style}
+                    type="button"
+                    onClick={() => updateField(editorField.key, { labelStyle: style })}
+                    className={cn(
+                      "inline-flex h-7 items-center justify-center rounded-full border px-2 text-[11px] transition-colors",
+                      (editorConfig?.labelStyle ?? "normal") === style
+                        ? "border-primary/30 bg-primary/8 text-primary"
+                        : "text-ink-muted border-hairline bg-canvas",
+                      style === "bold" && "font-semibold",
+                      style === "italic" && "italic",
+                    )}
+                  >
+                    {style}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                {(["default", "muted", "accent", "danger"] as const).map((tone) => (
+                  <button
+                    key={tone}
+                    type="button"
+                    onClick={() => updateField(editorField.key, { labelTone: tone })}
+                    className={cn(
+                      "inline-flex h-7 items-center justify-center rounded-full border px-2 text-[11px] transition-colors",
+                      (editorConfig?.labelTone ?? "default") === tone
+                        ? "border-primary/30 bg-primary/8 text-primary"
+                        : "text-ink-muted border-hairline bg-canvas",
+                      tone === "muted" && "text-ink-muted",
+                      tone === "accent" && "text-primary",
+                      tone === "danger" && "text-destructive",
+                    )}
+                  >
+                    {tone}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-ink-muted text-[10px] font-semibold tracking-wide uppercase">
+                    Label
+                  </span>
+                  <input
+                    type="text"
+                    value={fieldLabel(editorField)}
+                    onChange={(e) =>
+                      updateField(editorField.key, {
+                        labelEnOverride: e.target.value,
+                        labelDeOverride: e.target.value,
+                      })
+                    }
+                    className="h-7 rounded-md border border-hairline bg-canvas px-2 text-[12px] text-ink outline-none"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-ink-muted text-[10px] font-semibold tracking-wide uppercase">
+                    Backing path
+                  </span>
+                  <input
+                    type="text"
+                    value={editorValuePath ?? ""}
+                    onChange={(e) =>
+                      updateField(editorField.key, {
+                        path: e.target.value || null,
+                      })
+                    }
+                    className="h-7 rounded-md border border-hairline bg-canvas px-2 text-[12px] text-ink outline-none"
+                    placeholder="customAttributes.delivery.postalGroup"
+                  />
+                </label>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-ink-muted text-[10px] font-semibold tracking-wide uppercase">
+                    Source
+                  </span>
+                  <select
+                    value={editorIsJsonb ? "jsonb" : "schema"}
+                    onChange={(e) => {
+                      if (e.target.value === "jsonb") {
+                        updateField(editorField.key, {
+                          path: editorField.jsonPath ?? `customAttributes.${editorField.key}`,
+                        });
+                        return;
+                      }
+                      updateField(editorField.key, { path: null });
+                    }}
+                    className="h-7 rounded-md border border-hairline bg-canvas px-2 text-[12px] text-ink outline-none"
+                  >
+                    <option value="schema">Schema field</option>
+                    <option value="jsonb">JSONB field</option>
+                  </select>
+                </label>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-ink-muted text-[10px] font-semibold tracking-wide uppercase">
+                    Frame
+                  </span>
+                  <select
+                    value={editorFrameId}
+                    onChange={(e) => moveFieldToFrame(editorField.key, e.target.value)}
+                    className="h-7 rounded-md border border-hairline bg-canvas px-2 text-[12px] text-ink outline-none"
+                  >
+                    {frameNodes.map((frame) => (
+                      <option key={frame.id} value={frame.id}>
+                        {frame.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-ink-muted text-[10px] font-semibold tracking-wide uppercase">
+                    Source
+                  </span>
+                  <select
+                    value={editorIsJsonb ? "jsonb" : "schema"}
+                    onChange={(e) => {
+                      if (e.target.value === "jsonb") {
+                        updateField(editorField.key, {
+                          path: editorField.jsonPath ?? `customAttributes.${editorField.key}`,
+                        });
+                        return;
+                      }
+                      updateField(editorField.key, { path: null });
+                    }}
+                    className="h-7 rounded-md border border-hairline bg-canvas px-2 text-[12px] text-ink outline-none"
+                  >
+                    <option value="schema">Schema field</option>
+                    <option value="jsonb">JSONB field</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => moveFieldToStart(editorField.key, editorFrameId)}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-hairline px-2 text-[11px] transition-colors disabled:opacity-40"
+                >
+                  Move first
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveFieldToEnd(editorField.key, editorFrameId)}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-hairline px-2 text-[11px] transition-colors disabled:opacity-40"
+                >
+                  Move end
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editorIndex > 0) {
+                      const previous = editorSiblings[editorIndex - 1];
+                      if (previous) moveField(editorField.key, previous.key);
+                    }
+                  }}
+                  disabled={editorIndex <= 0}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-dashed border-hairline px-2 text-[11px] transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  Move up
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = editorSiblings[editorIndex + 1];
+                    if (next) moveField(editorField.key, next.key);
+                  }}
+                  disabled={editorIndex < 0 || editorIndex >= editorSiblings.length - 1}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-dashed border-hairline px-2 text-[11px] transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  Move down
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addFieldDraft("New field", editorFrameId)}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-dashed border-hairline px-2 text-[11px] transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  + Field
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => addFrameDraft()}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-dashed border-hairline px-2 text-[11px] transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  + Frame
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeFieldDraft(editorField.key)}
+                  className="inline-flex h-7 items-center justify-center rounded-full border border-hairline px-2 text-[11px] text-destructive transition-colors hover:border-destructive/35 hover:bg-destructive/5"
+                >
+                  Remove field
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => removeFrameDraft(editorFrameId)}
+                  className="inline-flex h-7 items-center justify-center rounded-full border border-hairline px-2 text-[11px] text-destructive transition-colors hover:border-destructive/35 hover:bg-destructive/5"
+                >
+                  Remove frame
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateField(editorField.key, {
+                      labelStyle: cycleLabelStyle(editorConfig?.labelStyle),
+                      labelTone: cycleLabelTone(editorConfig?.labelTone),
+                    });
+                  }}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-hairline px-2 text-[11px] transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  Cycle style
+                </button>
+              </div>
+              <div className="text-ink-muted text-[10px]">
+                {editorField.jsonPath ? "JSONB editing enabled" : "Schema-bound field"}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   const childSectionNode = hasChildContent ? (
     <div className="mt-4 border-t border-hairline pt-4">
@@ -806,6 +1326,7 @@ export function EntityMask({
         {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
         <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
         {fieldsGrid}
+        {editorOverlay}
         {childSectionNode}
         {footer}
       </div>
@@ -816,7 +1337,7 @@ export function EntityMask({
     return (
       <div ref={formRef} className={cn("flex h-full flex-col overflow-hidden", className)}>
         <div className="flex min-h-0 flex-1 divide-x divide-hairline overflow-hidden">
-          <div className="w-[35%] shrink-0 overflow-y-auto bg-canvas-soft/30 p-6">
+          <div className="w-[40%] shrink-0 overflow-y-auto bg-canvas-soft/30 p-6">
             {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
             <p className="mb-4 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
             {globalError && (
@@ -826,6 +1347,7 @@ export function EntityMask({
               </div>
             )}
             {fieldsGrid}
+            {editorOverlay}
           </div>
           <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
             {childSection!(formData as Record<string, unknown>, handleChange)}
@@ -842,6 +1364,7 @@ export function EntityMask({
         {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
         <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
         {fieldsGrid}
+        {editorOverlay}
         {childSectionNode}
         {footer}
       </div>
@@ -853,6 +1376,7 @@ export function EntityMask({
       {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
       <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
       {fieldsGrid}
+      {editorOverlay}
       {childSectionNode}
       {footer}
     </div>

@@ -24,32 +24,34 @@ export function TriViewWorkspace({
 
   return (
     <div className={cn("flex h-full w-full bg-canvas", className)}>
-      <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
-        <ResizablePanel
-          defaultSize={defaultLayout[0]}
-          minSize="200px"
-          maxSize="50%"
-          className="bg-canvas-soft"
-        >
-          <div className="h-full w-full overflow-auto">{navigationTree}</div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={defaultLayout[1]}>
-          {hasDependentContext ? (
-            <ResizablePanelGroup orientation="vertical">
-              <ResizablePanel defaultSize={defaultRightLayout[0]} minSize="25%">
-                <div className="h-full w-full overflow-hidden">{primaryGrid}</div>
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={defaultRightLayout[1]} minSize="20%">
-                <div className="h-full w-full overflow-hidden">{dependentContext}</div>
-              </ResizablePanel>
-            </ResizablePanelGroup>
-          ) : (
-            <div className="h-full w-full overflow-hidden">{primaryGrid}</div>
-          )}
-        </ResizablePanel>
-      </ResizablePanelGroup>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ResizablePanelGroup orientation="horizontal" className="min-h-0 w-full flex-1">
+          <ResizablePanel
+            defaultSize={defaultLayout[0]}
+            minSize="200px"
+            maxSize="50%"
+            className="bg-canvas-soft"
+          >
+            <div className="h-full w-full overflow-auto">{navigationTree}</div>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={defaultLayout[1]}>
+            {hasDependentContext ? (
+              <ResizablePanelGroup orientation="vertical">
+                <ResizablePanel defaultSize={defaultRightLayout[0]} minSize="25%">
+                  <div className="h-full w-full overflow-hidden">{primaryGrid}</div>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={defaultRightLayout[1]} minSize="20%">
+                  <div className="h-full w-full overflow-hidden">{dependentContext}</div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            ) : (
+              <div className="h-full w-full overflow-hidden">{primaryGrid}</div>
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
     </div>
   );
 }

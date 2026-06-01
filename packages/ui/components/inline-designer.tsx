@@ -285,7 +285,7 @@ export function InlineDesigner() {
                       : t("designer.editable", "editable"),
                     node.required
                       ? t("designer.required", "required")
-                      : t("designer.optional", "optional"),
+                      : t("designer.notRequired", "not required"),
                   ].join(" · ")}
                 />
                 <InfoRow
@@ -298,6 +298,16 @@ export function InlineDesigner() {
                   value={node.versionInfo.clientRevision}
                   mono
                 />
+                {node.path ? (
+                  <InfoRow label={t("designer.node.path", "Path")} value={node.path} mono />
+                ) : null}
+                {node.styleTokenBinding ? (
+                  <InfoRow
+                    label={t("designer.node.style", "Style")}
+                    value={node.styleTokenBinding}
+                    mono
+                  />
+                ) : null}
                 <InfoRow
                   label={t("designer.node.base", "Base")}
                   value={node.versionInfo.baseVersion ?? t("designer.node.none", "none")}

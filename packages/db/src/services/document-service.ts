@@ -732,6 +732,52 @@ async function loadActiveDocumentLines(
     .orderBy(asc(documentLine.lineNo));
 }
 
+async function recalculateDocumentTotals(
+  tx: any,
+  tenantId: string,
+  documentId: string,
+): Promise<{ totalNet: string; totalTax: string; totalGross: string }> {
+  const [totals] = await tx
+    .select({
+      totalNet: sql<string>`coalesce(sum(coalesce(${documentLine.lineTotalNet}, 0)), 0)`,
+      totalTax: sql<string>`coalesce(sum(coalesce(${documentLine.taxAmount}, 0)), 0)`,
+      totalGross: sql<string>`coalesce(sum(coalesce(${documentLine.lineTotalNet}, 0) + coalesce(${documentLine.taxAmount}, 0)), 0)`,
+    })
+    .from(documentLine)
+    .where(
+      and(
+        eq(documentLine.tenantId, tenantId),
+        eq(documentLine.documentId, documentId),
+        isNull(documentLine.archivedAt),
+      ),
+    );
+
+  return {
+    totalNet: totals?.totalNet ?? "0",
+    totalTax: totals?.totalTax ?? "0",
+    totalGross: totals?.totalGross ?? "0",
+  };
+}
+
+async function persistDocumentTotals(
+  tx: any,
+  tenantId: string,
+  documentId: string,
+  updatedAt: Date,
+) {
+  const totals = await recalculateDocumentTotals(tx, tenantId, documentId);
+  await tx
+    .update(document)
+    .set({
+      totalNet: totals.totalNet,
+      totalTax: totals.totalTax,
+      totalGross: totals.totalGross,
+      updatedAt,
+    })
+    .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+  return totals;
+}
+
 async function applyTrackingForMovementFromRows(
   tx: any,
   tenantId: string,
@@ -1575,7 +1621,9 @@ export class DocumentService {
       };
 
       if (!baseLine.articleId || baseLine.lineType !== "article") {
-        return await tx.insert(documentLine).values(baseLine).returning();
+        const inserted = await tx.insert(documentLine).values(baseLine).returning();
+        await persistDocumentTotals(tx, tenantId, data.documentId, new Date());
+        return inserted;
       }
 
       const [lineArticle] = await tx
@@ -1592,7 +1640,9 @@ export class DocumentService {
         lineArticle?.bomType === "production" && ["q", "p"].includes(doc.documentType);
 
       if (!shouldExpandSalesBom && !shouldExpandProductionBom) {
-        return await tx.insert(documentLine).values(baseLine).returning();
+        const inserted = await tx.insert(documentLine).values(baseLine).returning();
+        await persistDocumentTotals(tx, tenantId, data.documentId, new Date());
+        return inserted;
       }
 
       const bomHeaderLineType = shouldExpandProductionBom
@@ -1678,6 +1728,7 @@ export class DocumentService {
         )
         .returning();
 
+      await persistDocumentTotals(tx, tenantId, data.documentId, new Date());
       return [insertedHeader, ...insertedComponents];
     });
   }
@@ -2003,6 +2054,8 @@ export class DocumentService {
           updatedAt: now,
         })
         .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+
+      await persistDocumentTotals(tx, tenantId, createdDoc.documentId, now);
 
       return [createdDoc];
     });
@@ -3012,6 +3065,8 @@ export class DocumentService {
 
         if (!updatedDoc) throw new Error("Document update failed");
 
+        await persistDocumentTotals(tx, tenantId, updatedDoc.documentId, now);
+
         return {
           success: true,
           documentId: updatedDoc.documentId,
@@ -3170,6 +3225,8 @@ export class DocumentService {
       if (insertValues.length > 0) {
         await tx.insert(documentLine).values(insertValues);
       }
+
+      await persistDocumentTotals(tx, tenantId, newDoc.documentId, now);
 
       return { success: true, documentId: newDoc.documentId, documentNo: newDoc.documentNo };
     });
@@ -3508,6 +3565,8 @@ export class DocumentService {
 
         await copyDocumentLineTrackingRowsBulk(tx, tenantId, insertedLinePairs);
       }
+
+      await persistDocumentTotals(tx, tenantId, newDoc.documentId, new Date());
 
       return { documentId: newDoc.documentId, documentNo: newDoc.documentNo };
     });

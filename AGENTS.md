@@ -4,11 +4,10 @@ Codex repo instructions. Keep startup context lean: read [`map.md`](map.md) only
 
 ## Startup
 
-1. Read [`map.md`](map.md) only when necessary for fast orientation on routes, APIs, components, aliases, services, and commands.
-2. Use `.agents/` as the canonical project documentation folder. Load only the docs needed for the task.
-3. Treat `.agents/archive/` as historical context only. Do not read archived docs unless you are investigating prior decisions.
-4. Do not load `.agents/*` wholesale. Some docs are large references or historical checklists.
-5. When docs and code disagree, verify with live code using `rg`. Architecture docs define product invariants; live code defines current implementation shape.
+1. Read [`map.md`](map.md) only when you need fast orientation on routes, APIs, components, aliases, services, or commands.
+2. Use `.agents/` as the canonical documentation source, but load only the one or two docs that match the task.
+3. Never load `.agents/*` wholesale. First choose the relevant doc by task area, then verify against live code.
+4. When docs and code disagree, trust live code for implementation shape and use `rg` to verify the current state.
 
 ## Stack
 
@@ -66,16 +65,15 @@ Use this table to choose context. Prefer live code for implementation details; o
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Fast orientation                     | [`map.md`](map.md), [`.agents/decision-index.md`](.agents/decision-index.md)                                                                                                                                                                           |
 | Architecture invariants              | [`.agents/00_core_architecture.md`](.agents/00_core_architecture.md), [`.agents/01_project_foundation.md`](.agents/01_project_foundation.md), [`.agents/02_entity_introspection_and_generic_ui.md`](.agents/02_entity_introspection_and_generic_ui.md) |
-| Frontend shell, shared UI, design    | [`.agents/design.md`](.agents/design.md)                                                                                                                                                                                                               |
-| Designer Spec & Rework               | [`.agents/designer.md`](.agents/designer.md)                                                                                                                                                                                                           |
+| Frontend shell, shared UI, design    | [`.agents/design.md`](.agents/design.md), [`.agents/designer.md`](.agents/designer.md)                                                                                                                                                                 |
 | TanStack, auth, TypeScript, workflow | [`.agents/tanstack-patterns.md`](.agents/tanstack-patterns.md), [`.agents/auth.md`](.agents/auth.md), [`.agents/typescript.md`](.agents/typescript.md), [`.agents/workflow.md`](.agents/workflow.md)                                                   |
 | Database, migrations, tenancy        | [`.agents/postgres.md`](.agents/postgres.md), live Drizzle schema, and `.agents/schema.md` (index) or targeted tables under `.agents/schema/<table_name>.md`                                                                                           |
-| Feature slices                       | Open the matching active `.agents/*.md` file for the slice being changed, then verify against live code; archived slice docs live under [`.agents/archive/`](.agents/archive/)                                                                         |
+| Feature slices                       | Open the active `.agents/*.md` file for the slice being changed, then verify against live code.                                                                                                                                                        |
 
 ## Known Documentation Hygiene
 
 - Treat [`.agents/schema.md`](.agents/schema.md) as a generated reference. Read targeted table sections only.
 - Treat [`.agents/decision-index.md`](.agents/decision-index.md) as the current short-form decision summary.
 - Treat [`.agents/archive/status.md`](.agents/archive/status.md) as historical transcript unless the user explicitly asks for conversation history.
-- Treat [`.agents/archive/`](.agents/archive/) as historical-only documentation and keep it out of the default reading path.
+- Treat [`.agents/archive/`](.agents/archive/) as historical-only documentation. Do not open archived docs unless you are explicitly investigating prior decisions.
 - If a doc still references `.gemini/*`, resolve it to the equivalent `.agents/*` path.

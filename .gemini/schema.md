@@ -1,7 +1,7 @@
 # Slopware — Live Schema
 
-> Generated: 2026-05-27 12:28:13 UTC
-> Tables: 88
+> Generated: 2026-06-01 13:24:53 UTC
+> Tables: 96
 
 ## Module: uncategorized
 
@@ -201,6 +201,159 @@
 | next_val  | next_val      | integer | —     | NOT NULL, DEFAULT 1 |             |
 
 > INDEX `idx_address_seq_tenant` (tenant_id) [btree]
+
+### `ai_apply_attempt`
+
+> _⚠ pending annotation_
+
+| Column              | Business Name       | Type                     | Class | Constraints                | Description |
+| :------------------ | :------------------ | :----------------------- | :---- | :------------------------- | :---------- |
+| attempt_id          | attempt_id          | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id           | tenant_id           | uuid                     | —     | NOT NULL                   |             |
+| plan_id             | plan_id             | uuid                     | —     | NOT NULL                   |             |
+| applied_plan_json   | applied_plan_json   | jsonb                    | —     | NOT NULL                   |             |
+| status              | status              | text                     | —     | NOT NULL                   |             |
+| executed_by_user_id | executed_by_user_id | text                     | —     | NOT NULL                   |             |
+| error_logs          | error_logs          | text                     | —     |                            |             |
+| applied_at          | applied_at          | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| created_at          | created_at          | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at          | updated_at          | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_ai_apply_attempt_tenant` (tenant_id) [btree]
+> INDEX `idx_ai_apply_attempt_plan` (plan_id) [btree]
+> INDEX `idx_ai_apply_attempt_executor` (executed_by_user_id) [btree]
+> INDEX `idx_ai_apply_attempt_status` (status) [btree]
+
+### `ai_evidence`
+
+> _⚠ pending annotation_
+
+| Column           | Business Name    | Type                     | Class | Constraints                | Description |
+| :--------------- | :--------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| evidence_id      | evidence_id      | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id        | tenant_id        | uuid                     | —     | NOT NULL                   |             |
+| plan_id          | plan_id          | uuid                     | —     | NOT NULL                   |             |
+| field_name       | field_name       | text                     | —     | NOT NULL                   |             |
+| source_text      | source_text      | text                     | —     | NOT NULL                   |             |
+| match_confidence | match_confidence | numeric                  | —     | NOT NULL                   |             |
+| ambiguity_note   | ambiguity_note   | text                     | —     |                            |             |
+| archived         | archived         | boolean                  | —     | NOT NULL                   |             |
+| created_at       | created_at       | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at       | updated_at       | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_ai_evidence_tenant` (tenant_id) [btree]
+> INDEX `idx_ai_evidence_plan` (plan_id) [btree]
+> INDEX `idx_ai_evidence_field` (field_name) [btree]
+
+### `ai_interpretation`
+
+> _⚠ pending annotation_
+
+| Column                    | Business Name             | Type                     | Class | Constraints                | Description |
+| :------------------------ | :------------------------ | :----------------------- | :---- | :------------------------- | :---------- |
+| interpretation_id         | interpretation_id         | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                 | tenant_id                 | uuid                     | —     | NOT NULL                   |             |
+| source_thread_id          | source_thread_id          | uuid                     | —     |                            |             |
+| run_id                    | run_id                    | uuid                     | —     | NOT NULL                   |             |
+| prompt_version_id         | prompt_version_id         | uuid                     | —     | NOT NULL                   |             |
+| business_intent           | business_intent           | text                     | —     | NOT NULL                   |             |
+| confidence_score          | confidence_score          | numeric                  | —     | NOT NULL                   |             |
+| summary                   | summary                   | text                     | —     | NOT NULL                   |             |
+| evidence_json             | evidence_json             | jsonb                    | —     | NOT NULL                   |             |
+| extracted_references_json | extracted_references_json | jsonb                    | —     | NOT NULL                   |             |
+| requested_resolvers_json  | requested_resolvers_json  | jsonb                    | —     | NOT NULL                   |             |
+| blocking_questions_json   | blocking_questions_json   | jsonb                    | —     | NOT NULL                   |             |
+| raw_llm_trace             | raw_llm_trace             | jsonb                    | —     |                            |             |
+| created_at                | created_at                | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at                | updated_at                | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_ai_interpretation_tenant` (tenant_id) [btree]
+> INDEX `idx_ai_interpretation_run` (run_id) [btree]
+
+### `ai_plan`
+
+> _⚠ pending annotation_
+
+| Column            | Business Name     | Type                     | Class | Constraints                | Description |
+| :---------------- | :---------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| plan_id           | plan_id           | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id         | tenant_id         | uuid                     | —     | NOT NULL                   |             |
+| run_id            | run_id            | uuid                     | —     | NOT NULL                   |             |
+| prompt_version_id | prompt_version_id | uuid                     | —     | NOT NULL                   |             |
+| plan_json         | plan_json         | jsonb                    | —     | NOT NULL                   |             |
+| confidence_score  | confidence_score  | numeric                  | —     | NOT NULL                   |             |
+| apply_readiness   | apply_readiness   | text                     | —     | NOT NULL                   |             |
+| archived          | archived          | boolean                  | —     | NOT NULL                   |             |
+| created_at        | created_at        | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at        | updated_at        | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_ai_plan_tenant` (tenant_id) [btree]
+> INDEX `idx_ai_plan_run` (run_id) [btree]
+> INDEX `idx_ai_plan_prompt_version` (prompt_version_id) [btree]
+> INDEX `idx_ai_plan_readiness` (apply_readiness) [btree]
+
+### `ai_prompt_version`
+
+> _⚠ pending annotation_
+
+| Column            | Business Name     | Type                     | Class | Constraints                | Description |
+| :---------------- | :---------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| prompt_version_id | prompt_version_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id         | tenant_id         | uuid                     | —     |                            |             |
+| system_prompt     | system_prompt     | text                     | —     | NOT NULL                   |             |
+| input_schema      | input_schema      | jsonb                    | —     | NOT NULL                   |             |
+| model_config      | model_config      | jsonb                    | —     | NOT NULL                   |             |
+| archived          | archived          | boolean                  | —     | NOT NULL                   |             |
+| created_at        | created_at        | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at        | updated_at        | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_ai_prompt_version_tenant` (tenant_id) [btree]
+
+### `ai_review`
+
+> _⚠ pending annotation_
+
+| Column                      | Business Name               | Type                     | Class | Constraints                | Description |
+| :-------------------------- | :-------------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| review_id                   | review_id                   | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id                   | tenant_id                   | uuid                     | —     | NOT NULL                   |             |
+| interpretation_id           | interpretation_id           | uuid                     | —     | NOT NULL                   |             |
+| run_id                      | run_id                      | uuid                     | —     | NOT NULL                   |             |
+| review_status               | review_status               | text                     | —     | NOT NULL                   |             |
+| business_case               | business_case               | text                     | —     | NOT NULL                   |             |
+| headline                    | headline                    | text                     | —     | NOT NULL                   |             |
+| summary                     | summary                     | text                     | —     | NOT NULL                   |             |
+| intent_badge_json           | intent_badge_json           | jsonb                    | —     | NOT NULL                   |             |
+| sections_json               | sections_json               | jsonb                    | —     | NOT NULL                   |             |
+| warnings_json               | warnings_json               | jsonb                    | —     | NOT NULL                   |             |
+| blocking_issues_json        | blocking_issues_json        | jsonb                    | —     | NOT NULL                   |             |
+| proposed_apply_payload_json | proposed_apply_payload_json | jsonb                    | —     | NOT NULL                   |             |
+| applied_overrides_json      | applied_overrides_json      | jsonb                    | —     |                            |             |
+| created_at                  | created_at                  | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at                  | updated_at                  | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_ai_review_tenant` (tenant_id) [btree]
+> INDEX `idx_ai_review_interpretation` (interpretation_id) [btree]
+
+### `ai_run`
+
+> _⚠ pending annotation_
+
+| Column      | Business Name | Type                     | Class | Constraints                | Description |
+| :---------- | :------------ | :----------------------- | :---- | :------------------------- | :---------- |
+| run_id      | run_id        | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id   | tenant_id     | uuid                     | —     | NOT NULL                   |             |
+| user_id     | user_id       | text                     | —     | NOT NULL                   |             |
+| task_scope  | task_scope    | text                     | —     | NOT NULL                   |             |
+| status      | status        | text                     | —     | NOT NULL                   |             |
+| duration_ms | duration_ms   | integer                  | —     |                            |             |
+| archived    | archived      | boolean                  | —     | NOT NULL                   |             |
+| created_at  | created_at    | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at  | updated_at    | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_ai_run_tenant` (tenant_id) [btree]
+> INDEX `idx_ai_run_user` (user_id) [btree]
+> INDEX `idx_ai_run_status` (status) [btree]
 
 ### `article`
 
@@ -894,7 +1047,7 @@
 | created_at       | created_at       | timestamp with time zone | —     | NOT NULL, DEFAULT now()           |             |
 | updated_at       | updated_at       | timestamp with time zone | —     |                                   |             |
 
-> INDEX `idx_email_job_queue` (status, run_after) [btree]
+> INDEX `idx_email_job_queue_claim` (tenant_id, status, run_after, created_at) [btree]
 > INDEX `idx_email_job_account` (tenant_id, email_account_id) [btree]
 
 > CHECK `chk_email_job_type`: [object Object]
@@ -920,7 +1073,7 @@
 | created_at               | created_at               | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
 | updated_at               | updated_at               | timestamp with time zone | —     |                            |             |
 
-> INDEX `idx_email_label_account` (tenant_id, email_account_id) [btree]
+> INDEX `idx_email_label_account_active` (tenant_id, email_account_id, archived, kind, name) [btree]
 
 > CHECK `chk_email_label_kind`: [object Object]
 
@@ -955,6 +1108,7 @@
 | updated_at          | updated_at          | timestamp with time zone | —     |                                   |             |
 
 > INDEX `idx_email_message_thread` (tenant_id, email_thread_id) [btree]
+> INDEX `idx_email_message_thread_timeline` (tenant_id, email_thread_id, received_at, sent_at, created_at) [btree]
 > INDEX `idx_email_message_account_date` (tenant_id, email_account_id, received_at) [btree]
 
 > CHECK `chk_email_message_direction`: [object Object]
@@ -994,7 +1148,7 @@
 | updated_at        | updated_at        | timestamp with time zone | —     |                                   |             |
 | created_by        | created_by        | text                     | —     |                                   |             |
 
-> INDEX `idx_email_outbox_tenant_status` (tenant_id, status) [btree]
+> INDEX `idx_email_outbox_queue` (tenant_id, email_account_id, status, updated_at, created_at) [btree]
 > INDEX `idx_email_outbox_message` (tenant_id, email_message_id) [btree]
 
 > CHECK `chk_email_outbox_status`: [object Object]
@@ -1028,6 +1182,7 @@
 | :----------------- | :----------------- | :----------------------- | :---- | :------------------------- | :---------- |
 | email_template_id  | email_template_id  | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
 | tenant_id          | tenant_id          | uuid                     | —     | NOT NULL                   |             |
+| category           | category           | text                     | —     | NOT NULL, DEFAULT document |             |
 | code               | code               | text                     | —     | NOT NULL                   |             |
 | name               | name               | text                     | —     | NOT NULL                   |             |
 | subject_template   | subject_template   | text                     | —     | NOT NULL                   |             |
@@ -1038,7 +1193,7 @@
 | created_at         | created_at         | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
 | updated_at         | updated_at         | timestamp with time zone | —     |                            |             |
 
-> INDEX `idx_email_template_tenant` (tenant_id) [btree]
+> INDEX `idx_email_template_tenant` (tenant_id, category) [btree]
 
 ### `email_template_binding`
 
@@ -1099,10 +1254,11 @@
 | related_address_id  | related_address_id  | uuid                     | —     |                            |             |
 | related_document_id | related_document_id | uuid                     | —     |                            |             |
 | archived            | archived            | boolean                  | —     | NOT NULL                   |             |
+| in_trash            | in_trash            | boolean                  | —     | NOT NULL                   |             |
 | created_at          | created_at          | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
 | updated_at          | updated_at          | timestamp with time zone | —     |                            |             |
 
-> INDEX `idx_email_thread_account_date` (tenant_id, email_account_id, last_message_at) [btree]
+> INDEX `idx_email_thread_mailbox_list` (tenant_id, email_account_id, archived, last_message_at, created_at) [btree]
 > INDEX `idx_email_thread_document` (tenant_id, related_document_id) [btree]
 > INDEX `idx_email_thread_address` (tenant_id, related_address_id) [btree]
 
@@ -1878,6 +2034,30 @@
 > INDEX `uq_layouts_global` (entity_name, layout_key) [btree]
 > INDEX `uq_layouts_org` (organization_id, entity_name, layout_key) [btree]
 > INDEX `uq_layouts_tenant` (tenant_id, entity_name, layout_key) [btree]
+
+### `tenant_llm_config`
+
+> _⚠ pending annotation_
+
+| Column               | Business Name        | Type                     | Class | Constraints                | Description |
+| :------------------- | :------------------- | :----------------------- | :---- | :------------------------- | :---------- |
+| tenant_llm_config_id | tenant_llm_config_id | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
+| tenant_id            | tenant_id            | uuid                     | —     | NOT NULL                   |             |
+| company_id           | company_id           | uuid                     | —     | NOT NULL                   |             |
+| provider             | provider             | text                     | —     |                            |             |
+| endpoint_url         | endpoint_url         | text                     | —     |                            |             |
+| model                | model                | text                     | —     |                            |             |
+| api_key              | api_key              | text                     | —     |                            |             |
+| github_token         | github_token         | text                     | —     |                            |             |
+| github_repo          | github_repo          | text                     | —     |                            |             |
+| vertex_credentials   | vertex_credentials   | text                     | —     |                            |             |
+| vertex_project       | vertex_project       | text                     | —     |                            |             |
+| vertex_location      | vertex_location      | text                     | —     |                            |             |
+| is_active            | is_active            | boolean                  | —     | NOT NULL, DEFAULT true     |             |
+| created_at           | created_at           | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at           | updated_at           | timestamp with time zone | —     |                            |             |
+
+> INDEX `idx_tenant_llm_config_tenant` (tenant_id) [btree]
 
 ### `tenant_rules`
 

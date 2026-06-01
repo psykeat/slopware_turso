@@ -1329,6 +1329,20 @@ function DocumentsModule() {
     [activeDocumentId, queryClient],
   );
 
+  const openDocumentFromAi = useCallback((event: Event) => {
+    const documentId = (event as CustomEvent<{ documentId?: string }>).detail?.documentId;
+    if (!documentId) return;
+    documentRestoreIdRef.current = undefined;
+    setActiveDocumentId(documentId);
+    setEditorGroupId(undefined);
+    setEditorDocId(documentId);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("slopware:open-document", openDocumentFromAi);
+    return () => window.removeEventListener("slopware:open-document", openDocumentFromAi);
+  }, [openDocumentFromAi]);
+
   // Register context commands
   useEffect(() => {
     if (editorDocId) return;

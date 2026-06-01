@@ -43,6 +43,7 @@ export interface EmailProviderAdapter {
     changes: { addProviderLabelIds?: string[]; removeProviderLabelIds?: string[] },
   ): Promise<void>;
   markRead(credentialsEncrypted: string, providerMessageId: string, read: boolean): Promise<void>;
+  moveToTrash(credentialsEncrypted: string, providerMessageId: string): Promise<void>;
   fetchAttachment(
     credentialsEncrypted: string,
     providerMessageId: string,

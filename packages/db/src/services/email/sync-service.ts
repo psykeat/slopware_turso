@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, ilike } from "drizzle-orm";
 
 import { db } from "../../index";
 import {
@@ -59,7 +59,10 @@ export class EmailSyncService {
     options: {
       accountId?: string | null;
       labelId?: string | null;
+      folder?: string | null;
+      search?: string | null;
       limit?: number;
+      offset?: number;
     } = {},
   ) {
     const accounts = await new EmailAccountService(this.tenantId, this.userId).listAccounts();
@@ -95,7 +98,14 @@ export class EmailSyncService {
 
     const conditions = [
       eq(emailThread.tenantId, this.tenantId),
-      eq(emailThread.archived, false),
+      options.folder === "trash"
+        ? eq(emailThread.inTrash, true)
+        : and(
+            eq(emailThread.inTrash, false),
+            options.folder === "archive"
+              ? eq(emailThread.archived, true)
+              : eq(emailThread.archived, false),
+          ),
       options.accountId
         ? eq(emailThread.emailAccountId, options.accountId)
         : inArray(emailThread.emailAccountId, accountIds),
@@ -104,12 +114,264 @@ export class EmailSyncService {
       conditions.push(inArray(emailThread.emailThreadId, threadIdsWithLabel));
     }
 
-    return await db
+    if (options.folder === "drafts") {
+      const draftLabelRows = await db
+        .select({ emailLabelId: emailLabel.emailLabelId })
+        .from(emailLabel)
+        .where(
+          and(
+            eq(emailLabel.tenantId, this.tenantId),
+            options.accountId ? eq(emailLabel.emailAccountId, options.accountId) : undefined,
+            or(
+              ilike(emailLabel.name, "draft%"),
+              ilike(emailLabel.name, "entwurf%"),
+              ilike(emailLabel.name, "entwürfe%"),
+              ilike(emailLabel.providerLabelId, "draft%"),
+            ),
+          ),
+        );
+      const draftLabelIds = draftLabelRows.map((r) => r.emailLabelId);
+
+      const draftConditions = [eq(emailMessage.direction, "draft")];
+      if (draftLabelIds.length > 0) {
+        draftConditions.push(inArray(emailMessageLabel.emailLabelId, draftLabelIds));
+      }
+
+      const rows = await db
+        .selectDistinct({
+          emailThreadId: emailMessage.emailThreadId,
+        })
+        .from(emailMessage)
+        .leftJoin(
+          emailMessageLabel,
+          and(
+            eq(emailMessageLabel.tenantId, this.tenantId),
+            eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
+          ),
+        )
+        .where(
+          and(
+            eq(emailMessage.tenantId, this.tenantId),
+            options.accountId ? eq(emailMessage.emailAccountId, options.accountId) : undefined,
+            or(...draftConditions),
+          ),
+        );
+      const draftThreadIds = rows.map((r) => r.emailThreadId);
+      if (draftThreadIds.length === 0) return [];
+      conditions.push(inArray(emailThread.emailThreadId, draftThreadIds));
+    } else if (options.folder === "sent") {
+      const sentLabelRows = await db
+        .select({ emailLabelId: emailLabel.emailLabelId })
+        .from(emailLabel)
+        .where(
+          and(
+            eq(emailLabel.tenantId, this.tenantId),
+            options.accountId ? eq(emailLabel.emailAccountId, options.accountId) : undefined,
+            or(
+              ilike(emailLabel.name, "sent%"),
+              ilike(emailLabel.name, "gesendet%"),
+              ilike(emailLabel.providerLabelId, "sent%"),
+            ),
+          ),
+        );
+      const sentLabelIds = sentLabelRows.map((r) => r.emailLabelId);
+
+      const sentConditions = [eq(emailMessage.direction, "outbound")];
+      if (sentLabelIds.length > 0) {
+        sentConditions.push(inArray(emailMessageLabel.emailLabelId, sentLabelIds));
+      }
+
+      const rows = await db
+        .selectDistinct({
+          emailThreadId: emailMessage.emailThreadId,
+        })
+        .from(emailMessage)
+        .leftJoin(
+          emailMessageLabel,
+          and(
+            eq(emailMessageLabel.tenantId, this.tenantId),
+            eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
+          ),
+        )
+        .where(
+          and(
+            eq(emailMessage.tenantId, this.tenantId),
+            options.accountId ? eq(emailMessage.emailAccountId, options.accountId) : undefined,
+            or(...sentConditions),
+          ),
+        );
+      const sentThreadIds = rows.map((r) => r.emailThreadId);
+      if (sentThreadIds.length === 0) return [];
+      conditions.push(inArray(emailThread.emailThreadId, sentThreadIds));
+    } else if (options.folder === "inbox") {
+      const inboxLabelRows = await db
+        .select({ emailLabelId: emailLabel.emailLabelId })
+        .from(emailLabel)
+        .where(
+          and(
+            eq(emailLabel.tenantId, this.tenantId),
+            options.accountId ? eq(emailLabel.emailAccountId, options.accountId) : undefined,
+            or(
+              ilike(emailLabel.name, "inbox"),
+              ilike(emailLabel.name, "posteingang"),
+              ilike(emailLabel.providerLabelId, "inbox"),
+            ),
+          ),
+        );
+      const inboxLabelIds = inboxLabelRows.map((r) => r.emailLabelId);
+
+      const inboxConditions = [eq(emailMessage.direction, "inbound")];
+      if (inboxLabelIds.length > 0) {
+        inboxConditions.push(inArray(emailMessageLabel.emailLabelId, inboxLabelIds));
+      }
+
+      const rows = await db
+        .selectDistinct({
+          emailThreadId: emailMessage.emailThreadId,
+        })
+        .from(emailMessage)
+        .leftJoin(
+          emailMessageLabel,
+          and(
+            eq(emailMessageLabel.tenantId, this.tenantId),
+            eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
+          ),
+        )
+        .where(
+          and(
+            eq(emailMessage.tenantId, this.tenantId),
+            options.accountId ? eq(emailMessage.emailAccountId, options.accountId) : undefined,
+            or(...inboxConditions),
+          ),
+        );
+      const inboxThreadIds = rows.map((r) => r.emailThreadId);
+      if (inboxThreadIds.length === 0) return [];
+      conditions.push(inArray(emailThread.emailThreadId, inboxThreadIds));
+    }
+
+    if (options.search) {
+      conditions.push(
+        or(
+          ilike(emailThread.subject, `%${options.search}%`),
+          ilike(emailThread.snippet, `%${options.search}%`),
+        ),
+      );
+    }
+
+    const query = db
       .select()
       .from(emailThread)
       .where(and(...conditions))
       .orderBy(desc(emailThread.lastMessageAt), desc(emailThread.createdAt))
       .limit(options.limit ?? 50);
+
+    if (options.offset !== undefined) {
+      query.offset(options.offset);
+    }
+
+    const threads = await query;
+    if (threads.length === 0) return [];
+
+    const threadIds = threads.map((t) => t.emailThreadId);
+
+    // Fetch messages to derive senders and attachment indicators
+    const messages = await db
+      .select({
+        emailThreadId: emailMessage.emailThreadId,
+        fromJson: emailMessage.fromJson,
+        direction: emailMessage.direction,
+        hasAttachments: emailMessage.hasAttachments,
+      })
+      .from(emailMessage)
+      .where(
+        and(
+          eq(emailMessage.tenantId, this.tenantId),
+          inArray(emailMessage.emailThreadId, threadIds),
+        ),
+      )
+      .orderBy(emailMessage.receivedAt, emailMessage.sentAt, emailMessage.createdAt);
+
+    // Fetch distinct labels for these threads
+    const threadLabels = await db
+      .select({
+        emailThreadId: emailMessage.emailThreadId,
+        emailLabelId: emailLabel.emailLabelId,
+        providerLabelId: emailLabel.providerLabelId,
+        name: emailLabel.name,
+        color: emailLabel.color,
+        kind: emailLabel.kind,
+      })
+      .from(emailMessageLabel)
+      .innerJoin(
+        emailMessage,
+        and(
+          eq(emailMessage.tenantId, this.tenantId),
+          eq(emailMessage.emailMessageId, emailMessageLabel.emailMessageId),
+        ),
+      )
+      .innerJoin(
+        emailLabel,
+        and(
+          eq(emailLabel.tenantId, this.tenantId),
+          eq(emailLabel.emailLabelId, emailMessageLabel.emailLabelId),
+        ),
+      )
+      .where(
+        and(
+          eq(emailMessageLabel.tenantId, this.tenantId),
+          inArray(emailMessage.emailThreadId, threadIds),
+        ),
+      );
+
+    const getSenderName = (fromJson: any, direction: string) => {
+      if (direction === "outbound" || direction === "draft") return "me";
+      if (!fromJson || typeof fromJson !== "object") return "Unknown";
+      const name = fromJson.name || fromJson.displayName;
+      if (name && typeof name === "string") return name.trim();
+      const email = fromJson.email;
+      if (email && typeof email === "string") return email;
+      return "Unknown";
+    };
+
+    return threads.map((t) => {
+      const threadMessages = messages.filter((m) => m.emailThreadId === t.emailThreadId);
+      const senders: string[] = [];
+      let hasAttachments = false;
+
+      for (const msg of threadMessages) {
+        const name = getSenderName(msg.fromJson, msg.direction);
+        if (!senders.includes(name)) {
+          senders.push(name);
+        }
+        if (msg.hasAttachments) {
+          hasAttachments = true;
+        }
+      }
+
+      const senderDisplay = senders.join(", ") || "Unknown";
+
+      const labels = threadLabels
+        .filter((l) => l.emailThreadId === t.emailThreadId)
+        .reduce((acc, curr) => {
+          if (!acc.some((x) => x.emailLabelId === curr.emailLabelId)) {
+            acc.push({
+              emailLabelId: curr.emailLabelId,
+              providerLabelId: curr.providerLabelId,
+              name: curr.name,
+              color: curr.color,
+              kind: curr.kind,
+            });
+          }
+          return acc;
+        }, [] as any[]);
+
+      return {
+        ...t,
+        senderDisplay,
+        hasAttachments,
+        labels,
+      };
+    });
   }
 
   async listLabels(accountId: string) {
@@ -395,6 +657,35 @@ export class EmailSyncService {
     await db
       .update(emailThread)
       .set({ archived: true, updatedAt: new Date() })
+      .where(and(eq(emailThread.tenantId, this.tenantId), eq(emailThread.emailThreadId, threadId)));
+    return { ok: true };
+  }
+
+  async trashThread(threadId: string) {
+    const thread = await this.getThread(threadId);
+    if (!thread) return null;
+    await this.accountService.assertGrant(thread.emailAccountId, "read");
+
+    // Sicherheits-Check: Verhindere Löschen, wenn mit ERP-Daten verknüpft
+    if (thread.relatedDocumentId || thread.relatedAddressId) {
+      throw new Error(
+        "Dieser Thread ist mit ERP-Daten verknüpft und kann nicht gelöscht werden. Lösen Sie zuerst die Verknüpfung im Inspector.",
+      );
+    }
+
+    const account = await this.accountService.getAccountForProvider(
+      thread.emailAccountId,
+      "manage",
+    );
+    if (!account) return null;
+    const adapter = createEmailProviderAdapter(account.provider as any);
+    for (const message of thread.messages) {
+      await adapter.moveToTrash(account.credentialsEncrypted, message.providerMessageId);
+    }
+    await this.persistUpdatedCredentials(account.emailAccountId, adapter);
+    await db
+      .update(emailThread)
+      .set({ archived: false, inTrash: true, updatedAt: new Date() })
       .where(and(eq(emailThread.tenantId, this.tenantId), eq(emailThread.emailThreadId, threadId)));
     return { ok: true };
   }

@@ -6,6 +6,25 @@ import { eq, and } from "drizzle-orm";
 
 import { decrypt } from "../admin/llm-config";
 
+function inferProvider(model: string, provider?: string): string {
+  if (model.startsWith("vertex_ai/")) return "vertex_ai";
+  if (model.startsWith("gemini/")) return "google_ai_studio";
+  if (provider) return provider;
+  return "openai";
+}
+
+async function readLlmError(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text) as Record<string, unknown>;
+    if (typeof data.detail === "string") return data.detail;
+    if (typeof data.error === "string") return data.error;
+  } catch {
+    // fall through
+  }
+  return text || `HTTP ${res.status}`;
+}
+
 export const Route = createFileRoute("/api/feedback/submit")({
   server: {
     handlers: {
@@ -32,19 +51,26 @@ export const Route = createFileRoute("/api/feedback/submit")({
         }
 
         const storedConfig = configRow[0].value as {
+          provider?: string;
           endpointUrl: string;
           model: string;
           apiKey: string;
+          vertexCredentials?: string;
           githubToken: string;
           githubRepo: string; // format: "owner/repo"
+          vertexProject?: string;
+          vertexLocation?: string;
         };
 
         // Decrypt secrets before use
         const llmConfig = {
           ...storedConfig,
           apiKey: decrypt(storedConfig.apiKey ?? ""),
+          vertexCredentials: decrypt(storedConfig.vertexCredentials ?? ""),
           githubToken: decrypt(storedConfig.githubToken ?? ""),
+          provider: inferProvider(storedConfig.model ?? "", storedConfig.provider),
         };
+        const gatewayUrl = llmConfig.endpointUrl || "http://localhost:11435";
 
         // 2. Build LLM prompt
         const prompt = `You are an ERP system issue tracker. Based on this context and user report, write a GitHub issue.
@@ -62,29 +88,39 @@ User says: ${body.description}`;
         // 3. Call LiteLLM microservice
         let issueData: { title: string; body: string; label: string };
         try {
-          const llmRes = await fetch(`${llmConfig.endpointUrl}/complete`, {
+          const llmRes = await fetch(`${gatewayUrl}/complete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               prompt,
               model: llmConfig.model,
-              endpoint_url: llmConfig.endpointUrl,
+              endpoint_url: gatewayUrl,
+              provider: llmConfig.provider,
+              api_key: llmConfig.apiKey || undefined,
+              vertex_credentials: llmConfig.vertexCredentials || undefined,
+              vertex_project: llmConfig.vertexProject || undefined,
+              vertex_location: llmConfig.vertexLocation || undefined,
             }),
           });
-          if (!llmRes.ok) throw new Error("LLM call failed");
+          if (!llmRes.ok) {
+            throw new Error(await readLlmError(llmRes));
+          }
           const llmBody = (await llmRes.json()) as { content: string };
           issueData = JSON.parse(llmBody.content) as {
             title: string;
             body: string;
             label: string;
           };
-        } catch {
+        } catch (error) {
           // Fallback: use description directly as issue title
           issueData = {
             title: body.description.slice(0, 80),
             body: `**User Report:**\n${body.description}\n\n**Context:**\n\`\`\`json\n${JSON.stringify(body.snapshot, null, 2)}\n\`\`\``,
             label: "bug",
           };
+          if (error instanceof Error) {
+            issueData.body += `\n\n**LLM error:** ${error.message}`;
+          }
         }
 
         // 4. Create GitHub issue

@@ -71,11 +71,13 @@ import { Route as ApiDocumentsDocumentIdDeltaRouteImport } from './routes/api/do
 import { Route as ApiDocumentsDocumentIdDeleteRouteImport } from './routes/api/documents/$documentId/delete'
 import { Route as ApiDocumentsDocumentIdConvertRouteImport } from './routes/api/documents/$documentId/convert'
 import { Route as ApiDocumentsDocumentIdAuditRouteImport } from './routes/api/documents/$documentId/audit'
+import { Route as ApiDataTenantLlmConfigTestRouteImport } from './routes/api/data/tenantLlmConfig.test'
 import { Route as ApiArticlesArticleIdSerialNumbersRouteImport } from './routes/api/articles/$articleId/serial-numbers'
 import { Route as ApiArticlesArticleIdPricingRouteImport } from './routes/api/articles/$articleId/pricing'
 import { Route as ApiArticlesArticleIdImagesRouteImport } from './routes/api/articles/$articleId/images'
 import { Route as ApiArticlesArticleIdBomRouteImport } from './routes/api/articles/$articleId/bom'
 import { Route as ApiArticlesArticleIdBatchesRouteImport } from './routes/api/articles/$articleId/batches'
+import { Route as ApiAdminLlmConfigTestRouteImport } from './routes/api/admin/llm-config.test'
 import { Route as ApiAdminDocumentGroupsIdRouteImport } from './routes/api/admin/document-groups/$id'
 import { Route as ApiAdminDataSplatRouteImport } from './routes/api/admin/data/$'
 import { Route as ApiAccountingBatchesBatchIdRouteImport } from './routes/api/accounting/batches/$batchId'
@@ -420,6 +422,12 @@ const ApiDocumentsDocumentIdAuditRoute =
     path: '/api/documents/$documentId/audit',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiDataTenantLlmConfigTestRoute =
+  ApiDataTenantLlmConfigTestRouteImport.update({
+    id: '/api/data/tenantLlmConfig/test',
+    path: '/api/data/tenantLlmConfig/test',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiArticlesArticleIdSerialNumbersRoute =
   ApiArticlesArticleIdSerialNumbersRouteImport.update({
     id: '/api/articles/$articleId/serial-numbers',
@@ -449,6 +457,11 @@ const ApiArticlesArticleIdBatchesRoute =
     path: '/api/articles/$articleId/batches',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAdminLlmConfigTestRoute = ApiAdminLlmConfigTestRouteImport.update({
+  id: '/test',
+  path: '/test',
+  getParentRoute: () => ApiAdminLlmConfigRoute,
+} as any)
 const ApiAdminDocumentGroupsIdRoute =
   ApiAdminDocumentGroupsIdRouteImport.update({
     id: '/api/admin/document-groups/$id',
@@ -574,7 +587,7 @@ export interface FileRoutesByFullPath {
   '/api/accounting/batches': typeof ApiAccountingBatchesRouteWithChildren
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
-  '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
   '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -605,11 +618,13 @@ export interface FileRoutesByFullPath {
   '/api/accounting/batches/$batchId': typeof ApiAccountingBatchesBatchIdRouteWithChildren
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
+  '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
   '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
+  '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
   '/api/documents/$documentId/audit': typeof ApiDocumentsDocumentIdAuditRoute
   '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
   '/api/documents/$documentId/delete': typeof ApiDocumentsDocumentIdDeleteRoute
@@ -657,7 +672,7 @@ export interface FileRoutesByTo {
   '/api/accounting/batches': typeof ApiAccountingBatchesRouteWithChildren
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
-  '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
   '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -688,11 +703,13 @@ export interface FileRoutesByTo {
   '/api/accounting/batches/$batchId': typeof ApiAccountingBatchesBatchIdRouteWithChildren
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
+  '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
   '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
+  '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
   '/api/documents/$documentId/audit': typeof ApiDocumentsDocumentIdAuditRoute
   '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
   '/api/documents/$documentId/delete': typeof ApiDocumentsDocumentIdDeleteRoute
@@ -745,7 +762,7 @@ export interface FileRoutesById {
   '/api/accounting/batches': typeof ApiAccountingBatchesRouteWithChildren
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
-  '/api/admin/llm-config': typeof ApiAdminLlmConfigRoute
+  '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
   '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -776,11 +793,13 @@ export interface FileRoutesById {
   '/api/accounting/batches/$batchId': typeof ApiAccountingBatchesBatchIdRouteWithChildren
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
+  '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
   '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
+  '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
   '/api/documents/$documentId/audit': typeof ApiDocumentsDocumentIdAuditRoute
   '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
   '/api/documents/$documentId/delete': typeof ApiDocumentsDocumentIdDeleteRoute
@@ -863,11 +882,13 @@ export interface FileRouteTypes {
     | '/api/accounting/batches/$batchId'
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
+    | '/api/admin/llm-config/test'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
     | '/api/articles/$articleId/images'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
+    | '/api/data/tenantLlmConfig/test'
     | '/api/documents/$documentId/audit'
     | '/api/documents/$documentId/convert'
     | '/api/documents/$documentId/delete'
@@ -946,11 +967,13 @@ export interface FileRouteTypes {
     | '/api/accounting/batches/$batchId'
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
+    | '/api/admin/llm-config/test'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
     | '/api/articles/$articleId/images'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
+    | '/api/data/tenantLlmConfig/test'
     | '/api/documents/$documentId/audit'
     | '/api/documents/$documentId/convert'
     | '/api/documents/$documentId/delete'
@@ -1033,11 +1056,13 @@ export interface FileRouteTypes {
     | '/api/accounting/batches/$batchId'
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
+    | '/api/admin/llm-config/test'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
     | '/api/articles/$articleId/images'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
+    | '/api/data/tenantLlmConfig/test'
     | '/api/documents/$documentId/audit'
     | '/api/documents/$documentId/convert'
     | '/api/documents/$documentId/delete'
@@ -1079,7 +1104,7 @@ export interface RootRouteChildren {
   ApiAccountingBatchesRoute: typeof ApiAccountingBatchesRouteWithChildren
   ApiAddressesSearchRoute: typeof ApiAddressesSearchRoute
   ApiAdminCyclesRoute: typeof ApiAdminCyclesRoute
-  ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRoute
+  ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRouteWithChildren
   ApiAiSplatRoute: typeof ApiAiSplatRoute
   ApiArticlesSearchRoute: typeof ApiArticlesSearchRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -1109,6 +1134,7 @@ export interface RootRouteChildren {
   ApiArticlesArticleIdImagesRoute: typeof ApiArticlesArticleIdImagesRoute
   ApiArticlesArticleIdPricingRoute: typeof ApiArticlesArticleIdPricingRoute
   ApiArticlesArticleIdSerialNumbersRoute: typeof ApiArticlesArticleIdSerialNumbersRoute
+  ApiDataTenantLlmConfigTestRoute: typeof ApiDataTenantLlmConfigTestRoute
   ApiDocumentsDocumentIdAuditRoute: typeof ApiDocumentsDocumentIdAuditRoute
   ApiDocumentsDocumentIdConvertRoute: typeof ApiDocumentsDocumentIdConvertRoute
   ApiDocumentsDocumentIdDeleteRoute: typeof ApiDocumentsDocumentIdDeleteRoute
@@ -1562,6 +1588,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDocumentsDocumentIdAuditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/data/tenantLlmConfig/test': {
+      id: '/api/data/tenantLlmConfig/test'
+      path: '/api/data/tenantLlmConfig/test'
+      fullPath: '/api/data/tenantLlmConfig/test'
+      preLoaderRoute: typeof ApiDataTenantLlmConfigTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/articles/$articleId/serial-numbers': {
       id: '/api/articles/$articleId/serial-numbers'
       path: '/api/articles/$articleId/serial-numbers'
@@ -1596,6 +1629,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/articles/$articleId/batches'
       preLoaderRoute: typeof ApiArticlesArticleIdBatchesRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/llm-config/test': {
+      id: '/api/admin/llm-config/test'
+      path: '/test'
+      fullPath: '/api/admin/llm-config/test'
+      preLoaderRoute: typeof ApiAdminLlmConfigTestRouteImport
+      parentRoute: typeof ApiAdminLlmConfigRoute
     }
     '/api/admin/document-groups/$id': {
       id: '/api/admin/document-groups/$id'
@@ -1844,6 +1884,17 @@ const ApiAccountingBatchesRouteChildren: ApiAccountingBatchesRouteChildren = {
 const ApiAccountingBatchesRouteWithChildren =
   ApiAccountingBatchesRoute._addFileChildren(ApiAccountingBatchesRouteChildren)
 
+interface ApiAdminLlmConfigRouteChildren {
+  ApiAdminLlmConfigTestRoute: typeof ApiAdminLlmConfigTestRoute
+}
+
+const ApiAdminLlmConfigRouteChildren: ApiAdminLlmConfigRouteChildren = {
+  ApiAdminLlmConfigTestRoute: ApiAdminLlmConfigTestRoute,
+}
+
+const ApiAdminLlmConfigRouteWithChildren =
+  ApiAdminLlmConfigRoute._addFileChildren(ApiAdminLlmConfigRouteChildren)
+
 interface ApiImportBatchesBatchIdRouteChildren {
   ApiImportBatchesBatchIdApproveRoute: typeof ApiImportBatchesBatchIdApproveRoute
   ApiImportBatchesBatchIdPostRoute: typeof ApiImportBatchesBatchIdPostRoute
@@ -1939,7 +1990,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAccountingBatchesRoute: ApiAccountingBatchesRouteWithChildren,
   ApiAddressesSearchRoute: ApiAddressesSearchRoute,
   ApiAdminCyclesRoute: ApiAdminCyclesRoute,
-  ApiAdminLlmConfigRoute: ApiAdminLlmConfigRoute,
+  ApiAdminLlmConfigRoute: ApiAdminLlmConfigRouteWithChildren,
   ApiAiSplatRoute: ApiAiSplatRoute,
   ApiArticlesSearchRoute: ApiArticlesSearchRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
@@ -1971,6 +2022,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiArticlesArticleIdPricingRoute: ApiArticlesArticleIdPricingRoute,
   ApiArticlesArticleIdSerialNumbersRoute:
     ApiArticlesArticleIdSerialNumbersRoute,
+  ApiDataTenantLlmConfigTestRoute: ApiDataTenantLlmConfigTestRoute,
   ApiDocumentsDocumentIdAuditRoute: ApiDocumentsDocumentIdAuditRoute,
   ApiDocumentsDocumentIdConvertRoute: ApiDocumentsDocumentIdConvertRoute,
   ApiDocumentsDocumentIdDeleteRoute: ApiDocumentsDocumentIdDeleteRoute,

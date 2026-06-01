@@ -19,7 +19,10 @@ type EmailThreadDetail = {
 
 type AddressOption = {
   addressId: string;
-  name?: string | null;
+  addressNo?: string | null;
+  companyName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   city?: string | null;
 };
 
@@ -87,6 +90,21 @@ Body: ${message.bodyText || htmlToText(message.bodyHtml || "")}`,
 
         const planData = await res.json();
         if (cancelled) return;
+
+        if (planData && planData.planJson) {
+          const rawSteps =
+            planData.planJson.steps ||
+            planData.planJson.executionPlan ||
+            planData.planJson.plan ||
+            [];
+          planData.planJson.steps = rawSteps.map((s: any, idx: number) => ({
+            ...s,
+            stepIndex: s.stepIndex ?? s.stepId ?? s.step ?? idx + 1,
+            actionType: s.actionType || s.type || s.action,
+            commandPayload: s.commandPayload || s.commandInput || s.parameters,
+          }));
+        }
+
         setPlanResult(planData);
 
         const steps = planData?.planJson?.steps || [];
@@ -131,6 +149,15 @@ Body: ${message.bodyText || htmlToText(message.bodyHtml || "")}`,
             selectedMatchId: selectedAddressId || undefined,
           };
         }
+        if (step.actionType === "LOOKUP" && step.entityName === "document") {
+          return {
+            ...step,
+            selectedMatchId:
+              step.selectedMatchId ||
+              (step.candidateMatches && step.candidateMatches[0]?.id) ||
+              undefined,
+          };
+        }
         if (
           step.actionType === "EXECUTE_COMMAND" &&
           step.commandKey === "create-document-draft-from-ai-plan"
@@ -150,13 +177,23 @@ Body: ${message.bodyText || htmlToText(message.bodyHtml || "")}`,
           step.actionType === "EXECUTE_COMMAND" &&
           step.commandKey === "apply-ai-mail-classification"
         ) {
+          const convertIndex =
+            planResult.planJson.steps.findIndex(
+              (s: any) =>
+                s.actionType === "EXECUTE_COMMAND" &&
+                s.commandKey === "convert-document-from-ai-plan",
+            ) + 1;
+
           return {
             ...step,
             commandPayload: {
               ...step.commandPayload,
               emailThreadId: step.commandPayload.emailThreadId || selectedThreadId,
               relatedAddressId: selectedAddressId || undefined,
-              relatedDocumentId: step.commandPayload.relatedDocumentId || undefined,
+              relatedDocumentId:
+                convertIndex > 0
+                  ? `dependency:${convertIndex}`
+                  : step.commandPayload.relatedDocumentId || undefined,
             },
           };
         }
@@ -181,7 +218,7 @@ Body: ${message.bodyText || htmlToText(message.bodyHtml || "")}`,
         throw new Error(applyResult.errorLogs || "Fehler beim Ausführen");
       }
 
-      toast.success("KI-Plan erfolgreich gebucht!");
+      toast.success("KI-Plan erfolgreich gebucht! Kunde und Belegentwurf wurden verknüpft.");
       onApplied();
       onClose();
     } catch (err: any) {
@@ -281,11 +318,48 @@ Body: ${message.bodyText || htmlToText(message.bodyHtml || "")}`,
               <option value="">-- Nicht zugeordnet / Unbekannt --</option>
               {allAddresses.map((address) => (
                 <option key={address.addressId} value={address.addressId}>
-                  {address.name} {address.city ? `(${address.city})` : ""}
+                  {address.companyName ||
+                    [address.firstName, address.lastName].filter(Boolean).join(" ") ||
+                    `Geschäftspartner #${address.addressNo || address.addressId.slice(0, 8)}`}{" "}
+                  {address.city ? `(${address.city})` : ""}
                 </option>
               ))}
             </select>
           </div>
+
+          {planResult.planJson.steps.some(
+            (step: any) => step.commandKey === "convert-document-from-ai-plan",
+          ) && (
+            <div className="space-y-3 rounded-md border border-hairline bg-canvas p-4">
+              <div className="text-[11px] font-bold tracking-wider text-ink uppercase">
+                2. Angebot in Auftrag wandeln
+              </div>
+              <div className="text-[12px] text-ink-secondary">
+                Die KI hat erkannt, dass ein bestehendes Angebot bestellt wurde und schlägt vor,
+                dieses in einen Auftrag umzuwandeln:
+              </div>
+              <div className="rounded-sm border border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,transparent)] p-3">
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="font-semibold text-primary">Quell-Angebot (Referenz):</span>
+                  <span className="font-mono font-bold text-ink">
+                    {(() => {
+                      const lookupStepIndex = planResult.planJson.steps.findIndex(
+                        (step: any) =>
+                          step.entityName === "document" && step.actionType === "LOOKUP",
+                      );
+                      const lookupStep = planResult.planJson.steps[lookupStepIndex];
+                      const matchedNo =
+                        lookupStep?.candidateMatches?.[0]?.displayValue ||
+                        lookupStep?.lookupCriteria?.name ||
+                        lookupStep?.lookupCriteria?.code ||
+                        "Angebot";
+                      return matchedNo;
+                    })()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {planResult.planJson.steps.some(
             (step: any) => step.commandKey === "create-document-draft-from-ai-plan",

@@ -61,6 +61,7 @@ import { FocusProvider } from "@repo/ui/platform/focus-manager";
 import { GlobalCommands } from "@repo/ui/platform/global-commands";
 import { I18nextProvider } from "react-i18next";
 
+import { AiOverlayHost } from "#/components/ai/AiOverlayHost";
 import i18n from "#/lib/i18n";
 
 function RootDocument({ children }: { readonly children: React.ReactNode }) {
@@ -81,6 +82,7 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
                     <ShortcutHelp />
                     <StatisticsModule />
                     <CommandPalette />
+                    <AiOverlayHost />
                     {children}
                   </AiOverlayProvider>
                 </CommandProvider>

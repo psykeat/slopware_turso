@@ -25,6 +25,10 @@ export interface EmailDraftInput {
   subject: string;
   bodyHtml?: string | null;
   bodyText?: string | null;
+  /** If set, the created thread will be linked to this document ID */
+  relatedDocumentId?: string | null;
+  /** If set, the created thread will be linked to this address ID */
+  relatedAddressId?: string | null;
   attachments?: Array<{
     fileName: string;
     contentType?: string | null;

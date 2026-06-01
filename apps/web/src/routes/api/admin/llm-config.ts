@@ -81,21 +81,29 @@ export const Route = createFileRoute("/api/admin/llm-config")({
         }
 
         const stored = existing[0].value as {
+          provider?: string;
           endpointUrl?: string;
           model?: string;
           apiKey?: string;
+          vertexCredentials?: string;
           githubToken?: string;
           githubRepo?: string;
+          vertexProject?: string;
+          vertexLocation?: string;
         };
 
         return new Response(
           JSON.stringify({
             configured: true,
+            provider: stored.provider ?? "",
             endpointUrl: stored.endpointUrl ?? "",
             model: stored.model ?? "",
             apiKey: stored.apiKey ? SENTINEL : "",
+            vertexCredentials: stored.vertexCredentials ? SENTINEL : "",
             githubToken: stored.githubToken ? SENTINEL : "",
             githubRepo: stored.githubRepo ?? "",
+            vertexProject: stored.vertexProject ?? "",
+            vertexLocation: stored.vertexLocation ?? "",
           }),
           { headers: { "content-type": "application/json" } },
         );
@@ -116,11 +124,15 @@ export const Route = createFileRoute("/api/admin/llm-config")({
         }
 
         const body = (await request.json()) as {
+          provider: string;
           endpointUrl: string;
           model: string;
           apiKey: string;
+          vertexCredentials: string;
           githubToken: string;
           githubRepo: string;
+          vertexProject: string;
+          vertexLocation: string;
         };
 
         // Read existing row so we can preserve encrypted secrets when the
@@ -133,6 +145,7 @@ export const Route = createFileRoute("/api/admin/llm-config")({
 
         const existingValue = (existing[0]?.value ?? {}) as {
           apiKey?: string;
+          vertexCredentials?: string;
           githubToken?: string;
         };
 
@@ -146,12 +159,21 @@ export const Route = createFileRoute("/api/admin/llm-config")({
             ? (existingValue.githubToken ?? "")
             : encrypt(body.githubToken);
 
+        const resolvedVertexCredentials =
+          body.vertexCredentials === SENTINEL
+            ? (existingValue.vertexCredentials ?? "")
+            : encrypt(body.vertexCredentials);
+
         const newValue = {
+          provider: body.provider,
           endpointUrl: body.endpointUrl,
           model: body.model,
           apiKey: resolvedApiKey,
+          vertexCredentials: resolvedVertexCredentials,
           githubToken: resolvedGithubToken,
           githubRepo: body.githubRepo,
+          vertexProject: body.vertexProject,
+          vertexLocation: body.vertexLocation,
         };
 
         if (existing[0]) {

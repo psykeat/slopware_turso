@@ -16,6 +16,7 @@ Current active decisions only. Keep this file short.
 - Custom UI is allowed only with a documented ergonomic or business exception.
 - Shell localization lives in frontend base design; entity labels and helper text should resolve from effective metadata.
 - Core specs define the intended platform contract; live code defines the current implementation shape.
+- Shared AI overlay runtime: one temporary, zero-footprint overlay host for all AI-assisted flows, opened through `CommandProvider` and driven by server-side interpret / resolve / review / validate / apply contracts over effective metadata and focus context.
 - Archived docs are historical only and stay out of the default reading path.
 
 ## When To Open What

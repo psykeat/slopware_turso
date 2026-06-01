@@ -132,11 +132,17 @@ function mapGraphMessage(
   const folderName = message.parentFolderId
     ? folderNames.get(message.parentFolderId)?.toLowerCase()
     : "";
-  const direction = folderName?.includes("draft")
-    ? "draft"
-    : folderName?.includes("sent")
-      ? "outbound"
-      : "inbound";
+  const isDraft =
+    folderName &&
+    (folderName.includes("draft") ||
+      folderName.includes("entwürf") ||
+      folderName.includes("entwurf"));
+  const isSent =
+    folderName &&
+    (folderName.includes("sent") ||
+      folderName.includes("gesendet") ||
+      folderName.includes("gesendete"));
+  const direction = isDraft ? "draft" : isSent ? "outbound" : "inbound";
   return {
     providerMessageId: message.id,
     providerThreadId: message.conversationId ?? message.id,
@@ -462,6 +468,13 @@ export class GraphProviderAdapter implements EmailProviderAdapter {
     });
   }
 
+  async moveToTrash(credentialsEncrypted: string, providerMessageId: string): Promise<void> {
+    await this.request(credentialsEncrypted, `/me/messages/${providerMessageId}/move`, {
+      method: "POST",
+      body: JSON.stringify({ destinationId: "deleteditems" }),
+    });
+  }
+
   async fetchAttachment(
     credentialsEncrypted: string,
     providerMessageId: string,
@@ -480,15 +493,48 @@ export class GraphProviderAdapter implements EmailProviderAdapter {
   }
 
   private async deltaPage(credentialsEncrypted: string, cursor?: string | null) {
-    const url =
-      cursor && cursor.startsWith("https://")
-        ? cursor
-        : "/me/messages/delta?$top=25&$select=id,conversationId,internetMessageId,parentFolderId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,sentDateTime,receivedDateTime,isRead,hasAttachments,categories,internetMessageHeaders";
-    const result = await this.request<{
+    let url: string;
+    let isStandardSync = false;
+    let standardSyncTimestamp: string | null = null;
+
+    if (cursor && cursor.startsWith("standard-sync:")) {
+      isStandardSync = true;
+      standardSyncTimestamp = cursor.substring("standard-sync:".length);
+      url = `/me/messages?$filter=lastModifiedDateTime gt ${standardSyncTimestamp}&$top=25&$select=id,conversationId,internetMessageId,parentFolderId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,sentDateTime,receivedDateTime,isRead,hasAttachments,categories,internetMessageHeaders`;
+    } else if (cursor && cursor.startsWith("https://")) {
+      url = cursor;
+      isStandardSync = !cursor.includes("/messages/delta");
+    } else {
+      url =
+        "/me/messages/delta?$top=25&$select=id,conversationId,internetMessageId,parentFolderId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,sentDateTime,receivedDateTime,isRead,hasAttachments,categories,internetMessageHeaders";
+    }
+
+    let result: {
       value?: GraphMessage[];
       "@odata.nextLink"?: string;
       "@odata.deltaLink"?: string;
-    }>(credentialsEncrypted, url);
+    } = {};
+
+    try {
+      result = (await this.request<any>(credentialsEncrypted, url)) ?? {};
+    } catch (err: any) {
+      if (
+        !cursor &&
+        (err.message.includes("Change tracking is not supported") ||
+          err.message.includes("Unsupported request"))
+      ) {
+        console.log(
+          "ℹ️ Root change tracking is not supported for this account. Falling back to standard messages sync...",
+        );
+        isStandardSync = true;
+        url =
+          "/me/messages?$top=25&$select=id,conversationId,internetMessageId,parentFolderId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,sentDateTime,receivedDateTime,isRead,hasAttachments,categories,internetMessageHeaders";
+        result = (await this.request<any>(credentialsEncrypted, url)) ?? {};
+      } else {
+        throw err;
+      }
+    }
+
     const labels = await this.listLabels(credentialsEncrypted);
     const folderNames = new Map(labels.map((label) => [label.providerLabelId, label.name]));
     const messagesWithAttachments = await Promise.all(
@@ -496,12 +542,24 @@ export class GraphProviderAdapter implements EmailProviderAdapter {
         const attachments = message.hasAttachments
           ? await this.request<{ value?: GraphAttachment[] }>(
               credentialsEncrypted,
-              `/me/messages/${message.id}/attachments?$select=id,name,contentType,size,isInline,contentId`,
+              `/me/messages/${message.id}/attachments`,
             ).then((res) => res.value ?? [])
           : [];
         return { message, mapped: mapGraphMessage(message, attachments, folderNames) };
       }),
     );
+
+    let nextCursor: string | null = null;
+    if (result["@odata.nextLink"]) {
+      nextCursor = result["@odata.nextLink"];
+    } else if (result["@odata.deltaLink"]) {
+      nextCursor = result["@odata.deltaLink"];
+    } else if (isStandardSync) {
+      nextCursor = `standard-sync:${new Date().toISOString()}`;
+    } else {
+      nextCursor = cursor ?? null;
+    }
+
     return {
       labels,
       threads: messagesWithAttachments.map(({ message, mapped }) => ({
@@ -514,7 +572,7 @@ export class GraphProviderAdapter implements EmailProviderAdapter {
         messages: [mapped],
       })),
       hasMore: Boolean(result["@odata.nextLink"]),
-      nextCursor: result["@odata.nextLink"] ?? result["@odata.deltaLink"] ?? cursor ?? null,
+      nextCursor,
     };
   }
 }

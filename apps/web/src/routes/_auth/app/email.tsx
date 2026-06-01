@@ -15,18 +15,21 @@ import {
   ArchiveIcon,
   AtSignIcon,
   ClockIcon,
+  FileTextIcon,
   MailIcon,
   MailOpenIcon,
+  PaperclipIcon,
   PlusIcon,
   RefreshCcwIcon,
   SendIcon,
   SparklesIcon,
+  TrashIcon,
+  UserIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import { EmailAiAssistantPanel } from "#/components/email/EmailAiAssistantPanel";
 import {
   EmailComposeDialog,
   type EmailComposeAction,
@@ -67,6 +70,17 @@ type EmailThread = {
   lastMessageAt: string | null;
   isRead: boolean;
   messageCount: number;
+  senderDisplay?: string;
+  hasAttachments?: boolean;
+  relatedDocumentId?: string | null;
+  relatedAddressId?: string | null;
+  labels?: Array<{
+    emailLabelId: string;
+    providerLabelId: string;
+    name: string;
+    kind: string;
+    color?: string | null;
+  }>;
 };
 
 type EmailAttachment = {
@@ -307,11 +321,14 @@ function EmailWorkspace() {
   const queryClient = useQueryClient();
   const { setSubCrumb } = useActionBar();
   const { registerCommand } = useCommands();
-  const { openAiOverlay, closeAiOverlay } = useAiOverlay();
+  const { openAiOverlay } = useAiOverlay();
   const { setFocus } = useFocus();
   const { t } = useTranslation("ui");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<string | null>("inbox");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(0);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [selectedSystemView, setSelectedSystemView] = useState<"sync" | "templates" | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -373,11 +390,23 @@ function EmailWorkspace() {
   });
 
   const { data: threads = EMPTY, isLoading: threadsLoading } = useQuery<EmailThread[]>({
-    queryKey: ["email", "threads", activeAccountId, selectedLabelId],
+    queryKey: [
+      "email",
+      "threads",
+      activeAccountId,
+      selectedLabelId,
+      selectedFolder,
+      searchQuery,
+      page,
+    ],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (activeAccountId) params.set("accountId", activeAccountId);
       if (selectedLabelId) params.set("labelId", selectedLabelId);
+      if (selectedFolder) params.set("folder", selectedFolder);
+      if (searchQuery) params.set("q", searchQuery);
+      params.set("limit", "50");
+      params.set("offset", String(page * 50));
       const res = await fetch(`/api/email/threads?${params}`);
       if (!res.ok) throw new Error("Failed to fetch threads");
       return res.json();
@@ -458,14 +487,6 @@ function EmailWorkspace() {
     placeholderData: keepPreviousData,
   });
 
-  const { data: allAddresses = EMPTY } = useQuery<any[]>({
-    queryKey: ["data", "address"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/address");
-      return res.ok ? res.json() : [];
-    },
-  });
-
   const treeNodes = useMemo<TreeNode[]>(
     () => [
       {
@@ -481,8 +502,52 @@ function EmailWorkspace() {
             { id: `account:${account.emailAccountId}:sent`, label: t("email.tree.sent") },
             { id: `account:${account.emailAccountId}:drafts`, label: t("email.tree.drafts") },
             { id: `account:${account.emailAccountId}:archive`, label: t("email.tree.archive") },
+            { id: `account:${account.emailAccountId}:trash`, label: "Trash" },
             ...(labels
               .filter((label) => label.emailAccountId === account.emailAccountId)
+              .filter((label) => {
+                const name = label.name.toLowerCase();
+                const providerId = label.providerLabelId.toLowerCase();
+
+                // Filter out standard Gmail system labels
+                if (
+                  providerId === "inbox" ||
+                  providerId === "sent" ||
+                  providerId === "draft" ||
+                  providerId === "trash" ||
+                  providerId === "spam" ||
+                  providerId === "starred" ||
+                  providerId === "important" ||
+                  providerId === "unread"
+                ) {
+                  return false;
+                }
+
+                // Filter out standard localized Microsoft Graph system folders
+                if (
+                  name === "inbox" ||
+                  name === "posteingang" ||
+                  name === "sent items" ||
+                  name === "gesendete elemente" ||
+                  name === "gesendete objekte" ||
+                  name === "drafts" ||
+                  name === "entwürfe" ||
+                  name === "deleted items" ||
+                  name === "gelöschte elemente" ||
+                  name === "junk email" ||
+                  name === "junk-e-mail" ||
+                  name === "outbox" ||
+                  name === "postausgang" ||
+                  name === "archive" ||
+                  name === "archiv" ||
+                  name === "conversation history" ||
+                  name === "verlauf der unterhaltung"
+                ) {
+                  return false;
+                }
+
+                return true;
+              })
               .map((label) => ({
                 id: `label:${label.emailLabelId}`,
                 label: label.name,
@@ -494,7 +559,10 @@ function EmailWorkspace() {
       {
         id: "system",
         label: t("nav.email"),
-        children: [{ id: "system:sync", label: t("email.system.syncStatus") }],
+        children: [
+          { id: "system:sync", label: t("email.system.syncStatus") },
+          { id: "system:templates", label: "Templates" },
+        ],
       },
     ],
     [accounts, labels, t],
@@ -513,15 +581,15 @@ function EmailWorkspace() {
     activeAccount?.lastSyncStatus === "recovery_required";
   const selectedSystemLabel = selectedSystemView === "sync" ? t("email.system.syncStatus") : null;
 
-  const connectProvider = async (provider: "google" | "microsoft") => {
+  const connectProvider = useCallback(async (provider: "google" | "microsoft") => {
     window.location.href = `/api/email/accounts/connect/${provider}`;
-  };
+  }, []);
 
-  const openSystemView = (view: "sync" | "templates") => {
+  const openSystemView = useCallback((view: "sync" | "templates") => {
     setSelectedThreadId(null);
     setComposerOpen(false);
     setSelectedSystemView(view);
-  };
+  }, []);
 
   const queueAccountAction = useCallback(
     async (path: string, successMessage: string) => {
@@ -544,17 +612,6 @@ function EmailWorkspace() {
     identities[0] ??
     null;
   const selectedThread = threadDetail ?? null;
-
-  const resolveFolderLabelId = (accountId: string, folder: string) => {
-    const folderLower = folder.toLowerCase();
-    const match = labels.find((label) => {
-      if (label.emailAccountId !== accountId) return false;
-      const provider = label.providerLabelId.toLowerCase();
-      const name = label.name.toLowerCase();
-      return provider === folderLower || name.includes(folderLower);
-    });
-    return match?.emailLabelId ?? null;
-  };
 
   const openComposerWithDraft = useCallback(
     (draft: any, open = true) => {
@@ -592,7 +649,7 @@ function EmailWorkspace() {
     [selectedIdentityId],
   );
 
-  const openBlankComposer = () => {
+  const openBlankComposer = useCallback(() => {
     setSelectedSystemView(null);
     setSelectedThreadId(null);
     setSavedOutboxId(null);
@@ -609,7 +666,7 @@ function EmailWorkspace() {
       bodyHtml: "",
     });
     setComposerOpen(true);
-  };
+  }, []);
 
   const saveDraft = useCallback(
     async (options: { close?: boolean; value?: EmailComposeSubmitValue } = {}) => {
@@ -741,49 +798,94 @@ function EmailWorkspace() {
     [actOnDraft, saveDraft],
   );
 
-  const startReply = async (messageIndex = 0) => {
-    if (!selectedThread || !selectedThread.messages[messageIndex]) return;
-    const source = selectedThread.messages[messageIndex];
-    const res = await fetch(`/api/email/messages/${source.emailMessageId}/reply`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        identityId: selectedIdentityId,
-        to: [{ email: typeof source.fromJson?.email === "string" ? source.fromJson.email : "" }],
-        subject: `Re: ${source.subject ?? selectedThread.subject ?? ""}`,
-        bodyText: `\n\nOn ${formatMailboxDate(source.receivedAt ?? source.sentAt)} ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "someone"} wrote:\n${source.bodyText ?? htmlToText(source.bodyHtml ?? "")}`,
-        bodyHtml: `<p></p><p>On ${formatMailboxDate(source.receivedAt ?? source.sentAt)} ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "someone"} wrote:</p><blockquote>${source.bodyHtml ?? `<pre>${(source.bodyText ?? "").replace(/</g, "&lt;")}</pre>`}</blockquote>`,
-      }),
-    });
-    if (!res.ok) {
-      toast.error(await res.text());
-      return;
-    }
-    openComposerWithDraft(await res.json());
-  };
+  const startReply = useCallback(
+    async (messageIndex = 0) => {
+      if (!selectedThread || !selectedThread.messages[messageIndex]) return;
+      const source = selectedThread.messages[messageIndex];
+      const res = await fetch(`/api/email/messages/${source.emailMessageId}/reply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          identityId: selectedIdentityId,
+          to: [{ email: typeof source.fromJson?.email === "string" ? source.fromJson.email : "" }],
+          subject: `Re: ${source.subject ?? selectedThread.subject ?? ""}`,
+          bodyText: `\n\nOn ${formatMailboxDate(source.receivedAt ?? source.sentAt)} ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "someone"} wrote:\n${source.bodyText ?? htmlToText(source.bodyHtml ?? "")}`,
+          bodyHtml: `<p></p><p>On ${formatMailboxDate(source.receivedAt ?? source.sentAt)} ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "someone"} wrote:</p><blockquote>${source.bodyHtml ?? `<pre>${(source.bodyText ?? "").replace(/</g, "&lt;")}</pre>`}</blockquote>`,
+        }),
+      });
+      if (!res.ok) {
+        toast.error(await res.text());
+        return;
+      }
+      openComposerWithDraft(await res.json());
+    },
+    [selectedThread, selectedIdentityId, openComposerWithDraft],
+  );
 
-  const startForward = async (messageIndex = 0) => {
-    if (!selectedThread || !selectedThread.messages[messageIndex]) return;
-    const source = selectedThread.messages[messageIndex];
-    const res = await fetch(`/api/email/messages/${source.emailMessageId}/forward`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        identityId: selectedIdentityId,
-        to: [],
-        subject: `Fwd: ${source.subject ?? selectedThread.subject ?? ""}`,
-        bodyText: `\n\n-------- Forwarded message --------\nFrom: ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "unknown"}\nDate: ${formatMailboxDate(source.receivedAt ?? source.sentAt)}\nSubject: ${source.subject ?? ""}\n\n${source.bodyText ?? htmlToText(source.bodyHtml ?? "")}`,
-        bodyHtml: `<p>-------- Forwarded message --------</p><p>From: ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "unknown"}<br />Date: ${formatMailboxDate(source.receivedAt ?? source.sentAt)}<br />Subject: ${source.subject ?? ""}</p><blockquote>${source.bodyHtml ?? `<pre>${(source.bodyText ?? "").replace(/</g, "&lt;")}</pre>`}</blockquote>`,
-      }),
-    });
-    if (!res.ok) {
-      toast.error(await res.text());
-      return;
-    }
-    openComposerWithDraft(await res.json());
-  };
+  const startReplyAll = useCallback(
+    async (messageIndex = 0) => {
+      if (!selectedThread || !selectedThread.messages[messageIndex]) return;
+      const source = selectedThread.messages[messageIndex];
+      const senderEmail = typeof source.fromJson?.email === "string" ? source.fromJson.email : "";
+      const myEmail = selectedIdentity?.email || "";
 
-  const archiveThread = async () => {
+      const toEmails = [senderEmail, ...(source.toJson ?? []).map((t: any) => t.email)].filter(
+        (email) => email && email.toLowerCase() !== myEmail.toLowerCase(),
+      );
+
+      const distinctTo = Array.from(new Set(toEmails)).map((email) => ({ email }));
+
+      const ccEmails = (source.ccJson ?? [])
+        .map((c: any) => c.email)
+        .filter((email: string) => email && email.toLowerCase() !== myEmail.toLowerCase());
+      const distinctCc = Array.from(new Set(ccEmails)).map((email) => ({ email }));
+
+      const res = await fetch(`/api/email/messages/${source.emailMessageId}/reply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          identityId: selectedIdentityId,
+          to: distinctTo,
+          cc: distinctCc,
+          subject: `Re: ${source.subject ?? selectedThread.subject ?? ""}`,
+          bodyText: `\n\nOn ${formatMailboxDate(source.receivedAt ?? source.sentAt)} ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "someone"} wrote:\n${source.bodyText ?? htmlToText(source.bodyHtml ?? "")}`,
+          bodyHtml: `<p></p><p>On ${formatMailboxDate(source.receivedAt ?? source.sentAt)} ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "someone"} wrote:</p><blockquote>${source.bodyHtml ?? `<pre>${(source.bodyText ?? "").replace(/</g, "&lt;")}</pre>`}</blockquote>`,
+        }),
+      });
+      if (!res.ok) {
+        toast.error(await res.text());
+        return;
+      }
+      openComposerWithDraft(await res.json());
+    },
+    [selectedThread, selectedIdentity, selectedIdentityId, openComposerWithDraft],
+  );
+
+  const startForward = useCallback(
+    async (messageIndex = 0) => {
+      if (!selectedThread || !selectedThread.messages[messageIndex]) return;
+      const source = selectedThread.messages[messageIndex];
+      const res = await fetch(`/api/email/messages/${source.emailMessageId}/forward`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          identityId: selectedIdentityId,
+          to: [],
+          subject: `Fwd: ${source.subject ?? selectedThread.subject ?? ""}`,
+          bodyText: `\n\n-------- Forwarded message --------\nFrom: ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "unknown"}\nDate: ${formatMailboxDate(source.receivedAt ?? source.sentAt)}\nSubject: ${source.subject ?? ""}\n\n${source.bodyText ?? htmlToText(source.bodyHtml ?? "")}`,
+          bodyHtml: `<p>-------- Forwarded message --------</p><p>From: ${typeof source.fromJson?.email === "string" ? source.fromJson.email : "unknown"}<br />Date: ${formatMailboxDate(source.receivedAt ?? source.sentAt)}<br />Subject: ${source.subject ?? ""}</p><blockquote>${source.bodyHtml ?? `<pre>${(source.bodyText ?? "").replace(/</g, "&lt;")}</pre>`}</blockquote>`,
+        }),
+      });
+      if (!res.ok) {
+        toast.error(await res.text());
+        return;
+      }
+      openComposerWithDraft(await res.json());
+    },
+    [selectedThread, selectedIdentityId, openComposerWithDraft],
+  );
+
+  const archiveThread = useCallback(async () => {
     if (!selectedThreadId) return;
     const res = await fetch(`/api/email/threads/${selectedThreadId}/archive`, { method: "POST" });
     if (!res.ok) {
@@ -792,34 +894,51 @@ function EmailWorkspace() {
     }
     setSelectedThreadId(null);
     queryClient.invalidateQueries({ queryKey: ["email"] });
-  };
+  }, [selectedThreadId, queryClient]);
 
-  const openMailAiAssistant = useCallback(() => {
+  const trashThread = useCallback(async () => {
     if (!selectedThreadId) return;
-    if (!threadDetail) {
-      toast.error("Thread wird noch geladen");
+    const res = await fetch(`/api/email/threads/${selectedThreadId}/trash`, { method: "POST" });
+    if (!res.ok) {
+      toast.error(await res.text());
       return;
     }
-    openAiOverlay({
-      title: "KI-Assistent / AI Assistant",
-      description: "Thread analysieren, Absichten erkennen und Belegentwürfe vorschlagen.",
-      content: (
-        <EmailAiAssistantPanel
-          key={selectedThreadId}
-          selectedThreadId={selectedThreadId}
-          threadDetail={threadDetail}
-          allAddresses={allAddresses}
-          onApplied={() => queryClient.invalidateQueries({ queryKey: ["email"] })}
-          onClose={closeAiOverlay}
-        />
-      ),
-    });
-  }, [allAddresses, closeAiOverlay, openAiOverlay, queryClient, selectedThreadId, threadDetail]);
+    toast.success("E-Mail erfolgreich gelöscht.");
+    setSelectedThreadId(null);
+    queryClient.invalidateQueries({ queryKey: ["email"] });
+  }, [selectedThreadId, queryClient]);
+
+  const openMailAiAssistant = useCallback(() => {
+    openAiOverlay();
+  }, [openAiOverlay]);
+
+  const openEmailDraftFromAi = useCallback(
+    async (event: Event) => {
+      const draftId = (event as CustomEvent<{ draftId?: string }>).detail?.draftId;
+      if (!draftId) return;
+
+      const res = await fetch(`/api/email/drafts/${draftId}`);
+      if (!res.ok) {
+        toast.error(await res.text());
+        return;
+      }
+
+      const draft = await res.json();
+      openComposerWithDraft(draft);
+      setComposerOpen(true);
+      setSelectedThreadId(null);
+    },
+    [openComposerWithDraft],
+  );
 
   useEffect(() => {
     window.addEventListener("slopware:open-ai", openMailAiAssistant);
-    return () => window.removeEventListener("slopware:open-ai", openMailAiAssistant);
-  }, [openMailAiAssistant]);
+    window.addEventListener("slopware:open-email-draft", openEmailDraftFromAi);
+    return () => {
+      window.removeEventListener("slopware:open-ai", openMailAiAssistant);
+      window.removeEventListener("slopware:open-email-draft", openEmailDraftFromAi);
+    };
+  }, [openEmailDraftFromAi, openMailAiAssistant]);
 
   const draftBootstrapRef = useRef<string | null>(null);
 
@@ -842,6 +961,29 @@ function EmailWorkspace() {
     };
   }, [activeAccountId, openComposerWithDraft]);
 
+  const activeAccountIdRef = useRef<string | null>(null);
+  const selectedThreadIdRef = useRef<string | null>(null);
+  const composerOpenRef = useRef(false);
+  const saveDraftRef = useRef(saveDraft);
+  const actOnDraftRef = useRef(actOnDraft);
+  const openMailAiAssistantRef = useRef(openMailAiAssistant);
+  const connectProviderRef = useRef(connectProvider);
+  const startReplyRef = useRef(startReply);
+  const startForwardRef = useRef(startForward);
+  const trashThreadRef = useRef(trashThread);
+
+  useEffect(() => {
+    activeAccountIdRef.current = activeAccountId;
+    selectedThreadIdRef.current = selectedThreadId;
+    composerOpenRef.current = composerOpen;
+    saveDraftRef.current = saveDraft;
+    actOnDraftRef.current = actOnDraft;
+    connectProviderRef.current = connectProvider;
+    startReplyRef.current = startReply;
+    startForwardRef.current = startForward;
+    trashThreadRef.current = trashThread;
+  });
+
   useEffect(() => {
     const unregCompose = registerCommand({
       id: "email-compose",
@@ -860,8 +1002,9 @@ function EmailWorkspace() {
       group: "email",
       label: { en: "Sync email account", de: "E-Mail-Konto synchronisieren" },
       shortcut: "F9",
-      isEnabled: () => Boolean(activeAccountId),
+      isEnabled: () => Boolean(activeAccountIdRef.current),
       handler: async () => {
+        const activeAccountId = activeAccountIdRef.current;
         if (!activeAccountId) return;
         const res = await fetch(`/api/email/accounts/${activeAccountId}/sync`, { method: "POST" });
         if (!res.ok) throw new Error(await res.text());
@@ -875,8 +1018,9 @@ function EmailWorkspace() {
       group: "email",
       label: { en: "Mark thread read", de: "Thread gelesen markieren" },
       shortcut: "F8",
-      isEnabled: () => Boolean(selectedThreadId),
+      isEnabled: () => Boolean(selectedThreadIdRef.current),
       handler: async () => {
+        const selectedThreadId = selectedThreadIdRef.current;
         if (!selectedThreadId) return;
         const res = await fetch(`/api/email/threads/${selectedThreadId}/mark-read`, {
           method: "POST",
@@ -893,9 +1037,9 @@ function EmailWorkspace() {
       group: "email",
       label: { en: "Save draft", de: "Entwurf speichern" },
       shortcut: "F10",
-      isEnabled: () => composerOpen,
+      isEnabled: () => composerOpenRef.current,
       handler: async () => {
-        if (composerOpen) await saveDraft();
+        if (composerOpenRef.current) await saveDraftRef.current();
       },
     });
     const unregSend = registerCommand({
@@ -904,9 +1048,9 @@ function EmailWorkspace() {
       group: "email",
       label: { en: "Send draft", de: "Entwurf senden" },
       shortcut: "Ctrl+Enter",
-      isEnabled: () => composerOpen,
+      isEnabled: () => composerOpenRef.current,
       handler: async () => {
-        if (composerOpen) await actOnDraft("send");
+        if (composerOpenRef.current) await actOnDraftRef.current("send");
       },
     });
     const unregArchive = registerCommand({
@@ -914,8 +1058,9 @@ function EmailWorkspace() {
       scope: "context",
       group: "email",
       label: { en: "Archive thread", de: "Thread archivieren" },
-      isEnabled: () => Boolean(selectedThreadId),
+      isEnabled: () => Boolean(selectedThreadIdRef.current),
       handler: async () => {
+        const selectedThreadId = selectedThreadIdRef.current;
         if (!selectedThreadId) return;
         const res = await fetch(`/api/email/threads/${selectedThreadId}/archive`, {
           method: "POST",
@@ -925,6 +1070,71 @@ function EmailWorkspace() {
         queryClient.invalidateQueries({ queryKey: ["email"] });
       },
     });
+    const unregTrash = registerCommand({
+      id: "email-trash-thread",
+      scope: "context",
+      group: "email",
+      label: { en: "Delete email (Move to trash)", de: "E-Mail löschen (In Papierkorb)" },
+      shortcut: "F4",
+      isEnabled: () => Boolean(selectedThreadIdRef.current),
+      handler: async () => {
+        const selectedThreadId = selectedThreadIdRef.current;
+        if (!selectedThreadId) return;
+        await trashThreadRef.current();
+      },
+    });
+    const unregAi = registerCommand({
+      id: "email-ai-assistant",
+      scope: "context",
+      group: "email",
+      label: { en: "AI Assistant", de: "KI-Assistent" },
+      shortcut: "Alt+A",
+      isEnabled: () => Boolean(selectedThreadIdRef.current),
+      handler: () => {
+        openMailAiAssistantRef.current();
+      },
+    });
+    const unregConnect = registerCommand({
+      id: "connect-email-account",
+      scope: "context",
+      group: "email",
+      label: { en: "Connect Gmail account", de: "Gmail-Konto verbinden" },
+      handler: () => {
+        connectProviderRef.current("google");
+      },
+    });
+    const unregReply = registerCommand({
+      id: "reply-email",
+      scope: "context",
+      group: "email",
+      label: { en: "Reply to thread", de: "Auf Thread antworten" },
+      shortcut: "R",
+      isEnabled: () => Boolean(selectedThreadIdRef.current),
+      handler: () => {
+        void startReplyRef.current(0);
+      },
+    });
+    const unregForward = registerCommand({
+      id: "forward-email",
+      scope: "context",
+      group: "email",
+      label: { en: "Forward thread", de: "Thread weiterleiten" },
+      shortcut: "F",
+      isEnabled: () => Boolean(selectedThreadIdRef.current),
+      handler: () => {
+        void startForwardRef.current(0);
+      },
+    });
+    const unregApplyLabel = registerCommand({
+      id: "apply-email-label",
+      scope: "context",
+      group: "email",
+      label: { en: "Apply label to thread", de: "Label auf Thread anwenden" },
+      isEnabled: () => Boolean(selectedThreadIdRef.current),
+      handler: () => {
+        toast.info("Select a label from the dropdown in the toolbar");
+      },
+    });
     return () => {
       unregCompose();
       unregSync();
@@ -932,16 +1142,14 @@ function EmailWorkspace() {
       unregSave();
       unregSend();
       unregArchive();
+      unregTrash();
+      unregAi();
+      unregConnect();
+      unregReply();
+      unregForward();
+      unregApplyLabel();
     };
-  }, [
-    activeAccountId,
-    actOnDraft,
-    composerOpen,
-    queryClient,
-    registerCommand,
-    saveDraft,
-    selectedThreadId,
-  ]);
+  }, [registerCommand, queryClient, openBlankComposer]);
 
   const threadAttachments = selectedThread?.attachments ?? [];
   const threadMessages = selectedThread?.messages ?? [];
@@ -990,6 +1198,7 @@ function EmailWorkspace() {
               panelId="email-nav"
               data={treeNodes}
               isLoading={!accounts}
+              defaultExpandDepth={2}
               onSelect={(id) => {
                 if (id.startsWith("account:")) {
                   const parts = id.split(":");
@@ -1002,23 +1211,29 @@ function EmailWorkspace() {
                     setSelectedSystemView(null);
                   }
                   if (folder) {
-                    const labelId = resolveFolderLabelId(accountId ?? "", folder);
-                    setSelectedLabelId(labelId);
+                    setSelectedFolder(folder);
+                    setSelectedLabelId(null);
                   } else {
+                    setSelectedFolder("inbox");
                     setSelectedLabelId(null);
                   }
+                  setPage(0);
                   return;
                 }
                 if (id.startsWith("label:")) {
                   setSelectedLabelId(id.slice("label:".length));
+                  setSelectedFolder(null);
                   setSelectedSystemView(null);
+                  setPage(0);
                   return;
                 }
                 if (id.startsWith("system:")) {
+                  const view = id.slice("system:".length);
                   setSelectedLabelId(null);
+                  setSelectedFolder(null);
                   setSelectedThreadId(null);
                   setComposerOpen(false);
-                  openSystemView("sync");
+                  openSystemView(view as "sync" | "templates");
                   return;
                 }
               }}
@@ -1156,6 +1371,18 @@ function EmailWorkspace() {
                 </div>
               </div>
             ) : null}
+            <div className="border-b border-hairline p-2">
+              <input
+                type="text"
+                placeholder="Search mail..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(0);
+                }}
+                className="h-8 w-full rounded-sm border border-hairline bg-canvas px-2.5 text-[12px] outline-none focus:border-primary"
+              />
+            </div>
             <div className="min-h-0 flex-1 overflow-auto">
               {threads.length === 0 ? (
                 <div className="grid h-full place-items-center text-[13px] text-ink-mute">
@@ -1185,6 +1412,14 @@ function EmailWorkspace() {
                     <span className="min-w-0">
                       <span
                         className={cn(
+                          "mb-0.5 block truncate text-[12px] text-ink-secondary",
+                          !thread.isRead && "font-semibold text-ink",
+                        )}
+                      >
+                        {thread.senderDisplay || "Unknown sender"}
+                      </span>
+                      <span
+                        className={cn(
                           "block truncate text-[13px]",
                           !thread.isRead && "font-medium text-ink",
                         )}
@@ -1194,16 +1429,56 @@ function EmailWorkspace() {
                       <span className="mt-0.5 block truncate text-[12px] text-ink-mute">
                         {thread.snippet || "No preview"}
                       </span>
-                      <span className="mt-1 flex flex-wrap gap-1">
-                        {selectedLabelId ? null : null}
+                      <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className="rounded-full border border-hairline px-1.5 py-0.5 text-[10px] text-ink-mute">
                           {thread.messageCount} {t("email.panels.messages")}
                         </span>
                         {!thread.isRead && (
-                          <span className="rounded-full border border-hairline px-1.5 py-0.5 text-[10px] text-ink">
+                          <span className="rounded-full border border-hairline bg-[color-mix(in_oklab,var(--primary)_8%,transparent)] px-1.5 py-0.5 text-[10px] font-medium text-ink">
                             unread
                           </span>
                         )}
+                        {thread.hasAttachments && (
+                          <span
+                            className="inline-flex items-center text-ink-mute"
+                            title="Has attachments"
+                          >
+                            <PaperclipIcon className="size-3" />
+                          </span>
+                        )}
+                        {thread.relatedDocumentId && (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded-full border border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,transparent)] px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                            title="Related to ERP Document"
+                          >
+                            <FileTextIcon className="size-2.5" />
+                            <span>doc</span>
+                          </span>
+                        )}
+                        {thread.relatedAddressId && (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600"
+                            title="Related to Customer"
+                          >
+                            <UserIcon className="size-2.5" />
+                            <span>customer</span>
+                          </span>
+                        )}
+                        {thread.labels?.map((label) => (
+                          <span
+                            key={label.emailLabelId}
+                            className="rounded-full border px-1.5 py-0.5 text-[10px]"
+                            style={{
+                              backgroundColor: label.color
+                                ? `${label.color}15`
+                                : "var(--canvas-soft)",
+                              borderColor: label.color || "var(--hairline)",
+                              color: label.color || "var(--ink-secondary)",
+                            }}
+                          >
+                            {label.name}
+                          </span>
+                        ))}
                       </span>
                     </span>
                     <span className="text-[11px] text-ink-mute">
@@ -1212,6 +1487,23 @@ function EmailWorkspace() {
                   </button>
                 ))
               )}
+            </div>
+            <div className="flex flex-none items-center justify-between border-t border-hairline bg-canvas-soft px-3 py-2">
+              <button
+                disabled={page === 0}
+                onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+                className="rounded-sm border border-hairline bg-canvas px-2.5 py-1 text-[11px] text-ink-secondary hover:text-ink disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-[11px] text-ink-mute">Page {page + 1}</span>
+              <button
+                disabled={threads.length < 50}
+                onClick={() => setPage((prev) => prev + 1)}
+                className="rounded-sm border border-hairline bg-canvas px-2.5 py-1 text-[11px] text-ink-secondary hover:text-ink disabled:opacity-50"
+              >
+                Next
+              </button>
             </div>
           </section>
         }
@@ -1460,6 +1752,13 @@ function EmailWorkspace() {
                     <ArchiveIcon className="size-4" />
                   </button>
                   <button
+                    onClick={trashThread}
+                    className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-destructive"
+                    title="Löschen (F4)"
+                  >
+                    <TrashIcon className="size-4" />
+                  </button>
+                  <button
                     onClick={openMailAiAssistant}
                     disabled={!selectedThreadId}
                     className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
@@ -1467,6 +1766,37 @@ function EmailWorkspace() {
                   >
                     <SparklesIcon className="size-4 text-primary" />
                   </button>
+                  {selectedThreadId && labels.length > 0 && (
+                    <select
+                      onChange={async (e) => {
+                        const labelId = e.target.value;
+                        if (!labelId) return;
+                        const res = await fetch(
+                          `/api/email/threads/${selectedThreadId}/apply-label`,
+                          {
+                            method: "POST",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({ labelId }),
+                          },
+                        );
+                        if (!res.ok) {
+                          toast.error(await res.text());
+                        } else {
+                          toast.success("Label applied");
+                          queryClient.invalidateQueries({ queryKey: ["email"] });
+                        }
+                        e.target.value = ""; // Reset
+                      }}
+                      className="h-7 rounded-sm border border-hairline bg-canvas px-1.5 text-[12px] text-ink outline-none focus:border-primary"
+                    >
+                      <option value="">Apply Label...</option>
+                      {labels.map((l) => (
+                        <option key={l.emailLabelId} value={l.emailLabelId}>
+                          {l.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <button
                     onClick={() => {
                       openBlankComposer();
@@ -1524,10 +1854,59 @@ function EmailWorkspace() {
                                   <div>{message.subject ?? ""}</div>
                                 </div>
                               </div>
-                              <div className="mt-3 text-[13px] whitespace-pre-wrap text-ink">
-                                {message.bodyText ||
-                                  (message.bodyHtml ? htmlToText(message.bodyHtml) : "No body")}
-                              </div>
+                              {message.bodyHtml ? (
+                                <iframe
+                                  title="Message HTML Body"
+                                  srcDoc={`
+                                    <!DOCTYPE html>
+                                    <html>
+                                      <head>
+                                        <style>
+                                          body {
+                                            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+                                            font-size: 13px;
+                                            line-height: 1.5;
+                                            color: #1a1a1a;
+                                            margin: 0;
+                                            padding: 4px;
+                                            background: transparent;
+                                          }
+                                          img {
+                                            max-width: 100%;
+                                            height: auto;
+                                          }
+                                        </style>
+                                      </head>
+                                      <body>
+                                        ${message.bodyHtml}
+                                      </body>
+                                    </html>
+                                  `}
+                                  sandbox="allow-popups allow-popups-to-escape-sandbox"
+                                  className="mt-3 min-h-[150px] w-full resize-y border-0 bg-transparent"
+                                  onLoad={(e) => {
+                                    const iframe = e.currentTarget;
+                                    const doc =
+                                      iframe.contentDocument || iframe.contentWindow?.document;
+                                    if (doc) {
+                                      const adjustHeight = () => {
+                                        if (doc.body) {
+                                          iframe.style.height = `${Math.max(doc.body.scrollHeight + 20, 150)}px`;
+                                        }
+                                      };
+                                      adjustHeight();
+                                      if (typeof ResizeObserver !== "undefined") {
+                                        const observer = new ResizeObserver(adjustHeight);
+                                        observer.observe(doc.body);
+                                      }
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <div className="mt-3 text-[13px] whitespace-pre-wrap text-ink">
+                                  {message.bodyText || "No body"}
+                                </div>
+                              )}
                               {attachmentRows.length > 0 && (
                                 <div className="mt-3 flex flex-wrap gap-2">
                                   {attachmentRows.map((attachment) => (
@@ -1558,6 +1937,12 @@ function EmailWorkspace() {
                                   className="rounded-full border border-hairline px-2 py-1 text-[11px] text-ink-secondary hover:text-ink"
                                 >
                                   Reply
+                                </button>
+                                <button
+                                  onClick={() => startReplyAll(index)}
+                                  className="rounded-full border border-hairline px-2 py-1 text-[11px] text-ink-secondary hover:text-ink"
+                                >
+                                  Reply All
                                 </button>
                                 <button
                                   onClick={() => startForward(index)}
@@ -1620,6 +2005,32 @@ function EmailWorkspace() {
                         {
                           label: t("email.panels.unread"),
                           value: selectedThread && !selectedThread.isRead ? "Yes" : "No",
+                        },
+                        {
+                          label: "Related Document",
+                          value: selectedThread?.relatedDocumentId ? (
+                            <a
+                              href={`/app/documents?documentId=${selectedThread.relatedDocumentId}`}
+                              className="font-medium text-primary hover:underline"
+                            >
+                              Open Document
+                            </a>
+                          ) : (
+                            "-"
+                          ),
+                        },
+                        {
+                          label: "Related Customer",
+                          value: selectedThread?.relatedAddressId ? (
+                            <a
+                              href={`/app/addresses?addressId=${selectedThread.relatedAddressId}`}
+                              className="font-medium text-primary hover:underline"
+                            >
+                              Open Customer
+                            </a>
+                          ) : (
+                            "-"
+                          ),
                         },
                       ],
                     },

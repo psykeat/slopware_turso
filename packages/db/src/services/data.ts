@@ -35,16 +35,30 @@ export class DataService {
     if (entityName === "tenantLlmConfig" && Array.isArray(rows)) {
       const { decryptEmailCredentials } = await import("./email/credential-crypto");
       for (const row of rows) {
-        if (row && row.apiKey) {
+        if (!row) continue;
+        for (const field of ["apiKey", "githubToken", "vertexCredentials"] as const) {
+          if (!row[field]) continue;
           try {
-            row.apiKey = decryptEmailCredentials<string>(row.apiKey);
+            row[field] = decryptEmailCredentials<string>(row[field]);
           } catch {
-            // Fallback
+            // Fallback to stored value when decryption is not possible.
           }
         }
       }
     }
     return rows;
+  }
+
+  private async encryptLlmSecretFieldsIfNeeded(entityName: string, values: Record<string, any>) {
+    if (entityName !== "tenantLlmConfig") return values;
+    const { encryptEmailCredentials } = await import("./email/credential-crypto");
+    const update = { ...values };
+    for (const field of ["apiKey", "githubToken", "vertexCredentials"] as const) {
+      if (update[field]) {
+        update[field] = encryptEmailCredentials(update[field]);
+      }
+    }
+    return update;
   }
 
   private getTable(entityName: string) {
@@ -328,12 +342,9 @@ export class DataService {
         ? { ...lifecycleValues, tenantId: this.tenantId }
         : lifecycleValues;
 
-    if (entityName === "tenantLlmConfig" && values.apiKey) {
-      const { encryptEmailCredentials } = await import("./email/credential-crypto");
-      values.apiKey = encryptEmailCredentials(values.apiKey);
-    }
+    const encryptedValues = await this.encryptLlmSecretFieldsIfNeeded(entityName, values);
 
-    const inserted = await db.insert(table).values(values).returning();
+    const inserted = await db.insert(table).values(encryptedValues).returning();
     await this.decryptLlmApiKeyListIfNeeded(entityName, inserted);
     return inserted;
   }
@@ -370,10 +381,10 @@ export class DataService {
       currentRow,
     );
 
-    if (entityName === "tenantLlmConfig" && longTextAwareData.apiKey) {
-      const { encryptEmailCredentials } = await import("./email/credential-crypto");
-      longTextAwareData.apiKey = encryptEmailCredentials(longTextAwareData.apiKey);
-    }
+    const encryptedUpdate = await this.encryptLlmSecretFieldsIfNeeded(
+      entityName,
+      longTextAwareData,
+    );
 
     let articlePrimaryBeforeArchive: string | null = null;
     if (
@@ -398,7 +409,7 @@ export class DataService {
 
     const updatedRows = await db
       .update(table)
-      .set(longTextAwareData)
+      .set(encryptedUpdate)
       .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .returning();
 

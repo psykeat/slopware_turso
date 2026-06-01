@@ -2,7 +2,7 @@ import { ArticleImageStrip } from "@repo/ui/components/article-image-strip";
 import { BatchInventoryTable } from "@repo/ui/components/batch-inventory-table";
 import { BomEditor } from "@repo/ui/components/bom-editor";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
-import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
+import { DataGrid, type DataGridHandle, type ColumnDef } from "@repo/ui/components/data-grid";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { EntityMask } from "@repo/ui/components/entity-mask";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
@@ -295,7 +295,7 @@ function ArticlesModule() {
     [gridState, setSubCrumb, treeNodes],
   );
 
-  const articleGridColumns = useMemo(
+  const articleGridColumns = useMemo<ColumnDef<any>[]>(
     () => [
       {
         key: "primaryImageId",
@@ -331,12 +331,42 @@ function ArticlesModule() {
       {
         key: "baseUnitId",
         header: t("articleView.table.unit"),
+        type: "relation",
         render: (r: any) => <span>{unitMap.get(r.baseUnitId) ?? "—"}</span>,
+        renderValue: (r: any) => unitMap.get(r.baseUnitId) ?? "",
+        getSearchValue: (r: any) => unitMap.get(r.baseUnitId) ?? "",
+        relation: {
+          entity: "unit",
+          fkField: "baseUnitId",
+          labelField: "code",
+          mode: "lookup-eq",
+          resolveLabelToId: (label: string) => {
+            const match = units?.find((u: any) =>
+              u.code?.toLowerCase().includes(label.toLowerCase()),
+            );
+            return match ? match.unitId : null;
+          },
+        },
       },
       {
         key: "articleGroupId",
         header: t("articleView.table.group"),
+        type: "relation",
         render: (r: any) => <span>{groupMap.get(r.articleGroupId) ?? "—"}</span>,
+        renderValue: (r: any) => groupMap.get(r.articleGroupId) ?? "",
+        getSearchValue: (r: any) => groupMap.get(r.articleGroupId) ?? "",
+        relation: {
+          entity: "articleGroup",
+          fkField: "articleGroupId",
+          labelField: "name",
+          mode: "lookup-eq",
+          resolveLabelToId: (label: string) => {
+            const match = groups?.find((g: any) =>
+              g.label?.toLowerCase().includes(label.toLowerCase()),
+            );
+            return match ? match.id : null;
+          },
+        },
       },
       {
         key: "trackingMode",
@@ -353,7 +383,7 @@ function ArticlesModule() {
         ),
       },
     ],
-    [groupMap, t, unitMap],
+    [groupMap, t, unitMap, groups, units],
   );
 
   const movementGridColumns = useMemo(
@@ -677,6 +707,7 @@ function ArticlesModule() {
             data={treeNodes}
             header={t("tree.groups")}
             isLoading={isTreeLoading}
+            defaultExpandDepth={2}
             onSelect={selectTreeNode}
             onSelectCommit={() => restoreArticleGrid()}
           />

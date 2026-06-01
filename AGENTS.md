@@ -16,7 +16,7 @@ React 19 · TanStack Start/Router/Query · Drizzle ORM v1 · Better Auth · Tail
 
 ## Non-Negotiable Rules
 
-- Run linting (e.g., `pnpm lint` or local `vp` lint) only after major milestones are reached, rather than continuously after every small change. Passing linting validates that changes are correct.
+- CRITICAL: NEVER run linting (pnpm lint or local vp lint) multiple times or for intermediate small changes within a single turn. Only run linting ONCE at the very end of a milestone or prompt turn, when all edits are complete and ready for final validation.
 - Do not run production builds unless build output or bundling is the issue.
 - No hard delete for business data. Archive with `PATCH { archived: true }`.
 - Tenant isolation is server-side only. Never trust client payloads for `tenantId`.

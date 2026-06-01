@@ -672,6 +672,7 @@ function AddressesModule() {
             data={treeNodes}
             header={t("tree.categories")}
             isLoading={isTreeLoading}
+            defaultExpandDepth={2}
             onSelect={selectCategoryNode}
             onSelectCommit={() => restoreAddressGrid()}
           />

@@ -12,6 +12,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { LlmConfigForm } from "#/components/llm/LlmConfigForm";
 import { SetupGuide } from "#/components/setup/SetupGuide";
 import { YearEndAssistant } from "#/components/setup/YearEndAssistant";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
@@ -614,7 +615,11 @@ function SettingsView() {
       if (!res.ok) return { data: [], total: 0 };
       return res.json() as Promise<{ data: any[]; total: number }>;
     },
-    enabled: !!selectedKey && !isCompanyMaster && (!isCompanyScopedSetting || !!selectedCompanyId),
+    enabled:
+      !!selectedKey &&
+      !isCompanyMaster &&
+      selectedKey !== "tenantLlmConfig" &&
+      (!isCompanyScopedSetting || !!selectedCompanyId),
   });
 
   const companyRecord = selectedCompany;
@@ -652,7 +657,7 @@ function SettingsView() {
       handler: () => selectEntityByIndex(Math.max(selectedIndex - 1, 0)),
     });
 
-    if (isCompanyMaster) {
+    if (isCompanyMaster || selectedKey === "tenantLlmConfig") {
       return () => {
         unregDown();
         unregUp();
@@ -867,6 +872,15 @@ function SettingsView() {
                 Kein Firmenstammsatz für den aktiven Mandanten gefunden.
               </div>
             )}
+          </div>
+        ) : selectedKey === "tenantLlmConfig" ? (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <LlmConfigForm
+              scope="tenant"
+              title={tableLabel}
+              description="Configure the tenant-specific LLM service, credentials and provider settings for the selected company."
+              companyId={selectedCompanyId}
+            />
           </div>
         ) : (
           <DataGrid

@@ -164,6 +164,40 @@ const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
       },
     },
   },
+  {
+    commandKey: "convert-document-from-ai-plan",
+    label: "Beleg wandeln aus KI-Plan",
+    description:
+      "Wandelt einen bestehenden Beleg (z.B. ein Angebot in einen Auftrag) basierend auf den Mappings um.",
+    writesTables: ["document", "document_line"],
+    inputSchema: {
+      type: "object",
+      required: ["sourceDocumentId"],
+      properties: {
+        sourceDocumentId: { type: "string", format: "uuid" },
+        targetDocType: { type: "string", enum: ["Order", "DeliveryNote", "Invoice"] },
+        targetGroupId: { type: "string", format: "uuid" },
+      },
+    },
+  },
+  {
+    commandKey: "prepare-document-email",
+    label: "Dokumenten-E-Mail vorbereiten",
+    description:
+      "Erzeugt einen editierbaren E-Mail-Entwurf auf Basis eines Belegs, inklusive Standard-Anhängen und Empfängerauflösung.",
+    writesTables: ["email_thread", "email_message", "email_outbox"],
+    inputSchema: {
+      type: "object",
+      required: ["documentId", "emailIdentityId"],
+      properties: {
+        documentId: { type: "string", format: "uuid" },
+        emailIdentityId: { type: "string", format: "uuid" },
+        subject: { type: "string" },
+        bodyText: { type: "string" },
+        bodyHtml: { type: "string" },
+      },
+    },
+  },
 ];
 
 export class AIDiscoveryService {

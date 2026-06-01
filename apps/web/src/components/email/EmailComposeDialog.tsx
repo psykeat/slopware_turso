@@ -98,6 +98,47 @@ export function EmailComposeDialog({
   const [draft, setDraft] = useState<EmailComposeValue>(value);
   const [composeMode, setComposeMode] = useState<EmailComposeMode>(mode);
   const [attachmentRows, setAttachmentRows] = useState<EmailComposeAttachment[]>(attachments);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("/api/email/attachments/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const result = await res.json();
+        setAttachmentRows((prev) => [
+          ...prev,
+          {
+            fileName: result.fileName,
+            contentType: result.contentType,
+            sizeBytes: result.sizeBytes,
+            storageKey: result.storageKey,
+          },
+        ]);
+        toast.success(`Uploaded ${file.name}`);
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Failed to upload file");
+    } finally {
+      setUploading(false);
+      event.target.value = ""; // Reset
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -242,96 +283,50 @@ export function EmailComposeDialog({
               <div className="mb-2 flex items-center justify-between text-[11px] tracking-wider text-ink-mute uppercase">
                 <span>Attachments</span>
                 {canAddAttachments && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAttachmentRows((prev) => [
-                        ...prev,
-                        { fileName: "", contentType: "application/octet-stream" },
-                      ])
-                    }
-                    className="rounded-sm border border-hairline bg-canvas px-2 py-1 text-[11px] text-ink-secondary hover:text-ink"
-                  >
-                    Add
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <label className="cursor-pointer rounded-sm border border-hairline bg-canvas px-2 py-1 text-[11px] text-ink-secondary hover:text-ink">
+                      {uploading ? "Uploading..." : "Upload File"}
+                      <input
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileChange}
+                        disabled={uploading}
+                      />
+                    </label>
+                  </div>
                 )}
               </div>
               <div className="space-y-2">
                 {attachmentRows.length === 0 ? (
                   <div className="text-[12px] text-ink-mute">No attachments</div>
                 ) : (
-                  attachmentRows.map((attachment, index) =>
-                    attachment.readOnly ? (
-                      <div
-                        key={`${attachment.fileName}-${index}`}
-                        className="grid grid-cols-[1fr_auto] gap-2 rounded-sm border border-hairline bg-canvas px-2 py-1.5 text-[12px]"
-                      >
-                        <span className="min-w-0 truncate text-ink">{attachment.fileName}</span>
-                        <span className="text-ink-mute">
+                  attachmentRows.map((attachment, index) => (
+                    <div
+                      key={`${attachment.fileName}-${index}`}
+                      className="grid grid-cols-[1fr_auto] gap-2 rounded-sm border border-hairline bg-canvas px-2 py-1.5 text-[12px]"
+                    >
+                      <span className="min-w-0 truncate text-ink">{attachment.fileName}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] text-ink-mute">
                           {attachment.contentType} · {formatBytes(attachment.sizeBytes)}
                         </span>
+                        {!attachment.readOnly && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAttachmentRows((prev) =>
+                                prev.filter((_, itemIndex) => itemIndex !== index),
+                              )
+                            }
+                            className="text-[11px] font-medium text-ink-secondary hover:text-ink"
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
-                    ) : (
-                      <div
-                        key={`${attachment.fileName}-${index}`}
-                        className="grid grid-cols-[1.4fr_1fr_1fr_auto] gap-2"
-                      >
-                        <input
-                          value={attachment.fileName}
-                          onChange={(event) =>
-                            setAttachmentRows((prev) =>
-                              prev.map((item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, fileName: event.target.value }
-                                  : item,
-                              ),
-                            )
-                          }
-                          placeholder="File name"
-                          className="h-8 rounded-sm border border-hairline bg-canvas px-2 text-[12px] outline-none focus:border-primary"
-                        />
-                        <input
-                          value={attachment.contentType}
-                          onChange={(event) =>
-                            setAttachmentRows((prev) =>
-                              prev.map((item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, contentType: event.target.value }
-                                  : item,
-                              ),
-                            )
-                          }
-                          placeholder="Content type"
-                          className="h-8 rounded-sm border border-hairline bg-canvas px-2 text-[12px] outline-none focus:border-primary"
-                        />
-                        <input
-                          value={attachment.storageKey ?? ""}
-                          onChange={(event) =>
-                            setAttachmentRows((prev) =>
-                              prev.map((item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, storageKey: event.target.value }
-                                  : item,
-                              ),
-                            )
-                          }
-                          placeholder="Storage key"
-                          className="h-8 rounded-sm border border-hairline bg-canvas px-2 text-[12px] outline-none focus:border-primary"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setAttachmentRows((prev) =>
-                              prev.filter((_, itemIndex) => itemIndex !== index),
-                            )
-                          }
-                          className="h-8 rounded-sm border border-hairline px-2 text-[12px] text-ink-secondary hover:bg-canvas"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ),
-                  )
+                    </div>
+                  ))
                 )}
               </div>
             </div>

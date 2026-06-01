@@ -50,6 +50,8 @@ export class EmailSendService {
           lastMessageAt: new Date(),
           isRead: true,
           messageCount: 1,
+          relatedDocumentId: input.relatedDocumentId ?? null,
+          relatedAddressId: input.relatedAddressId ?? null,
         })
         .returning();
 
@@ -239,20 +241,87 @@ export class EmailSendService {
         );
 
       if (outbox.emailMessageId) {
-        await tx
-          .update(emailMessage)
-          .set({
-            providerMessageId: sent.providerMessageId,
-            direction: "outbound",
-            sentAt: sent.sentAt ? new Date(sent.sentAt) : new Date(),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(emailMessage.tenantId, this.tenantId),
-              eq(emailMessage.emailMessageId, outbox.emailMessageId),
-            ),
-          );
+        if (account.provider === "microsoft") {
+          // Delete attachments linked to this draft message
+          await tx
+            .delete(emailAttachment)
+            .where(
+              and(
+                eq(emailAttachment.tenantId, this.tenantId),
+                eq(emailAttachment.emailMessageId, outbox.emailMessageId),
+              ),
+            );
+
+          // Get the thread ID of this draft message to clean it up too
+          const [msgRow] = await tx
+            .select({ emailThreadId: emailMessage.emailThreadId })
+            .from(emailMessage)
+            .where(
+              and(
+                eq(emailMessage.tenantId, this.tenantId),
+                eq(emailMessage.emailMessageId, outbox.emailMessageId),
+              ),
+            )
+            .limit(1);
+
+          // Update outbox row to remove the foreign key reference so we can delete the message
+          await tx
+            .update(emailOutbox)
+            .set({ emailMessageId: null })
+            .where(
+              and(eq(emailOutbox.tenantId, this.tenantId), eq(emailOutbox.emailOutboxId, outboxId)),
+            );
+
+          // Delete the draft message
+          await tx
+            .delete(emailMessage)
+            .where(
+              and(
+                eq(emailMessage.tenantId, this.tenantId),
+                eq(emailMessage.emailMessageId, outbox.emailMessageId),
+              ),
+            );
+
+          if (msgRow?.emailThreadId) {
+            // Check if the thread has any other messages left. If not, delete the thread.
+            const otherMsgs = await tx
+              .select()
+              .from(emailMessage)
+              .where(
+                and(
+                  eq(emailMessage.tenantId, this.tenantId),
+                  eq(emailMessage.emailThreadId, msgRow.emailThreadId),
+                ),
+              )
+              .limit(1);
+
+            if (otherMsgs.length === 0) {
+              await tx
+                .delete(emailThread)
+                .where(
+                  and(
+                    eq(emailThread.tenantId, this.tenantId),
+                    eq(emailThread.emailThreadId, msgRow.emailThreadId),
+                  ),
+                );
+            }
+          }
+        } else {
+          await tx
+            .update(emailMessage)
+            .set({
+              providerMessageId: sent.providerMessageId,
+              direction: "outbound",
+              sentAt: sent.sentAt ? new Date(sent.sentAt) : new Date(),
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(emailMessage.tenantId, this.tenantId),
+                eq(emailMessage.emailMessageId, outbox.emailMessageId),
+              ),
+            );
+        }
       }
     });
 

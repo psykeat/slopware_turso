@@ -581,6 +581,12 @@ export class GmailProviderAdapter implements EmailProviderAdapter {
     });
   }
 
+  async moveToTrash(credentialsEncrypted: string, providerMessageId: string): Promise<void> {
+    await this.request(credentialsEncrypted, `/messages/${providerMessageId}/trash`, {
+      method: "POST",
+    });
+  }
+
   async fetchAttachment(
     credentialsEncrypted: string,
     providerMessageId: string,

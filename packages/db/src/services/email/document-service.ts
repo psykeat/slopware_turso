@@ -178,6 +178,7 @@ export class EmailDocumentService {
       bodyHtml: input.bodyHtml ?? defaults.bodyHtml,
       bodyText: input.bodyText ?? defaults.bodyText,
       attachments: defaults.attachments,
+      relatedDocumentId: input.documentId,
     });
 
     return {

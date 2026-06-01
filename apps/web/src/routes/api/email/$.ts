@@ -296,11 +296,16 @@ async function handleGet(context: EmailContext) {
   }
 
   if (segments[0] === "threads") {
+    const limit = url.searchParams.get("limit");
+    const offset = url.searchParams.get("offset");
     return json(
       await syncService.listThreads({
         accountId: url.searchParams.get("accountId"),
         labelId: url.searchParams.get("labelId"),
-        limit: Number(url.searchParams.get("limit") ?? 50),
+        folder: url.searchParams.get("folder"),
+        search: url.searchParams.get("q") || url.searchParams.get("search"),
+        limit: limit ? Number(limit) : 50,
+        offset: offset ? Number(offset) : undefined,
       }),
     );
   }
@@ -361,6 +366,32 @@ async function handleGet(context: EmailContext) {
 
 async function handlePost(context: EmailContext) {
   const { request, segments, tenantId, userId } = context;
+
+  if (segments[0] === "attachments" && segments[1] === "upload") {
+    try {
+      const form = await request.formData();
+      const file = form.get("file") as File | null;
+      if (!file) return jsonError(400, "file is required");
+
+      const storageKey = `tenant-${tenantId}/attachments/${randomBytes(16).toString("hex")}-${file.name}`;
+      const path = join(storageRoot(), storageKey);
+
+      await mkdir(join(storageRoot(), `tenant-${tenantId}`, "attachments"), { recursive: true });
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await writeFile(path, buffer);
+
+      return json({
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        storageKey,
+      });
+    } catch (err: any) {
+      return jsonError(400, err.message || "Failed to upload file");
+    }
+  }
+
   const bodyResult = await readBody(request);
   if (!bodyResult.ok) return bodyResult.response;
   const body = bodyResult.value;
@@ -446,6 +477,16 @@ async function handlePost(context: EmailContext) {
     const result = await new EmailSyncService(tenantId, userId).archiveThread(segments[1]);
     if (!result) return new Response("Not Found", { status: 404 });
     return json(result);
+  }
+
+  if (segments[0] === "threads" && segments[1] && segments[2] === "trash") {
+    try {
+      const result = await new EmailSyncService(tenantId, userId).trashThread(segments[1]);
+      if (!result) return new Response("Not Found", { status: 404 });
+      return json(result);
+    } catch (e: any) {
+      return jsonError(400, e.message);
+    }
   }
 
   if (segments[0] === "drafts" && segments[1] && segments[2] === "send") {

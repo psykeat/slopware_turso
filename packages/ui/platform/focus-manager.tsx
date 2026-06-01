@@ -10,6 +10,7 @@ export type FocusArea =
   | "dialog"
   | "designer"
   | "statistics"
+  | "ai-assistant"
   | null;
 
 export interface FocusContextState {

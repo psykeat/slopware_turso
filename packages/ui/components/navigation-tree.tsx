@@ -24,6 +24,7 @@ export interface NavigationTreeProps {
   isLoading?: boolean;
   onSelect?: (id: string) => void;
   onSelectCommit?: (id: string) => void;
+  defaultExpandDepth?: number;
 }
 
 export function NavigationTree({
@@ -35,11 +36,36 @@ export function NavigationTree({
   isLoading,
   onSelect,
   onSelectCommit,
+  defaultExpandDepth,
 }: NavigationTreeProps) {
   const { t } = useTranslation("ui");
   const { state: focusState, setFocus } = useFocus();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const treeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (defaultExpandDepth === undefined || defaultExpandDepth <= 0 || !data.length) return;
+
+    const initialExpanded: Record<string, boolean> = {};
+    const walk = (items: TreeNode[], currentLevel: number) => {
+      for (const item of items) {
+        const itemLevel = item.level ?? currentLevel;
+        if (itemLevel < defaultExpandDepth) {
+          initialExpanded[item.id] = true;
+          if (item.children) {
+            walk(item.children, itemLevel + 1);
+          }
+        }
+      }
+    };
+    walk(data, 0);
+
+    const timer = setTimeout(() => {
+      setExpanded((prev) => ({ ...initialExpanded, ...prev }));
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [data, defaultExpandDepth]);
 
   const flatNodes = useMemo(() => {
     const nodes: TreeNode[] = [];

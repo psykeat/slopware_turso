@@ -2219,6 +2219,7 @@ export const emailThread = pgTable(
     relatedAddressId: uuid("related_address_id").references(() => address.addressId),
     relatedDocumentId: uuid("related_document_id").references(() => document.documentId),
     archived: boolean("archived").notNull().default(false),
+    inTrash: boolean("in_trash").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
@@ -2785,6 +2786,73 @@ export const aiApplyAttempt = pgTable(
   ],
 );
 
+export const aiInterpretation = pgTable(
+  "ai_interpretation",
+  {
+    interpretationId: uuid("interpretation_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    sourceThreadId: uuid("source_thread_id").references(() => emailThread.emailThreadId),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => aiRun.runId),
+    promptVersionId: uuid("prompt_version_id")
+      .notNull()
+      .references(() => aiPromptVersion.promptVersionId),
+    businessIntent: text("business_intent").notNull(),
+    confidenceScore: numeric("confidence_score").notNull(),
+    summary: text("summary").notNull(),
+    evidenceJson: jsonb("evidence_json").notNull(),
+    extractedReferencesJson: jsonb("extracted_references_json").notNull(),
+    requestedResolversJson: jsonb("requested_resolvers_json").notNull(),
+    blockingQuestionsJson: jsonb("blocking_questions_json").notNull(),
+    rawLlmTrace: jsonb("raw_llm_trace"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_ai_interpretation_tenant").on(table.tenantId),
+    index("idx_ai_interpretation_run").on(table.runId),
+  ],
+);
+
+export const aiReview = pgTable(
+  "ai_review",
+  {
+    reviewId: uuid("review_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    interpretationId: uuid("interpretation_id")
+      .notNull()
+      .references(() => aiInterpretation.interpretationId),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => aiRun.runId),
+    reviewStatus: text("review_status").notNull(),
+    businessCase: text("business_case").notNull(),
+    headline: text("headline").notNull(),
+    summary: text("summary").notNull(),
+    intentBadgeJson: jsonb("intent_badge_json").notNull(),
+    sectionsJson: jsonb("sections_json").notNull(),
+    warningsJson: jsonb("warnings_json").notNull(),
+    blockingIssuesJson: jsonb("blocking_issues_json").notNull(),
+    proposedApplyPayloadJson: jsonb("proposed_apply_payload_json").notNull(),
+    appliedOverridesJson: jsonb("applied_overrides_json"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_ai_review_tenant").on(table.tenantId),
+    index("idx_ai_review_interpretation").on(table.interpretationId),
+  ],
+);
+
 export const aiEvidence = pgTable(
   "ai_evidence",
   {
@@ -2824,9 +2892,15 @@ export const tenantLlmConfig = pgTable(
     companyId: uuid("company_id")
       .notNull()
       .references(() => company.companyId),
+    provider: text("provider"),
     endpointUrl: text("endpoint_url"),
     model: text("model"),
     apiKey: text("api_key"),
+    githubToken: text("github_token"),
+    githubRepo: text("github_repo"),
+    vertexCredentials: text("vertex_credentials"),
+    vertexProject: text("vertex_project"),
+    vertexLocation: text("vertex_location"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }),

@@ -31,14 +31,24 @@ import React, {
   useImperativeHandle,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 
 import { cn } from "../lib/utils";
 import { useDesigner } from "../platform/designer-context";
 import { useFocus } from "../platform/focus-manager";
 import type { FilterOp, FilterRule } from "../types/grid";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "./dropdown-menu";
 import { Skeleton } from "./skeleton";
 
 export type { FilterOp, FilterRule };
+
+export type RelationFilterMode = "lookup-eq" | "join-text";
 
 export interface ColumnDef<T> {
   key: string;
@@ -48,8 +58,17 @@ export interface ColumnDef<T> {
   isNumeric?: boolean;
   width?: string;
   sortable?: boolean;
-  type?: "text" | "number" | "date" | "boolean";
+  type?: "text" | "number" | "date" | "boolean" | "relation";
   pin?: "left" | "right";
+  renderValue?: (row: T) => string;
+  getSearchValue?: (row: T) => string;
+  relation?: {
+    entity: string;
+    fkField: string;
+    labelField: string;
+    mode: RelationFilterMode;
+    resolveLabelToId?: (label: string) => string | null;
+  };
 }
 
 export interface BulkAction {
@@ -442,6 +461,11 @@ function DataGridInner<T>(
   const designer = useDesigner() as unknown as DesignerRuntimeContext;
   const { isDesignMode, delta, initColumns, addColumnDraft } = designer;
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  const [selectedColIndex, setSelectedColIndex] = useState<number>(0);
+  const [transientQuery, setTransientQuery] = useState<string>("");
+  const [transientSearchActive, setTransientSearchActive] = useState<boolean>(false);
+  const [exporting, setExporting] = useState(false);
+  const [activeSearchColKey, setActiveSearchColKey] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const colPickerRef = useRef<HTMLDivElement>(null);
   const headerCheckRef = useRef<HTMLInputElement>(null);
@@ -449,8 +473,6 @@ function DataGridInner<T>(
   const lastFocusRef = useRef<{ id: string; entity: string; panel: string; row: number } | null>(
     null,
   );
-  const lastColsRef = useRef<string>("");
-
   const [resolvedColumns, setResolvedColumns] = useState<ColumnDef<T>[]>(initialColumns ?? []);
   const [internalLoading, setInternalLoading] = useState(!initialColumns && !!entityName);
   const [showColPicker, setShowColPicker] = useState(false);
@@ -575,13 +597,26 @@ function DataGridInner<T>(
 
   useEffect(() => {
     if (initialColumns) {
-      const sig = JSON.stringify(initialColumns);
-      if (sig !== lastColsRef.current) {
-        lastColsRef.current = sig;
+      const changed =
+        initialColumns.length !== resolvedColumns.length ||
+        initialColumns.some((col, idx) => {
+          const prev = resolvedColumns[idx];
+          return (
+            !prev ||
+            col.key !== prev.key ||
+            col.header !== prev.header ||
+            col.render !== prev.render ||
+            col.renderValue !== prev.renderValue ||
+            col.getSearchValue !== prev.getSearchValue ||
+            col.type !== prev.type
+          );
+        });
+
+      if (changed) {
         setResolvedColumns(initialColumns);
       }
     }
-  }, [initialColumns]);
+  }, [initialColumns, resolvedColumns]);
 
   // In design mode, honour the delta column order and visibility
   const effectiveColumns = useMemo(() => {
@@ -696,6 +731,41 @@ function DataGridInner<T>(
       }
     },
     [virtualized, virtualizer],
+  );
+
+  const performSearchJump = useCallback(
+    (colKey: string, query: string, currentIndex: number, direction: number) => {
+      if (rows.length === 0 || !query) return;
+
+      const lowerQuery = query.toLowerCase();
+      const dir = direction === 0 ? 1 : direction;
+      const start = direction === 0 ? currentIndex : currentIndex + direction;
+
+      const col = effectiveColumns.find((c) => c.key === colKey) as ColumnDef<T> | undefined;
+
+      for (let i = 0; i < rows.length; i++) {
+        const idx = (start + i * dir + rows.length * 2) % rows.length;
+        const row = rows[idx]?.original;
+        if (!row) continue;
+
+        let valStr = "";
+        if (col?.getSearchValue) {
+          valStr = col.getSearchValue(row);
+        } else if (col?.renderValue) {
+          valStr = col.renderValue(row);
+        } else {
+          const val = (row as Record<string, any>)[colKey];
+          valStr = val !== undefined && val !== null ? String(val) : "";
+        }
+
+        if (valStr.toLowerCase().includes(lowerQuery)) {
+          setSelectedIndex(idx);
+          scrollRowIntoView(idx);
+          break;
+        }
+      }
+    },
+    [rows, scrollRowIntoView, effectiveColumns],
   );
 
   const focusRow = useCallback(
@@ -825,9 +895,141 @@ function DataGridInner<T>(
 
   // Scoped keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Handle keys in transient search mode first
+    if (transientSearchActive) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setTransientSearchActive(false);
+        setTransientQuery("");
+        setActiveSearchColKey(null);
+        return;
+      }
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        const nextQuery = transientQuery.slice(0, -1);
+        setTransientQuery(nextQuery);
+        if (nextQuery === "") {
+          setTransientSearchActive(false);
+          setActiveSearchColKey(null);
+        } else {
+          performSearchJump(activeSearchColKey!, nextQuery, selectedIndex, 0);
+        }
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (e.ctrlKey) {
+          // Commit search as a persistent filter
+          if (onFiltersChange && activeSearchColKey) {
+            let resolvedValue = transientQuery;
+            let filterCol = activeSearchColKey;
+            let filterOp: FilterOp = "contains";
+
+            const col = effectiveColumns.find((c) => c.key === activeSearchColKey) as
+              | ColumnDef<T>
+              | undefined;
+
+            if (col?.type === "relation" && col.relation) {
+              if (col.relation.mode === "lookup-eq") {
+                let fkVal = col.relation.resolveLabelToId?.(transientQuery) || null;
+                if (!fkVal) {
+                  // Fallback to local row search
+                  const match = rows.find((r) => {
+                    const label =
+                      col.getSearchValue?.(r.original) || col.renderValue?.(r.original) || "";
+                    return label.toLowerCase().includes(transientQuery.toLowerCase());
+                  });
+                  fkVal = match
+                    ? (match.original as Record<string, any>)[col.relation.fkField]
+                    : null;
+                }
+
+                if (fkVal) {
+                  resolvedValue = String(fkVal);
+                  filterCol = col.relation.fkField;
+                  filterOp = "eq";
+                } else {
+                  // Discard query and return to prevent invalid UUID strings from crashing the DB
+                  return;
+                }
+              } else if (col.relation.mode === "join-text") {
+                filterCol = `${col.relation.entity}.${col.relation.labelField}`;
+                filterOp = "contains";
+              }
+            } else if (activeSearchColKey.endsWith("Id")) {
+              filterOp = "eq";
+            }
+
+            const active = filtersProp ?? [];
+            const filtered = active.filter((f) => f.col !== filterCol);
+            onFiltersChange([
+              ...filtered,
+              {
+                id:
+                  active.find((f) => f.col === filterCol)?.id ||
+                  Math.random().toString(36).substring(2, 9),
+                col: filterCol,
+                op: filterOp,
+                val: resolvedValue,
+              },
+            ]);
+            setTransientSearchActive(false);
+            setTransientQuery("");
+            setActiveSearchColKey(null);
+          }
+        } else {
+          // Find next matching row
+          const direction = e.shiftKey ? -1 : 1;
+          performSearchJump(activeSearchColKey!, transientQuery, selectedIndex, direction);
+        }
+        return;
+      }
+
+      // Capture and append alphanumeric characters during an active transient search
+      const isAlphanumeric = e.key.length === 1 && /[a-zA-Z0-9\s.,\-_]/.test(e.key);
+      if (isAlphanumeric && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        const nextQuery = transientQuery + e.key;
+        setTransientQuery(nextQuery);
+        performSearchJump(activeSearchColKey!, nextQuery, selectedIndex, 0);
+        return;
+      }
+
+      // If Arrow/Tab is pressed, close transient search and let standard navigation handle it
+      if (e.key.startsWith("Arrow") || e.key === "Tab") {
+        setTransientSearchActive(false);
+        setTransientQuery("");
+        setActiveSearchColKey(null);
+      } else {
+        // Prevent all other default keyboard actions during active search
+        e.preventDefault();
+        return;
+      }
+    }
+
     if (e.ctrlKey || e.metaKey || e.altKey) {
+      // Alt+S: Toggle sorting on the active column
+      if (e.altKey && e.key === "s") {
+        e.preventDefault();
+        const col = effectiveColumns[selectedColIndex];
+        if (col && col.sortable && !isDesignMode) {
+          const tableCol = table.getColumn(col.key);
+          tableCol?.toggleSorting();
+        }
+      }
+      // Ctrl+L or Ctrl+F: Focus global search input in toolbar
+      if (e.ctrlKey && (e.key === "l" || e.key === "f")) {
+        e.preventDefault();
+        const searchInput = scrollRef.current
+          ?.closest(".flex-col")
+          ?.querySelector("input[placeholder*='Search']");
+        if (searchInput instanceof HTMLInputElement) {
+          searchInput.focus();
+        }
+      }
       return;
     }
+
     if (e.key === "ArrowDown") {
       e.preventDefault();
       const next = Math.min(selectedIndex + 1, rows.length - 1);
@@ -838,6 +1040,12 @@ function DataGridInner<T>(
       const next = Math.max(selectedIndex - 1, 0);
       setSelectedIndex(next);
       scrollRowIntoView(next);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      setSelectedColIndex((p) => Math.max(0, p - 1));
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      setSelectedColIndex((p) => Math.min(effectiveColumns.length - 1, p + 1));
     } else if (e.key === "Home") {
       e.preventDefault();
       setSelectedIndex(0);
@@ -858,6 +1066,27 @@ function DataGridInner<T>(
         else next.add(key);
         return next;
       });
+    } else if (e.key === "/") {
+      e.preventDefault();
+      const searchInput = scrollRef.current
+        ?.closest(".flex-col")
+        ?.querySelector("input[placeholder*='Search']");
+      if (searchInput instanceof HTMLInputElement) {
+        searchInput.focus();
+      }
+    } else {
+      // Check for alphanumeric keys to start search mode
+      const isAlphanumeric = e.key.length === 1 && /[a-zA-Z0-9\s.,\-_]/.test(e.key);
+      if (isAlphanumeric && !isDesignMode) {
+        const col = effectiveColumns[selectedColIndex];
+        if (col) {
+          e.preventDefault();
+          setTransientSearchActive(true);
+          setActiveSearchColKey(col.key);
+          setTransientQuery(e.key);
+          performSearchJump(col.key, e.key, selectedIndex, 0);
+        }
+      }
     }
   };
 
@@ -907,6 +1136,150 @@ function DataGridInner<T>(
 
   const removeFilter = (id: string) => {
     onFiltersChange?.(activeFilters.filter((r) => r.id !== id));
+  };
+
+  const handleResetGrid = () => {
+    handleSearchChange("");
+    onFiltersChange?.([]);
+    if (onSortChange) onSortChange(null);
+    else setInternalSorting([]);
+    setColumnVisibility({});
+    toast.success("Grid view reset successfully.");
+  };
+
+  const handleCopyToClipboard = async () => {
+    if (!data || data.length === 0) {
+      toast.warning("No records to copy");
+      return;
+    }
+
+    const exportColumns = effectiveColumns;
+    const headers = exportColumns.map((col) => col.header).join("\t");
+
+    const rows = data.map((dataRow) => {
+      return exportColumns
+        .map((colDef) => {
+          const col = colDef as ColumnDef<T>;
+          let value = "";
+
+          if (col.getSearchValue) {
+            value = col.getSearchValue(dataRow);
+          } else if (col.renderValue) {
+            value = col.renderValue(dataRow);
+          } else {
+            const rawVal = (dataRow as Record<string, any>)[col.key];
+            value = rawVal !== undefined && rawVal !== null ? String(rawVal) : "";
+          }
+
+          return value.replace(/[\t\n\r]/g, " ");
+        })
+        .join("\t");
+    });
+
+    const tsvContent = [headers, ...rows].join("\n");
+    try {
+      await navigator.clipboard.writeText(tsvContent);
+      toast.success(`Copied ${data.length} records to clipboard.`);
+    } catch (err) {
+      console.error("Clipboard copy failed:", err);
+      toast.error("Failed to copy to clipboard");
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if (exporting) return;
+    setExporting(true);
+
+    try {
+      const params = new URLSearchParams();
+
+      const effectiveSort = onSortChange
+        ? sort
+          ? { key: sort.key, dir: sort.dir }
+          : null
+        : internalSorting.length > 0
+          ? { key: internalSorting[0].id, dir: internalSorting[0].desc ? "desc" : "asc" }
+          : null;
+      if (effectiveSort) {
+        params.set("orderBy", `${effectiveSort.key}:${effectiveSort.dir}`);
+      }
+
+      if (localSearch) {
+        params.set("search", localSearch);
+      }
+
+      if (filtersProp && filtersProp.length > 0) {
+        params.set("filters", JSON.stringify(filtersProp));
+      }
+
+      const res = await fetch(`/api/data/${entityName}?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch export data");
+
+      const fullData = await res.json();
+      const exportData = Array.isArray(fullData) ? fullData : fullData.data || [];
+
+      if (!exportData || exportData.length === 0) {
+        toast.warning("No records to export");
+        return;
+      }
+
+      const exportColumns = effectiveColumns;
+      const headers = exportColumns.map((col) => col.header);
+
+      const csvRows = exportData.map((dataRow: any) => {
+        return exportColumns.map((colDef) => {
+          const col = colDef as ColumnDef<T>;
+          let value = "";
+
+          if (col.getSearchValue) {
+            value = col.getSearchValue(dataRow);
+          } else if (col.renderValue) {
+            value = col.renderValue(dataRow);
+          } else {
+            const rawVal = (dataRow as Record<string, any>)[col.key];
+            if (rawVal !== undefined && rawVal !== null) {
+              if (
+                (col.key === "primaryImageId" || col.key.toLowerCase().includes("image")) &&
+                typeof rawVal === "string"
+              ) {
+                const host = typeof window !== "undefined" ? window.location.origin : "";
+                value = `${host}/api/storage/article-images/${rawVal}`;
+              } else {
+                value = String(rawVal);
+              }
+            }
+          }
+
+          const escaped = value.replace(/"/g, '""');
+          return `"${escaped}"`;
+        });
+      });
+
+      const csvContent = [
+        headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(","),
+        ...csvRows.map((r: string[]) => r.join(",")),
+      ].join("\n");
+
+      const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      const dateStr = new Date().toISOString().split("T")[0];
+      const filename = `${entityName.toLowerCase()}_export_${dateStr}.csv`;
+
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success(`Exported ${exportData.length} records successfully.`);
+    } catch (err) {
+      console.error("Export failed:", err);
+      toast.error("Export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const skeletonWidthForCol = (col: ColumnDef<T>, idx: number) => {
@@ -1028,21 +1401,83 @@ function DataGridInner<T>(
                 )}
               </div>
             )}
-            {(
-              [
-                { Icon: RefreshCwIcon, label: "Refresh" },
-                { Icon: DownloadIcon, label: "Export" },
-                { Icon: MoreHorizontalIcon, label: "More" },
-              ] as const
-            ).map(({ Icon, label }) => (
-              <button
-                key={label}
-                title={label}
-                className="grid size-7 place-items-center rounded-sm text-ink-mute transition-colors hover:bg-canvas hover:text-ink"
+            <button
+              title="Refresh"
+              onClick={() => onSearchChange?.(localSearch)}
+              className="grid size-7 place-items-center rounded-sm text-ink-mute transition-colors hover:bg-canvas hover:text-ink"
+            >
+              <RefreshCwIcon size={14} />
+            </button>
+            <button
+              title={exporting ? "Exporting..." : "Export CSV"}
+              onClick={handleExportCSV}
+              disabled={exporting}
+              className={cn(
+                "grid size-7 place-items-center rounded-sm text-ink-mute transition-colors hover:bg-canvas hover:text-ink",
+                exporting && "cursor-not-allowed opacity-50",
+              )}
+            >
+              {exporting ? (
+                <RefreshCwIcon size={14} className="animate-spin text-primary" />
+              ) : (
+                <DownloadIcon size={14} />
+              )}
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    title="More"
+                    className="grid size-7 place-items-center rounded-sm text-ink-mute transition-colors hover:bg-canvas hover:text-ink focus:outline-none"
+                  >
+                    <MoreHorizontalIcon size={14} />
+                  </button>
+                }
+              />
+              <DropdownMenuContent
+                align="end"
+                className="z-50 w-56 rounded-[4px] border border-hairline bg-canvas p-1 text-[13px] shadow-md"
               >
-                <Icon size={14} />
-              </button>
-            ))}
+                {/* 1. Grid- & Ansichtsverwaltung */}
+                <div className="px-2 py-1 text-[11px] font-bold tracking-wider text-ink-mute uppercase select-none">
+                  View Management
+                </div>
+                <DropdownMenuItem
+                  onClick={handleResetGrid}
+                  className="flex cursor-pointer items-center gap-2 rounded-[3px] px-2 py-1.5 text-ink transition-colors hover:bg-canvas-soft"
+                >
+                  <span>Reset Grid View</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1 border-t border-hairline" />
+
+                {/* 2. Daten-Werkzeuge */}
+                <div className="px-2 py-1 text-[11px] font-bold tracking-wider text-ink-mute uppercase select-none">
+                  Data Tools
+                </div>
+                <DropdownMenuItem
+                  onClick={handleCopyToClipboard}
+                  className="flex cursor-pointer items-center gap-2 rounded-[3px] px-2 py-1.5 text-ink transition-colors hover:bg-canvas-soft"
+                >
+                  <span>Copy to Clipboard (TSV)</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1 border-t border-hairline" />
+
+                {/* 3. Globale Massenaktionen */}
+                <div className="px-2 py-1 text-[11px] font-bold tracking-wider text-ink-mute uppercase select-none">
+                  Bulk Operations
+                </div>
+                <DropdownMenuItem
+                  onClick={() =>
+                    toast.info(`Bulk archiving is not configured for ${entityName.toLowerCase()}s.`)
+                  }
+                  className="flex cursor-not-allowed items-center gap-2 rounded-[3px] px-2 py-1.5 text-ink-mute opacity-60 hover:bg-canvas-soft"
+                >
+                  <span>Archive All Filtered (Placeholder)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {/* Column visibility picker */}
             <div ref={colPickerRef} className="relative">
               <button
@@ -1097,7 +1532,13 @@ function DataGridInner<T>(
       {onFiltersChange && showFilters && (
         <div className="flex shrink-0 flex-col gap-1.5 border-b border-hairline bg-canvas px-3 py-2">
           {activeFilters.map((rule) => {
-            const col = resolvedColumns.find((c) => c.key === rule.col);
+            const col = resolvedColumns.find(
+              (c) =>
+                c.key === rule.col ||
+                (c.relation &&
+                  (c.relation.fkField === rule.col ||
+                    `${c.relation.entity}.${c.relation.labelField}` === rule.col)),
+            ) as ColumnDef<T> | undefined;
             const colType = getColType(col);
             const ops = OPS_BY_TYPE[colType] ?? OPS_BY_TYPE.text;
             const noValue = rule.op === "is_empty" || rule.op === "is_not_empty";
@@ -1437,6 +1878,8 @@ function DataGridInner<T>(
                         "relative flex cursor-pointer border-b border-hairline transition-colors",
                         !isSelected && !isChecked && "hover:bg-canvas-soft",
                       )}
+                      onClick={() => activateRow(dataRow, vItem.index, id)}
+                      onDoubleClick={() => onRowOpen?.(dataRow)}
                     >
                       {selectable && (
                         <button
@@ -1464,16 +1907,10 @@ function DataGridInner<T>(
                           />
                         </button>
                       )}
-                      <button
-                        type="button"
-                        aria-label={`Open row ${id}`}
-                        className="absolute inset-y-0 z-10 bg-transparent"
-                        style={{ left: selectable ? 40 : 0, right: 0 }}
-                        onClick={() => activateRow(dataRow, vItem.index, id)}
-                        onDoubleClick={() => onRowOpen?.(dataRow)}
-                      />
-                      {row.getVisibleCells().map((cell) => {
-                        const col = resolvedColumns.find((c) => c.key === cell.column.id);
+                      {row.getVisibleCells().map((cell, cellIdx) => {
+                        const col = effectiveColumns.find((c) => c.key === cell.column.id) as
+                          | ColumnDef<T>
+                          | undefined;
                         if (!col) return null;
                         const value = (dataRow as Record<string, any>)[col.key];
                         const rendered = col.render
@@ -1483,18 +1920,47 @@ function DataGridInner<T>(
                               ("en" in value || "de" in value)
                             ? value[i18n.language] || value.en || value.de
                             : value;
+                        const isCellFocused = isSelected && selectedColIndex === cellIdx;
                         return (
+                          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
                           <div
                             key={cell.id}
+                            role="gridcell"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              activateRow(dataRow, vItem.index, id);
+                              setSelectedColIndex(cellIdx);
+                            }}
                             className={cn(
-                              "flex shrink-0 items-center px-4 text-[13px] font-light text-ink",
+                              "flex shrink-0 items-center border border-transparent text-[13px] font-light text-ink transition-all",
+                              isCellFocused && transientSearchActive ? "px-1" : "px-4",
                               col.isNumeric && "justify-end font-mono tabular-nums",
                               col.align === "center" && "justify-center",
                               col.align === "right" && "justify-end",
+                              isCellFocused &&
+                                "rounded-[2px] border-primary/60 bg-primary/[0.04] ring-1 ring-primary/40 ring-inset",
                             )}
-                            style={colFlexStyle(col.width)}
+                            style={{
+                              ...colFlexStyle(col.width),
+                              overflow: "hidden",
+                            }}
                           >
-                            <span className="truncate">{rendered as React.ReactNode}</span>
+                            {isCellFocused && transientSearchActive ? (
+                              <div className="relative flex h-[85%] w-full animate-in items-center gap-1.5 overflow-hidden rounded border border-primary/40 bg-primary/10 px-2 text-xs font-medium text-primary duration-100 select-none zoom-in-95 fade-in">
+                                <SearchIcon size={12} className="shrink-0 text-primary/80" />
+                                <span className="shrink-0 text-[10px] font-bold tracking-wider text-primary/60 uppercase">
+                                  {col.header}:
+                                </span>
+                                <span className="flex-1 truncate bg-transparent text-left font-mono font-semibold text-primary outline-none">
+                                  {transientQuery}
+                                </span>
+                                <span className="-ml-0.5 shrink-0 animate-pulse font-bold text-primary select-none">
+                                  |
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="truncate">{rendered as React.ReactNode}</span>
+                            )}
                           </div>
                         );
                       })}
@@ -1533,6 +1999,8 @@ function DataGridInner<T>(
                         "relative flex cursor-pointer border-b border-hairline transition-colors",
                         !isSelected && !isChecked && "hover:bg-canvas-soft",
                       )}
+                      onClick={() => activateRow(dataRow, index, id)}
+                      onDoubleClick={() => onRowOpen?.(dataRow)}
                     >
                       {selectable && (
                         <button
@@ -1560,16 +2028,10 @@ function DataGridInner<T>(
                           />
                         </button>
                       )}
-                      <button
-                        type="button"
-                        aria-label={`Open row ${id}`}
-                        className="absolute inset-y-0 z-10 bg-transparent"
-                        style={{ left: selectable ? 40 : 0, right: 0 }}
-                        onClick={() => activateRow(dataRow, index, id)}
-                        onDoubleClick={() => onRowOpen?.(dataRow)}
-                      />
-                      {row.getVisibleCells().map((cell) => {
-                        const col = resolvedColumns.find((c) => c.key === cell.column.id);
+                      {row.getVisibleCells().map((cell, cellIdx) => {
+                        const col = effectiveColumns.find((c) => c.key === cell.column.id) as
+                          | ColumnDef<T>
+                          | undefined;
                         if (!col) return null;
                         const value = (dataRow as Record<string, any>)[col.key];
                         const rendered = col.render
@@ -1579,18 +2041,47 @@ function DataGridInner<T>(
                               ("en" in value || "de" in value)
                             ? value[i18n.language] || value.en || value.de
                             : value;
+                        const isCellFocused = isSelected && selectedColIndex === cellIdx;
                         return (
+                          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
                           <div
                             key={cell.id}
+                            role="gridcell"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              activateRow(dataRow, index, id);
+                              setSelectedColIndex(cellIdx);
+                            }}
                             className={cn(
-                              "flex shrink-0 items-center px-4 text-[13px] font-light text-ink",
+                              "flex shrink-0 items-center border border-transparent text-[13px] font-light text-ink transition-all",
+                              isCellFocused && transientSearchActive ? "px-1" : "px-4",
                               col.isNumeric && "justify-end font-mono tabular-nums",
                               col.align === "center" && "justify-center",
                               col.align === "right" && "justify-end",
+                              isCellFocused &&
+                                "rounded-[2px] border-primary/60 bg-primary/[0.04] ring-1 ring-primary/40 ring-inset",
                             )}
-                            style={colFlexStyle(col.width)}
+                            style={{
+                              ...colFlexStyle(col.width),
+                              overflow: "hidden",
+                            }}
                           >
-                            <span className="truncate">{rendered as React.ReactNode}</span>
+                            {isCellFocused && transientSearchActive ? (
+                              <div className="relative flex h-[85%] w-full animate-in items-center gap-1.5 overflow-hidden rounded border border-primary/40 bg-primary/10 px-2 text-xs font-medium text-primary duration-100 select-none zoom-in-95 fade-in">
+                                <SearchIcon size={12} className="shrink-0 text-primary/80" />
+                                <span className="shrink-0 text-[10px] font-bold tracking-wider text-primary/60 uppercase">
+                                  {col.header}:
+                                </span>
+                                <span className="flex-1 truncate bg-transparent text-left font-mono font-semibold text-primary outline-none">
+                                  {transientQuery}
+                                </span>
+                                <span className="-ml-0.5 shrink-0 animate-pulse font-bold text-primary select-none">
+                                  |
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="truncate">{rendered as React.ReactNode}</span>
+                            )}
                           </div>
                         );
                       })}

@@ -10,7 +10,7 @@ import { cn } from "@repo/ui/lib/utils";
 import { ActionBarProvider, useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { DesignerProvider, useDesigner } from "@repo/ui/platform/designer-context";
-import { useFocus, type FocusContextState } from "@repo/ui/platform/focus-manager";
+import { useFocus } from "@repo/ui/platform/focus-manager";
 import { TelemetryProvider, useTelemetry } from "@repo/ui/platform/telemetry-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
@@ -35,7 +35,7 @@ import {
   CheckIcon,
   PlusIcon,
 } from "lucide-react";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { captureFeedbackSnapshot, type FeedbackSnapshot } from "#/lib/feedback-snapshot";
@@ -612,7 +612,7 @@ function AppLayoutInner({
   tenantId: string;
 }) {
   const { subCrumb } = useActionBar();
-  const { state: focusState, setFocus, resetFocus } = useFocus();
+  const { state: focusState, setFocus } = useFocus();
   const { registerCommand } = useCommands();
   const { getSnapshot } = useTelemetry();
   const { isDesignMode } = useDesigner();
@@ -620,7 +620,6 @@ function AppLayoutInner({
   const [snapshot, setSnapshot] = useState<FeedbackSnapshot>(DEFAULT_SNAPSHOT);
   const prevFeedbackOpen = useRef(false);
   const focusSnapshotRef = useRef(focusState);
-  const designerFocusSnapshotRef = useRef<FocusContextState | null>(null);
 
   useEffect(() => {
     focusSnapshotRef.current = focusState;

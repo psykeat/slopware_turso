@@ -509,6 +509,53 @@ export function EntityMask({
     return [...orderedFields, ...remainingFields, ...draftOnlyFields];
   }, [designerFieldConfigs, delta.fieldConfigs, fields, isDesignMode]);
 
+  const groupedFields = useMemo(() => {
+    const groups: { frameId: string; label: string; fields: FieldDef[] }[] = [];
+    const fieldsInFrames = new Set<string>();
+
+    if (frameNodes.length > 0) {
+      // Create a map from fieldKey to parentId
+      const fieldToParent = new Map<string, string>();
+      if (activeSurfaceState?.nodes) {
+        for (const node of activeSurfaceState.nodes) {
+          if ((node.kind === "field-ref" || node.kind === "jsonb-field") && node.parentId) {
+            fieldToParent.set(node.id, node.parentId);
+          }
+        }
+      }
+
+      // Group fields by defined frames
+      for (const frame of frameNodes) {
+        const frameFields = effectiveFields.filter((field) => {
+          const parentId = fieldToParent.get(field.key);
+          return parentId === frame.id;
+        });
+
+        groups.push({
+          frameId: frame.id,
+          label: frame.label,
+          fields: frameFields,
+        });
+
+        for (const f of frameFields) {
+          fieldsInFrames.add(f.key);
+        }
+      }
+    }
+
+    // Capture any remaining fields that aren't in any frame
+    const remaining = effectiveFields.filter((f) => !fieldsInFrames.has(f.key));
+    if (remaining.length > 0) {
+      groups.push({
+        frameId: "default",
+        label: "", // no label for general/remaining fields
+        fields: remaining,
+      });
+    }
+
+    return groups;
+  }, [frameNodes, effectiveFields, activeSurfaceState]);
+
   const fieldByKey = useMemo(
     () => new Map(effectiveFields.map((field) => [field.key, field])),
     [effectiveFields],
@@ -723,7 +770,14 @@ export function EntityMask({
       if (top + estimatedHeight > window.innerHeight - 12) {
         top = Math.max(12, rect.top - estimatedHeight - 10);
       }
-      const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+      let left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+
+      // Collision guard against the right-docked InlineDesigner panel (width ~420px + margins)
+      const collisionBoundary = window.innerWidth - 452;
+      if (left > collisionBoundary - width) {
+        left = Math.max(12, Math.min(left, collisionBoundary - width));
+      }
+
       setOverlayStyle({ position: "fixed", top, left, width, zIndex: 70 });
     };
     sync();
@@ -898,33 +952,58 @@ export function EntityMask({
         </div>
       )}
 
-      <div className={cn("grid gap-x-6 gap-y-5", fieldGridClass)}>
-        {effectiveFields.filter(visibleFieldInLiveView).length > 0
-          ? effectiveFields.filter(visibleFieldInLiveView).map((field) => (
-              <React.Fragment key={field.key}>
-                {field.sectionLabel && (
-                  <div
-                    className={cn(
-                      "-mb-2 border-t border-hairline pt-2",
-                      fieldGridClass === "grid-cols-2" ? "col-span-2" : "",
+      {groupedFields.map((group) => {
+        const visibleFields = group.fields.filter(visibleFieldInLiveView);
+        if (visibleFields.length === 0 && !isDesignMode) return null;
+
+        const content = (
+          <div className={cn("grid gap-x-6 gap-y-5", fieldGridClass)}>
+            {visibleFields.length > 0
+              ? visibleFields.map((field) => (
+                  <React.Fragment key={field.key}>
+                    {field.sectionLabel && (
+                      <div
+                        className={cn(
+                          "-mb-2 border-t border-hairline pt-2",
+                          fieldGridClass === "grid-cols-2" ? "col-span-2" : "",
+                        )}
+                      >
+                        <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                          {i18n.language === "de" && field.sectionLabelDe
+                            ? field.sectionLabelDe
+                            : field.sectionLabel}
+                        </span>
+                      </div>
                     )}
-                  >
-                    <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                      {i18n.language === "de" && field.sectionLabelDe
-                        ? field.sectionLabelDe
-                        : field.sectionLabel}
-                    </span>
+                    {renderFieldCard(field)}
+                  </React.Fragment>
+                ))
+              : isDesignMode && (
+                  <div className="text-ink-muted col-span-full rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
+                    {i18n.language === "de"
+                      ? "Keine Felder in diesem Rahmen."
+                      : "No fields in this frame."}
                   </div>
                 )}
-                {renderFieldCard(field)}
-              </React.Fragment>
-            ))
-          : isDesignMode && (
-              <div className="text-ink-muted col-span-full rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
-                No fields available.
-              </div>
-            )}
-      </div>
+          </div>
+        );
+
+        if (group.label) {
+          return (
+            <fieldset
+              key={group.frameId}
+              className="space-y-4 rounded-lg border border-hairline bg-canvas-soft p-4 shadow-sm"
+            >
+              <legend className="text-ink-muted px-2 text-[12px] font-semibold tracking-wide uppercase">
+                {group.label}
+              </legend>
+              {content}
+            </fieldset>
+          );
+        }
+
+        return <div key={group.frameId}>{content}</div>;
+      })}
 
       {isDesignMode && (
         <div className="flex flex-wrap gap-2">
@@ -1133,29 +1212,6 @@ export function EntityMask({
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="flex flex-col gap-1">
                   <span className="text-ink-muted text-[10px] font-semibold tracking-wide uppercase">
-                    Source
-                  </span>
-                  <select
-                    value={editorIsJsonb ? "jsonb" : "schema"}
-                    onChange={(e) => {
-                      if (e.target.value === "jsonb") {
-                        updateField(editorField.key, {
-                          path: editorField.jsonPath ?? `customAttributes.${editorField.key}`,
-                        });
-                        return;
-                      }
-                      updateField(editorField.key, { path: null });
-                    }}
-                    className="h-7 rounded-md border border-hairline bg-canvas px-2 text-[12px] text-ink outline-none"
-                  >
-                    <option value="schema">Schema field</option>
-                    <option value="jsonb">JSONB field</option>
-                  </select>
-                </label>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-ink-muted text-[10px] font-semibold tracking-wide uppercase">
                     Frame
                   </span>
                   <select
@@ -1190,6 +1246,20 @@ export function EntityMask({
                     <option value="schema">Schema field</option>
                     <option value="jsonb">JSONB field</option>
                   </select>
+                </label>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-ink-muted text-[10px] font-semibold tracking-wide uppercase">
+                    Frame Name
+                  </span>
+                  <input
+                    type="text"
+                    value={editorFrameLabel}
+                    onChange={(e) => updateFrameLabel(editorFrameId, e.target.value)}
+                    className="h-7 rounded-md border border-hairline bg-canvas px-2 text-[12px] text-ink outline-none"
+                  />
                 </label>
               </div>
 

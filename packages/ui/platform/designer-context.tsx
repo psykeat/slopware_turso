@@ -942,10 +942,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     setIsDesignMode((prev) => !prev);
   }, []);
 
-  const closeDesignMode = useCallback(() => {
-    setIsDesignMode(false);
-  }, []);
-
   const persistActiveSurface = useCallback(
     async (mode: "save" | "apply") => {
       const entityName = focusState.entity;
@@ -998,8 +994,8 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
 
   const saveDesign = useCallback(async () => {
     try {
-      await persistActiveSurface("save");
-      toast.success("Designer saved");
+      await persistActiveSurface("apply");
+      toast.success("Designer saved & applied");
     } catch (error) {
       console.error("Failed to save designer surface:", error);
       toast.error(error instanceof Error ? error.message : "Failed to save designer surface");
@@ -1057,6 +1053,30 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     });
     setInteractionState({ ...defaultDelta });
   }, [updateRuntime]);
+
+  const closeDesignMode = useCallback(async () => {
+    const hasUnsaved = Object.values(runtimeState.surfaces).some(
+      (bucket) => bucket && bucket.draftPatchOps.length > 0,
+    );
+    if (hasUnsaved) {
+      const confirmSave = window.confirm(
+        "Es gibt ungespeicherte Änderungen. Möchten Sie diese speichern und übernehmen?\n\nYou have unsaved changes. Would you like to save and apply them?",
+      );
+      if (confirmSave) {
+        try {
+          await persistActiveSurface("apply");
+          toast.success("Designer-Änderungen erfolgreich angewendet");
+        } catch (error) {
+          console.error("Failed to apply design on exit:", error);
+          toast.error("Failed to apply design changes");
+          return; // Keep designer open on error
+        }
+      } else {
+        resetDelta();
+      }
+    }
+    setIsDesignMode(false);
+  }, [runtimeState.surfaces, persistActiveSurface, resetDelta]);
 
   const updateColumn = useCallback(
     (key: string, patch: Partial<ColumnDesignConfig>) => {
@@ -1521,7 +1541,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [focusState.entity, updateRuntime],
+    [focusState.area, focusState.entity, updateRuntime],
   );
 
   const initFields = useCallback(
@@ -1754,7 +1774,8 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       id: "designer.apply",
       scope: "context",
       group: "workflow",
-      label: { en: "Apply Designer Draft", de: "Designer-Entwurf anwenden" },
+      label: { en: "Save & Apply Designer", de: "Speichern & Übernehmen" },
+      shortcut: "F10",
       isEnabled: () => isDesignMode,
       handler: () => {
         void applyDesign();

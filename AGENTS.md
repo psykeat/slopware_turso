@@ -17,6 +17,7 @@ React 19 · TanStack Start/Router/Query · Drizzle ORM v1 · Better Auth · Tail
 ## Non-Negotiable Rules
 
 - CRITICAL: NEVER run linting (pnpm lint or local vp lint) multiple times or for intermediate small changes within a single turn. Only run linting ONCE at the very end of a milestone or prompt turn, when all edits are complete and ready for final validation.
+- CRITICAL: To understand `@repo/ui` component APIs (e.g. `DataGrid`, `EntityMask`, `DocumentEditor`), ALWAYS read their generated TS declaration files under `packages/ui/dist/` (e.g. `packages/ui/dist/components/<name>.d.ts`) instead of reading their massive `.tsx` implementation files. This saves context window token space and prevents API hallucinations.
 - Do not run production builds unless build output or bundling is the issue.
 - No hard delete for business data. Archive with `PATCH { archived: true }`.
 - Tenant isolation is server-side only. Never trust client payloads for `tenantId`.
@@ -65,9 +66,10 @@ Use this table to choose context. Prefer live code for implementation details; o
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Fast orientation                     | [`map.md`](map.md), [`.agents/decision-index.md`](.agents/decision-index.md)                                                                                                                                                                           |
 | Architecture invariants              | [`.agents/00_core_architecture.md`](.agents/00_core_architecture.md), [`.agents/01_project_foundation.md`](.agents/01_project_foundation.md), [`.agents/02_entity_introspection_and_generic_ui.md`](.agents/02_entity_introspection_and_generic_ui.md) |
-| Frontend shell, shared UI, design    | [`.agents/design.md`](.agents/design.md), [`.agents/03_frontend_basedesign.md`](.agents/03_frontend_basedesign.md)                                                                                                                                     |
+| Frontend shell, shared UI, design    | [`.agents/design.md`](.agents/design.md)                                                                                                                                                                                                               |
+| Designer Spec & Rework               | [`.agents/designer.md`](.agents/designer.md)                                                                                                                                                                                                           |
 | TanStack, auth, TypeScript, workflow | [`.agents/tanstack-patterns.md`](.agents/tanstack-patterns.md), [`.agents/auth.md`](.agents/auth.md), [`.agents/typescript.md`](.agents/typescript.md), [`.agents/workflow.md`](.agents/workflow.md)                                                   |
-| Database, migrations, tenancy        | [`.agents/postgres.md`](.agents/postgres.md), live Drizzle schema, and targeted sections of [`.agents/schema.md`](.agents/schema.md)                                                                                                                   |
+| Database, migrations, tenancy        | [`.agents/postgres.md`](.agents/postgres.md), live Drizzle schema, and `.agents/schema.md` (index) or targeted tables under `.agents/schema/<table_name>.md`                                                                                           |
 | Feature slices                       | Open the matching active `.agents/*.md` file for the slice being changed, then verify against live code; archived slice docs live under [`.agents/archive/`](.agents/archive/)                                                                         |
 
 ## Known Documentation Hygiene

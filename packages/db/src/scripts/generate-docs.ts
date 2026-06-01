@@ -9,7 +9,9 @@ import * as schema from "../schema/index";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "../../../../");
-const SCHEMA_MD_PATH = path.join(PROJECT_ROOT, ".gemini/schema.md");
+const SCHEMA_MD_PATH_GEMINI = path.join(PROJECT_ROOT, ".gemini/schema.md");
+const SCHEMA_MD_PATH_AGENTS = path.join(PROJECT_ROOT, ".agents/schema.md");
+const SCHEMAS_DIR_AGENTS = path.join(PROJECT_ROOT, ".agents/schema");
 
 interface Annotation {
   businessName: string;
@@ -19,9 +21,47 @@ interface Annotation {
 const annotations: Record<string, Record<string, Annotation>> = {};
 
 function parseExistingSchema() {
-  if (!fs.existsSync(SCHEMA_MD_PATH)) return;
+  // 1. Try to parse from individual modular schema files if they exist
+  if (fs.existsSync(SCHEMAS_DIR_AGENTS)) {
+    const files = fs.readdirSync(SCHEMAS_DIR_AGENTS);
+    let loadedFromModules = false;
+    for (const file of files) {
+      if (!file.endsWith(".md")) continue;
+      const tableName = file.slice(0, -3); // remove ".md"
+      const content = fs.readFileSync(path.join(SCHEMAS_DIR_AGENTS, file), "utf-8");
+      annotations[tableName] = {};
+      loadedFromModules = true;
 
-  const content = fs.readFileSync(SCHEMA_MD_PATH, "utf-8");
+      const rows = content.split("\n");
+      for (const row of rows) {
+        if (row.startsWith("|") && !row.includes("Column") && !row.includes("---")) {
+          const parts = row.split("|").map((p) => p.trim());
+          if (parts.length >= 7) {
+            const columnName = parts[1];
+            const businessName = parts[2];
+            const description = parts[6];
+            annotations[tableName][columnName] = { businessName, description };
+          }
+        }
+      }
+    }
+    if (loadedFromModules) {
+      console.log("Loaded existing annotations from modular schema files.");
+      return;
+    }
+  }
+
+  // 2. Fallback: parse from the single giant schema.md file (Gemini or Agents path)
+  const fallbackPath = fs.existsSync(SCHEMA_MD_PATH_GEMINI)
+    ? SCHEMA_MD_PATH_GEMINI
+    : fs.existsSync(SCHEMA_MD_PATH_AGENTS)
+      ? SCHEMA_MD_PATH_AGENTS
+      : null;
+
+  if (!fallbackPath) return;
+
+  console.log(`Migrating annotations from single schema file: ${fallbackPath}`);
+  const content = fs.readFileSync(fallbackPath, "utf-8");
   const tableSections = content.split(/### `?([^`\n]+)`?/);
 
   for (let i = 1; i < tableSections.length; i += 2) {
@@ -46,6 +86,11 @@ function parseExistingSchema() {
 }
 
 function generateMarkdown() {
+  // Ensure the target directory for individual schemas exists
+  if (!fs.existsSync(SCHEMAS_DIR_AGENTS)) {
+    fs.mkdirSync(SCHEMAS_DIR_AGENTS, { recursive: true });
+  }
+
   // Filter for Drizzle table objects.
   const tables = Object.entries(schema)
     .filter(([_, value]) => {
@@ -57,23 +102,16 @@ function generateMarkdown() {
 
   console.log("Found tables:", tables.length);
 
-  let md = `# Slopware — Live Schema\n\n`;
-  md += `> Generated: ${new Date().toISOString().replace("T", " ").split(".")[0]} UTC\n`;
-  md += `> Tables: ${tables.length}\n\n`;
-
-  md += `## Module: uncategorized\n\n`;
-
-  // Sort tables by name
-  tables.sort((a, b) => getTableConfig(a).name.localeCompare(getTableConfig(b).name));
-
+  // Generate individual table markdown files
   for (const table of tables) {
     const config = getTableConfig(table);
     const tableName = config.name;
+    const tableFile = path.join(SCHEMAS_DIR_AGENTS, `${tableName}.md`);
 
-    md += `### \`${tableName}\`\n\n`;
-    md += `> _⚠ pending annotation_\n\n`;
-    md += `| Column | Business Name | Type | Class | Constraints | Description |\n`;
-    md += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
+    let tableMd = `# Table: \`${tableName}\`\n\n`;
+    tableMd += `> _⚠ pending annotation_\n\n`;
+    tableMd += `| Column | Business Name | Type | Class | Constraints | Description |\n`;
+    tableMd += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
 
     for (const column of config.columns) {
       const colName = column.name;
@@ -87,7 +125,6 @@ function generateMarkdown() {
         if (typeof def === "function") {
           defStr = "runtime";
         } else if (def && typeof def === "object" && "queryChunks" in def) {
-          // It's a SQL object
           defStr = (def as any).queryChunks
             .map((c: any) => {
               if (typeof c === "string") return c;
@@ -109,30 +146,56 @@ function generateMarkdown() {
         description: "",
       };
 
-      md += `| ${colName} | ${annotation.businessName} | ${colType} | ${isPK ? "PK" : "—"} | ${constraints.join(", ")} | ${annotation.description} |\n`;
+      tableMd += `| ${colName} | ${annotation.businessName} | ${colType} | ${isPK ? "PK" : "—"} | ${constraints.join(", ")} | ${annotation.description} |\n`;
     }
 
-    md += `\n`;
+    tableMd += `\n`;
 
     if (config.indexes.length > 0) {
       for (const index of config.indexes) {
         const idxConfig = (index as any).config;
         const columns = idxConfig.columns.map((c: any) => c.name).join(", ");
-        md += `> INDEX \`${idxConfig.name}\` (${columns}) [${idxConfig.method || "btree"}]\n`;
+        tableMd += `> INDEX \`${idxConfig.name}\` (${columns}) [${idxConfig.method || "btree"}]\n`;
       }
-      md += `\n`;
+      tableMd += `\n`;
     }
 
     if (config.checks && config.checks.length > 0) {
       for (const check of config.checks) {
-        md += `> CHECK \`${check.name}\`: ${check.value.toString().replace("sql`", "").replace("`", "")}\n`;
+        tableMd += `> CHECK \`${check.name}\`: ${check.value.toString().replace("sql`", "").replace("`", "")}\n`;
       }
-      md += `\n`;
+      tableMd += `\n`;
     }
+
+    fs.writeFileSync(tableFile, tableMd);
   }
 
-  fs.writeFileSync(SCHEMA_MD_PATH, md);
-  console.log(`Generated schema docs at ${SCHEMA_MD_PATH}`);
+  // Sort tables by name
+  tables.sort((a, b) => getTableConfig(a).name.localeCompare(getTableConfig(b).name));
+
+  // Generate the main index markdown file (schema.md)
+  let md = `# Slopware — Live Schema Index\n\n`;
+  md += `> Generated: ${new Date().toISOString().replace("T", " ").split(".")[0]} UTC\n`;
+  md += `> Tables: ${tables.length}\n\n`;
+  md += `Here is the index of all database tables. Click on a table name to view its detailed columns, types, and business annotations.\n\n`;
+  md += `## Tables\n\n`;
+
+  for (const table of tables) {
+    const config = getTableConfig(table);
+    const tableName = config.name;
+    const pkCol = config.columns.find((c) => c.primary)?.name || "id";
+    const recordAnnotation = annotations[tableName]?.[pkCol] || { businessName: tableName };
+    const label =
+      recordAnnotation.businessName !== tableName ? ` (_${recordAnnotation.businessName}_)` : "";
+
+    md += `- [${tableName}](file:///home/ubuntu/slopware/.agents/schema/${tableName}.md)${label}\n`;
+  }
+
+  // Write index to both .gemini/schema.md and .agents/schema.md for perfect parity
+  fs.writeFileSync(SCHEMA_MD_PATH_GEMINI, md);
+  fs.writeFileSync(SCHEMA_MD_PATH_AGENTS, md);
+  console.log(`Generated schema index at ${SCHEMA_MD_PATH_GEMINI} and ${SCHEMA_MD_PATH_AGENTS}`);
+  console.log(`Generated ${tables.length} individual table schemas in ${SCHEMAS_DIR_AGENTS}`);
 }
 
 parseExistingSchema();

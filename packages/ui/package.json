@@ -12,7 +12,8 @@
     "./components/langtext-record-panel": "./components/langtext-record-panel.tsx"
   },
   "scripts": {
-    "ui": "vpx shadcn@latest"
+    "ui": "vpx shadcn@latest",
+    "build:types": "tsc --declaration --emitDeclarationOnly --declarationDir dist --noEmit false"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",

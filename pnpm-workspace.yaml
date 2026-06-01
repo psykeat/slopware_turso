@@ -6,6 +6,13 @@ allowBuilds:
   esbuild: true
   msw: false
 
+strictDepBuilds: true
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 43200
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - "@better-auth/*"
+  - "better-auth"
 # FIXME: Temporary workaround for experimental @better-auth/drizzle-adapter version,
 # which is currently being published via pkg.pr.new in an ongoing pull request:
 # https://github.com/better-auth/better-auth/pull/9489

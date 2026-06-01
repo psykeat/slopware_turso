@@ -25,6 +25,7 @@
     "db:sql": "vp run --filter=@repo/db sql",
     "db:psql": "vp run --filter=@repo/db psql",
     "ui": "vp run --filter=@repo/ui ui",
+    "ui:types": "pnpm --filter @repo/ui build:types",
     "ui:web": "vp run --filter=@repo/web ui",
     "auth:secret": "vpx auth@latest secret",
     "auth:generate": "vp run --filter=@repo/db auth:generate",

@@ -9,11 +9,10 @@ import { LangTextRecordPanel } from "@repo/ui/components/langtext-record-panel";
 import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
 import { formatMoney, formatDate, StatusDot } from "@repo/ui/lib/formatters";
-import { cn } from "@repo/ui/lib/utils";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useFocus } from "@repo/ui/platform/focus-manager";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -58,6 +57,7 @@ function AddressesModule() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [contactNotizDraft, setContactNotizDraft] = useState("");
 
   const [activeAddressId, setActiveAddressId] = useState<string | null>(
     focusState.entity === "address" ? focusState.recordId : null,
@@ -253,8 +253,13 @@ function AddressesModule() {
   );
 
   const getContactId = useCallback(
-    (row: any) => row.contactId || row.addressContactId || row.id || null,
+    (row: Record<string, any> | null) => row?.contactId || row?.addressContactId || row?.id || null,
     [],
+  );
+
+  const handleContactRowSelect = useCallback(
+    (row: Record<string, any> | null) => setSelectedContactId(getContactId(row)),
+    [getContactId],
   );
 
   const getContactLabel = useCallback((contact: any) => {
@@ -263,40 +268,73 @@ function AddressesModule() {
     return `${name || contact.email || contact.phoneMobile || "Kontakt"}${tail}`;
   }, []);
 
-  const resolvedContactId = useMemo(() => {
-    if (contacts.length === 0) return null;
-    if (
-      selectedContactId &&
-      contacts.some((contact: any) => getContactId(contact) === selectedContactId)
-    ) {
-      return selectedContactId;
-    }
-    return getContactId(contacts[0]);
+  const selectedContact = useMemo(() => {
+    if (!selectedContactId) return null;
+    return contacts.find((contact: any) => getContactId(contact) === selectedContactId) ?? null;
   }, [contacts, getContactId, selectedContactId]);
 
-  const contactOptions = useMemo(
-    () =>
-      contacts
-        .map((contact: any) => {
-          const id = getContactId(contact);
-          if (!id) return null;
-          return {
-            id,
-            label: getContactLabel(contact),
-            isPrimary: !!contact.isPrimary,
-            email: contact.email ?? null,
-            phone: contact.phoneMobile ?? null,
-          };
-        })
-        .filter(Boolean) as Array<{
-        id: string;
-        label: string;
-        isPrimary: boolean;
-        email: string | null;
-        phone: string | null;
-      }>,
-    [contacts, getContactId, getContactLabel],
-  );
+  const selectedContactNotiztext =
+    selectedContact && typeof selectedContact.notiztext === "string"
+      ? selectedContact.notiztext
+      : "";
+
+  useEffect(() => {
+    if (!selectedContactId) {
+      setContactNotizDraft("");
+      return;
+    }
+    if (!selectedContact) {
+      return;
+    }
+    setContactNotizDraft(selectedContactNotiztext);
+  }, [selectedContact, selectedContactId, selectedContactNotiztext]);
+
+  useEffect(() => {
+    if (!selectedContactId) return;
+    if (contacts.some((contact: any) => getContactId(contact) === selectedContactId)) return;
+    setSelectedContactId(null);
+  }, [contacts, getContactId, selectedContactId]);
+
+  useEffect(() => {
+    setSelectedContactId(null);
+    setContactNotizDraft("");
+  }, [activeAddressId]);
+
+  const saveContactNoteMutation = useMutation({
+    mutationFn: async ({ contactId, notiztext }: { contactId: string; notiztext: string }) => {
+      const res = await fetch(`/api/data/addressContact/${contactId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notiztext }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: async () => {
+      if (!activeAddressId) return;
+      await queryClient.invalidateQueries({
+        queryKey: ["data", "addressContact", activeAddressId],
+      });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message ?? "Notiztext konnte nicht gespeichert werden");
+    },
+  });
+  const saveContactNote = saveContactNoteMutation.mutate;
+
+  useEffect(() => {
+    if (!selectedContactId) return;
+    if (contactNotizDraft === selectedContactNotiztext) return;
+
+    const timeout = window.setTimeout(() => {
+      saveContactNote({
+        contactId: selectedContactId,
+        notiztext: contactNotizDraft,
+      });
+    }, 450);
+
+    return () => window.clearTimeout(timeout);
+  }, [contactNotizDraft, saveContactNote, selectedContactId, selectedContactNotiztext]);
 
   const dependentTabs = useMemo(
     () => [
@@ -855,98 +893,40 @@ function AddressesModule() {
                   <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                     Contacts
                   </div>
-                  <InlineEditGrid
-                    entityName="addressContact"
-                    parentKey={{ addressId: record.addressId as string }}
-                    keyColumn="contactId"
-                    columns={[
-                      { key: "firstName", header: "First Name", type: "text" },
-                      { key: "lastName", header: "Last Name", type: "text", required: true },
-                      { key: "email", header: "Email", type: "text" },
-                      { key: "phoneMobile", header: "Mobile", type: "text" },
-                      { key: "roleFunction", header: "Role", type: "text" },
-                      { key: "isPrimary", header: "Primary", type: "boolean", width: "60px" },
-                    ]}
-                  />
-                  <div className="mt-3 rounded-xl border border-hairline bg-canvas shadow-sm">
-                    <div className="flex items-start justify-between gap-3 border-b border-hairline px-4 py-3">
-                      <div>
-                        <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                          Ansprechpartner-Langtext
-                        </div>
-                        <div className="mt-0.5 text-[12px] text-ink-secondary">
-                          {resolvedContactId
-                            ? "Ausgewählter Kontakt wird rechts als Text-Inspector bearbeitet."
-                            : "Wähle einen Kontakt, damit der Text-Inspector aktiv wird."}
-                        </div>
-                      </div>
-                      <div className="text-right text-[11px] text-ink-mute">
-                        {contactOptions.length} Kontakte
-                      </div>
-                    </div>
-                    <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
-                      <div className="space-y-2">
-                        {contactOptions.length === 0 ? (
-                          <div className="rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
-                            Noch keine Kontakte vorhanden.
-                          </div>
-                        ) : (
-                          contactOptions.map((contact) => {
-                            const isSelected = contact.id === resolvedContactId;
-                            return (
-                              <button
-                                key={contact.id}
-                                type="button"
-                                className={cn(
-                                  "flex w-full items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
-                                  isSelected
-                                    ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--canvas))] shadow-sm"
-                                    : "border-hairline bg-canvas hover:border-primary hover:bg-canvas-soft",
-                                )}
-                                onClick={() => setSelectedContactId(contact.id)}
-                              >
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="truncate text-[13px] font-medium text-ink">
-                                      {contact.label}
-                                    </span>
-                                    {contact.isPrimary ? (
-                                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium tracking-wide text-emerald-700 uppercase">
-                                        Primär
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  <div className="mt-1 truncate text-[11px] text-ink-mute">
-                                    {[contact.email, contact.phone].filter(Boolean).join(" · ") ||
-                                      " "}
-                                  </div>
-                                </div>
-                                <span
-                                  className={cn(
-                                    "mt-0.5 inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase",
-                                    isSelected
-                                      ? "border-primary/30 bg-primary/10 text-primary"
-                                      : "border-hairline text-ink-mute",
-                                  )}
-                                >
-                                  {isSelected ? "Aktiv" : "Wählen"}
-                                </span>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                      <LangTextRecordPanel
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+                    <div className="min-w-0">
+                      <InlineEditGrid
+                        key={`${record.addressId as string}-contacts`}
                         entityName="addressContact"
-                        recordId={resolvedContactId}
-                        title="Notiztext"
-                        fields={[
-                          {
-                            field: "notiztext",
-                            label: "Notiztext",
-                          },
+                        parentKey={{ addressId: record.addressId as string }}
+                        keyColumn="contactId"
+                        className="h-full"
+                        onRowSelect={handleContactRowSelect}
+                        columns={[
+                          { key: "firstName", header: "First Name", type: "text" },
+                          { key: "lastName", header: "Last Name", type: "text", required: true },
+                          { key: "email", header: "Email", type: "text" },
+                          { key: "phoneMobile", header: "Mobile", type: "text" },
+                          { key: "roleFunction", header: "Role", type: "text" },
+                          { key: "isPrimary", header: "Primary", type: "boolean", width: "60px" },
                         ]}
-                        className="min-h-[220px]"
+                      />
+                    </div>
+                    <div className="flex min-h-[18rem] min-w-0 flex-col overflow-hidden rounded-xl border border-hairline bg-canvas shadow-sm">
+                      <div className="border-b border-hairline px-4 py-3">
+                        <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                          Notiztext
+                        </div>
+                        <div className="mt-0.5 truncate text-[12px] text-ink-secondary">
+                          {selectedContact ? getContactLabel(selectedContact) : "Kontakt auswählen"}
+                        </div>
+                      </div>
+                      <textarea
+                        value={selectedContact ? contactNotizDraft : ""}
+                        onChange={(e) => setContactNotizDraft(e.target.value)}
+                        placeholder="Kontakt auswählen"
+                        disabled={!selectedContact}
+                        className="min-h-0 flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[13px] leading-5 text-ink outline-none placeholder:text-ink-mute disabled:cursor-not-allowed disabled:text-ink-mute"
                       />
                     </div>
                   </div>
@@ -956,6 +936,7 @@ function AddressesModule() {
                     Delivery Addresses
                   </div>
                   <InlineEditGrid
+                    key={`${record.addressId as string}-delivery-addresses`}
                     entityName="deliveryAddress"
                     parentKey={{ addressId: record.addressId as string }}
                     keyColumn="deliveryAddressId"
@@ -991,6 +972,7 @@ function AddressesModule() {
                     Bank Accounts
                   </div>
                   <InlineEditGrid
+                    key={`${record.addressId as string}-bank-accounts`}
                     entityName="bankAccount"
                     parentKey={{ addressId: record.addressId as string }}
                     keyColumn="bankAccountId"

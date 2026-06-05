@@ -96,7 +96,7 @@ i=1
 while [ "$i" -le "$ITERATIONS" ]; do
   emit_iteration_json "iteration_start" "$i" "running" "starting iteration"
   tmpfile=$(mktemp "$RUN_DIR/codex.XXXXXX")
-  echo "------- ITERATION $i --------" | tee -a "$LOG_FILE"
+  echo "  [codex] iter $i/$TOTAL_ITERATIONS..." | tee -a "$LOG_FILE"
 
   ralph_commits=$(git log --grep="RALPH" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
 
@@ -112,7 +112,7 @@ $ralph_commits"
     --dangerously-bypass-approvals-and-sandbox \
     --dangerously-bypass-hook-trust \
     -o "$tmpfile" \
-    "$full_prompt" 2>&1 | tee -a "$LOG_FILE"
+    "$full_prompt" >> "$LOG_FILE" 2>&1
 
   # Read the final message from Codex to inspect for stop tags
   output=$(cat "$tmpfile" 2>/dev/null || echo "")
@@ -120,12 +120,12 @@ $ralph_commits"
 
   case "$output" in
     *"<promise>NO MORE TASKS</promise>"*)
-      echo "Codex Ralph complete after $i iterations." | tee -a "$LOG_FILE"
+      echo "  [codex] ✓ done after $i iterations" | tee -a "$LOG_FILE"
       emit_iteration_json "run_complete" "$i" "done" "completion marker found"
       exit 0
       ;;
     *"<promise>ABORT</promise>"*)
-      echo "Codex Ralph aborted after $i iterations." | tee -a "$LOG_FILE"
+      echo "  [codex] ✗ aborted after $i iterations" | tee -a "$LOG_FILE"
       emit_iteration_json "run_aborted" "$i" "aborted" "abort marker found"
       exit 1
       ;;
@@ -137,6 +137,6 @@ $ralph_commits"
   i=$((i + 1))
 done
 
-echo "Codex Ralph reached iteration limit without completion." | tee -a "$LOG_FILE"
+echo "  [codex] ✗ iteration limit reached ($ITERATIONS)" | tee -a "$LOG_FILE"
 emit_iteration_json "iteration_limit" "$ITERATIONS" "failed" "iteration limit reached without completion"
 exit 1

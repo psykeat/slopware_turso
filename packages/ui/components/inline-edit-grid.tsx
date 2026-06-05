@@ -19,6 +19,7 @@ export interface InlineEditGridProps {
   keyColumn: string;
   columns: InlineColumnDef[];
   className?: string;
+  onRowSelect?: (row: Record<string, any> | null) => void;
 }
 
 const NEW_ROW_ID = "__new__";
@@ -29,14 +30,18 @@ export function InlineEditGrid({
   keyColumn,
   columns,
   className,
+  onRowSelect,
 }: InlineEditGridProps) {
   const queryClient = useQueryClient();
+  const parentKeySignature = JSON.stringify(parentKey);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Record<string, any>>({});
   const firstEditInputRef = useRef<HTMLInputElement>(null);
+  const selectedIdRef = useRef<string | null>(null);
 
   const { data: rows = [] } = useQuery({
-    queryKey: ["data", entityName, JSON.stringify(parentKey)],
+    queryKey: ["data", entityName, parentKeySignature],
     queryFn: async () => {
       const params = Object.entries(parentKey)
         .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
@@ -76,16 +81,27 @@ export function InlineEditGrid({
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["data", entityName] }),
+    onSuccess: (_result, deletedId) => {
+      if (selectedIdRef.current === deletedId) {
+        setSelectedId(null);
+        onRowSelect?.(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ["data", entityName] });
+    },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const startEdit = (row: any) => {
-    setEditingId(row[keyColumn]);
+    const nextId = row[keyColumn];
+    setSelectedId(nextId);
+    onRowSelect?.(row);
+    setEditingId(nextId);
     setEditData({ ...row });
   };
 
   const startNew = () => {
+    setSelectedId(null);
+    onRowSelect?.(null);
     setEditingId(NEW_ROW_ID);
     setEditData({});
   };
@@ -94,6 +110,10 @@ export function InlineEditGrid({
     setEditingId(null);
     setEditData({});
   };
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   useEffect(() => {
     if (!editingId) return;
@@ -148,13 +168,16 @@ export function InlineEditGrid({
             {allRows.map((row: any) => {
               const id = row[keyColumn];
               const isEditing = id === editingId;
+              const isSelected = id === selectedId;
 
               return (
                 <tr
                   key={id}
                   className={cn(
                     "group border-b border-hairline last:border-0",
-                    isEditing ? "bg-surface-hover" : "hover:bg-surface-hover/50 cursor-pointer",
+                    isEditing || isSelected
+                      ? "bg-surface-hover cursor-pointer"
+                      : "hover:bg-surface-hover/50 cursor-pointer",
                   )}
                   onClick={!isEditing ? () => startEdit(row) : undefined}
                 >

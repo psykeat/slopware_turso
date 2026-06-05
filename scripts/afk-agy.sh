@@ -92,7 +92,7 @@ mkdir -p "$RUN_DIR"
 i=1
 while [ "$i" -le "$ITERATIONS" ]; do
   emit_iteration_json "iteration_start" "$i" "running" "starting iteration"
-  echo "------- ITERATION $i --------" | tee -a "$LOG_FILE"
+  echo "  [agy] iter $i/$TOTAL_ITERATIONS..." | tee -a "$LOG_FILE"
 
   ralph_commits=$(git log --grep="RALPH" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
 
@@ -105,16 +105,16 @@ $ralph_commits"
 
   # Run agy in print mode with auto-approved permissions
   output=$(agy --print --dangerously-skip-permissions "$full_prompt" 2>&1)
-  echo "$output" | tee -a "$LOG_FILE"
+  echo "$output" >> "$LOG_FILE"
 
   case "$output" in
     *"<promise>NO MORE TASKS</promise>"*)
-      echo "Agy Ralph complete after $i iterations." | tee -a "$LOG_FILE"
+      echo "  [agy] ✓ done after $i iterations" | tee -a "$LOG_FILE"
       emit_iteration_json "run_complete" "$i" "done" "completion marker found"
       exit 0
       ;;
     *"<promise>ABORT</promise>"*)
-      echo "Agy Ralph aborted after $i iterations." | tee -a "$LOG_FILE"
+      echo "  [agy] ✗ aborted after $i iterations" | tee -a "$LOG_FILE"
       emit_iteration_json "run_aborted" "$i" "aborted" "abort marker found"
       exit 1
       ;;
@@ -124,6 +124,6 @@ $ralph_commits"
   i=$((i + 1))
 done
 
-echo "Agy Ralph reached iteration limit without completion." | tee -a "$LOG_FILE"
+echo "  [agy] ✗ iteration limit reached ($ITERATIONS)" | tee -a "$LOG_FILE"
 emit_iteration_json "iteration_limit" "$ITERATIONS" "failed" "iteration limit reached without completion"
 exit 1

@@ -2,8 +2,23 @@ import { Button } from "@repo/ui/components/button";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { cn } from "@repo/ui/lib/utils";
 import { CheckIcon, ClockIcon, MailIcon, SendIcon, XIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import { toast } from "sonner";
+
+import {
+  formatRecipientAutocompleteContact,
+  getRecipientTokenRange,
+  replaceRecipientToken,
+  type RecipientAutocompleteContact,
+} from "./email-recipient-autocomplete";
 
 export type EmailComposeMode = "plain" | "html";
 export type EmailComposeAction = "save-draft" | "provider-draft" | "queue" | "send";
@@ -83,44 +98,6 @@ function hasAnyRecipient(value: EmailComposeValue) {
   );
 }
 
-type AddressContactSuggestion = {
-  contactId: string;
-  addressId: string;
-  firstName: string | null;
-  lastName: string;
-  email: string | null;
-  isPrimary?: boolean;
-};
-
-function formatAddressContact(contact: AddressContactSuggestion) {
-  const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim();
-  if (name && contact.email) return `${name} <${contact.email}>`;
-  if (name) return name;
-  return contact.email || "";
-}
-
-function getRecipientTokenRange(value: string, selectionStart: number, selectionEnd: number) {
-  const caretStart = Math.max(0, Math.min(selectionStart, value.length));
-  const caretEnd = Math.max(caretStart, Math.min(selectionEnd, value.length));
-  const prefix = value.slice(0, caretStart);
-  const tokenStart = Math.max(prefix.lastIndexOf(",") + 1, 0);
-  const suffix = value.slice(caretEnd);
-  const nextCommaIndex = suffix.indexOf(",");
-  const tokenEnd = nextCommaIndex === -1 ? value.length : caretEnd + nextCommaIndex;
-  return { start: tokenStart, end: tokenEnd, query: value.slice(tokenStart, caretStart).trim() };
-}
-
-function replaceRecipientToken(
-  value: string,
-  range: { start: number; end: number },
-  replacement: string,
-) {
-  const prefix = value.slice(0, range.start);
-  const suffix = value.slice(range.end).trimStart();
-  if (!suffix) return `${prefix}${replacement}`;
-  return `${prefix}${replacement}, ${suffix.replace(/^,\s*/, "")}`;
-}
-
 function RecipientAutocompleteField({
   value,
   onChange,
@@ -130,7 +107,8 @@ function RecipientAutocompleteField({
   onChange: (value: string) => void;
   placeholder: string;
 }) {
-  const [suggestions, setSuggestions] = useState<AddressContactSuggestion[]>([]);
+  const listboxId = useId();
+  const [suggestions, setSuggestions] = useState<RecipientAutocompleteContact[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selection, setSelection] = useState({ start: value.length, end: value.length });
@@ -156,7 +134,7 @@ function RecipientAutocompleteField({
         if (!res.ok) {
           throw new Error(await res.text());
         }
-        const rows = (await res.json()) as AddressContactSuggestion[];
+        const rows = (await res.json()) as RecipientAutocompleteContact[];
         if (controller.signal.aborted) return;
         setSuggestions(
           Array.isArray(rows) ? rows.filter((row) => Boolean(row?.email)).slice(0, 8) : [],
@@ -178,8 +156,8 @@ function RecipientAutocompleteField({
     };
   }, [isOpen, query]);
 
-  const commitSuggestion = (contact: AddressContactSuggestion) => {
-    const formatted = formatAddressContact(contact);
+  const commitSuggestion = (contact: RecipientAutocompleteContact) => {
+    const formatted = formatRecipientAutocompleteContact(contact);
     if (!formatted) return;
     const nextValue = replaceRecipientToken(value, range, formatted);
     onChange(nextValue);
@@ -234,6 +212,16 @@ function RecipientAutocompleteField({
       <input
         ref={inputRef}
         value={value}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen && query.trim() ? true : undefined}
+        aria-controls={listboxId}
+        aria-activedescendant={
+          isOpen && suggestions[activeIndex]
+            ? `${listboxId}-${suggestions[activeIndex].contactId}`
+            : undefined
+        }
         onFocus={() => {
           if (query.trim()) setIsOpen(true);
         }}
@@ -257,7 +245,12 @@ function RecipientAutocompleteField({
         className="h-9 w-full rounded-sm border border-hairline bg-canvas px-2 text-[13px] outline-none focus:border-primary"
       />
       {isOpen && query.trim() && (
-        <div className="absolute top-full right-0 left-0 z-20 mt-1 overflow-hidden rounded-sm border border-hairline bg-canvas shadow-lg">
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-label={`${placeholder} contact suggestions`}
+          className="absolute top-full right-0 left-0 z-20 mt-1 overflow-hidden rounded-sm border border-hairline bg-canvas shadow-lg"
+        >
           <div className="max-h-56 overflow-auto py-1">
             {loading ? (
               <div className="px-3 py-2 text-[12px] text-ink-mute">Searching contacts…</div>
@@ -265,11 +258,14 @@ function RecipientAutocompleteField({
               <div className="px-3 py-2 text-[12px] text-ink-mute">No contacts found</div>
             ) : (
               suggestions.map((contact, index) => {
-                const label = formatAddressContact(contact);
+                const label = formatRecipientAutocompleteContact(contact);
                 return (
                   <button
+                    id={`${listboxId}-${contact.contactId}`}
                     key={contact.contactId}
                     type="button"
+                    role="option"
+                    aria-selected={index === activeIndex}
                     onMouseDown={(event) => {
                       event.preventDefault();
                       commitSuggestion(contact);

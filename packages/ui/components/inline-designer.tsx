@@ -1,5 +1,4 @@
 import {
-  CheckIcon,
   HistoryIcon,
   RefreshCwIcon,
   RotateCcwIcon,
@@ -35,7 +34,6 @@ interface DesignerClientSnapshot {
 interface DesignerClient {
   load: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
   save: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
-  apply: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
   reconcile: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
   history: (entityName: string | null) => Promise<DesignerHistoryEntry[]>;
 }
@@ -45,9 +43,6 @@ const designerClient: DesignerClient = {
     return snapshot;
   },
   async save(snapshot) {
-    return snapshot;
-  },
-  async apply(snapshot) {
     return snapshot;
   },
   async reconcile(snapshot) {
@@ -127,11 +122,10 @@ export function InlineDesigner() {
     selectedNodes,
     closeDesignMode,
     resetDelta,
-    saveDesign,
     applyDesign,
     reconcileDesign,
   } = useDesigner();
-  const [busyAction, setBusyAction] = useState<"save" | "apply" | "reconcile" | null>(null);
+  const [busyAction, setBusyAction] = useState<"save" | "reconcile" | null>(null);
 
   const snapshot = useMemo<DesignerClientSnapshot>(
     () => ({
@@ -171,16 +165,6 @@ export function InlineDesigner() {
     setBusyAction("save");
     try {
       await designerClient.save(snapshot);
-      await saveDesign();
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleApply = async () => {
-    setBusyAction("apply");
-    try {
-      await designerClient.apply(snapshot);
       await applyDesign();
     } finally {
       setBusyAction(null);
@@ -462,17 +446,6 @@ export function InlineDesigner() {
             >
               <SaveIcon className="size-3.5" />
               {busyAction === "save" ? t("designer.saving", "Saving…") : t("designer.save", "Save")}
-            </button>
-            <button
-              type="button"
-              onClick={handleApply}
-              disabled={busyAction !== null}
-              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-hairline-input hover:text-ink disabled:opacity-50"
-            >
-              <CheckIcon className="size-3.5" />
-              {busyAction === "apply"
-                ? t("designer.applying", "Applying…")
-                : t("designer.apply", "Apply")}
             </button>
             <button
               type="button"

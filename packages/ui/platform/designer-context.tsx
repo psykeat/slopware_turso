@@ -205,8 +205,7 @@ interface DesignerContextValue {
     entityName?: string | null,
   ) => void;
   setDesignerSurface: (surface: DesignerSurface, entityName?: string | null) => void;
-  saveDesign: () => Promise<void>;
-  applyDesign: () => Promise<void>;
+  applyDesign: () => Promise<boolean>;
   reconcileDesign: () => Promise<void>;
 }
 
@@ -942,73 +941,64 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     setIsDesignMode((prev) => !prev);
   }, []);
 
-  const persistActiveSurface = useCallback(
-    async (mode: "save" | "apply") => {
-      const entityName = focusState.entity;
-      const surface = runtimeState.activeSurface ?? inferSurfaceFromFocus(focusState.area);
-      if (!entityName) return;
+  const persistActiveSurface = useCallback(async () => {
+    const entityName = focusState.entity;
+    const surface = runtimeState.activeSurface ?? inferSurfaceFromFocus(focusState.area);
+    if (!entityName) return false;
 
-      const bucket = ensureSurfaceBucket(runtimeState, surface, entityName);
-      if (bucket.draftPatchOps.length === 0) return;
+    const bucket = ensureSurfaceBucket(runtimeState, surface, entityName);
+    if (bucket.draftPatchOps.length === 0) return true;
 
-      const response = await fetch(`/api/metadata/designer/${entityName}/${surface}/apply`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          baseVersion: bucket.versionInfo.baseVersion,
-          derivedFromVersion: bucket.versionInfo.derivedFromVersion,
-          surface: bucket.surface,
-          ops: bucket.draftPatchOps,
-          clientRevision: bucket.versionInfo.clientRevision,
-        }),
-      });
+    const response = await fetch(`/api/metadata/designer/${entityName}/${surface}/apply`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        baseVersion: bucket.versionInfo.baseVersion,
+        derivedFromVersion: bucket.versionInfo.derivedFromVersion,
+        surface: bucket.surface,
+        ops: bucket.draftPatchOps,
+        clientRevision: bucket.versionInfo.clientRevision,
+      }),
+    });
 
-      if (!response.ok) {
-        throw new Error(`Failed to ${mode} designer surface (${response.status})`);
-      }
-
-      updateRuntime((prev) => {
-        const currentBucket = ensureSurfaceBucket(prev, surface, entityName);
-        const committedNodes = cloneDesignerNodes(currentBucket.nodes);
-        const nextBucket: DesignerSurfaceState = {
-          ...currentBucket,
-          baselineNodes: cloneDesignerNodes(committedNodes),
-          nodes: committedNodes,
-          draftPatchOps: [],
-          versionInfo: {
-            ...currentBucket.versionInfo,
-            clientRevision: nextRevision(currentBucket.versionInfo.clientRevision),
-          },
-        };
-        return {
-          ...prev,
-          activeSurface: surface,
-          surfaces: { ...prev.surfaces, [surface]: nextBucket },
-        };
-      });
-    },
-    [focusState.area, focusState.entity, runtimeState, updateRuntime],
-  );
-
-  const saveDesign = useCallback(async () => {
-    try {
-      await persistActiveSurface("apply");
-      toast.success("Designer saved & applied");
-    } catch (error) {
-      console.error("Failed to save designer surface:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to save designer surface");
+    if (!response.ok) {
+      throw new Error(`Failed to apply designer surface (${response.status})`);
     }
-  }, [persistActiveSurface]);
+
+    updateRuntime((prev) => {
+      const currentBucket = ensureSurfaceBucket(prev, surface, entityName);
+      const committedNodes = cloneDesignerNodes(currentBucket.nodes);
+      const nextBucket: DesignerSurfaceState = {
+        ...currentBucket,
+        baselineNodes: cloneDesignerNodes(committedNodes),
+        nodes: committedNodes,
+        draftPatchOps: [],
+        versionInfo: {
+          ...currentBucket.versionInfo,
+          clientRevision: nextRevision(currentBucket.versionInfo.clientRevision),
+        },
+      };
+      return {
+        ...prev,
+        activeSurface: surface,
+        surfaces: { ...prev.surfaces, [surface]: nextBucket },
+      };
+    });
+
+    return true;
+  }, [focusState.area, focusState.entity, runtimeState, updateRuntime]);
 
   const applyDesign = useCallback(async () => {
     try {
-      await persistActiveSurface("apply");
+      const applied = await persistActiveSurface();
       toast.success("Designer applied");
+      return applied;
     } catch (error) {
       console.error("Failed to apply designer surface:", error);
       toast.error(error instanceof Error ? error.message : "Failed to apply designer surface");
+      return false;
     }
   }, [persistActiveSurface]);
 
@@ -1064,7 +1054,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       );
       if (confirmSave) {
         try {
-          await persistActiveSurface("apply");
+          await persistActiveSurface();
           toast.success("Designer-Änderungen erfolgreich angewendet");
         } catch (error) {
           console.error("Failed to apply design on exit:", error);
@@ -1750,16 +1740,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       isEnabled: () => true,
       handler: () => toggleDesignMode(),
     });
-    const unregisterSave = registerCommand({
-      id: "designer.save",
-      scope: "context",
-      group: "workflow",
-      label: { en: "Save Designer Draft", de: "Designer-Entwurf speichern" },
-      isEnabled: () => isDesignMode,
-      handler: () => {
-        void saveDesign();
-      },
-    });
     const unregisterReset = registerCommand({
       id: "designer.reset",
       scope: "context",
@@ -1774,11 +1754,14 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       id: "designer.apply",
       scope: "context",
       group: "workflow",
-      label: { en: "Save & Apply Designer", de: "Speichern & Übernehmen" },
+      label: { en: "Save & Close Designer", de: "Speichern & Schließen" },
       shortcut: "F10",
       isEnabled: () => isDesignMode,
-      handler: () => {
-        void applyDesign();
+      handler: async () => {
+        const applied = await applyDesign();
+        if (applied && isDesignMode) {
+          await closeDesignMode();
+        }
       },
     });
     const unregisterReconcile = registerCommand({
@@ -1803,7 +1786,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       unregisterToggle();
-      unregisterSave();
       unregisterReset();
       unregisterApply();
       unregisterReconcile();
@@ -1816,7 +1798,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     registerCommand,
     reconcileDesign,
     resetDelta,
-    saveDesign,
     toggleDesignMode,
   ]);
 
@@ -1850,7 +1831,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       initFields,
       selectDesignerNodes,
       setDesignerSurface,
-      saveDesign,
       applyDesign,
       reconcileDesign,
     }),
@@ -1875,7 +1855,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       reconcileDesign,
       resetDelta,
       runtimeState,
-      saveDesign,
       selectDesignerNodes,
       selectedNodes,
       setDesignerSurface,

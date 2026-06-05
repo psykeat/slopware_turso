@@ -7,6 +7,8 @@ PROMPT_FILE=""
 LOG_FILE=""
 JSON_OUTPUT=0
 POSITIONAL=()
+CODEX_TIMEOUT_SECONDS="${CODEX_TIMEOUT_SECONDS:-3600}"
+CODEX_KILL_AFTER_SECONDS="${CODEX_KILL_AFTER_SECONDS:-30}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 SCRIPT_NAME="afk-codex"
@@ -26,21 +28,16 @@ Options:
 EOF
 }
 
-run_codex() {
-  local output_file="$1"
-  local prompt="$2"
-
-  codex exec \
-    --dangerously-bypass-approvals-and-sandbox \
-    --dangerously-bypass-hook-trust \
-    -o "$output_file" \
-    "$prompt"
-}
-
-is_auth_token_invalidated() {
+is_terminal_codex_failure() {
   local path="$1"
 
-  grep -qiE 'token_invalidated|authentication token has been invalidated|Please try signing in again' "$path" 2>/dev/null
+  grep -qiE 'token_invalidated|authentication token has been invalidated|Please try signing in again|workspace is out of credits|out of credits|Selected model is at capacity|model is at capacity|Please try a different model' "$path" 2>/dev/null
+}
+
+codex_failure_reason() {
+  local path="$1"
+
+  grep -Eim1 'token_invalidated|authentication token has been invalidated|Please try signing in again|workspace is out of credits|out of credits|Selected model is at capacity|model is at capacity|Please try a different model' "$path" 2>/dev/null || true
 }
 
 while [ "$#" -gt 0 ]; do
@@ -107,12 +104,14 @@ mkdir -p "$RUN_DIR"
 : > "$LOG_FILE"
 
 tmpfile=""
-trap 'rm -f "${tmpfile:-}"' EXIT
+eventfile=""
+trap 'rm -f "${tmpfile:-}" "${eventfile:-}"' EXIT
 
 i=1
 while [ "$i" -le "$ITERATIONS" ]; do
   emit_iteration_json "iteration_start" "$i" "running" "starting iteration"
   tmpfile=$(mktemp "$RUN_DIR/codex.XXXXXX")
+  eventfile=$(mktemp "$RUN_DIR/codex.events.XXXXXX")
   echo "  [codex] iter $i/$TOTAL_ITERATIONS..." | tee -a "$LOG_FILE"
 
   ralph_commits=$(git log --grep="RALPH" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
@@ -126,16 +125,54 @@ $ralph_commits"
 
   # Run Codex non-interactively in YOLO mode
   set +e
-  run_codex "$tmpfile" "$full_prompt" >> "$LOG_FILE" 2>&1
-  run_status=$?
+  if command -v timeout >/dev/null 2>&1; then
+    timeout \
+      --foreground \
+      --signal=TERM \
+      --kill-after="${CODEX_KILL_AFTER_SECONDS}s" \
+      "${CODEX_TIMEOUT_SECONDS}s" \
+      codex exec \
+        --json \
+        --dangerously-bypass-approvals-and-sandbox \
+        --dangerously-bypass-hook-trust \
+        -o "$tmpfile" \
+        "$full_prompt" \
+        > "$eventfile" \
+        2>> "$LOG_FILE"
+    run_status=$?
+  else
+    codex exec \
+      --json \
+      --dangerously-bypass-approvals-and-sandbox \
+      --dangerously-bypass-hook-trust \
+      -o "$tmpfile" \
+      "$full_prompt" \
+      > "$eventfile" \
+      2>> "$LOG_FILE"
+    run_status=$?
+  fi
   set -e
+
+  cat "$eventfile" >> "$LOG_FILE"
 
   if [ "$run_status" -ne 0 ]; then
     output=$(cat "$tmpfile" 2>/dev/null || echo "")
     printf '%s\n' "$output" >> "$LOG_FILE"
-    if is_auth_token_invalidated "$LOG_FILE" || is_auth_token_invalidated "$tmpfile"; then
-      echo "  [codex] ✗ authentication token invalidated; stop here and re-authenticate" | tee -a "$LOG_FILE"
-      emit_iteration_json "iteration_failed" "$i" "failed" "codex auth token invalidated"
+    reason=$(jq -r 'select(.type=="item.completed" and .item.type=="error") | .item.message' "$eventfile" 2>/dev/null | tail -n 1 || true)
+    if [ -z "$reason" ] && is_terminal_codex_failure "$LOG_FILE"; then
+      reason=$(codex_failure_reason "$LOG_FILE")
+    fi
+    if [ -z "$reason" ] && is_terminal_codex_failure "$tmpfile"; then
+      reason=$(codex_failure_reason "$tmpfile")
+    fi
+    if [ -n "$reason" ]; then
+      echo "  [codex] ✗ $reason" | tee -a "$LOG_FILE"
+      emit_iteration_json "iteration_failed" "$i" "failed" "$reason"
+      exit 2
+    fi
+    if [ "$run_status" -eq 124 ]; then
+      echo "  [codex] ✗ iter $i timed out after ${CODEX_TIMEOUT_SECONDS}s" | tee -a "$LOG_FILE"
+      emit_iteration_json "iteration_failed" "$i" "failed" "codex exec timed out after ${CODEX_TIMEOUT_SECONDS}s"
       exit 2
     fi
     echo "  [codex] ✗ iter $i failed with exit code $run_status" | tee -a "$LOG_FILE"
@@ -149,7 +186,6 @@ $ralph_commits"
 
   # Read the final message from Codex to inspect for stop tags
   output=$(cat "$tmpfile" 2>/dev/null || echo "")
-  printf '%s\n' "$output" >> "$LOG_FILE"
 
   case "$output" in
     *"<promise>NO MORE TASKS</promise>"*)

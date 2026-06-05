@@ -200,6 +200,32 @@ extract_blocker_ids() {
   '
 }
 
+clear_stale_git_lock() {
+  local lockfile=".git/index.lock"
+
+  [ -e "$lockfile" ] || return 0
+
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof "$lockfile" >/dev/null 2>&1; then
+      echo "Git index lock is active: $lockfile" >&2
+      return 1
+    fi
+  elif command -v fuser >/dev/null 2>&1; then
+    if fuser "$lockfile" >/dev/null 2>&1; then
+      echo "Git index lock is active: $lockfile" >&2
+      return 1
+    fi
+  fi
+
+  echo "Removing stale Git lock: $lockfile"
+  rm -f "$lockfile"
+}
+
+run_git() {
+  clear_stale_git_lock
+  git "$@"
+}
+
 if [ "$DRY_RUN" -eq 1 ]; then
   mkdir -p "$RUNS_DIR"
   for ID in "${ISSUE_IDS[@]}"; do
@@ -218,8 +244,8 @@ fi
 ## Ensure we start on main and are clean
 echo "Starting issue run on main..."
 emit_status_json "run_start" "" "" "" "running" "starting issue run"
-git checkout main
-git pull origin main
+run_git checkout main
+run_git pull origin main
 mkdir -p "$RUNS_DIR"
 
 for ID in "${ISSUE_IDS[@]}"; do
@@ -299,17 +325,17 @@ EOF
 The agent encountered the following design/technical blockers:
 
 $BLOCKER_CONTENT"
-      git checkout main > /dev/null 2>&1 || true
-      git reset --hard origin/main > /dev/null 2>&1 || true
+      run_git checkout main > /dev/null 2>&1 || true
+      run_git reset --hard origin/main > /dev/null 2>&1 || true
       echo "  run artifacts kept in $RUN_DIR"
     else
-      git add .
-      if git diff --cached --quiet; then
+      run_git add .
+      if run_git diff --cached --quiet; then
         echo "  ❌ #$ID: no changes produced"
         emit_status_json "issue_no_changes" "$ID" "" "$RUN_DIR" "failed" "agent produced no changes"
-        git reset --hard origin/main > /dev/null 2>&1 || true
-      elif git commit -m "RALPH: fix #$ID - $TITLE"; then
-        git push origin main
+        run_git reset --hard origin/main > /dev/null 2>&1 || true
+      elif run_git commit -m "RALPH: fix #$ID - $TITLE"; then
+        run_git push origin main
         gh issue close "$ID" -R "$REPO" --comment "Automatically implemented and pushed to main by Ralph ($ENGINE)."
         DECLARED_MERGED="$DECLARED_MERGED $ID"
         emit_status_json "issue_complete" "$ID" "" "$RUN_DIR" "completed" "committed to main, issue closed"
@@ -320,16 +346,22 @@ $BLOCKER_CONTENT"
       else
         echo "  ❌ #$ID: commit failed, resetting"
         emit_status_json "issue_commit_failed" "$ID" "" "$RUN_DIR" "failed" "commit failed"
-        git reset --hard origin/main > /dev/null 2>&1 || true
+        run_git reset --hard origin/main > /dev/null 2>&1 || true
         echo "  run artifacts kept in $RUN_DIR"
       fi
     fi
   else
     agent_status=$?
+    if [ "$agent_status" -eq 2 ]; then
+      echo "  ❌ #$ID: codex environment unavailable, aborting run"
+      emit_status_json "issue_failed" "$ID" "" "$RUN_DIR" "failed" "codex environment unavailable"
+      echo "  run artifacts kept in $RUN_DIR"
+      exit 2
+    fi
     echo "  ❌ #$ID: agent failed, resetting"
     echo "  ↳ exit code: $agent_status"
     emit_status_json "issue_failed" "$ID" "" "$RUN_DIR" "failed" "agent returned failure (exit code $agent_status)"
-    git reset --hard origin/main > /dev/null 2>&1 || true
+    run_git reset --hard origin/main > /dev/null 2>&1 || true
     echo "  run artifacts kept in $RUN_DIR"
   fi
 done

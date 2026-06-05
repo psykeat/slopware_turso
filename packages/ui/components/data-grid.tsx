@@ -600,6 +600,35 @@ function DataGridInner<T>(
   }, [columnVisibility, visibilityStorageKey]);
 
   const columnOrderStorageKey = userId ? `col-order:${entityName}:${panelId}:${userId}` : null;
+  const [storedColumnOrder, setStoredColumnOrder] = useState<string[] | null>(() => {
+    if (typeof window === "undefined" || !columnOrderStorageKey) return null;
+    try {
+      const stored = localStorage.getItem(columnOrderStorageKey);
+      return parseColumnOrder(stored ? JSON.parse(stored) : null);
+    } catch {
+      return null;
+    }
+  });
+  const { data: publishedLayout } = useQuery({
+    queryKey: ["metadata", "layout", entityName, "grid"],
+    queryFn: async () => {
+      if (!entityName) return null;
+      const res = await fetch(`/api/metadata/layout/${entityName}/grid`);
+      if (!res.ok) return null;
+      return res.json() as Promise<Record<string, unknown>>;
+    },
+    enabled: Boolean(entityName),
+    staleTime: 5 * 60 * 1000,
+  });
+  const publishedColumnOrder = useMemo(() => parseColumnOrder(publishedLayout), [publishedLayout]);
+  const publishedDefaultColumnOrder = useMemo(() => {
+    const candidate = publishedColumnOrder ?? resolvedColumns.map((column) => column.key);
+    return normalizeColumnOrder(candidate, resolvedColumns);
+  }, [publishedColumnOrder, resolvedColumns]);
+  const defaultColumnOrder = useMemo(
+    () => normalizeColumnOrder(storedColumnOrder ?? publishedDefaultColumnOrder, resolvedColumns),
+    [publishedDefaultColumnOrder, resolvedColumns, storedColumnOrder],
+  );
 
   // Sync localSearch when prop changes externally
   useEffect(() => {
@@ -673,6 +702,20 @@ function DataGridInner<T>(
   }, [entityName, i18n.language, initColumns, initialColumns]);
 
   useEffect(() => {
+    if (!columnOrderStorageKey) {
+      setStoredColumnOrder(null);
+      return;
+    }
+
+    try {
+      const stored = localStorage.getItem(columnOrderStorageKey);
+      setStoredColumnOrder(parseColumnOrder(stored ? JSON.parse(stored) : null));
+    } catch {
+      setStoredColumnOrder(null);
+    }
+  }, [columnOrderStorageKey]);
+
+  useEffect(() => {
     if (initialColumns) {
       const changed =
         initialColumns.length !== resolvedColumns.length ||
@@ -696,14 +739,28 @@ function DataGridInner<T>(
   }, [initialColumns, resolvedColumns]);
 
   useEffect(() => {
-    const normalized = normalizeColumnOrder(columnOrder, resolvedColumns);
-    if (
-      normalized.length !== columnOrder.length ||
-      normalized.some((key, index) => key !== columnOrder[index])
-    ) {
-      setColumnOrder(normalized);
-    }
+    if (resolvedColumns.length === 0) return;
 
+    const selectedKey = columnOrder[selectedColIndex];
+    const nextOrder = defaultColumnOrder;
+    setColumnOrder((current) => {
+      const same =
+        current.length === nextOrder.length &&
+        current.every((key, index) => key === nextOrder[index]);
+      return same ? current : nextOrder;
+    });
+    if (selectedKey) {
+      const nextIndex = nextOrder.indexOf(selectedKey);
+      if (nextIndex >= 0 && nextIndex !== selectedColIndex) {
+        setSelectedColIndex(nextIndex);
+      }
+    }
+    // columnOrder is intentionally omitted to avoid clobbering user-driven reorders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultColumnOrder, resolvedColumns]);
+
+  useEffect(() => {
+    const normalized = normalizeColumnOrder(columnOrder, resolvedColumns);
     const selectedKey = columnOrder[selectedColIndex];
     if (selectedKey) {
       const nextIndex = normalized.indexOf(selectedKey);
@@ -714,27 +771,6 @@ function DataGridInner<T>(
     // columnOrder is intentionally omitted to avoid a normalization loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedColumns]);
-
-  useEffect(() => {
-    if (!columnOrderStorageKey || resolvedColumns.length === 0) return;
-
-    let storedOrder: string[] | null = null;
-    try {
-      const stored = localStorage.getItem(columnOrderStorageKey);
-      storedOrder = parseColumnOrder(stored ? JSON.parse(stored) : null);
-    } catch {
-      storedOrder = null;
-    }
-
-    const preferred = storedOrder ?? resolvedColumns.map((column) => column.key);
-    const nextOrder = normalizeColumnOrder(preferred, resolvedColumns);
-    setColumnOrder((current) => {
-      const same =
-        current.length === nextOrder.length &&
-        current.every((key, index) => key === nextOrder[index]);
-      return same ? current : nextOrder;
-    });
-  }, [columnOrderStorageKey, resolvedColumns]);
 
   // In design mode, honour the delta column order and visibility
   const effectiveColumns = useMemo(() => {
@@ -1268,6 +1304,7 @@ function DataGridInner<T>(
       const normalized = normalizeColumnOrder(nextOrder, resolvedColumns);
       const selectedKey = columnOrder[selectedColIndex];
       setColumnOrder(normalized);
+      setStoredColumnOrder(normalized);
       if (selectedKey) {
         const nextIndex = normalized.indexOf(selectedKey);
         if (nextIndex >= 0) {
@@ -1292,8 +1329,22 @@ function DataGridInner<T>(
     if (onSortChange) onSortChange(null);
     else setInternalSorting([]);
     setColumnVisibility({});
-    const defaultOrder = resolvedColumns.map((column) => column.key);
-    persistColumnOrder(defaultOrder);
+    try {
+      if (columnOrderStorageKey) {
+        localStorage.removeItem(columnOrderStorageKey);
+      }
+    } catch {
+      // Ignore storage failures in restrictive browser modes.
+    }
+    setStoredColumnOrder(null);
+    const selectedKey = columnOrder[selectedColIndex];
+    setColumnOrder(publishedDefaultColumnOrder);
+    if (selectedKey) {
+      const nextIndex = publishedDefaultColumnOrder.indexOf(selectedKey);
+      if (nextIndex >= 0) {
+        setSelectedColIndex(nextIndex);
+      }
+    }
     toast.success("Grid view reset successfully.");
   };
 

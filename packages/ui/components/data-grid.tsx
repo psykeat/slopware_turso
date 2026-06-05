@@ -219,6 +219,13 @@ function reorderColumnKeys(
   return next;
 }
 
+function isSameColumnOrder(left: string[] | null, right: string[] | null) {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  if (left.length !== right.length) return false;
+  return left.every((key, index) => key === right[index]);
+}
+
 type DesignerColumnDraft = {
   key: string;
   visible: boolean;
@@ -521,6 +528,9 @@ function DataGridInner<T>(
       if (!res.ok) return null;
       return res.json() as Promise<{
         userId: string;
+        isBase?: boolean;
+        isSystemAdmin?: boolean;
+        tenantRole?: string | null;
       }>;
     },
     staleTime: 5 * 60 * 1000,
@@ -625,6 +635,10 @@ function DataGridInner<T>(
     const candidate = publishedColumnOrder ?? resolvedColumns.map((column) => column.key);
     return normalizeColumnOrder(candidate, resolvedColumns);
   }, [publishedColumnOrder, resolvedColumns]);
+  const canPersistPublishedColumnOrder = Boolean(
+    tenantInfo &&
+    (tenantInfo.tenantRole === "owner" || (tenantInfo.isSystemAdmin && tenantInfo.isBase)),
+  );
   const defaultColumnOrder = useMemo(
     () => normalizeColumnOrder(storedColumnOrder ?? publishedDefaultColumnOrder, resolvedColumns),
     [publishedDefaultColumnOrder, resolvedColumns, storedColumnOrder],
@@ -1319,8 +1333,42 @@ function DataGridInner<T>(
           // Ignore storage failures in restrictive browser modes.
         }
       }
+
+      if (
+        canPersistPublishedColumnOrder &&
+        entityName &&
+        !isSameColumnOrder(normalized, publishedDefaultColumnOrder)
+      ) {
+        void (async () => {
+          const res = await fetch(`/api/metadata/layout/${entityName}/grid`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              layoutDefinition: {
+                columnOrder: normalized,
+              },
+            }),
+          });
+          if (!res.ok) {
+            throw new Error(`Layout persist failed with status ${res.status}`);
+          }
+        })().catch((error) => {
+          console.error("Failed to persist published column order", error);
+          toast.error("Failed to save published column order");
+        });
+      }
     },
-    [columnOrder, columnOrderStorageKey, resolvedColumns, selectedColIndex],
+    [
+      canPersistPublishedColumnOrder,
+      columnOrder,
+      columnOrderStorageKey,
+      entityName,
+      publishedDefaultColumnOrder,
+      resolvedColumns,
+      selectedColIndex,
+    ],
   );
 
   function handleColumnOrderChange(

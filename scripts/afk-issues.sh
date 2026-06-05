@@ -284,8 +284,10 @@ $BLOCKER_CONTENT"
       fi
     fi
   else
+    agent_status=$?
     echo "  ❌ #$ID: agent failed, resetting"
-    emit_status_json "issue_failed" "$ID" "" "$RUN_DIR" "failed" "agent returned failure"
+    echo "  ↳ exit code: $agent_status"
+    emit_status_json "issue_failed" "$ID" "" "$RUN_DIR" "failed" "agent returned failure (exit code $agent_status)"
     git reset --hard origin/main > /dev/null 2>&1 || true
     echo "  run artifacts kept in $RUN_DIR"
   fi

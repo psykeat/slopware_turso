@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+
 import { and, eq } from "drizzle-orm";
 
 import { db } from "../index";
@@ -229,7 +231,7 @@ export class MetadataWriter {
   }
 
   private getScope() {
-    if (this.context.isSystemAdmin && this.context.isBaseTenant) {
+    if (this.context.isBaseTenant) {
       return "global";
     }
 
@@ -630,6 +632,9 @@ export class MetadataWriter {
     const values = this.buildLayoutWriteData(existing, data, patchMeta);
 
     if (existing) {
+      if (isDeepStrictEqual(existing.layoutDefinition, values)) {
+        return;
+      }
       const old = existing;
       await tx
         .update(tenantLayouts)

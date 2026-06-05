@@ -1,7 +1,7 @@
 import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { user } from "@repo/db/schema";
-import { getUserTenantInfo, getTenantInfoById } from "@repo/db/services/tenant";
+import { getUserTenantInfo, getTenantInfoById, getUserTenantRole } from "@repo/db/services/tenant";
 import { createFileRoute } from "@tanstack/react-router";
 import { eq } from "drizzle-orm";
 
@@ -49,6 +49,7 @@ export const Route = createFileRoute("/api/me")({
               tenantName: "Default",
               orgName: "",
               isBase: false,
+              tenantRole: null,
               lastCompanyId: userPrefs?.lastCompanyId ?? null,
             }),
             {
@@ -57,11 +58,19 @@ export const Route = createFileRoute("/api/me")({
           );
         }
 
+        const tenantRole = info?.tenantId
+          ? await getUserTenantRole(session.user.id, info.tenantId)
+          : null;
+
+        const tenantInfo = { ...(info as Record<string, unknown>) };
+        delete tenantInfo.role;
+
         return new Response(
           JSON.stringify({
-            ...info,
+            ...tenantInfo,
             userId: session.user.id,
             isSystemAdmin,
+            tenantRole,
             lastCompanyId: userPrefs?.lastCompanyId ?? null,
           }),
           {

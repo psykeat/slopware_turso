@@ -3,7 +3,7 @@ import { db } from "@repo/db";
 import { metadataHistory } from "@repo/db/schema";
 import { MetadataResolver } from "@repo/db/services/metadata";
 import { MetadataWriter } from "@repo/db/services/metadata-writer";
-import { getTenantInfoById } from "@repo/db/services/tenant";
+import { getTenantInfoById, getUserTenantRole } from "@repo/db/services/tenant";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, desc, eq } from "drizzle-orm";
 
@@ -397,7 +397,13 @@ async function handleUpdate({ request, method }: { request: Request; method: "PO
       const layoutKey = segments.pop();
       const entityName = segments.pop();
       if (!entityName || !layoutKey) return new Response("Bad Request", { status: 400 });
-      if (!isSystemAdmin) return new Response("Forbidden", { status: 403 });
+
+      const tenantRole = await getUserTenantRole(session.user.id, context.tenantId);
+      const canWriteLayout =
+        tenantInfo &&
+        ((tenantInfo.isBase && (isSystemAdmin || tenantRole === "owner")) ||
+          tenantRole === "owner");
+      if (!canWriteLayout) return new Response("Forbidden", { status: 403 });
 
       // Expects the layout definition directly as body
       await writer.saveLayoutOverride(entityName, layoutKey, body);

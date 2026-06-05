@@ -26,6 +26,17 @@ Options:
 EOF
 }
 
+run_codex() {
+  local output_file="$1"
+  local prompt="$2"
+
+  codex exec \
+    --dangerously-bypass-approvals-and-sandbox \
+    --dangerously-bypass-hook-trust \
+    -o "$output_file" \
+    "$prompt"
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --run-dir)
@@ -108,11 +119,22 @@ Previous RALPH commits:
 $ralph_commits"
 
   # Run Codex non-interactively in YOLO mode
-  codex exec \
-    --dangerously-bypass-approvals-and-sandbox \
-    --dangerously-bypass-hook-trust \
-    -o "$tmpfile" \
-    "$full_prompt" >> "$LOG_FILE" 2>&1
+  set +e
+  run_codex "$tmpfile" "$full_prompt" >> "$LOG_FILE" 2>&1
+  run_status=$?
+  set -e
+
+  if [ "$run_status" -ne 0 ]; then
+    output=$(cat "$tmpfile" 2>/dev/null || echo "")
+    printf '%s\n' "$output" >> "$LOG_FILE"
+    echo "  [codex] ✗ iter $i failed with exit code $run_status" | tee -a "$LOG_FILE"
+    if [ -n "$output" ]; then
+      echo "  [codex] last output:" | tee -a "$LOG_FILE"
+      printf '%s\n' "$output" | tail -n 40 | tee -a "$LOG_FILE"
+    fi
+    emit_iteration_json "iteration_failed" "$i" "failed" "codex exec exited with status $run_status"
+    exit "$run_status"
+  fi
 
   # Read the final message from Codex to inspect for stop tags
   output=$(cat "$tmpfile" 2>/dev/null || echo "")

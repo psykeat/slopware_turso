@@ -129,6 +129,7 @@ export async function getUserTenantInfo(userId: string) {
       tenantName: tenant.name,
       organizationId: tenant.organizationId,
       orgName: organization.name,
+      role: userTenant.role,
       lastCompanyId: user.lastCompanyId,
     })
     .from(userTenant)
@@ -140,6 +141,18 @@ export async function getUserTenantInfo(userId: string) {
     .limit(1);
 
   return result[0] || null;
+}
+
+export async function getUserTenantRole(userId: string, tenantId: string) {
+  const [result] = await db
+    .select({
+      role: userTenant.role,
+    })
+    .from(userTenant)
+    .where(and(eq(userTenant.userId, userId), eq(userTenant.tenantId, tenantId)))
+    .limit(1);
+
+  return result?.role ?? null;
 }
 
 export async function getTenantInfoById(tenantId: string) {

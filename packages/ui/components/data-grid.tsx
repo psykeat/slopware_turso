@@ -859,7 +859,7 @@ function DataGridInner<T>(
     state: { sorting: effectiveSorting, columnVisibility, columnOrder },
     onSortingChange: handleSortingChange,
     onColumnVisibilityChange: setColumnVisibility,
-    onColumnOrderChange: setColumnOrder,
+    onColumnOrderChange: handleColumnOrderChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: !!onSortChange,
@@ -1322,6 +1322,13 @@ function DataGridInner<T>(
     },
     [columnOrder, columnOrderStorageKey, resolvedColumns, selectedColIndex],
   );
+
+  function handleColumnOrderChange(
+    updater: ColumnOrderState | ((prev: ColumnOrderState) => ColumnOrderState),
+  ) {
+    const nextOrder = typeof updater === "function" ? updater(columnOrder) : updater;
+    persistColumnOrder(nextOrder);
+  }
 
   const handleResetGrid = () => {
     handleSearchChange("");

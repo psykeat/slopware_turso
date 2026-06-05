@@ -1,6 +1,6 @@
 import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
-import { emailThread, emailMessage } from "@repo/db/schema";
+import { aiSession, emailThread, emailMessage } from "@repo/db/schema";
 import { AIDiscoveryService } from "@repo/db/services/ai-discovery";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, eq } from "drizzle-orm";
@@ -18,11 +18,60 @@ export const Route = createFileRoute("/api/ai/$")({
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context) return new Response("Forbidden", { status: 403 });
         const tenantId = context.tenantId;
+        const userId = session.user.id;
 
         const url = new URL(request.url);
         const path = url.pathname;
 
         try {
+          // 0. POST /api/ai/sessions
+          if (path === "/api/ai/sessions") {
+            const body = (await request.json().catch(() => null)) as {
+              focusType?: string | null;
+              focusId?: string | null;
+              mode?: string | null;
+            } | null;
+
+            if (!body?.focusType || !body.focusId) {
+              return new Response(JSON.stringify({ error: "focusType and focusId are required" }), {
+                status: 400,
+                headers: { "content-type": "application/json" },
+              });
+            }
+
+            const [sessionRow] = await db
+              .insert(aiSession)
+              .values({
+                tenantId,
+                userId,
+                focusType: body.focusType,
+                focusId: body.focusId,
+                mode: body.mode ?? null,
+                status: "active",
+              })
+              .returning({
+                sessionId: aiSession.sessionId,
+                status: aiSession.status,
+                focusType: aiSession.focusType,
+                focusId: aiSession.focusId,
+                mode: aiSession.mode,
+              });
+
+            return new Response(
+              JSON.stringify({
+                sessionId: sessionRow.sessionId,
+                status: sessionRow.status,
+                focusType: sessionRow.focusType,
+                focusId: sessionRow.focusId,
+                mode: sessionRow.mode,
+              }),
+              {
+                status: 201,
+                headers: { "content-type": "application/json" },
+              },
+            );
+          }
+
           // 1. GET /api/ai/catalog/entities
           if (path === "/api/ai/catalog/entities") {
             const scopeParam = url.searchParams.get("scope") || "all";

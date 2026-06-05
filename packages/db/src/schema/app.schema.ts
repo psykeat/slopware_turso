@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   pgTable,
+  pgEnum,
   uuid,
   text,
   varchar,
@@ -2706,6 +2707,39 @@ export const aiRun = pgTable(
     index("idx_ai_run_tenant").on(table.tenantId),
     index("idx_ai_run_user").on(table.userId),
     index("idx_ai_run_status").on(table.status),
+  ],
+);
+
+export const aiSessionStatus = pgEnum("ai_session_status", [
+  "active",
+  "awaiting_review",
+  "completed",
+  "aborted",
+]);
+
+export const aiSession = pgTable(
+  "ai_session",
+  {
+    sessionId: uuid("session_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    mode: text("mode"),
+    focusType: text("focus_type").notNull(),
+    focusId: text("focus_id").notNull(),
+    status: aiSessionStatus("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_ai_session_tenant").on(table.tenantId),
+    index("idx_ai_session_user").on(table.userId),
+    index("idx_ai_session_status").on(table.status),
+    index("idx_ai_session_focus").on(table.focusType, table.focusId),
   ],
 );
 

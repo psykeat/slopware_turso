@@ -1,7 +1,7 @@
 # Slopware — Live Schema Index
 
-> Generated: 2026-06-01 20:40:06 UTC
-> Tables: 96
+> Generated: 2026-06-05 19:32:53 UTC
+> Tables: 97
 
 Here is the index of all database tables. Click on a table name to view its detailed columns, types, and business annotations.
 
@@ -22,6 +22,7 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [ai_prompt_version](file:///home/ubuntu/slopware/.agents/schema/ai_prompt_version.md) (_prompt_version_id_)
 - [ai_review](file:///home/ubuntu/slopware/.agents/schema/ai_review.md) (_review_id_)
 - [ai_run](file:///home/ubuntu/slopware/.agents/schema/ai_run.md) (_run_id_)
+- [ai_session](file:///home/ubuntu/slopware/.agents/schema/ai_session.md)
 - [article](file:///home/ubuntu/slopware/.agents/schema/article.md) (_article_id_)
 - [article_bom](file:///home/ubuntu/slopware/.agents/schema/article_bom.md) (_bom_id_)
 - [article_group](file:///home/ubuntu/slopware/.agents/schema/article_group.md) (_article_group_id_)

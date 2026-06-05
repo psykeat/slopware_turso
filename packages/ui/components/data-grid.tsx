@@ -1,8 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
   type ColumnDef as TsColumnDef,
+  type ColumnOrderState,
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
@@ -20,6 +22,7 @@ import {
   SearchIcon,
   GripVerticalIcon,
   PinIcon,
+  SaveIcon,
 } from "lucide-react";
 import React, {
   forwardRef,
@@ -163,6 +166,58 @@ const OPS_BY_TYPE: Record<string, Array<{ value: FilterOp; label: string }>> = {
 
 function getColType(col: ColumnDef<any> | undefined): string {
   return col?.type ?? (col?.isNumeric ? "number" : "text");
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function parseColumnOrder(value: unknown): string[] | null {
+  if (isStringArray(value)) return value;
+  if (isRecord(value)) {
+    const candidate =
+      value.columnOrder ?? value.columns ?? value.order ?? value.layoutDefinition?.columnOrder;
+    if (isStringArray(candidate)) return candidate;
+  }
+  return null;
+}
+
+function normalizeColumnOrder(order: string[] | null, columns: ColumnDef<any>[]) {
+  const normalized = order?.filter((key) => columns.some((column) => column.key === key)) ?? [];
+  const seen = new Set(normalized);
+  for (const column of columns) {
+    if (!seen.has(column.key)) {
+      normalized.push(column.key);
+      seen.add(column.key);
+    }
+  }
+  return normalized;
+}
+
+function orderColumns<T>(columns: ColumnDef<T>[], order: string[]) {
+  const byKey = new Map(columns.map((column) => [column.key, column]));
+  const ordered = order
+    .map((key) => byKey.get(key))
+    .filter((column): column is ColumnDef<T> => Boolean(column));
+  const remaining = columns.filter((column) => !order.includes(column.key));
+  return [...ordered, ...remaining];
+}
+
+function reorderColumnKeys(
+  order: string[],
+  draggedKey: string,
+  targetKey: string,
+  position: "before" | "after",
+) {
+  if (draggedKey === targetKey) return order;
+
+  const next = order.filter((key) => key !== draggedKey);
+  const targetIndex = next.indexOf(targetKey);
+  if (targetIndex < 0) return order;
+
+  const insertAt = position === "before" ? targetIndex : targetIndex + 1;
+  next.splice(insertAt, 0, draggedKey);
+  return next;
 }
 
 type DesignerColumnDraft = {
@@ -460,6 +515,25 @@ function DataGridInner<T>(
   const { state: focusState, setFocus } = useFocus();
   const designer = useDesigner() as unknown as DesignerRuntimeContext;
   const { isDesignMode, delta, initColumns, addColumnDraft } = designer;
+  const { data: tenantInfo } = useQuery({
+    queryKey: ["me", "grid-tenant"],
+    queryFn: async () => {
+      const res = await fetch("/api/me");
+      if (!res.ok) return null;
+      return res.json() as Promise<{
+        userId: string;
+        isSystemAdmin: boolean;
+        tenantId: string | null;
+        tenantName: string;
+        orgName: string;
+        isBase?: boolean;
+      }>;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const userId = typeof tenantInfo?.userId === "string" ? tenantInfo.userId : null;
+  const isSystemAdmin = Boolean(tenantInfo?.isSystemAdmin);
+  const isBaseTenant = Boolean(tenantInfo?.isBase);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [selectedColIndex, setSelectedColIndex] = useState<number>(0);
   const [transientQuery, setTransientQuery] = useState<string>("");
@@ -478,6 +552,14 @@ function DataGridInner<T>(
   const [showColPicker, setShowColPicker] = useState(false);
   const [internalSorting, setInternalSorting] = useState<SortingState>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(
+    (initialColumns ?? []).map((column) => column.key),
+  );
+  const [draggedColumnKey, setDraggedColumnKey] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    key: string;
+    position: "before" | "after";
+  } | null>(null);
   const [restoreRequest, setRestoreRequest] = useState<{
     token: number;
     recordId: string | null;
@@ -488,6 +570,7 @@ function DataGridInner<T>(
   // Local debounced search state
   const [localSearch, setLocalSearch] = useState(searchProp ?? "");
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasUserReorderedRef = useRef(false);
 
   // Row selection
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -508,10 +591,11 @@ function DataGridInner<T>(
       : designerSelectionKey;
 
   // Column visibility persisted per entityName
-  const storageKey = `datagrid-cols-${entityName}`;
+  const visibilityStorageKey = `datagrid-cols-${entityName}`;
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
     try {
-      const stored = localStorage.getItem(storageKey);
+      if (typeof window === "undefined") return {};
+      const stored = localStorage.getItem(visibilityStorageKey);
       return stored ? JSON.parse(stored) : {};
     } catch {
       return {};
@@ -520,9 +604,12 @@ function DataGridInner<T>(
 
   useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(columnVisibility));
+      localStorage.setItem(visibilityStorageKey, JSON.stringify(columnVisibility));
     } catch {}
-  }, [columnVisibility, storageKey]);
+  }, [columnVisibility, visibilityStorageKey]);
+
+  const layoutKey = `col-order:${panelId}`;
+  const columnOrderStorageKey = userId ? `col-order:${entityName}:${panelId}:${userId}` : null;
 
   // Sync localSearch when prop changes externally
   useEffect(() => {
@@ -618,10 +705,75 @@ function DataGridInner<T>(
     }
   }, [initialColumns, resolvedColumns]);
 
+  useEffect(() => {
+    const normalized = normalizeColumnOrder(columnOrder, resolvedColumns);
+    if (
+      normalized.length !== columnOrder.length ||
+      normalized.some((key, index) => key !== columnOrder[index])
+    ) {
+      setColumnOrder(normalized);
+    }
+
+    const selectedKey = columnOrder[selectedColIndex];
+    if (selectedKey) {
+      const nextIndex = normalized.indexOf(selectedKey);
+      if (nextIndex >= 0 && nextIndex !== selectedColIndex) {
+        setSelectedColIndex(nextIndex);
+      }
+    }
+    // columnOrder is intentionally omitted to avoid a normalization loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedColumns]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateColumnOrder() {
+      if (!entityName || resolvedColumns.length === 0) return;
+
+      let localOrder: string[] | null = null;
+      if (columnOrderStorageKey) {
+        try {
+          const stored = localStorage.getItem(columnOrderStorageKey);
+          localOrder = parseColumnOrder(stored ? JSON.parse(stored) : null);
+        } catch {
+          localOrder = null;
+        }
+      }
+
+      let remoteOrder: string[] | null = null;
+      try {
+        const res = await fetch(`/api/metadata/layout/${entityName}/${layoutKey}`);
+        if (res.ok) {
+          const payload = await res.json();
+          remoteOrder = parseColumnOrder(payload);
+        }
+      } catch {
+        remoteOrder = null;
+      }
+
+      if (cancelled || hasUserReorderedRef.current) return;
+
+      const preferred = localOrder ?? remoteOrder;
+      const nextOrder = normalizeColumnOrder(preferred, resolvedColumns);
+      setColumnOrder(nextOrder);
+    }
+
+    void hydrateColumnOrder();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [columnOrderStorageKey, entityName, layoutKey, resolvedColumns]);
+
   // In design mode, honour the delta column order and visibility
   const effectiveColumns = useMemo(() => {
     const activeDraftColumns = designerColumns.length > 0 ? designerColumns : delta.columns;
-    if (!isDesignMode || activeDraftColumns.length === 0) return resolvedColumns;
+    const orderedResolvedColumns = orderColumns(
+      resolvedColumns,
+      normalizeColumnOrder(columnOrder, resolvedColumns),
+    );
+    if (!isDesignMode || activeDraftColumns.length === 0) return orderedResolvedColumns;
 
     const draftByKey = new Map(activeDraftColumns.map((column) => [column.key, column]));
     const orderedKeys = activeDraftColumns
@@ -631,7 +783,7 @@ function DataGridInner<T>(
 
     const orderedResolved = orderedKeys
       .map((key) => {
-        const baseColumn = resolvedColumns.find((column) => column.key === key);
+        const baseColumn = orderedResolvedColumns.find((column) => column.key === key);
         if (!baseColumn) return null;
         const draftColumn = draftByKey.get(key);
         if (draftColumn?.visible === false) return null;
@@ -643,10 +795,12 @@ function DataGridInner<T>(
       })
       .filter(Boolean) as typeof resolvedColumns;
 
-    const remainingResolved = resolvedColumns.filter((column) => !draftByKey.has(column.key));
+    const remainingResolved = orderedResolvedColumns.filter(
+      (column) => !draftByKey.has(column.key),
+    );
 
     const draftOnlyColumns = activeDraftColumns
-      .filter((column) => !resolvedColumns.some((resolved) => resolved.key === column.key))
+      .filter((column) => !orderedResolvedColumns.some((resolved) => resolved.key === column.key))
       .filter((column) => column.visible)
       .map((column) => ({
         key: column.key,
@@ -660,7 +814,7 @@ function DataGridInner<T>(
       }));
 
     return [...orderedResolved, ...remainingResolved, ...draftOnlyColumns];
-  }, [delta.columns, designerColumns, isDesignMode, resolvedColumns]);
+  }, [columnOrder, delta.columns, designerColumns, isDesignMode, resolvedColumns]);
 
   // TanStack Table column definitions
   const tanstackColumns = useMemo<TsColumnDef<T>[]>(
@@ -696,9 +850,10 @@ function DataGridInner<T>(
   const table = useReactTable({
     data,
     columns: tanstackColumns,
-    state: { sorting: effectiveSorting, columnVisibility },
+    state: { sorting: effectiveSorting, columnVisibility, columnOrder },
     onSortingChange: handleSortingChange,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnOrderChange: setColumnOrder,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: !!onSortChange,
@@ -1138,14 +1293,89 @@ function DataGridInner<T>(
     onFiltersChange?.(activeFilters.filter((r) => r.id !== id));
   };
 
+  const persistColumnOrder = useCallback(
+    (nextOrder: ColumnOrderState) => {
+      const normalized = normalizeColumnOrder(nextOrder, resolvedColumns);
+      const selectedKey = columnOrder[selectedColIndex];
+      hasUserReorderedRef.current = true;
+      setColumnOrder(normalized);
+      if (selectedKey) {
+        const nextIndex = normalized.indexOf(selectedKey);
+        if (nextIndex >= 0) {
+          setSelectedColIndex(nextIndex);
+        }
+      }
+
+      if (columnOrderStorageKey) {
+        try {
+          localStorage.setItem(columnOrderStorageKey, JSON.stringify(normalized));
+        } catch {
+          // Ignore storage failures in restrictive browser modes.
+        }
+      }
+    },
+    [columnOrder, columnOrderStorageKey, resolvedColumns, selectedColIndex],
+  );
+
+  const publishColumnOrder = useCallback(async () => {
+    if (!isSystemAdmin) return;
+
+    try {
+      const res = await fetch(`/api/metadata/layout/${entityName}/${layoutKey}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          columnOrder: normalizeColumnOrder(columnOrder, resolvedColumns),
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to save column order: ${res.status}`);
+      }
+
+      toast.success(isBaseTenant ? "Als Standard gespeichert." : "Tenant-Reihenfolge gespeichert.");
+    } catch (error) {
+      console.error("Failed to publish column order:", error);
+      toast.error("Column order could not be saved.");
+    }
+  }, [columnOrder, entityName, isBaseTenant, isSystemAdmin, layoutKey, resolvedColumns]);
+
   const handleResetGrid = () => {
     handleSearchChange("");
     onFiltersChange?.([]);
     if (onSortChange) onSortChange(null);
     else setInternalSorting([]);
     setColumnVisibility({});
+    const defaultOrder = resolvedColumns.map((column) => column.key);
+    persistColumnOrder(defaultOrder);
     toast.success("Grid view reset successfully.");
   };
+
+  const handleColumnDragStart = useCallback((columnKey: string) => {
+    setDraggedColumnKey(columnKey);
+    setDropTarget(null);
+  }, []);
+
+  const handleColumnDrop = useCallback(
+    (targetKey: string, position: "before" | "after") => {
+      if (!draggedColumnKey || draggedColumnKey === targetKey) {
+        setDraggedColumnKey(null);
+        setDropTarget(null);
+        return;
+      }
+
+      const nextOrder = reorderColumnKeys(
+        normalizeColumnOrder(columnOrder, resolvedColumns),
+        draggedColumnKey,
+        targetKey,
+        position,
+      );
+      persistColumnOrder(nextOrder);
+      setDraggedColumnKey(null);
+      setDropTarget(null);
+    },
+    [columnOrder, draggedColumnKey, persistColumnOrder, resolvedColumns],
+  );
 
   const handleCopyToClipboard = async () => {
     if (!data || data.length === 0) {
@@ -1501,6 +1731,17 @@ function DataGridInner<T>(
                   Column
                 </button>
               )}
+              {isSystemAdmin && (
+                <button
+                  type="button"
+                  title={isBaseTenant ? "Als Standard speichern" : "Als Tenant speichern"}
+                  onClick={publishColumnOrder}
+                  className="ml-1 inline-flex h-7 items-center gap-1 rounded-sm border border-hairline px-2 text-[12px] text-ink-mute transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  <SaveIcon size={12} />
+                  {isBaseTenant ? "Als Standard speichern" : "Als Tenant speichern"}
+                </button>
+              )}
               {showColPicker && resolvedColumns.length > 0 && (
                 <div className="absolute top-full right-0 z-50 min-w-[160px] rounded-[var(--radius-sm)] border border-hairline bg-canvas p-1 shadow-sm">
                   {table.getAllColumns().map((col) => {
@@ -1761,6 +2002,11 @@ function DataGridInner<T>(
                   : null;
                 const headerLabel = col?.header ?? header.id;
                 const isDesignerSelected = activeDesignerHeaderKey === header.id;
+                const isDragged = draggedColumnKey === header.id;
+                const isDropBefore =
+                  dropTarget?.key === header.id && dropTarget.position === "before";
+                const isDropAfter =
+                  dropTarget?.key === header.id && dropTarget.position === "after";
 
                 if (isDesignMode) {
                   return (
@@ -1801,14 +2047,67 @@ function DataGridInner<T>(
                 return (
                   <div
                     key={header.id}
+                    onDragOver={(e) => {
+                      if (isDesignMode || !draggedColumnKey || draggedColumnKey === header.id)
+                        return;
+                      e.preventDefault();
+                      const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                      const position = e.clientX < rect.left + rect.width / 2 ? "before" : "after";
+                      setDropTarget({ key: header.id, position });
+                    }}
+                    onDrop={(e) => {
+                      if (isDesignMode) return;
+                      e.preventDefault();
+                      const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                      const position = e.clientX < rect.left + rect.width / 2 ? "before" : "after";
+                      handleColumnDrop(header.id, position);
+                    }}
+                    onDragLeave={(e) => {
+                      if (
+                        e.relatedTarget instanceof Node &&
+                        e.currentTarget.contains(e.relatedTarget)
+                      ) {
+                        return;
+                      }
+                      setDropTarget((current) => (current?.key === header.id ? null : current));
+                    }}
                     className={cn(
-                      "flex h-9 shrink-0 items-center gap-1 px-4 text-[12px] font-medium text-ink-mute select-none",
+                      "group flex h-9 shrink-0 items-center gap-1 px-4 text-[12px] font-medium text-ink-mute select-none",
                       (col?.isNumeric || col?.align === "right") && "justify-end",
                       col?.align === "center" && "justify-center",
                       isSortable && "cursor-pointer transition-colors hover:text-ink",
+                      isDragged && "opacity-40",
+                      isDropBefore && "border-l-2 border-primary/60",
+                      isDropAfter && "border-r-2 border-primary/60",
+                      (isDropBefore || isDropAfter) &&
+                        "bg-[color-mix(in_oklab,var(--primary)_5%,transparent)]",
                     )}
                     style={colFlexStyle(col?.width)}
                   >
+                    <button
+                      type="button"
+                      aria-label={`Reorder column ${headerLabel}`}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                      draggable
+                      onDragStart={(e) => {
+                        if (isDesignMode) return;
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", header.id);
+                        handleColumnDragStart(header.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedColumnKey(null);
+                        setDropTarget(null);
+                      }}
+                      className={cn(
+                        "flex size-4 shrink-0 cursor-grab items-center justify-center rounded-sm text-ink-mute opacity-0 transition-opacity group-hover:opacity-100",
+                        draggedColumnKey === header.id && "text-primary opacity-100",
+                        isDesignMode && "pointer-events-none",
+                      )}
+                    >
+                      <GripVerticalIcon size={11} />
+                    </button>
                     {isSortable ? (
                       <button
                         type="button"

@@ -397,6 +397,7 @@ async function handleUpdate({ request, method }: { request: Request; method: "PO
       const layoutKey = segments.pop();
       const entityName = segments.pop();
       if (!entityName || !layoutKey) return new Response("Bad Request", { status: 400 });
+      if (!isSystemAdmin) return new Response("Forbidden", { status: 403 });
 
       // Expects the layout definition directly as body
       await writer.saveLayoutOverride(entityName, layoutKey, body);

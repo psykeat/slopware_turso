@@ -43,9 +43,12 @@ export const Route = createFileRoute("/api/me")({
         if (!info) {
           return new Response(
             JSON.stringify({
+              userId: session.user.id,
+              isSystemAdmin,
               tenantId: null,
               tenantName: "Default",
               orgName: "",
+              isBase: false,
               lastCompanyId: userPrefs?.lastCompanyId ?? null,
             }),
             {
@@ -55,7 +58,12 @@ export const Route = createFileRoute("/api/me")({
         }
 
         return new Response(
-          JSON.stringify({ ...info, lastCompanyId: userPrefs?.lastCompanyId ?? null }),
+          JSON.stringify({
+            ...info,
+            userId: session.user.id,
+            isSystemAdmin,
+            lastCompanyId: userPrefs?.lastCompanyId ?? null,
+          }),
           {
             headers: { "content-type": "application/json" },
           },

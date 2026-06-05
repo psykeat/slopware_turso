@@ -44,6 +44,161 @@ const ADDRESS_LANGTEXT_FIELDS = [
   { field: "langtext", label: "Langtext" },
 ];
 
+function ContactNotizEditor({
+  contactLabel,
+  contactId,
+  initialValue,
+  onChange,
+  disabled,
+}: {
+  contactLabel: string;
+  contactId: string | null;
+  initialValue: string;
+  onChange: (notiztext: string) => void;
+  disabled: boolean;
+}) {
+  const [draft, setDraft] = useState(initialValue);
+
+  useEffect(() => {
+    if (!contactId) return;
+    if (draft === initialValue) return;
+
+    const timeout = window.setTimeout(() => {
+      onChange(draft);
+    }, 450);
+
+    return () => window.clearTimeout(timeout);
+  }, [contactId, draft, initialValue, onChange]);
+
+  return (
+    <div className="flex min-h-[18rem] min-w-0 flex-col overflow-hidden rounded-xl border border-hairline bg-canvas shadow-sm">
+      <div className="border-b border-hairline px-4 py-3">
+        <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+          Notiztext
+        </div>
+        <div className="mt-0.5 truncate text-[12px] text-ink-secondary">
+          {contactLabel || "Kontakt auswählen"}
+        </div>
+      </div>
+      <textarea
+        value={contactId ? draft : ""}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="Kontakt auswählen"
+        disabled={disabled}
+        className="min-h-0 flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[13px] leading-5 text-ink outline-none placeholder:text-ink-mute disabled:cursor-not-allowed disabled:text-ink-mute"
+      />
+    </div>
+  );
+}
+
+function AddressContactsSection({
+  addressId,
+  contacts,
+  title,
+}: {
+  addressId: string;
+  contacts: any[];
+  title: string;
+}) {
+  const queryClient = useQueryClient();
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+
+  const getContactId = useCallback(
+    (row: Record<string, any> | null) => row?.contactId || row?.addressContactId || row?.id || null,
+    [],
+  );
+
+  const getContactLabel = useCallback((contact: any) => {
+    const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+    const tail = contact.roleFunction ? ` · ${contact.roleFunction}` : "";
+    return `${name || contact.email || contact.phoneMobile || "Kontakt"}${tail}`;
+  }, []);
+
+  const selectedContact = useMemo(() => {
+    if (!selectedContactId) return null;
+    return contacts.find((contact: any) => getContactId(contact) === selectedContactId) ?? null;
+  }, [contacts, getContactId, selectedContactId]);
+
+  const selectedContactNotiztext =
+    selectedContact && typeof selectedContact.notiztext === "string"
+      ? selectedContact.notiztext
+      : "";
+
+  const { mutate: saveContactNote } = useMutation({
+    mutationFn: async ({ contactId, notiztext }: { contactId: string; notiztext: string }) => {
+      const res = await fetch(`/api/data/addressContact/${contactId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notiztext }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["data", "addressContact", addressId],
+      });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message ?? "Notiztext konnte nicht gespeichert werden");
+    },
+  });
+
+  const handleContactRowSelect = useCallback(
+    (row: Record<string, any> | null) => setSelectedContactId(getContactId(row)),
+    [getContactId],
+  );
+
+  const handleContactNoteChange = useCallback(
+    (notiztext: string) => {
+      if (!selectedContact) return;
+      const contactId = getContactId(selectedContact);
+      if (!contactId) return;
+      if (notiztext === selectedContactNotiztext) return;
+
+      saveContactNote({
+        contactId,
+        notiztext,
+      });
+    },
+    [getContactId, saveContactNote, selectedContact, selectedContactNotiztext],
+  );
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">{title}</div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_clamp(18rem,22vw,24rem)]">
+        <div className="min-w-0">
+          <InlineEditGrid
+            key={`${addressId}-contacts`}
+            entityName="addressContact"
+            parentKey={{ addressId }}
+            keyColumn="contactId"
+            className="h-full"
+            onRowSelect={handleContactRowSelect}
+            columns={[
+              { key: "firstName", header: "First Name", type: "text" },
+              { key: "lastName", header: "Last Name", type: "text", required: true },
+              { key: "email", header: "Email", type: "text" },
+              { key: "phoneMobile", header: "Mobile", type: "text" },
+              { key: "roleFunction", header: "Role", type: "text" },
+              { key: "isPrimary", header: "Primary", type: "boolean", width: "60px" },
+            ]}
+          />
+        </div>
+        <ContactNotizEditor
+          key={selectedContact ? (getContactId(selectedContact) ?? "selected") : "empty"}
+          contactLabel={selectedContact ? getContactLabel(selectedContact) : ""}
+          contactId={selectedContact ? getContactId(selectedContact) : null}
+          initialValue={selectedContactNotiztext}
+          onChange={handleContactNoteChange}
+          disabled={!selectedContact}
+        />
+      </div>
+    </div>
+  );
+}
+
 function AddressesModule() {
   const { state: focusState } = useFocus();
   const { registerCommand } = useCommands();
@@ -56,8 +211,6 @@ function AddressesModule() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
-  const [contactNotizDraft, setContactNotizDraft] = useState("");
 
   const [activeAddressId, setActiveAddressId] = useState<string | null>(
     focusState.entity === "address" ? focusState.recordId : null,
@@ -251,85 +404,6 @@ function AddressesModule() {
     () => addresses.find((a: any) => a.addressId === activeAddressId),
     [addresses, activeAddressId],
   );
-
-  const getContactId = useCallback(
-    (row: Record<string, any> | null) => row?.contactId || row?.addressContactId || row?.id || null,
-    [],
-  );
-
-  const handleContactRowSelect = useCallback(
-    (row: Record<string, any> | null) => setSelectedContactId(getContactId(row)),
-    [getContactId],
-  );
-
-  const getContactLabel = useCallback((contact: any) => {
-    const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
-    const tail = contact.roleFunction ? ` · ${contact.roleFunction}` : "";
-    return `${name || contact.email || contact.phoneMobile || "Kontakt"}${tail}`;
-  }, []);
-
-  const selectedContact = useMemo(() => {
-    if (!selectedContactId) return null;
-    return contacts.find((contact: any) => getContactId(contact) === selectedContactId) ?? null;
-  }, [contacts, getContactId, selectedContactId]);
-
-  const selectedContactNotiztext =
-    selectedContact && typeof selectedContact.notiztext === "string"
-      ? selectedContact.notiztext
-      : "";
-
-  // Synchronize contact draft only when the selected contact actually changes
-  useEffect(() => {
-    setContactNotizDraft(selectedContactNotiztext);
-  }, [selectedContactNotiztext]);
-
-  // Adjust selected contact if it gets deleted/removed from list
-  useEffect(() => {
-    if (!selectedContactId) return;
-    if (contacts.some((contact: any) => getContactId(contact) === selectedContactId)) return;
-    setSelectedContactId(null);
-  }, [contacts, getContactId, selectedContactId]);
-
-  // Reset selected contact when changing the main address
-  useEffect(() => {
-    setSelectedContactId(null);
-  }, [activeAddressId]);
-
-  const saveContactNoteMutation = useMutation({
-    mutationFn: async ({ contactId, notiztext }: { contactId: string; notiztext: string }) => {
-      const res = await fetch(`/api/data/addressContact/${contactId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notiztext }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    onSuccess: async () => {
-      if (!activeAddressId) return;
-      await queryClient.invalidateQueries({
-        queryKey: ["data", "addressContact", activeAddressId],
-      });
-    },
-    onError: (error: any) => {
-      toast.error(error?.message ?? "Notiztext konnte nicht gespeichert werden");
-    },
-  });
-  const saveContactNote = saveContactNoteMutation.mutate;
-
-  useEffect(() => {
-    if (!selectedContactId) return;
-    if (contactNotizDraft === selectedContactNotiztext) return;
-
-    const timeout = window.setTimeout(() => {
-      saveContactNote({
-        contactId: selectedContactId,
-        notiztext: contactNotizDraft,
-      });
-    }, 450);
-
-    return () => window.clearTimeout(timeout);
-  }, [contactNotizDraft, saveContactNote, selectedContactId, selectedContactNotiztext]);
 
   const dependentTabs = useMemo(
     () => [
@@ -884,48 +958,12 @@ function AddressesModule() {
                     onControlledChange={(field, value) => onChange(field, value)}
                   />
                 </div>
-                <div>
-                  <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    Contacts
-                  </div>
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                    <div className="min-w-0">
-                      <InlineEditGrid
-                        key={`${record.addressId as string}-contacts`}
-                        entityName="addressContact"
-                        parentKey={{ addressId: record.addressId as string }}
-                        keyColumn="contactId"
-                        className="h-full"
-                        onRowSelect={handleContactRowSelect}
-                        columns={[
-                          { key: "firstName", header: "First Name", type: "text" },
-                          { key: "lastName", header: "Last Name", type: "text", required: true },
-                          { key: "email", header: "Email", type: "text" },
-                          { key: "phoneMobile", header: "Mobile", type: "text" },
-                          { key: "roleFunction", header: "Role", type: "text" },
-                          { key: "isPrimary", header: "Primary", type: "boolean", width: "60px" },
-                        ]}
-                      />
-                    </div>
-                    <div className="flex min-h-[18rem] min-w-0 flex-col overflow-hidden rounded-xl border border-hairline bg-canvas shadow-sm">
-                      <div className="border-b border-hairline px-4 py-3">
-                        <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                          Notiztext
-                        </div>
-                        <div className="mt-0.5 truncate text-[12px] text-ink-secondary">
-                          {selectedContact ? getContactLabel(selectedContact) : "Kontakt auswählen"}
-                        </div>
-                      </div>
-                      <textarea
-                        value={selectedContact ? contactNotizDraft : ""}
-                        onChange={(e) => setContactNotizDraft(e.target.value)}
-                        placeholder="Kontakt auswählen"
-                        disabled={!selectedContact}
-                        className="min-h-0 flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[13px] leading-5 text-ink outline-none placeholder:text-ink-mute disabled:cursor-not-allowed disabled:text-ink-mute"
-                      />
-                    </div>
-                  </div>
-                </div>
+                <AddressContactsSection
+                  key={record.addressId as string}
+                  addressId={record.addressId as string}
+                  contacts={contacts}
+                  title="Ansprechpartner"
+                />
                 <div>
                   <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
                     Delivery Addresses

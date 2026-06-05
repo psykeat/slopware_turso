@@ -8,6 +8,26 @@ import * as schema from "../schema/index";
 
 type FieldLabel = { en: string; de: string };
 type EntityLabelMap = Record<string, FieldLabel>;
+type DiscoveredTenantField = {
+  entityName: string;
+  fieldName: string;
+  fieldType: string;
+  label: FieldLabel;
+  isVisible: boolean;
+  isRequired: boolean;
+  lookupTable?: string;
+};
+
+type ExistingTenantField = {
+  entityName: string;
+  fieldName: string;
+  fieldType: string;
+};
+
+type HelperTableRegistration = {
+  payload: ReturnType<typeof getHelperTablePayload>["payload"];
+  conflictSet: ReturnType<typeof getHelperTablePayload>["conflictSet"];
+};
 
 const entityLabelMap: EntityLabelMap = {
   company: { en: "Company Master", de: "Firmenstamm" },
@@ -258,30 +278,108 @@ function getTenantFieldPayload(key: string, colName: string, col: any, schemaRef
   };
 }
 
+function discoverSchemaMetadata(): {
+  fields: DiscoveredTenantField[];
+  helperTables: HelperTableRegistration[];
+} {
+  const discoveredFields: DiscoveredTenantField[] = [];
+  const helperTables: HelperTableRegistration[] = [];
+
+  for (const { key, table } of discoverTables()) {
+    try {
+      getTableConfig(table);
+    } catch {
+      continue;
+    }
+
+    const columns = getColumnsBase(table);
+    const helperTable = getHelperTablePayload(key, columns as Record<string, unknown>);
+    console.log(`Processing table: ${key}`);
+
+    if (helperTable.shouldRegister) {
+      helperTables.push({
+        payload: helperTable.payload,
+        conflictSet: helperTable.conflictSet,
+      });
+    }
+
+    for (const [colName, col] of Object.entries(columns)) {
+      const field = getTenantFieldPayload(key, colName, col, schema);
+      discoveredFields.push({
+        entityName: key,
+        fieldName: colName,
+        fieldType: field.fieldType,
+        label: field.label,
+        isVisible: field.isVisible,
+        isRequired: field.isRequired,
+        lookupTable: field.lookupTable,
+      });
+    }
+  }
+
+  return { fields: discoveredFields, helperTables };
+}
+
+export function planTenantFieldReconciliation(
+  discoveredFields: DiscoveredTenantField[],
+  existingFields: ExistingTenantField[],
+) {
+  const existingFieldMap = new Map(
+    existingFields.map((field) => [`${field.entityName}:${field.fieldName}`, field] as const),
+  );
+
+  const inserts: DiscoveredTenantField[] = [];
+  const updates: Array<Pick<DiscoveredTenantField, "entityName" | "fieldName" | "fieldType">> = [];
+
+  for (const field of discoveredFields) {
+    const fieldKey = `${field.entityName}:${field.fieldName}`;
+    const existingField = existingFieldMap.get(fieldKey);
+
+    if (!existingField) {
+      inserts.push(field);
+      continue;
+    }
+
+    if (existingField.fieldType !== field.fieldType) {
+      updates.push({
+        entityName: field.entityName,
+        fieldName: field.fieldName,
+        fieldType: field.fieldType,
+      });
+    }
+  }
+
+  return {
+    inserts,
+    updates,
+    unchanged: discoveredFields.length - inserts.length - updates.length,
+    total: discoveredFields.length,
+  };
+}
+
 /**
- * Automatically discovers metadata from Drizzle schema and populates
- * helper_table_registry and global tenant_fields with improved labels.
+ * Automatically discovers metadata from Drizzle schema and reconciles
+ * helper_table_registry plus global tenant_fields against the live schema.
  */
 export async function seedMetadata() {
   console.log("Starting improved dynamic metadata discovery...");
 
-  const tables = discoverTables();
+  const { fields: discoveredFields, helperTables } = discoverSchemaMetadata();
 
-  for (const { key, table } of tables) {
-    let config;
-    try {
-      config = getTableConfig(table);
-    } catch (e) {
-      continue;
-    }
-    const columns = getColumnsBase(table);
-    const tableName = config.name;
+  await db.transaction(async (tx) => {
+    const existingFields = (await tx
+      .select({
+        entityName: tenantFields.entityName,
+        fieldName: tenantFields.fieldName,
+        fieldType: tenantFields.fieldType,
+      })
+      .from(tenantFields)
+      .where(eq(tenantFields.scope, "global"))) as ExistingTenantField[];
 
-    console.log(`Processing table: ${tableName} (Entity: ${key})`);
+    const { inserts, updates } = planTenantFieldReconciliation(discoveredFields, existingFields);
 
-    const helperTable = getHelperTablePayload(key, columns as Record<string, unknown>);
-    if (helperTable.shouldRegister) {
-      await db
+    for (const helperTable of helperTables) {
+      await tx
         .insert(helperTableRegistry)
         .values(helperTable.payload)
         .onConflictDoUpdate({
@@ -290,14 +388,12 @@ export async function seedMetadata() {
         });
     }
 
-    for (const [colName, col] of Object.entries(columns)) {
-      const field = getTenantFieldPayload(key, colName, col, schema);
-
-      await db
+    for (const field of inserts) {
+      await tx
         .insert(tenantFields)
         .values({
-          entityName: key,
-          fieldName: colName,
+          entityName: field.entityName,
+          fieldName: field.fieldName,
           fieldType: field.fieldType,
           label: field.label,
           scope: "global",
@@ -305,18 +401,24 @@ export async function seedMetadata() {
           isRequired: field.isRequired,
           lookupTable: field.lookupTable,
         })
-        .onConflictDoUpdate({
-          target: [tenantFields.entityName, tenantFields.fieldName],
-          set: {
-            fieldType: field.fieldType,
-            isRequired: field.isRequired,
-            lookupTable: field.lookupTable || undefined,
-            label: field.label,
-            isVisible: field.isVisible,
-          },
-        });
+        .onConflictDoNothing();
     }
-  }
+
+    for (const field of updates) {
+      await tx
+        .update(tenantFields)
+        .set({
+          fieldType: field.fieldType,
+        })
+        .where(
+          and(
+            eq(tenantFields.scope, "global"),
+            eq(tenantFields.entityName, field.entityName),
+            eq(tenantFields.fieldName, field.fieldName),
+          ),
+        );
+    }
+  });
 
   console.log("Improved dynamic metadata discovery complete.");
 }

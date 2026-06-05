@@ -141,16 +141,21 @@ ENGINE_NAME="$ENGINE"
 REPO_NAME="$REPO"
 TOTAL_ITERATIONS="$ITERATIONS"
 
-echo "engine=$ENGINE  repo=$REPO  prefix=$BRANCH_PREFIX  iter=$ITERATIONS  dry=$DRY_RUN  json=$JSON_OUTPUT"
+echo "Using engine: $ENGINE"
+echo "Using repository: $REPO"
+echo "Using branch prefix: $BRANCH_PREFIX"
+echo "Using iterations: $ITERATIONS"
+echo "Dry run: $DRY_RUN"
+echo "JSON output: $JSON_OUTPUT"
 
 if [ "${#ISSUE_IDS[@]}" -gt 0 ]; then
-  echo "  issues: ${ISSUE_IDS[*]}"
+  echo "Using manually provided issue IDs: ${ISSUE_IDS[*]}"
 else
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "Dry run requires explicit issue IDs."
     exit 1
   fi
-  echo "  fetching open issues from $REPO..."
+  echo "Fetching open issues from $REPO..."
   mapfile -t ISSUE_IDS < <(gh issue list -R "$REPO" --limit "$ISSUE_LIMIT" --json number --jq '.[].number' | sort -n)
 fi
 
@@ -177,40 +182,29 @@ if [ "$DRY_RUN" -eq 1 ]; then
   exit 0
 fi
 
-# Ensure we start on main and are clean
-echo "Starting issue run on $(git branch --show-current 2>/dev/null || echo main)..."
+## Ensure we start on main and are clean
+echo "Starting issue run on main..."
 emit_status_json "run_start" "" "" "" "running" "starting issue run"
 git checkout main
 git pull origin main
 mkdir -p "$RUNS_DIR"
 
-cleanup_issue_workspace() {
-  local branch_name="$1"
-
-  git checkout main >/dev/null 2>&1 || true
-  git branch -D "$branch_name" >/dev/null 2>&1 || true
-  git reset --hard origin/main >/dev/null 2>&1 || true
-}
-
 for ID in "${ISSUE_IDS[@]}"; do
   printf '\n[#%s] filtering...\n' "$ID"
   emit_status_json "issue_filter" "$ID" "" "" "running" "checking issue dependencies"
-  
+
   # Fetch body to check dependencies
   BODY=$(gh issue view "$ID" -R "$REPO" --json body --jq '.body')
-  
+
   # Dependency parsing: Check if body contains "Depends on #<num>"
-  # Extracts the dependency ID if present
   DEP_ID=$(echo "$BODY" | grep -o -E "Depends on #[0-9]+" | grep -o -E "[0-9]+" || true)
-  
+
   if [ -n "$DEP_ID" ]; then
     printf '  depends on #%s\n' "$DEP_ID"
-    
-    # Check if dependency is still open in GitHub
+
     DEP_STATUS=$(gh issue view "$DEP_ID" -R "$REPO" --json state --jq '.state' 2>/dev/null || echo "CLOSED")
-    
+
     if [ "$DEP_STATUS" = "OPEN" ]; then
-      # If the dependency was successfully processed earlier in this session, we can proceed
       if [[ " $DECLARED_MERGED " =~ " $DEP_ID " ]]; then
         echo "  dep #$DEP_ID processed in this run, proceeding"
         emit_status_json "issue_dependency_resolved" "$ID" "" "" "running" "dependency already merged in this run"
@@ -225,13 +219,9 @@ for ID in "${ISSUE_IDS[@]}"; do
   fi
 
   TITLE=$(gh issue view "$ID" -R "$REPO" --json title --jq '.title')
-  BRANCH_NAME="${BRANCH_PREFIX}${ID}"
+  RUN_DIR=$(mktemp -d "$RUNS_DIR/issue-$ID.XXXXXX")
   printf '[#%s] processing "%s"\n' "$ID" "$(echo "$TITLE" | head -c 60)"
   emit_status_json "issue_start" "$ID" "" "" "running" "starting issue processing"
-  RUN_DIR=$(mktemp -d "$RUNS_DIR/issue-$ID.XXXXXX")
-  
-  echo "  branch: $BRANCH_NAME"
-  git checkout -B "$BRANCH_NAME"
 
   cat <<EOF > "$RUN_DIR/prompt.md"
 # Task Prompt: Issue #$ID
@@ -259,63 +249,45 @@ EOF
     executor_args+=(--json)
   fi
 
-  # Execute the autonomous run (with configured iterations)
   if "$SCRIPT_DIR/$AFK_SCRIPT" "${executor_args[@]}"; then
-    # Check if agent exited because of a blocker
     if [ -f "$RUN_DIR/blocked.md" ]; then
       BLOCKER_CONTENT=$(cat "$RUN_DIR/blocked.md")
       echo "  ⚠ #$ID blocked — posting to GitHub"
-      emit_status_json "issue_blocked" "$ID" "$BRANCH_NAME" "$RUN_DIR" "blocked" "agent reported a blocker"
+      emit_status_json "issue_blocked" "$ID" "" "$RUN_DIR" "blocked" "agent reported a blocker"
       gh issue comment "$ID" -R "$REPO" --body "### ⚠️ Autonomous Agent Blocked
 The agent encountered the following design/technical blockers:
 
 $BLOCKER_CONTENT"
-
-      echo "  cleaning up workspace"
-      cleanup_issue_workspace "$BRANCH_NAME"
-      echo "Run artifacts kept in $RUN_DIR"
+      git checkout main > /dev/null 2>&1 || true
+      git reset --hard origin/main > /dev/null 2>&1 || true
+      echo "  run artifacts kept in $RUN_DIR"
     else
-      echo "  🎉 #$ID done — creating PR"
       git add .
-
       if git diff --cached --quiet; then
-        echo "  ❌ #$ID: no changes, rolling back"
-        emit_status_json "issue_no_changes" "$ID" "$BRANCH_NAME" "$RUN_DIR" "failed" "agent produced no changes"
-        git checkout main
-        git branch -D "$BRANCH_NAME" || true
-        git reset --hard origin/main
-        echo "Run artifacts kept in $RUN_DIR"
+        echo "  ❌ #$ID: no changes produced"
+        emit_status_json "issue_no_changes" "$ID" "" "$RUN_DIR" "failed" "agent produced no changes"
+        git reset --hard origin/main > /dev/null 2>&1 || true
       elif git commit -m "RALPH: fix #$ID - $TITLE"; then
-        git push origin "$BRANCH_NAME"
-
-        gh pr create -R "$REPO" \
-          --title "RALPH: fix #$ID - $TITLE" \
-          --body "Automatically completed by Ralph ($ENGINE)." \
-          --head "$BRANCH_NAME" \
-          --base main
-
+        git push origin main
+        gh issue close "$ID" -R "$REPO" --comment "Automatically implemented and pushed to main by Ralph ($ENGINE)."
         DECLARED_MERGED="$DECLARED_MERGED $ID"
-        emit_status_json "issue_complete" "$ID" "$BRANCH_NAME" "$RUN_DIR" "completed" "pull request created"
-
-        echo "  ✓ PR created for #$ID"
-        git checkout main
-        if [ "$KEEP_RUNS" -eq 1 ]; then
-          echo "Run artifacts kept in $RUN_DIR"
-        else
+        emit_status_json "issue_complete" "$ID" "" "$RUN_DIR" "completed" "committed to main, issue closed"
+        echo "  ✓ #$ID done → main (issue closed)"
+        if [ "$KEEP_RUNS" -eq 0 ]; then
           rm -rf "$RUN_DIR"
         fi
       else
-        echo "  ❌ #$ID: commit failed, rolling back"
-        emit_status_json "issue_commit_failed" "$ID" "$BRANCH_NAME" "$RUN_DIR" "failed" "commit failed"
-        cleanup_issue_workspace "$BRANCH_NAME"
-        echo "Run artifacts kept in $RUN_DIR"
+        echo "  ❌ #$ID: commit failed, resetting"
+        emit_status_json "issue_commit_failed" "$ID" "" "$RUN_DIR" "failed" "commit failed"
+        git reset --hard origin/main > /dev/null 2>&1 || true
+        echo "  run artifacts kept in $RUN_DIR"
       fi
     fi
   else
-    echo "  ❌ #$ID: agent failed, rolling back"
-    emit_status_json "issue_failed" "$ID" "$BRANCH_NAME" "$RUN_DIR" "failed" "agent returned failure"
-    cleanup_issue_workspace "$BRANCH_NAME"
-    echo "Run artifacts kept in $RUN_DIR"
+    echo "  ❌ #$ID: agent failed, resetting"
+    emit_status_json "issue_failed" "$ID" "" "$RUN_DIR" "failed" "agent returned failure"
+    git reset --hard origin/main > /dev/null 2>&1 || true
+    echo "  run artifacts kept in $RUN_DIR"
   fi
 done
 

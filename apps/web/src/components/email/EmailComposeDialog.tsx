@@ -2,7 +2,7 @@ import { Button } from "@repo/ui/components/button";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { cn } from "@repo/ui/lib/utils";
 import { CheckIcon, ClockIcon, MailIcon, SendIcon, XIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 
 export type EmailComposeMode = "plain" | "html";
@@ -83,6 +83,217 @@ function hasAnyRecipient(value: EmailComposeValue) {
   );
 }
 
+type AddressContactSuggestion = {
+  contactId: string;
+  addressId: string;
+  firstName: string | null;
+  lastName: string;
+  email: string | null;
+  isPrimary?: boolean;
+};
+
+function formatAddressContact(contact: AddressContactSuggestion) {
+  const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim();
+  if (name && contact.email) return `${name} <${contact.email}>`;
+  if (name) return name;
+  return contact.email || "";
+}
+
+function getRecipientTokenRange(value: string, selectionStart: number, selectionEnd: number) {
+  const caretStart = Math.max(0, Math.min(selectionStart, value.length));
+  const caretEnd = Math.max(caretStart, Math.min(selectionEnd, value.length));
+  const prefix = value.slice(0, caretStart);
+  const tokenStart = Math.max(prefix.lastIndexOf(",") + 1, 0);
+  const suffix = value.slice(caretEnd);
+  const nextCommaIndex = suffix.indexOf(",");
+  const tokenEnd = nextCommaIndex === -1 ? value.length : caretEnd + nextCommaIndex;
+  return { start: tokenStart, end: tokenEnd, query: value.slice(tokenStart, caretStart).trim() };
+}
+
+function replaceRecipientToken(
+  value: string,
+  range: { start: number; end: number },
+  replacement: string,
+) {
+  const prefix = value.slice(0, range.start);
+  const suffix = value.slice(range.end).trimStart();
+  if (!suffix) return `${prefix}${replacement}`;
+  return `${prefix}${replacement}, ${suffix.replace(/^,\s*/, "")}`;
+}
+
+function RecipientAutocompleteField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  const [suggestions, setSuggestions] = useState<AddressContactSuggestion[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [selection, setSelection] = useState({ start: value.length, end: value.length });
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const range = getRecipientTokenRange(value, selection.start, selection.end);
+  const query = range.query;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const term = query.trim();
+    if (!term) return;
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/data/addressContact?q=${encodeURIComponent(term)}&limit=8`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+        const rows = (await res.json()) as AddressContactSuggestion[];
+        if (controller.signal.aborted) return;
+        setSuggestions(
+          Array.isArray(rows) ? rows.filter((row) => Boolean(row?.email)).slice(0, 8) : [],
+        );
+        setActiveIndex(0);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error(error);
+          setSuggestions([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 180);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [isOpen, query]);
+
+  const commitSuggestion = (contact: AddressContactSuggestion) => {
+    const formatted = formatAddressContact(contact);
+    if (!formatted) return;
+    const nextValue = replaceRecipientToken(value, range, formatted);
+    onChange(nextValue);
+    setIsOpen(false);
+    setSuggestions([]);
+    setActiveIndex(0);
+    queueMicrotask(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      const caret = nextValue.length;
+      input.focus();
+      input.setSelectionRange(caret, caret);
+      setSelection({ start: caret, end: caret });
+    });
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!isOpen && (event.key === "ArrowDown" || event.key === "ArrowUp") && query.trim()) {
+      setIsOpen(true);
+      return;
+    }
+
+    if (!isOpen || suggestions.length === 0) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((current) => (current + 1) % suggestions.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((current) => (current - 1 + suggestions.length) % suggestions.length);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const selected = suggestions[activeIndex];
+      if (selected) commitSuggestion(selected);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        value={value}
+        onFocus={() => {
+          if (query.trim()) setIsOpen(true);
+        }}
+        onBlur={() => setIsOpen(false)}
+        onChange={(event) => {
+          const nextValue = event.currentTarget.value;
+          const nextSelectionStart = event.currentTarget.selectionStart ?? nextValue.length;
+          const nextSelectionEnd = event.currentTarget.selectionEnd ?? nextSelectionStart;
+          setSelection({ start: nextSelectionStart, end: nextSelectionEnd });
+          onChange(nextValue);
+          setIsOpen(Boolean(nextValue.trim()));
+        }}
+        onSelect={(event) => {
+          const input = event.currentTarget;
+          const start = input.selectionStart ?? input.value.length;
+          const end = input.selectionEnd ?? start;
+          setSelection({ start, end });
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="h-9 w-full rounded-sm border border-hairline bg-canvas px-2 text-[13px] outline-none focus:border-primary"
+      />
+      {isOpen && query.trim() && (
+        <div className="absolute top-full right-0 left-0 z-20 mt-1 overflow-hidden rounded-sm border border-hairline bg-canvas shadow-lg">
+          <div className="max-h-56 overflow-auto py-1">
+            {loading ? (
+              <div className="px-3 py-2 text-[12px] text-ink-mute">Searching contacts…</div>
+            ) : suggestions.length === 0 ? (
+              <div className="px-3 py-2 text-[12px] text-ink-mute">No contacts found</div>
+            ) : (
+              suggestions.map((contact, index) => {
+                const label = formatAddressContact(contact);
+                return (
+                  <button
+                    key={contact.contactId}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      commitSuggestion(contact);
+                    }}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    className={cn(
+                      "flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-[12px]",
+                      index === activeIndex
+                        ? "bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] text-ink"
+                        : "text-ink",
+                    )}
+                  >
+                    <span className="min-w-0 truncate">{label}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function EmailComposeDialog({
   open,
   title = "Compose email",
@@ -100,8 +311,8 @@ export function EmailComposeDialog({
   const [attachmentRows, setAttachmentRows] = useState<EmailComposeAttachment[]>(attachments);
   const [uploading, setUploading] = useState(false);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.currentTarget.files;
     if (!files || files.length === 0) return;
 
     setUploading(true);
@@ -136,7 +347,7 @@ export function EmailComposeDialog({
       toast.error(error.message || "Failed to upload file");
     } finally {
       setUploading(false);
-      event.target.value = ""; // Reset
+      event.currentTarget.value = ""; // Reset
     }
   };
 
@@ -226,24 +437,21 @@ export function EmailComposeDialog({
                 {notice}
               </div>
             )}
-            <input
+            <RecipientAutocompleteField
               value={draft.to}
-              onChange={(event) => setDraft((prev) => ({ ...prev, to: event.target.value }))}
+              onChange={(nextValue) => setDraft((prev) => ({ ...prev, to: nextValue }))}
               placeholder="To"
-              className="h-9 rounded-sm border border-hairline bg-canvas px-2 text-[13px] outline-none focus:border-primary"
             />
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <input
+              <RecipientAutocompleteField
                 value={draft.cc}
-                onChange={(event) => setDraft((prev) => ({ ...prev, cc: event.target.value }))}
+                onChange={(nextValue) => setDraft((prev) => ({ ...prev, cc: nextValue }))}
                 placeholder="Cc"
-                className="h-9 rounded-sm border border-hairline bg-canvas px-2 text-[13px] outline-none focus:border-primary"
               />
-              <input
+              <RecipientAutocompleteField
                 value={draft.bcc}
-                onChange={(event) => setDraft((prev) => ({ ...prev, bcc: event.target.value }))}
+                onChange={(nextValue) => setDraft((prev) => ({ ...prev, bcc: nextValue }))}
                 placeholder="Bcc"
-                className="h-9 rounded-sm border border-hairline bg-canvas px-2 text-[13px] outline-none focus:border-primary"
               />
             </div>
             <input

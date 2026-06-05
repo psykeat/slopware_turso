@@ -1,7 +1,8 @@
-import { and, desc, eq, inArray, isNull, or, ilike } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, ilike, sql } from "drizzle-orm";
 
 import { db } from "../../index";
 import {
+  addressContact,
   emailAccount,
   emailAttachment,
   emailLabel,
@@ -20,6 +21,39 @@ import type { EmailJobType, ProviderLabel, ProviderThread, SyncPage } from "./ty
 function asDate(value: Date | string | null | undefined) {
   if (!value) return null;
   return value instanceof Date ? value : new Date(value);
+}
+
+function extractEmailAddress(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const angledMatch = trimmed.match(/<([^<>]+)>/);
+    if (angledMatch?.[1]) {
+      const candidate = angledMatch[1].trim();
+      return candidate.includes("@") ? candidate.toLowerCase() : null;
+    }
+
+    const plainMatch = trimmed.match(/([^\s<>]+@[^\s<>]+)/);
+    if (plainMatch?.[1]) {
+      return plainMatch[1].trim().toLowerCase();
+    }
+
+    return trimmed.includes("@") ? trimmed.toLowerCase() : null;
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return (
+      extractEmailAddress(record.email) ??
+      extractEmailAddress(record.address) ??
+      extractEmailAddress(record.value) ??
+      null
+    );
+  }
+
+  return null;
 }
 
 export class EmailSyncService {
@@ -1026,6 +1060,22 @@ export class EmailSyncService {
       })
       .returning();
 
+    if (!threadRow.relatedAddressId) {
+      const matchedAddressId = await this.matchRelatedAddressId(tx, thread.messages);
+      if (matchedAddressId) {
+        await tx
+          .update(emailThread)
+          .set({ relatedAddressId: matchedAddressId, updatedAt: new Date() })
+          .where(
+            and(
+              eq(emailThread.tenantId, this.tenantId),
+              eq(emailThread.emailThreadId, threadRow.emailThreadId),
+            ),
+          );
+        threadRow.relatedAddressId = matchedAddressId;
+      }
+    }
+
     for (const message of thread.messages) {
       const [messageRow] = await tx
         .insert(emailMessage)
@@ -1148,5 +1198,32 @@ export class EmailSyncService {
         }
       }
     }
+  }
+
+  private async matchRelatedAddressId(tx: any, messages: ProviderThread["messages"]) {
+    for (const message of messages) {
+      if (message.direction !== "inbound") continue;
+      const fromEmail = extractEmailAddress(message.from);
+      if (!fromEmail) continue;
+
+      const [contact] = await tx
+        .select({
+          addressId: addressContact.addressId,
+        })
+        .from(addressContact)
+        .where(
+          and(
+            eq(addressContact.tenantId, this.tenantId),
+            eq(addressContact.archived, false),
+            sql`lower(${addressContact.email}) = ${fromEmail}`,
+          ),
+        )
+        .orderBy(desc(addressContact.isPrimary), desc(addressContact.createdAt))
+        .limit(1);
+
+      if (contact?.addressId) return contact.addressId;
+    }
+
+    return null;
   }
 }

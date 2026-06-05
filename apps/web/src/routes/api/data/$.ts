@@ -1,7 +1,10 @@
 import { auth } from "@repo/auth/auth";
+import { db } from "@repo/db";
+import { addressContact } from "@repo/db/schema";
 import { DataService } from "@repo/db/services/data";
 import { DocumentService } from "@repo/db/services/document-service";
 import { createFileRoute } from "@tanstack/react-router";
+import { asc, and, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
@@ -31,6 +34,57 @@ export const Route = createFileRoute("/api/data/$")({
         if (!entityName) return new Response("Bad Request", { status: 400 });
 
         try {
+          if (entityName === "addressContact" && !id) {
+            const q = url.searchParams.get("q");
+            if (q !== null) {
+              const term = q.trim();
+              if (!term) {
+                return new Response(JSON.stringify([]), {
+                  headers: { "content-type": "application/json" },
+                });
+              }
+
+              const requestedLimit = Number(url.searchParams.get("limit") ?? "10");
+              const limit = Number.isFinite(requestedLimit)
+                ? Math.min(Math.max(requestedLimit, 1), 25)
+                : 10;
+              const searchTerm = `%${term}%`;
+              const rows = await db
+                .select({
+                  contactId: addressContact.contactId,
+                  addressId: addressContact.addressId,
+                  firstName: addressContact.firstName,
+                  lastName: addressContact.lastName,
+                  email: addressContact.email,
+                  isPrimary: addressContact.isPrimary,
+                })
+                .from(addressContact)
+                .where(
+                  and(
+                    eq(addressContact.tenantId, context?.tenantId ?? ""),
+                    eq(addressContact.archived, false),
+                    isNotNull(addressContact.email),
+                    sql`${addressContact.email} <> ''`,
+                    or(
+                      ilike(addressContact.firstName, searchTerm),
+                      ilike(addressContact.lastName, searchTerm),
+                      ilike(addressContact.email, searchTerm),
+                    ),
+                  ),
+                )
+                .orderBy(
+                  asc(addressContact.lastName),
+                  asc(addressContact.firstName),
+                  asc(addressContact.email),
+                )
+                .limit(limit);
+
+              return new Response(JSON.stringify(rows), {
+                headers: { "content-type": "application/json" },
+              });
+            }
+          }
+
           if (id) {
             console.log(`[Data API] GET Single: ${entityName} ID: ${id}`);
             const result = await service.get(entityName, id);
@@ -47,6 +101,7 @@ export const Route = createFileRoute("/api/data/$")({
             "page",
             "orderBy",
             "paginated",
+            "q",
             "search",
             "filters",
           ]);
@@ -66,7 +121,7 @@ export const Route = createFileRoute("/api/data/$")({
           const effectiveLimit = limit ?? 50;
           const offset = paginated ? (page - 1) * effectiveLimit : undefined;
 
-          const search = url.searchParams.get("search") ?? undefined;
+          const search = url.searchParams.get("q") ?? url.searchParams.get("search") ?? undefined;
           const filtersParam = url.searchParams.get("filters");
           let filterRules: Array<{ col: string; op: string; val: string }> | undefined;
           if (filtersParam) {

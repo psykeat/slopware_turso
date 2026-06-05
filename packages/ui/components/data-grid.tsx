@@ -22,7 +22,6 @@ import {
   SearchIcon,
   GripVerticalIcon,
   PinIcon,
-  SaveIcon,
 } from "lucide-react";
 import React, {
   forwardRef,
@@ -522,18 +521,11 @@ function DataGridInner<T>(
       if (!res.ok) return null;
       return res.json() as Promise<{
         userId: string;
-        isSystemAdmin: boolean;
-        tenantId: string | null;
-        tenantName: string;
-        orgName: string;
-        isBase?: boolean;
       }>;
     },
     staleTime: 5 * 60 * 1000,
   });
   const userId = typeof tenantInfo?.userId === "string" ? tenantInfo.userId : null;
-  const isSystemAdmin = Boolean(tenantInfo?.isSystemAdmin);
-  const isBaseTenant = Boolean(tenantInfo?.isBase);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [selectedColIndex, setSelectedColIndex] = useState<number>(0);
   const [transientQuery, setTransientQuery] = useState<string>("");
@@ -570,7 +562,6 @@ function DataGridInner<T>(
   // Local debounced search state
   const [localSearch, setLocalSearch] = useState(searchProp ?? "");
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasUserReorderedRef = useRef(false);
 
   // Row selection
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -608,7 +599,6 @@ function DataGridInner<T>(
     } catch {}
   }, [columnVisibility, visibilityStorageKey]);
 
-  const layoutKey = `col-order:${panelId}`;
   const columnOrderStorageKey = userId ? `col-order:${entityName}:${panelId}:${userId}` : null;
 
   // Sync localSearch when prop changes externally
@@ -726,45 +716,25 @@ function DataGridInner<T>(
   }, [resolvedColumns]);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!columnOrderStorageKey || resolvedColumns.length === 0) return;
 
-    async function hydrateColumnOrder() {
-      if (!entityName || resolvedColumns.length === 0) return;
-
-      let localOrder: string[] | null = null;
-      if (columnOrderStorageKey) {
-        try {
-          const stored = localStorage.getItem(columnOrderStorageKey);
-          localOrder = parseColumnOrder(stored ? JSON.parse(stored) : null);
-        } catch {
-          localOrder = null;
-        }
-      }
-
-      let remoteOrder: string[] | null = null;
-      try {
-        const res = await fetch(`/api/metadata/layout/${entityName}/${layoutKey}`);
-        if (res.ok) {
-          const payload = await res.json();
-          remoteOrder = parseColumnOrder(payload);
-        }
-      } catch {
-        remoteOrder = null;
-      }
-
-      if (cancelled || hasUserReorderedRef.current) return;
-
-      const preferred = localOrder ?? remoteOrder;
-      const nextOrder = normalizeColumnOrder(preferred, resolvedColumns);
-      setColumnOrder(nextOrder);
+    let storedOrder: string[] | null = null;
+    try {
+      const stored = localStorage.getItem(columnOrderStorageKey);
+      storedOrder = parseColumnOrder(stored ? JSON.parse(stored) : null);
+    } catch {
+      storedOrder = null;
     }
 
-    void hydrateColumnOrder();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [columnOrderStorageKey, entityName, layoutKey, resolvedColumns]);
+    const preferred = storedOrder ?? resolvedColumns.map((column) => column.key);
+    const nextOrder = normalizeColumnOrder(preferred, resolvedColumns);
+    setColumnOrder((current) => {
+      const same =
+        current.length === nextOrder.length &&
+        current.every((key, index) => key === nextOrder[index]);
+      return same ? current : nextOrder;
+    });
+  }, [columnOrderStorageKey, resolvedColumns]);
 
   // In design mode, honour the delta column order and visibility
   const effectiveColumns = useMemo(() => {
@@ -1297,7 +1267,6 @@ function DataGridInner<T>(
     (nextOrder: ColumnOrderState) => {
       const normalized = normalizeColumnOrder(nextOrder, resolvedColumns);
       const selectedKey = columnOrder[selectedColIndex];
-      hasUserReorderedRef.current = true;
       setColumnOrder(normalized);
       if (selectedKey) {
         const nextIndex = normalized.indexOf(selectedKey);
@@ -1316,29 +1285,6 @@ function DataGridInner<T>(
     },
     [columnOrder, columnOrderStorageKey, resolvedColumns, selectedColIndex],
   );
-
-  const publishColumnOrder = useCallback(async () => {
-    if (!isSystemAdmin) return;
-
-    try {
-      const res = await fetch(`/api/metadata/layout/${entityName}/${layoutKey}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          columnOrder: normalizeColumnOrder(columnOrder, resolvedColumns),
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to save column order: ${res.status}`);
-      }
-
-      toast.success(isBaseTenant ? "Als Standard gespeichert." : "Tenant-Reihenfolge gespeichert.");
-    } catch (error) {
-      console.error("Failed to publish column order:", error);
-      toast.error("Column order could not be saved.");
-    }
-  }, [columnOrder, entityName, isBaseTenant, isSystemAdmin, layoutKey, resolvedColumns]);
 
   const handleResetGrid = () => {
     handleSearchChange("");
@@ -1729,17 +1675,6 @@ function DataGridInner<T>(
                 >
                   <PlusIcon size={12} />
                   Column
-                </button>
-              )}
-              {isSystemAdmin && (
-                <button
-                  type="button"
-                  title={isBaseTenant ? "Als Standard speichern" : "Als Tenant speichern"}
-                  onClick={publishColumnOrder}
-                  className="ml-1 inline-flex h-7 items-center gap-1 rounded-sm border border-hairline px-2 text-[12px] text-ink-mute transition-colors hover:border-primary/35 hover:text-primary"
-                >
-                  <SaveIcon size={12} />
-                  {isBaseTenant ? "Als Standard speichern" : "Als Tenant speichern"}
                 </button>
               )}
               {showColPicker && resolvedColumns.length > 0 && (

@@ -3,8 +3,10 @@ packages:
   - packages/*
   - tooling/*
 allowBuilds:
+  "@google/genai": true
   esbuild: true
   msw: false
+  protobufjs: true
 
 strictDepBuilds: true
 trustPolicy: no-downgrade
@@ -30,6 +32,8 @@ catalog:
   "@tailwindcss/vite": ^4.3.0
   "@tanstack/devtools-a11y": ^0.1.2
   "@tanstack/devtools-vite": ^0.6.0
+  "@tanstack/ai": ^0.20.1
+  "@tanstack/ai-gemini": ^0.10.10
   "@tanstack/eslint-plugin-query": ^5.100.10
   "@tanstack/eslint-plugin-router": ^1.161.6
   "@tanstack/react-devtools": ^0.10.3

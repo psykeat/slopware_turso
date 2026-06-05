@@ -12,6 +12,7 @@
     "@fontsource-variable/inter": "catalog:",
     "@icons-pack/react-simple-icons": "catalog:",
     "@react-pdf/renderer": "catalog:",
+    "@repo/agent": "workspace:*",
     "@repo/auth": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/ui": "workspace:*",

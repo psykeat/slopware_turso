@@ -292,6 +292,7 @@ export class GraphProviderAdapter implements EmailProviderAdapter {
     };
   }
 
+  // fallow-ignore-next-line unused-class-member
   async connect(input: Record<string, unknown>): Promise<EmailProviderConnection> {
     const clientId = process.env.MICROSOFT_CLIENT_ID ?? process.env.GRAPH_CLIENT_ID;
     const clientSecret = process.env.MICROSOFT_CLIENT_SECRET ?? process.env.GRAPH_CLIENT_SECRET;

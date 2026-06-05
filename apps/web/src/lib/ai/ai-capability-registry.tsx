@@ -4,7 +4,7 @@ import { MailClassificationReview } from "../../components/ai/reviews/MailClassi
 import { MailOrderReview } from "../../components/ai/reviews/MailOrderReview";
 import { MailToDocumentDraftReview } from "../../components/ai/reviews/MailToDocumentDraftReview";
 
-export interface AiTaskDefinition<TPayload = any, TValidation = any> {
+interface AiTaskDefinition<TPayload = any, TValidation = any> {
   taskScope: string;
   label: { en: string; de: string };
   icon: string;

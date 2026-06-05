@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useCommands } from "./command-registry";
 import { type FocusContextState, useFocus } from "./focus-manager";
 
-export interface ColumnDesignConfig {
+interface ColumnDesignConfig {
   key: string;
   visible: boolean;
   width?: string;
@@ -35,7 +35,7 @@ export interface FieldDesignConfig {
   path?: string | null;
 }
 
-export interface DesignerDelta {
+interface DesignerDelta {
   columns: ColumnDesignConfig[];
   fieldConfigs: FieldDesignConfig[];
   activeDragId: string | null;
@@ -141,7 +141,7 @@ export interface DesignerHistoryEntry {
   patchOps: DesignerPatchOp[];
 }
 
-export interface DesignerSurfaceState {
+interface DesignerSurfaceState {
   surface: DesignerSurface;
   entityName: string | null;
   baselineNodes: DesignerNode[];

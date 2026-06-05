@@ -1,10 +1,10 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 
-export interface AiOverlayOptions {
+interface AiOverlayOptions {
   taskScope?: string;
 }
 
-export interface AiOverlayContextValue {
+interface AiOverlayContextValue {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   openAiOverlay: (options?: AiOverlayOptions) => void;

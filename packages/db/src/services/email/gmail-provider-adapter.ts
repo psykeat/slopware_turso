@@ -296,6 +296,7 @@ export class GmailProviderAdapter implements EmailProviderAdapter {
     return (await readJsonResponse<T>(res)) as T;
   }
 
+  // fallow-ignore-next-line unused-class-member
   async connect(input: Record<string, unknown>): Promise<EmailProviderConnection> {
     const clientId = process.env.GMAIL_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GMAIL_CLIENT_SECRET ?? process.env.GOOGLE_CLIENT_SECRET;

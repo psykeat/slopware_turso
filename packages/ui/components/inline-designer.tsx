@@ -6,7 +6,7 @@ import {
   Settings2Icon,
   XIcon,
 } from "lucide-react";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/utils";
@@ -20,6 +20,7 @@ import {
   useDesigner,
 } from "../platform/designer-context";
 import { useFocus } from "../platform/focus-manager";
+import { Input } from "./input";
 
 interface DesignerClientSnapshot {
   entityName: string | null;
@@ -124,8 +125,13 @@ export function InlineDesigner() {
     resetDelta,
     applyDesign,
     reconcileDesign,
+    updateFrameLabel,
   } = useDesigner();
-  const [busyAction, setBusyAction] = useState<"save" | "reconcile" | null>(null);
+  const [busyAction, setBusyAction] = useState<"save" | "apply" | "reconcile" | null>(null);
+  const [editingFrameId, setEditingFrameId] = useState<string | null>(null);
+  const [editingFrameLabel, setEditingFrameLabel] = useState("");
+  const frameLabelInputRef = useRef<HTMLInputElement>(null);
+  const ignoreNextFrameBlurRef = useRef(false);
 
   const snapshot = useMemo<DesignerClientSnapshot>(
     () => ({
@@ -150,16 +156,23 @@ export function InlineDesigner() {
     ],
   );
 
+  const frameNodes = useMemo(
+    () =>
+      [...(activeSurfaceState?.nodes ?? [])]
+        .filter((node) => node.kind === "group-frame")
+        .sort(
+          (left, right) =>
+            left.displayOrder - right.displayOrder || left.id.localeCompare(right.id),
+        ),
+    [activeSurfaceState?.nodes],
+  );
+
   const node = selectedNodes[0] ?? null;
   const patchOps = snapshot.patchOps;
   const history = snapshot.history;
   const conflicts = snapshot.conflicts;
   const versionInfo = snapshot.versionInfo;
   const entityName = snapshot.entityName;
-
-  if (!isDesignMode) {
-    return null;
-  }
 
   const handleSave = async () => {
     setBusyAction("save");
@@ -188,6 +201,45 @@ export function InlineDesigner() {
   const handleClose = () => {
     closeDesignMode();
   };
+
+  useEffect(() => {
+    if (!editingFrameId) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      frameLabelInputRef.current?.focus();
+      frameLabelInputRef.current?.select();
+    });
+  }, [editingFrameId]);
+
+  const startFrameEdit = (frameId: string, label: string) => {
+    ignoreNextFrameBlurRef.current = false;
+    setEditingFrameId(frameId);
+    setEditingFrameLabel(label);
+  };
+
+  const commitFrameEdit = (frameId: string, nextLabel: string) => {
+    const frame = frameNodes.find((item) => item.id === frameId);
+    setEditingFrameId(null);
+
+    if (!frame) {
+      return;
+    }
+
+    if (nextLabel !== frame.label) {
+      updateFrameLabel(frameId, nextLabel);
+    }
+  };
+
+  const cancelFrameEdit = () => {
+    ignoreNextFrameBlurRef.current = true;
+    setEditingFrameId(null);
+  };
+
+  if (!isDesignMode) {
+    return null;
+  }
 
   const historyPreview = history.slice().reverse().slice(0, 6);
 
@@ -226,6 +278,76 @@ export function InlineDesigner() {
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+          <CompactSection
+            title={t("designer.frames", "Frames")}
+            icon={<Settings2Icon className="text-ink-muted size-3.5" />}
+          >
+            {frameNodes.length > 0 ? (
+              <div className="space-y-1.5">
+                {frameNodes.map((frame) => {
+                  const isEditing = editingFrameId === frame.id;
+
+                  return (
+                    <div
+                      key={frame.id}
+                      className="rounded-lg border border-hairline bg-canvas-soft px-2.5 py-2 text-[11px]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-ink-muted font-mono">{frame.id}</span>
+                        <span className="text-ink-muted rounded-full border border-hairline bg-canvas px-2 py-0.5 font-mono text-[10px]">
+                          {frame.children.length}
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        {isEditing ? (
+                          <Input
+                            ref={frameLabelInputRef}
+                            value={editingFrameLabel}
+                            onChange={(event) => setEditingFrameLabel(event.target.value)}
+                            onBlur={() => {
+                              if (ignoreNextFrameBlurRef.current) {
+                                ignoreNextFrameBlurRef.current = false;
+                                return;
+                              }
+                              commitFrameEdit(frame.id, editingFrameLabel);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                commitFrameEdit(frame.id, editingFrameLabel);
+                              }
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                cancelFrameEdit();
+                              }
+                            }}
+                            className="h-7 text-[12px]"
+                            aria-label={t("designer.frameLabel", "Frame label")}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startFrameEdit(frame.id, frame.label)}
+                            className={cn(
+                              "w-full rounded-md border border-transparent px-2 py-1 text-left text-[12px] font-medium text-ink transition-colors",
+                              "hover:border-hairline hover:bg-canvas",
+                            )}
+                          >
+                            {frame.label || t("designer.node.unlabeled", "Unlabeled")}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-ink-muted rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
+                {t("designer.frames.empty", "No frames available.")}
+              </div>
+            )}
+          </CompactSection>
+
           <CompactSection
             title={t("designer.selection", "Selection")}
             icon={<HistoryIcon className="text-ink-muted size-3.5" />}

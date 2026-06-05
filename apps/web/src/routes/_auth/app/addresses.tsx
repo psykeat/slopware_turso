@@ -58,17 +58,22 @@ function ContactNotizEditor({
   disabled: boolean;
 }) {
   const [draft, setDraft] = useState(initialValue);
+  const initialValueRef = useRef(initialValue);
+
+  useEffect(() => {
+    initialValueRef.current = initialValue;
+  }, [initialValue]);
 
   useEffect(() => {
     if (!contactId) return;
-    if (draft === initialValue) return;
+    if (draft === initialValueRef.current) return;
 
     const timeout = window.setTimeout(() => {
       onChange(draft);
     }, 450);
 
     return () => window.clearTimeout(timeout);
-  }, [contactId, draft, initialValue, onChange]);
+  }, [contactId, draft, onChange]);
 
   return (
     <div className="flex min-h-[18rem] min-w-0 flex-col overflow-hidden rounded-xl border border-hairline bg-canvas shadow-sm">
@@ -102,6 +107,7 @@ function AddressContactsSection({
 }) {
   const queryClient = useQueryClient();
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const contactsQueryKey = ["data", "addressContact", addressId] as const;
 
   const getContactId = useCallback(
     (row: Record<string, any> | null) => row?.contactId || row?.addressContactId || row?.id || null,
@@ -132,14 +138,42 @@ function AddressContactsSection({
         body: JSON.stringify({ notiztext }),
       });
       if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      return res.json() as Promise<any[]>;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["data", "addressContact", addressId],
-      });
+    onMutate: async ({ contactId, notiztext }) => {
+      await queryClient.cancelQueries({ queryKey: contactsQueryKey });
+
+      const previousContacts = queryClient.getQueryData<any[]>(contactsQueryKey);
+      queryClient.setQueryData<any[]>(
+        contactsQueryKey,
+        (current) =>
+          current?.map((contact) =>
+            getContactId(contact) === contactId ? { ...contact, notiztext } : contact,
+          ) ?? current,
+      );
+
+      return { previousContacts };
     },
-    onError: (error: any) => {
+    onSuccess: (updatedRows, { contactId, notiztext }) => {
+      const updatedRow = updatedRows?.[0] ?? null;
+      queryClient.setQueryData<any[]>(
+        contactsQueryKey,
+        (current) =>
+          current?.map((contact) => {
+            if (getContactId(contact) !== contactId) return contact;
+            return {
+              ...contact,
+              ...(updatedRow ?? {}),
+              notiztext,
+            };
+          }) ?? current,
+      );
+      void queryClient.invalidateQueries({ queryKey: contactsQueryKey });
+    },
+    onError: (error: any, _variables, context) => {
+      if (context?.previousContacts) {
+        queryClient.setQueryData(contactsQueryKey, context.previousContacts);
+      }
       toast.error(error?.message ?? "Notiztext konnte nicht gespeichert werden");
     },
   });
@@ -187,9 +221,9 @@ function AddressContactsSection({
           />
         </div>
         <ContactNotizEditor
-          key={selectedContact ? (getContactId(selectedContact) ?? "selected") : "empty"}
+          key={selectedContactId ?? "empty"}
           contactLabel={selectedContact ? getContactLabel(selectedContact) : ""}
-          contactId={selectedContact ? getContactId(selectedContact) : null}
+          contactId={selectedContactId}
           initialValue={selectedContactNotiztext}
           onChange={handleContactNoteChange}
           disabled={!selectedContact}

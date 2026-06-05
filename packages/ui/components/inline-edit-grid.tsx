@@ -41,7 +41,7 @@ export function InlineEditGrid({
   const selectedIdRef = useRef<string | null>(null);
 
   const { data: rows = [] } = useQuery({
-    queryKey: ["data", entityName, parentKeySignature],
+    queryKey: ["data", entityName, parentKeySignature, parentKey],
     queryFn: async () => {
       const params = Object.entries(parentKey)
         .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)

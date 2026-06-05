@@ -600,17 +600,18 @@ export function EntityMask({
     });
   }, [entityName, isDesignMode, mode, recordId, setFocus]);
 
-  useEffect(() => {
+  // Sync editorFieldKey state on render instead of effect to avoid setState-in-effect warning
+  const lastSelectedFieldKeyRef = useRef(selectedFieldKey);
+  if (lastSelectedFieldKeyRef.current !== selectedFieldKey) {
+    lastSelectedFieldKeyRef.current = selectedFieldKey;
     if (!selectedFieldKey) {
-      setEditorFieldKey(null);
-      setEditorMode("compact");
-      return;
-    }
-    if (editorFieldKey !== selectedFieldKey) {
+      if (editorFieldKey !== null) setEditorFieldKey(null);
+      if (editorMode !== "compact") setEditorMode("compact");
+    } else if (editorFieldKey !== selectedFieldKey) {
       setEditorFieldKey(selectedFieldKey);
-      setEditorMode("compact");
+      if (editorMode !== "compact") setEditorMode("compact");
     }
-  }, [editorFieldKey, selectedFieldKey]);
+  }
 
   useEffect(() => {
     didAutoFocusRef.current = false;
@@ -757,7 +758,9 @@ export function EntityMask({
 
   useLayoutEffect(() => {
     if (!editorFieldKey || !isDesignMode) {
-      setOverlayStyle(null);
+      if (overlayStyle !== null) {
+        setOverlayStyle(null);
+      }
       return;
     }
     const sync = () => {
@@ -787,7 +790,15 @@ export function EntityMask({
       window.removeEventListener("scroll", sync, true);
       window.removeEventListener("resize", sync);
     };
-  }, [editorFieldKey, editorMode, isDesignMode, selectedFieldKey, formData, fields.length]);
+  }, [
+    editorFieldKey,
+    editorMode,
+    isDesignMode,
+    selectedFieldKey,
+    formData,
+    fields.length,
+    overlayStyle,
+  ]);
 
   useEffect(() => {
     if (!editorFieldKey) return;

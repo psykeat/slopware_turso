@@ -1367,7 +1367,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [focusState.area, focusState.entity, updateRuntime],
+    [focusState.entity, updateRuntime],
   );
 
   const removeFieldDraft = useCallback(

@@ -278,26 +278,21 @@ function AddressesModule() {
       ? selectedContact.notiztext
       : "";
 
+  // Synchronize contact draft only when the selected contact actually changes
   useEffect(() => {
-    if (!selectedContactId) {
-      setContactNotizDraft("");
-      return;
-    }
-    if (!selectedContact) {
-      return;
-    }
     setContactNotizDraft(selectedContactNotiztext);
-  }, [selectedContact, selectedContactId, selectedContactNotiztext]);
+  }, [selectedContactNotiztext]);
 
+  // Adjust selected contact if it gets deleted/removed from list
   useEffect(() => {
     if (!selectedContactId) return;
     if (contacts.some((contact: any) => getContactId(contact) === selectedContactId)) return;
     setSelectedContactId(null);
   }, [contacts, getContactId, selectedContactId]);
 
+  // Reset selected contact when changing the main address
   useEffect(() => {
     setSelectedContactId(null);
-    setContactNotizDraft("");
   }, [activeAddressId]);
 
   const saveContactNoteMutation = useMutation({

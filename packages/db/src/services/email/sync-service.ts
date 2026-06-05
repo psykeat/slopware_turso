@@ -1070,6 +1070,7 @@ export class EmailSyncService {
             and(
               eq(emailThread.tenantId, this.tenantId),
               eq(emailThread.emailThreadId, threadRow.emailThreadId),
+              isNull(emailThread.relatedAddressId),
             ),
           );
         threadRow.relatedAddressId = matchedAddressId;

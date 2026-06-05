@@ -9,6 +9,8 @@ import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
 
 import { db } from "../index";
 import {
+  address,
+  addressContact,
   emailAccount,
   emailAccountUserGrant,
   emailAttachment,
@@ -443,6 +445,23 @@ async function testGraphSyncAndWatch() {
           { status: 200 },
         );
       }
+      if (url.includes("/me/messages/graph-message-1/attachments")) {
+        return new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "graph-att-1",
+                name: "graph.txt",
+                contentType: "text/plain",
+                size: 18,
+                isInline: true,
+                contentId: "cid-graph",
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
       if (url.includes("/subscriptions")) {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
         ensure(body.clientState === "graph-state", "Expected configured Graph client state");
@@ -512,6 +531,31 @@ async function testGraphServiceLayerFlows() {
   const sendService = new EmailSendService(context.tenantId, context.userId);
   const accountService = new EmailAccountService(context.tenantId, context.userId);
   const attachmentStorageKey = await createAttachmentFixture();
+  const inboundMatchEmail = `inbound-match-${randomUUID()}@example.com`;
+  const matchedAddressNo = `M-${randomUUID().slice(0, 8)}`;
+  const [matchedAddress] = await db
+    .insert(address)
+    .values({
+      tenantId: context.tenantId,
+      addressNo: matchedAddressNo,
+      companyName: "Inbound Match Customer",
+      addressLine1: "Match Street 1",
+      postalCode: "10115",
+      city: "Berlin",
+      countryCode: "DE",
+    })
+    .returning();
+  ensure(matchedAddress, "Expected fixture address to be created");
+  const [matchedContact] = await db
+    .insert(addressContact)
+    .values({
+      tenantId: context.tenantId,
+      addressId: matchedAddress.addressId,
+      lastName: "Inbound Match",
+      email: inboundMatchEmail,
+    })
+    .returning();
+  ensure(matchedContact, "Expected fixture contact to be created");
   const previousState = process.env.MICROSOFT_WEBHOOK_CLIENT_STATE;
   process.env.MICROSOFT_WEBHOOK_CLIENT_STATE = "graph-state";
 
@@ -540,7 +584,9 @@ async function testGraphServiceLayerFlows() {
                   subject: "Graph fixture subject",
                   bodyPreview: "Graph fixture preview",
                   body: { contentType: "text", content: "Graph fixture body" },
-                  from: { emailAddress: { address: "sender@example.com", name: "Sender" } },
+                  from: {
+                    emailAddress: { address: inboundMatchEmail.toUpperCase(), name: "Sender" },
+                  },
                   toRecipients: [
                     { emailAddress: { address: account.primaryEmail, name: "Fixture" } },
                   ],
@@ -631,6 +677,10 @@ async function testGraphServiceLayerFlows() {
         ensure(
           importedThread?.attachments?.length === 1,
           "Graph sync did not import the attachment metadata",
+        );
+        ensure(
+          importedThread?.relatedAddressId === matchedAddress.addressId,
+          "Graph sync did not match the inbound sender to address_contact.email",
         );
 
         const attachment = importedThread.attachments?.[0];
@@ -727,6 +777,22 @@ async function testGraphServiceLayerFlows() {
   } finally {
     process.env.MICROSOFT_WEBHOOK_CLIENT_STATE = previousState;
     await account.cleanup();
+    await db
+      .delete(addressContact)
+      .where(
+        and(
+          eq(addressContact.tenantId, context.tenantId),
+          eq(addressContact.contactId, matchedContact.contactId),
+        ),
+      );
+    await db
+      .delete(address)
+      .where(
+        and(
+          eq(address.tenantId, context.tenantId),
+          eq(address.addressId, matchedAddress.addressId),
+        ),
+      );
   }
 }
 

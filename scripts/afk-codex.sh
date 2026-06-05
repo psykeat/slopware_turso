@@ -37,6 +37,12 @@ run_codex() {
     "$prompt"
 }
 
+is_auth_token_invalidated() {
+  local path="$1"
+
+  grep -qiE 'token_invalidated|authentication token has been invalidated|Please try signing in again' "$path" 2>/dev/null
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --run-dir)
@@ -127,6 +133,11 @@ $ralph_commits"
   if [ "$run_status" -ne 0 ]; then
     output=$(cat "$tmpfile" 2>/dev/null || echo "")
     printf '%s\n' "$output" >> "$LOG_FILE"
+    if is_auth_token_invalidated "$LOG_FILE" || is_auth_token_invalidated "$tmpfile"; then
+      echo "  [codex] ✗ authentication token invalidated; stop here and re-authenticate" | tee -a "$LOG_FILE"
+      emit_iteration_json "iteration_failed" "$i" "failed" "codex auth token invalidated"
+      exit 2
+    fi
     echo "  [codex] ✗ iter $i failed with exit code $run_status" | tee -a "$LOG_FILE"
     if [ -n "$output" ]; then
       echo "  [codex] last output:" | tee -a "$LOG_FILE"

@@ -8,6 +8,11 @@ import { asc, and, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
+import {
+  buildAddressContactSearchTerm,
+  normalizeAddressContactLookupRow,
+} from "./address-contact-lookup";
+
 export const Route = createFileRoute("/api/data/$")({
   server: {
     handlers: {
@@ -48,7 +53,7 @@ export const Route = createFileRoute("/api/data/$")({
               const limit = Number.isFinite(requestedLimit)
                 ? Math.min(Math.max(requestedLimit, 1), 25)
                 : 10;
-              const searchTerm = `%${term}%`;
+              const searchTerm = buildAddressContactSearchTerm(term);
               const rows = await db
                 .select({
                   contactId: addressContact.contactId,
@@ -79,9 +84,19 @@ export const Route = createFileRoute("/api/data/$")({
                 )
                 .limit(limit);
 
-              return new Response(JSON.stringify(rows), {
-                headers: { "content-type": "application/json" },
-              });
+              return new Response(
+                JSON.stringify(
+                  rows.map((row) =>
+                    normalizeAddressContactLookupRow({
+                      ...row,
+                      name: null,
+                    }),
+                  ),
+                ),
+                {
+                  headers: { "content-type": "application/json" },
+                },
+              );
             }
           }
 

@@ -167,6 +167,39 @@ fi
 # Track successfully processed issues in this run to allow resolving intra-run dependencies
 DECLARED_MERGED=""
 
+extract_blocker_ids() {
+  local body="$1"
+
+  printf '%s\n' "$body" | awk '
+    BEGIN {
+      in_blockers = 0
+    }
+
+    /^##[[:space:]]+Blocked by[[:space:]]*$/ {
+      in_blockers = 1
+      next
+    }
+
+    /^##[[:space:]]+Depends on[[:space:]]*$/ {
+      in_blockers = 1
+      next
+    }
+
+    /^##[[:space:]]+/ {
+      if (in_blockers) {
+        exit
+      }
+    }
+
+    in_blockers && /^[[:space:]]*-[[:space:]]*#/ {
+      while (match($0, /#[0-9]+/)) {
+        print substr($0, RSTART + 1, RLENGTH - 1)
+        $0 = substr($0, RSTART + RLENGTH)
+      }
+    }
+  '
+}
+
 if [ "$DRY_RUN" -eq 1 ]; then
   mkdir -p "$RUNS_DIR"
   for ID in "${ISSUE_IDS[@]}"; do
@@ -195,26 +228,34 @@ for ID in "${ISSUE_IDS[@]}"; do
 
   # Fetch body to check dependencies
   BODY=$(gh issue view "$ID" -R "$REPO" --json body --jq '.body')
+  BODY="${BODY//\\n/$'\n'}"
 
-  # Dependency parsing: Check if body contains "Depends on #<num>"
-  DEP_ID=$(echo "$BODY" | grep -o -E "Depends on #[0-9]+" | grep -o -E "[0-9]+" || true)
+  mapfile -t DEP_IDS < <(extract_blocker_ids "$BODY" | sort -u)
 
-  if [ -n "$DEP_ID" ]; then
-    printf '  depends on #%s\n' "$DEP_ID"
+  if [ "${#DEP_IDS[@]}" -gt 0 ]; then
+    printf '  blockers: %s\n' "${DEP_IDS[*]}"
 
-    DEP_STATUS=$(gh issue view "$DEP_ID" -R "$REPO" --json state --jq '.state' 2>/dev/null || echo "CLOSED")
+    SKIP_ISSUE=0
+    for DEP_ID in "${DEP_IDS[@]}"; do
+      DEP_STATUS=$(gh issue view "$DEP_ID" -R "$REPO" --json state --jq '.state' 2>/dev/null || echo "CLOSED")
 
-    if [ "$DEP_STATUS" = "OPEN" ]; then
-      if [[ " $DECLARED_MERGED " =~ " $DEP_ID " ]]; then
-        echo "  dep #$DEP_ID processed in this run, proceeding"
-        emit_status_json "issue_dependency_resolved" "$ID" "" "" "running" "dependency already merged in this run"
+      if [ "$DEP_STATUS" = "OPEN" ]; then
+        if [[ " $DECLARED_MERGED " =~ " $DEP_ID " ]]; then
+          echo "  dep #$DEP_ID processed in this run, proceeding"
+          emit_status_json "issue_dependency_resolved" "$ID" "" "" "running" "dependency already merged in this run"
+        else
+          echo "  ⚠ skip #$ID: dep #$DEP_ID still OPEN"
+          emit_status_json "issue_skipped" "$ID" "" "" "skipped" "dependency still open"
+          SKIP_ISSUE=1
+          break
+        fi
       else
-        echo "  ⚠ skip #$ID: dep #$DEP_ID still OPEN"
-        emit_status_json "issue_skipped" "$ID" "" "" "skipped" "dependency still open"
-        continue
+        echo "  dep #$DEP_ID closed, proceeding"
       fi
-    else
-      echo "  dep #$DEP_ID closed, proceeding"
+    done
+
+    if [ "$SKIP_ISSUE" -eq 1 ]; then
+      continue
     fi
   fi
 

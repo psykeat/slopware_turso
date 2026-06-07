@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { auth } from "@repo/auth/auth";
 import { EmailAccountService } from "@repo/db/services/email/account-service";
 import { EmailDocumentService } from "@repo/db/services/email/document-service";
-import { EmailJobService } from "@repo/db/services/email/job-service";
 import { EmailSendService } from "@repo/db/services/email/send-service";
 import { EmailSyncService } from "@repo/db/services/email/sync-service";
 import { EmailTemplateService } from "@repo/db/services/email/template-service";
@@ -347,20 +346,6 @@ async function handleGet(context: EmailContext) {
     );
   }
 
-  if (segments[0] === "jobs") {
-    const accountId = url.searchParams.get("accountId");
-    if (!accountId) return jsonError(400, "accountId is required");
-    await accountService.assertGrant(accountId, "read");
-    return json(
-      await new EmailJobService(tenantId).list({
-        emailAccountId: accountId,
-        status: url.searchParams.get("status"),
-        jobType: parseJobType(url.searchParams.get("jobType")),
-        limit: Number(url.searchParams.get("limit") ?? 50),
-      }),
-    );
-  }
-
   return new Response("Not Found", { status: 404 });
 }
 
@@ -572,35 +557,6 @@ async function handlePost(context: EmailContext) {
     });
   }
 
-  if (segments[0] === "jobs" && segments[1] === "run-next") {
-    const workerId = typeof body.workerId === "string" ? body.workerId : "api";
-    const jobService = new EmailJobService(tenantId);
-    const job = await jobService.claimNext(workerId);
-    if (!job) return json({ job: null });
-    try {
-      const result = await new EmailSyncService(tenantId, userId).runJob(job.emailJobId);
-      await jobService.complete(job.emailJobId, workerId);
-      return json({ job, result });
-    } catch (error) {
-      await jobService.fail(job.emailJobId, error, new Date(Date.now() + 60_000), workerId);
-      throw error;
-    }
-  }
-
-  if (segments[0] === "jobs" && segments[1] && segments[2] === "run") {
-    const jobService = new EmailJobService(tenantId);
-    const job = await jobService.get(segments[1]);
-    if (!job) return new Response("Not Found", { status: 404 });
-    try {
-      const result = await new EmailSyncService(tenantId, userId).runJob(job.emailJobId);
-      await jobService.complete(job.emailJobId);
-      return json({ job, result });
-    } catch (error) {
-      await jobService.fail(job.emailJobId, error, new Date(Date.now() + 60_000));
-      throw error;
-    }
-  }
-
   return new Response("Not Found", { status: 404 });
 }
 
@@ -616,20 +572,6 @@ function providerFromSegment(segment: string): EmailProvider | null {
 
 function publicProviderSegment(provider: EmailProvider) {
   return provider === "gmail" ? "google" : "microsoft";
-}
-
-function parseJobType(value: string | null): EmailJobType | null {
-  if (
-    value === "initial_sync" ||
-    value === "incremental_sync" ||
-    value === "watch_renewal" ||
-    value === "reconcile" ||
-    value === "send" ||
-    value === "fetch_attachment"
-  ) {
-    return value;
-  }
-  return null;
 }
 
 function parseAccountJobType(value: unknown): EmailJobType | null {

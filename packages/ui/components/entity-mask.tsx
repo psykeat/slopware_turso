@@ -1,3 +1,4 @@
+import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircleIcon, EyeIcon, EyeOffIcon, GripVerticalIcon, PlusIcon } from "lucide-react";
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
@@ -98,53 +99,6 @@ function getFieldLabelClasses(field: FieldDef) {
   );
 }
 
-function splitPath(path: string) {
-  return path
-    .split(".")
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-}
-
-function readValueAtPath(source: Record<string, any>, path: string) {
-  const segments = splitPath(path);
-  let current: any = source;
-  for (const segment of segments) {
-    if (current == null || typeof current !== "object") return undefined;
-    current = current[segment];
-  }
-  return current;
-}
-
-function writeValueAtPath(source: Record<string, any>, path: string, value: any) {
-  const segments = splitPath(path);
-  if (segments.length === 0) return { ...source };
-  const next = Array.isArray(source) ? [...source] : { ...source };
-  let current: any = next;
-  for (let index = 0; index < segments.length - 1; index += 1) {
-    const segment = segments[index];
-    const existing = current[segment];
-    current[segment] =
-      existing && typeof existing === "object" && !Array.isArray(existing) ? { ...existing } : {};
-    current = current[segment];
-  }
-  current[segments[segments.length - 1]] = value;
-  return next;
-}
-
-function readFieldValue(field: FieldDef, formData: Record<string, any>) {
-  const path = field.jsonPath ?? field.key;
-  if (!path.includes(".")) return formData[field.key];
-  return readValueAtPath(formData, path);
-}
-
-function writeFieldValue(field: FieldDef, formData: Record<string, any>, value: any) {
-  const path = field.jsonPath ?? field.key;
-  if (!path.includes(".")) {
-    return { ...formData, [field.key]: value };
-  }
-  return writeValueAtPath(formData, path, value);
-}
-
 function normalizeStyleBinding(field: FieldDef, config: FieldDesignConfig | null) {
   const labelTone = config?.labelTone ?? "default";
   const labelStyle = config?.labelStyle ?? "normal";
@@ -154,16 +108,35 @@ function normalizeStyleBinding(field: FieldDef, config: FieldDesignConfig | null
 }
 
 function FieldInput({
-  field,
+  field: originalField,
   value,
   disabled,
   onChange,
+  onBlur,
 }: {
   field: FieldDef;
   value: any;
   disabled: boolean;
   onChange: (val: any) => void;
+  onBlur?: () => void;
 }) {
+  const field = useMemo(() => {
+    if (
+      originalField.type !== "lookup" &&
+      originalField.key.endsWith("Id") &&
+      originalField.key !== "id"
+    ) {
+      return {
+        ...originalField,
+        type: "lookup" as const,
+        lookupTable: originalField.lookupTable || originalField.key.replace(/Id$/, ""),
+      };
+    }
+    // Also enforce UUIDs that are passed to a text field without 'Id' to be hidden or handled?
+    // The user said: "input fields with uuid fks must always resolve the uuid". Above fixes it by key.
+    // If it's still a text field but value is a uuid, we can blank it, but key inference is safest.
+    return originalField;
+  }, [originalField]);
   const { i18n } = useTranslation();
   const hasError = !!field.error;
   const displayValue =
@@ -198,6 +171,7 @@ function FieldInput({
           checked={!!value}
           disabled={disabled || field.readonly}
           onChange={(e) => onChange(e.target.checked)}
+          onBlur={onBlur}
           className="h-4 w-4 cursor-pointer rounded border-hairline-input accent-[var(--primary)] disabled:opacity-50"
         />
         <span className={cn("text-[13px]", getFieldLabelClasses(field))}>
@@ -214,6 +188,7 @@ function FieldInput({
         readOnly={field.readonly}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         className={cn(inputBase, "h-auto min-h-[80px] resize-y py-2", hasError && inputError)}
       />
     );
@@ -225,6 +200,7 @@ function FieldInput({
         value={displayValue}
         disabled={disabled || field.readonly}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         className={cn(inputBase, "cursor-pointer", hasError && inputError)}
       >
         <option value="" />
@@ -253,6 +229,7 @@ function FieldInput({
       readOnly={field.readonly}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
       className={cn(inputBase, hasError && inputError)}
     />
   );
@@ -304,24 +281,75 @@ export function EntityMask({
 
   const [metaFields, setMetaFields] = useState<FieldDef[]>([]);
   const [loading, setLoading] = useState(!propFields && !!entityName);
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [initialData, setInitialData] = useState<Record<string, any>>(
+    mode === "create" ? (initialValues ?? {}) : {},
+  );
   const [globalError, setGlobalError] = useState<string | null>(null);
+
+  const form = useForm({
+    defaultValues: initialData,
+    onSubmit: async ({ value, formApi }) => {
+      setGlobalError(null);
+      const isEdit = recordId && mode !== "create";
+      const url = isEdit ? `${apiBase}/${entityName}/${recordId}` : `${apiBase}/${entityName}`;
+      const method = isEdit ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(value),
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        let parsed: any;
+        try {
+          parsed = JSON.parse(errorText);
+        } catch {}
+
+        if (parsed && typeof parsed === "object" && parsed.error) {
+          throw new Error(parsed.error);
+        } else if (parsed && Array.isArray(parsed.issues)) {
+          let hasFieldErrors = false;
+          parsed.issues.forEach((issue: any) => {
+            const path = issue.path?.join(".") || "";
+            if (path) {
+              formApi.setFieldMeta(path as any, (meta) => ({ ...meta, errors: [issue.message] }));
+              hasFieldErrors = true;
+            } else {
+              setGlobalError(issue.message);
+            }
+          });
+          throw new Error("Validation failed");
+        } else if (res.status === 400 || res.status === 409 || res.status === 422) {
+          throw new Error(errorText || `Constraint failed: ${res.status}`);
+        } else {
+          throw new Error(errorText || `Save failed: ${res.status}`);
+        }
+      }
+      const result = await res.json();
+      toast.success(recordId ? t("form.updateSuccess") : t("form.createSuccess"));
+      queryClient.invalidateQueries({ queryKey: ["data", entityName] });
+      onSaved?.(result);
+      return result;
+    },
+  });
   const [editorFieldKey, setEditorFieldKey] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<"compact" | "expanded">("compact");
   const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties | null>(null);
 
   // Reset form and fetch data when record changes
   useEffect(() => {
-    const resetTimer = setTimeout(
-      () => setFormData(mode === "create" ? (initialValues ?? {}) : {}),
-      0,
-    );
+    let active = true;
+    const initial = mode === "create" ? (initialValues ?? {}) : {};
+    if (mode === "create") {
+      setInitialData(initial);
+      form.reset();
+    }
     if (recordId && (mode === "edit" || !mode)) {
       fetch(`${apiBase}/${entityName}/${recordId}`)
         .then((res) => res.json())
         .then((data) => {
+          if (!active) return;
           if (Array.isArray(data)) {
-            // Find by primary key if list returned (some APIs return full table)
             const pk = recordId;
             const record =
               data.find(
@@ -332,14 +360,18 @@ export function EntityMask({
                   r.accountNo === pk ||
                   r.iso2Code === pk,
               ) || data[0];
-            setFormData(record || {});
+            setInitialData(record || {});
+            setTimeout(() => form.reset(), 0);
           } else if (data) {
-            setFormData(data);
+            setInitialData(data);
+            setTimeout(() => form.reset(), 0);
           }
         })
         .catch((err) => console.error("EntityMask: failed to fetch record", err));
     }
-    return () => clearTimeout(resetTimer);
+    return () => {
+      active = false;
+    };
   }, [recordId, entityName, mode, apiBase, initialValues]);
 
   // Load metadata when no fields prop provided
@@ -639,40 +671,13 @@ export function EntityMask({
     });
   }, [fields.length, loading]);
 
-  const { mutate: saveRecord, isPending: isSaving } = useMutation({
-    mutationFn: async (data: Record<string, any>) => {
-      setGlobalError(null);
-      const isEdit = recordId && mode !== "create";
-      const url = isEdit ? `${apiBase}/${entityName}/${recordId}` : `${apiBase}/${entityName}`;
-      const method = isEdit ? "PATCH" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || `Save failed: ${res.status}`);
-      }
-      return res.json();
-    },
-    onSuccess: (result: unknown) => {
-      toast.success(recordId ? t("form.updateSuccess") : t("form.createSuccess"));
-      queryClient.invalidateQueries({ queryKey: ["data", entityName] });
-      onSaved?.(result);
-    },
-    onError: (error: Error) => {
-      setGlobalError(error.message);
-    },
-  });
-
   // F10 / Escape keyboard handlers
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "F10") {
         e.preventDefault();
         e.stopPropagation();
-        saveRecord(formData);
+        form.handleSubmit();
       }
       if (e.key === "Escape") {
         e.preventDefault();
@@ -682,67 +687,7 @@ export function EntityMask({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [formData, onCancel, saveRecord]);
-
-  const handleChange = (key: string, val: any) => {
-    let nextFormData: Record<string, any> | null = null;
-    const changedField = fieldByKey.get(key) ?? null;
-
-    setFormData((prev) => {
-      const next = (
-        changedField ? writeFieldValue(changedField, prev, val) : { ...prev, [key]: val }
-      ) as Record<string, any>;
-
-      // Auto-generate slug from name if slug exists in fields
-      if (key === "name" && fieldByKey.has("slug")) {
-        const generatedSlug = val
-          .toString()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)+/g, "");
-
-        // Only auto-generate if slug is empty or matches the old auto-generated version of name
-        const oldGeneratedSlug = prev.name
-          ? prev.name
-              .toString()
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/(^-|-$)+/g, "")
-          : "";
-
-        if (!next.slug || next.slug === oldGeneratedSlug) {
-          next.slug = generatedSlug;
-        }
-      }
-
-      nextFormData = next;
-      return next;
-    });
-
-    if (!nextFormData) return;
-
-    const currentFormData = nextFormData as Record<string, any>;
-
-    onFieldChange?.(key, val, currentFormData, setFormData);
-
-    // Auto-lookup city if countryCode and postalCode are present
-    if (
-      (key === "countryCode" || key === "postalCode") &&
-      currentFormData.countryCode &&
-      currentFormData.postalCode
-    ) {
-      fetch(
-        `/api/data/postalCode?countryCode=${currentFormData.countryCode}&plz=${currentFormData.postalCode}`,
-      )
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => {
-          if (Array.isArray(data) && data.length === 1) {
-            setFormData((curr) => ({ ...curr, city: data[0].city }));
-          }
-        })
-        .catch((err) => console.warn("City lookup failed", err));
-    }
-  };
+  }, [form, onCancel]);
 
   const fieldLabel = (field: FieldDef) =>
     i18n.language === "de" && field.labelDe ? field.labelDe : field.label;
@@ -751,7 +696,7 @@ export function EntityMask({
     i18n.language === "de" && field.helpTextDe ? field.helpTextDe : field.helpText;
 
   const showCancel = !inline && !!onCancel;
-  const hasChildContent = !!childSection && !loading && Object.keys(formData).length > 0;
+  const hasChildContent = !!childSection && !loading && Object.keys(initialData).length > 0; // We show it if we loaded data
   const fieldGridClass = _layout === "single" ? "grid-cols-1" : "grid-cols-2";
 
   const selectedDesignerFieldKey = selectedFieldKey;
@@ -759,7 +704,9 @@ export function EntityMask({
   useLayoutEffect(() => {
     if (!editorFieldKey || !isDesignMode) {
       if (overlayStyle !== null) {
-        setOverlayStyle(null);
+        requestAnimationFrame(() => {
+          setOverlayStyle(null);
+        });
       }
       return;
     }
@@ -790,15 +737,7 @@ export function EntityMask({
       window.removeEventListener("scroll", sync, true);
       window.removeEventListener("resize", sync);
     };
-  }, [
-    editorFieldKey,
-    editorMode,
-    isDesignMode,
-    selectedFieldKey,
-    formData,
-    fields.length,
-    overlayStyle,
-  ]);
+  }, [editorFieldKey, editorMode, isDesignMode, selectedFieldKey, fields.length]); // Removed form.state.values and overlayStyle to prevent infinite loops
 
   useEffect(() => {
     if (!editorFieldKey) return;
@@ -870,87 +809,173 @@ export function EntityMask({
     const designerConfig = designerFieldConfigs.get(field.key);
     const visibilityChecked = designerConfig?.visible ?? field.visible !== false;
     const hiddenClass = isDesignMode && !visibilityChecked ? "opacity-55" : "";
-    const currentValue = readFieldValue(field, formData);
+
+    const path = field.jsonPath ?? field.key;
+
+    // Build listeners dynamically based on field
+    let onChangeAsync: any = undefined;
+    let onChange: any = undefined;
+
+    // Derived autofill: ZIP + Country -> City
+    if (field.key === "postalCode" || field.key === "countryCode") {
+      onChangeAsync = async ({ value, fieldApi }: any) => {
+        const otherKey = field.key === "postalCode" ? "countryCode" : "postalCode";
+        const otherVal = fieldApi.form.getFieldValue(otherKey);
+        const postalCode = field.key === "postalCode" ? value : otherVal;
+        const countryCode = field.key === "countryCode" ? value : otherVal;
+
+        if (postalCode && countryCode) {
+          try {
+            const res = await fetch(
+              `/api/data/postalCode?countryCode=${countryCode}&plz=${postalCode}`,
+            );
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length === 1) {
+                fieldApi.form.setFieldValue("city", data[0].city);
+              }
+            }
+          } catch (err) {
+            console.warn("City lookup failed", err);
+          }
+        }
+        return undefined;
+      };
+    }
+
+    // Auto slug generation
+    if (field.key === "name" && fieldByKey.has("slug")) {
+      onChange = ({ value, fieldApi }: any) => {
+        const generatedSlug = value
+          .toString()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)+/g, "");
+
+        const currentSlug = fieldApi.form.getFieldValue("slug");
+        if (!currentSlug) {
+          fieldApi.form.setFieldValue("slug", generatedSlug);
+        }
+        return undefined;
+      };
+    }
 
     return (
-      <div
+      <form.Field
         key={field.key}
-        ref={(node) => setFieldRef(field.key, node)}
-        onClick={isDesignMode ? () => openFieldEditor(field.key, "compact") : undefined}
-        onDoubleClick={isDesignMode ? () => openFieldEditor(field.key, "expanded") : undefined}
-        onFocusCapture={isDesignMode ? () => openFieldEditor(field.key, "compact") : undefined}
-        onKeyDown={
-          isDesignMode
-            ? (e) => {
-                if (e.key !== "Enter" && e.key !== " ") return;
-                e.preventDefault();
-                openFieldEditor(field.key, "expanded");
-              }
-            : undefined
-        }
-        role="group"
-        tabIndex={isDesignMode ? 0 : undefined}
-        className={cn(
-          "relative flex min-w-0 flex-col gap-1.5 rounded-md transition-all",
-          field.fullWidth && fieldGridClass === "grid-cols-2" && "col-span-2",
-          hiddenClass,
-          isDesignMode &&
-            (isSelected
-              ? "bg-primary/[0.04] shadow-[0_0_0_1px_rgba(83,58,253,0.08)] ring-1 ring-primary/60 ring-inset"
-              : "ring-1 ring-primary/20 ring-inset hover:bg-primary/[0.02] hover:ring-primary/45"),
-        )}
+        name={path as any}
+        asyncDebounceMs={onChangeAsync ? 500 : undefined}
+        validators={{
+          onChangeAsync: onChangeAsync,
+          onChange: onChange,
+        }}
       >
-        {isDesignMode && (
-          <div className="pointer-events-none absolute top-1 left-2 z-10 flex items-center gap-1">
-            <span
+        {(fieldApi) => {
+          const currentValue = fieldApi.state.value;
+          const hasError = fieldApi.state.meta.errors.length > 0;
+          const errorMessage = fieldApi.state.meta.errors.join(", ");
+          const combinedError = hasError ? errorMessage : field.error;
+
+          return (
+            <div
+              ref={(node) => setFieldRef(field.key, node)}
+              onClick={isDesignMode ? () => openFieldEditor(field.key, "compact") : undefined}
+              onDoubleClick={
+                isDesignMode ? () => openFieldEditor(field.key, "expanded") : undefined
+              }
+              onFocusCapture={
+                isDesignMode ? () => openFieldEditor(field.key, "compact") : undefined
+              }
+              onKeyDown={
+                isDesignMode
+                  ? (e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      openFieldEditor(field.key, "expanded");
+                    }
+                  : undefined
+              }
+              role="group"
+              tabIndex={isDesignMode ? 0 : undefined}
               className={cn(
-                "inline-flex items-center gap-1 rounded-full border bg-canvas px-1.5 py-0.5 font-mono text-[9px] font-medium tracking-[0.14em] shadow-sm",
-                isSelected ? "border-primary/40 text-primary" : "border-hairline text-ink-mute",
+                "relative flex min-w-0 flex-col gap-1.5 rounded-md transition-all",
+                field.fullWidth && fieldGridClass === "grid-cols-2" && "col-span-2",
+                hiddenClass,
+                isDesignMode &&
+                  (isSelected
+                    ? "bg-primary/[0.04] shadow-[0_0_0_1px_rgba(83,58,253,0.08)] ring-1 ring-primary/60 ring-inset"
+                    : "ring-1 ring-primary/20 ring-inset hover:bg-primary/[0.02] hover:ring-primary/45"),
               )}
             >
-              <GripVerticalIcon className="size-2.5 shrink-0 opacity-70" />
-              {field.key}
-            </span>
-            {field.jsonPath ? (
-              <span className="text-ink-muted rounded-full border border-hairline bg-canvas px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] uppercase">
-                jsonb
-              </span>
-            ) : null}
-          </div>
-        )}
+              {isDesignMode && (
+                <div className="pointer-events-none absolute top-1 left-2 z-10 flex items-center gap-1">
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border bg-canvas px-1.5 py-0.5 font-mono text-[9px] font-medium tracking-[0.14em] shadow-sm",
+                      isSelected
+                        ? "border-primary/40 text-primary"
+                        : "border-hairline text-ink-mute",
+                    )}
+                  >
+                    <GripVerticalIcon className="size-2.5 shrink-0 opacity-70" />
+                    {field.key}
+                  </span>
+                  {field.jsonPath ? (
+                    <span className="text-ink-muted rounded-full border border-hairline bg-canvas px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] uppercase">
+                      jsonb
+                    </span>
+                  ) : null}
+                </div>
+              )}
 
-        {field.type !== "boolean" && (
-          <div className="flex items-center gap-1 text-[12px] font-medium select-none">
-            <button
-              type="button"
-              onClick={isDesignMode ? () => openFieldEditor(field.key, "expanded") : undefined}
-              className={cn("truncate text-left", getFieldLabelClasses(field))}
-            >
-              {fieldLabel(field)}
-            </button>
-            {field.required && <span className="shrink-0 leading-none text-destructive">*</span>}
-          </div>
-        )}
+              {field.type !== "boolean" && (
+                <div className="flex items-center gap-1 text-[12px] font-medium select-none">
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={
+                      isDesignMode ? () => openFieldEditor(field.key, "expanded") : undefined
+                    }
+                    className={cn("truncate text-left", getFieldLabelClasses(field))}
+                  >
+                    {fieldLabel(field)}
+                  </button>
+                  {field.required && (
+                    <span className="shrink-0 leading-none text-destructive">*</span>
+                  )}
+                </div>
+              )}
 
-        <div className="w-full min-w-0">
-          <FieldInput
-            field={field}
-            value={currentValue ?? field.value ?? ""}
-            disabled={isSaving}
-            onChange={(val) => handleChange(field.key, val)}
-          />
-        </div>
+              <div className="w-full min-w-0">
+                <form.Subscribe selector={(state) => state.isSubmitting}>
+                  {(isSubmitting) => (
+                    <FieldInput
+                      field={{ ...field, error: combinedError }}
+                      value={currentValue ?? field.value ?? ""}
+                      disabled={isSubmitting}
+                      onChange={(val) => {
+                        fieldApi.handleChange(val);
+                        // Backwards compatibility for onFieldChange
+                        onFieldChange?.(field.key, val, form.state.values, (() => {}) as any);
+                      }}
+                      onBlur={() => fieldApi.handleBlur()}
+                    />
+                  )}
+                </form.Subscribe>
+              </div>
 
-        {field.error && (
-          <span className="text-[11px] text-[var(--destructive)]">{field.error}</span>
-        )}
-        {!field.error && helpText(field) && (
-          <span className="text-[11px] text-ink-mute">{helpText(field)}</span>
-        )}
-      </div>
+              {combinedError && (
+                <span className="text-[11px] text-[var(--destructive)]">{combinedError}</span>
+              )}
+              {!combinedError && helpText(field) && (
+                <span className="text-[11px] text-ink-mute">{helpText(field)}</span>
+              )}
+            </div>
+          );
+        }}
+      </form.Field>
     );
   };
-
   const fieldsGrid = (
     <div className="flex flex-col gap-6">
       {globalError && (
@@ -1372,10 +1397,22 @@ export function EntityMask({
         )
       : null;
 
-  const childSectionNode = hasChildContent ? (
-    <div className="mt-4 border-t border-hairline pt-4">
-      {childSection!(formData as Record<string, unknown>, handleChange)}
+  const globalErrorNode = globalError ? (
+    <div className="mb-4 rounded-md bg-destructive/10 p-3 text-[13px] text-destructive">
+      {globalError}
     </div>
+  ) : null;
+
+  const childSectionNode = hasChildContent ? (
+    <form.Subscribe selector={(state) => state.values}>
+      {(values) => (
+        <div className="mt-4 border-t border-hairline pt-4">
+          {childSection!(values as Record<string, unknown>, (key, val) =>
+            form.setFieldValue(key as any, val),
+          )}
+        </div>
+      )}
+    </form.Subscribe>
   ) : null;
 
   const footerButtons = (
@@ -1389,12 +1426,17 @@ export function EntityMask({
         </button>
       )}
       <button
-        onClick={() => saveRecord(formData)}
-        disabled={isSaving}
+        onClick={() => form.handleSubmit()}
+        disabled={form.state.isSubmitting}
         className="h-7 rounded-full px-4 text-[13px] disabled:opacity-50"
         style={{ background: "var(--primary)", color: "var(--primary-fg)" }}
       >
-        {isSaving ? t("form.saving") : recordId ? t("form.update") : t("form.create")} (F10)
+        {form.state.isSubmitting
+          ? t("form.saving")
+          : recordId
+            ? t("form.update")
+            : t("form.create")}{" "}
+        (F10)
       </button>
     </div>
   );
@@ -1431,7 +1473,13 @@ export function EntityMask({
             {editorOverlay}
           </div>
           <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
-            {childSection!(formData as Record<string, unknown>, handleChange)}
+            <form.Subscribe selector={(state) => state.values}>
+              {(values) =>
+                childSection!(values as Record<string, unknown>, (key, val) =>
+                  form.setFieldValue(key as any, val),
+                )
+              }
+            </form.Subscribe>
           </div>
         </div>
         <div className="shrink-0 border-t border-hairline bg-canvas px-6 py-4">{footerButtons}</div>

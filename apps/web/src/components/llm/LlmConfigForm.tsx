@@ -1,10 +1,9 @@
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type Provider = "openai" | "google_ai_studio" | "vertex_ai";
+type Provider = "openai" | "anthropic" | "openrouter" | "google_ai_studio" | "vertex_ai";
 type Scope = "global" | "tenant";
 
-const _SENTINEL = "••••••••";
 interface LlmConfigState {
   provider: Provider;
   endpointUrl: string;
@@ -25,20 +24,64 @@ interface LlmConfigFormProps {
   companyId?: string | null;
 }
 
-function inferProvider(model: string, provider?: string): Provider {
-  if (model.startsWith("vertex_ai/")) return "vertex_ai";
-  if (model.startsWith("gemini/")) return "google_ai_studio";
-  if (provider === "openai" || provider === "google_ai_studio" || provider === "vertex_ai") {
-    return provider;
+const PROVIDER_OPTIONS: Array<{ value: Provider; label: string }> = [
+  { value: "openai", label: "OpenAI" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "google_ai_studio", label: "Google AI Studio" },
+  { value: "vertex_ai", label: "Vertex AI" },
+];
+
+const PROVIDER_DEFAULTS: Record<Provider, { model: string; baseUrl: string; apiKeyLabel: string }> =
+  {
+    openai: {
+      model: "gpt-4o-mini",
+      baseUrl: "https://api.openai.com/v1",
+      apiKeyLabel: "API Key",
+    },
+    anthropic: {
+      model: "claude-sonnet-4-5",
+      baseUrl: "https://api.anthropic.com",
+      apiKeyLabel: "API Key",
+    },
+    openrouter: {
+      model: "openai/gpt-5",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKeyLabel: "API Key",
+    },
+    google_ai_studio: {
+      model: "gemini-2.5-flash",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeyLabel: "API Key",
+    },
+    vertex_ai: {
+      model: "gemini-2.5-flash",
+      baseUrl: "",
+      apiKeyLabel: "API Key",
+    },
+  };
+
+function normalizeProvider(provider?: string): Provider {
+  switch (provider) {
+    case "openai":
+    case "anthropic":
+    case "openrouter":
+    case "google_ai_studio":
+    case "vertex_ai":
+      return provider;
+    case "gemini":
+      return "google_ai_studio";
+    default:
+      return "google_ai_studio";
   }
-  return "openai";
 }
 
-function buildInitialState(): LlmConfigState {
+function buildInitialState(provider: Provider = "google_ai_studio"): LlmConfigState {
+  const defaults = PROVIDER_DEFAULTS[provider];
   return {
-    provider: "google_ai_studio",
-    endpointUrl: "http://localhost:11435",
-    model: "gemini/gemini-2.5-flash",
+    provider,
+    endpointUrl: defaults.baseUrl,
+    model: defaults.model,
     apiKey: "",
     vertexCredentials: "",
     githubToken: "",
@@ -51,7 +94,6 @@ function buildInitialState(): LlmConfigState {
 
 export function LlmConfigForm({ scope, title, description, companyId }: LlmConfigFormProps) {
   const [config, setConfig] = useState<LlmConfigState>(() => buildInitialState());
-  const [recordId, setRecordId] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showGithubToken, setShowGithubToken] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -63,10 +105,7 @@ export function LlmConfigForm({ scope, title, description, companyId }: LlmConfi
 
   const isTenantScope = scope === "tenant";
   const modelPlaceholder = useMemo(
-    () =>
-      config.provider === "vertex_ai" || config.provider === "google_ai_studio"
-        ? "gemini-2.5-flash"
-        : "gpt-4o-mini",
+    () => PROVIDER_DEFAULTS[config.provider].model,
     [config.provider],
   );
 
@@ -80,94 +119,55 @@ export function LlmConfigForm({ scope, title, description, companyId }: LlmConfi
       setTestResult("");
 
       try {
-        if (scope === "global") {
-          const res = await fetch("/api/admin/llm-config");
-          if (!res.ok || !active) {
-            if (active) setLoadStatus("error");
-            return;
-          }
-
-          const data = (await res.json()) as {
-            configured?: boolean;
-            provider?: string;
-            endpointUrl?: string;
-            model?: string;
-            apiKey?: string;
-            vertexCredentials?: string;
-            githubToken?: string;
-            githubRepo?: string;
-            vertexProject?: string;
-            vertexLocation?: string;
-          };
-
-          if (!active) return;
-          if (!data.configured) {
-            setConfig(buildInitialState());
-            setRecordId(null);
-            setLoadStatus("idle");
-            return;
-          }
-
-          setConfig({
-            provider: inferProvider(data.model || "", data.provider || ""),
-            endpointUrl: data.endpointUrl || "http://localhost:11435",
-            model: data.model || "gemini/gemini-2.5-flash",
-            apiKey: data.apiKey || "",
-            vertexCredentials: data.vertexCredentials || "",
-            githubToken: data.githubToken || "",
-            githubRepo: data.githubRepo || "",
-            vertexProject: data.vertexProject || "",
-            vertexLocation: data.vertexLocation || "",
-            isActive: true,
-          });
-          setRecordId(null);
-          setLoadStatus("idle");
-          return;
-        }
-
-        if (!companyId) {
+        if (scope === "tenant" && !companyId) {
           if (active) setLoadStatus("idle");
           setConfig(buildInitialState());
-          setRecordId(null);
           return;
         }
 
-        const params = new URLSearchParams({
-          paginated: "true",
-          page: "1",
-          limit: "1",
-          companyId,
-        });
-        const res = await fetch(`/api/data/tenantLlmConfig?${params.toString()}`);
+        const params = new URLSearchParams({ scope });
+        if (scope === "tenant" && companyId) params.set("companyId", companyId);
+
+        const res = await fetch(`/api/ai/llm-config?${params.toString()}`);
         if (!res.ok || !active) {
           if (active) setLoadStatus("error");
           return;
         }
 
-        const data = (await res.json()) as { data?: Array<Record<string, any>> };
-        const row = data.data?.[0];
+        const data = (await res.json()) as {
+          configured?: boolean;
+          provider?: string;
+          endpointUrl?: string;
+          model?: string;
+          apiKey?: string;
+          vertexCredentials?: string;
+          githubToken?: string;
+          githubRepo?: string;
+          vertexProject?: string;
+          vertexLocation?: string;
+          isActive?: boolean;
+        };
         if (!active) return;
 
-        if (!row) {
+        if (!data.configured) {
           setConfig(buildInitialState());
-          setRecordId(null);
           setLoadStatus("idle");
           return;
         }
 
+        const provider = normalizeProvider(data.provider);
         setConfig({
-          provider: inferProvider(row.model || "", row.provider || ""),
-          endpointUrl: row.endpointUrl || "http://localhost:11435",
-          model: row.model || "gemini/gemini-2.5-flash",
-          apiKey: row.apiKey || "",
-          vertexCredentials: row.vertexCredentials || "",
-          githubToken: row.githubToken || "",
-          githubRepo: row.githubRepo || "",
-          vertexProject: row.vertexProject || "",
-          vertexLocation: row.vertexLocation || "",
-          isActive: row.isActive ?? true,
+          provider,
+          endpointUrl: data.endpointUrl || PROVIDER_DEFAULTS[provider].baseUrl,
+          model: data.model || PROVIDER_DEFAULTS[provider].model,
+          apiKey: data.apiKey || "",
+          vertexCredentials: data.vertexCredentials || "",
+          githubToken: data.githubToken || "",
+          githubRepo: data.githubRepo || "",
+          vertexProject: data.vertexProject || "",
+          vertexLocation: data.vertexLocation || "",
+          isActive: data.isActive ?? true,
         });
-        setRecordId(row.tenantLlmConfigId ?? row.id ?? null);
         setLoadStatus("idle");
       } catch {
         if (active) setLoadStatus("error");
@@ -190,6 +190,26 @@ export function LlmConfigForm({ scope, title, description, companyId }: LlmConfi
       setTestResult("");
     };
 
+  const handleProviderChange = (provider: Provider) => {
+    setConfig((prev) => {
+      const previousDefaults = PROVIDER_DEFAULTS[prev.provider];
+      const nextDefaults = PROVIDER_DEFAULTS[provider];
+      return {
+        ...prev,
+        provider,
+        endpointUrl:
+          !prev.endpointUrl || prev.endpointUrl === previousDefaults.baseUrl
+            ? nextDefaults.baseUrl
+            : prev.endpointUrl,
+        model:
+          !prev.model || prev.model === previousDefaults.model ? nextDefaults.model : prev.model,
+      };
+    });
+    setSaveStatus("idle");
+    setTestStatus("idle");
+    setTestResult("");
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setSaveStatus("idle");
@@ -201,39 +221,17 @@ export function LlmConfigForm({ scope, title, description, companyId }: LlmConfi
 
       const payload = {
         ...config,
+        scope,
         ...(isTenantScope ? { companyId } : {}),
       };
 
-      const res = await fetch(
-        scope === "global"
-          ? "/api/admin/llm-config"
-          : recordId
-            ? `/api/data/tenantLlmConfig/${recordId}`
-            : "/api/data/tenantLlmConfig",
-        {
-          method: scope === "global" ? "POST" : recordId ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
+      const res = await fetch("/api/ai/llm-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      if (res.ok) {
-        setSaveStatus("success");
-        if (scope === "tenant") {
-          const data = (await res.json().catch(() => null)) as
-            | Array<Record<string, any>>
-            | Record<string, any>
-            | null;
-          if (Array.isArray(data)) {
-            const firstRow = data[0];
-            if (firstRow) setRecordId(firstRow.tenantLlmConfigId ?? firstRow.id ?? recordId);
-          } else if (data) {
-            setRecordId(data.tenantLlmConfigId ?? data.id ?? recordId);
-          }
-        }
-      } else {
-        setSaveStatus("error");
-      }
+      setSaveStatus(res.ok ? "success" : "error");
     } catch {
       setSaveStatus("error");
     } finally {
@@ -252,17 +250,15 @@ export function LlmConfigForm({ scope, title, description, companyId }: LlmConfi
         return;
       }
 
-      const res = await fetch(
-        scope === "global" ? "/api/admin/llm-config/test" : "/api/data/tenantLlmConfig/test",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...config,
-            ...(isTenantScope ? { companyId } : {}),
-          }),
-        },
-      );
+      const res = await fetch("/api/ai/llm-config/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...config,
+          scope,
+          ...(isTenantScope ? { companyId } : {}),
+        }),
+      });
 
       const data = (await res.json().catch(() => null)) as {
         ok?: boolean;
@@ -329,12 +325,14 @@ export function LlmConfigForm({ scope, title, description, companyId }: LlmConfi
           <select
             id="llm-provider"
             value={config.provider}
-            onChange={(e) => updateField("provider")(e.target.value as Provider)}
+            onChange={(e) => handleProviderChange(e.target.value as Provider)}
             className="h-9 rounded-md border border-hairline-input bg-canvas-soft px-3 text-[13px] text-ink focus:ring-1 focus:ring-primary focus:outline-none"
           >
-            <option value="google_ai_studio">Google AI Studio</option>
-            <option value="vertex_ai">Vertex AI</option>
-            <option value="openai">OpenAI</option>
+            {PROVIDER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -343,14 +341,14 @@ export function LlmConfigForm({ scope, title, description, companyId }: LlmConfi
             htmlFor="llm-endpoint-url"
             className="text-[12px] font-medium tracking-wider text-ink-secondary uppercase"
           >
-            LiteLLM Service URL
+            Base URL
           </label>
           <input
             id="llm-endpoint-url"
             type="text"
             value={config.endpointUrl}
             onChange={(e) => updateField("endpointUrl")(e.target.value)}
-            placeholder="http://localhost:11435"
+            placeholder={PROVIDER_DEFAULTS[config.provider].baseUrl}
             className="h-9 rounded-md border border-hairline-input bg-canvas-soft px-3 text-[13px] text-ink placeholder:text-ink-mute focus:ring-1 focus:ring-primary focus:outline-none"
           />
         </div>
@@ -423,38 +421,46 @@ export function LlmConfigForm({ scope, title, description, companyId }: LlmConfi
                 className="min-h-24 rounded-md border border-hairline-input bg-canvas-soft px-3 py-2 text-[13px] text-ink placeholder:text-ink-mute focus:ring-1 focus:ring-primary focus:outline-none"
               />
               <p className="text-[11px] text-ink-mute">
-                Optional. Leave empty to use ADC. LiteLLM&apos;s `vertex_ai/` route requires a
-                service-account JSON or application-default credentials, not a Vertex API key.
+                Optional. Leave empty to use ADC. Vertex AI integration requires a service-account
+                JSON or application-default credentials, not a Vertex API key.
               </p>
             </div>
           </>
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="llm-api-key"
-            className="text-[12px] font-medium tracking-wider text-ink-secondary uppercase"
-          >
-            API Key
-          </label>
-          <div className="relative">
-            <input
-              id="llm-api-key"
-              type={showApiKey ? "text" : "password"}
-              value={config.apiKey}
-              onChange={(e) => updateField("apiKey")(e.target.value)}
-              placeholder="sk-…"
-              className="h-9 w-full rounded-md border border-hairline-input bg-canvas-soft px-3 pr-10 text-[13px] text-ink placeholder:text-ink-mute focus:ring-1 focus:ring-primary focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => setShowApiKey((v) => !v)}
-              className="absolute top-1/2 right-2.5 -translate-y-1/2 text-ink-mute hover:text-ink"
+        {config.provider !== "vertex_ai" && (
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="llm-api-key"
+              className="text-[12px] font-medium tracking-wider text-ink-secondary uppercase"
             >
-              {showApiKey ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
-            </button>
+              {PROVIDER_DEFAULTS[config.provider].apiKeyLabel}
+            </label>
+            <div className="relative">
+              <input
+                id="llm-api-key"
+                type={showApiKey ? "text" : "password"}
+                value={config.apiKey}
+                onChange={(e) => updateField("apiKey")(e.target.value)}
+                placeholder={
+                  config.provider === "openrouter"
+                    ? "sk-or-…"
+                    : config.provider === "anthropic"
+                      ? "sk-ant-…"
+                      : "sk-…"
+                }
+                className="h-9 w-full rounded-md border border-hairline-input bg-canvas-soft px-3 pr-10 text-[13px] text-ink placeholder:text-ink-mute focus:ring-1 focus:ring-primary focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey((v) => !v)}
+                className="absolute top-1/2 right-2.5 -translate-y-1/2 text-ink-mute hover:text-ink"
+              >
+                {showApiKey ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <label
@@ -554,8 +560,8 @@ export function LlmConfigForm({ scope, title, description, companyId }: LlmConfi
             </pre>
           ) : (
             <p className="text-[11px] text-ink-mute">
-              Sends a minimal ping through the saved LLM configuration and returns the raw result or
-              error.
+              Sends a direct ping through the saved provider adapter and returns the structured
+              result or error.
             </p>
           )}
         </div>

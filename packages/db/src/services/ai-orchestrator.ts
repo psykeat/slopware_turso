@@ -6,15 +6,19 @@ import { db } from "../index";
 import {
   aiPromptVersion,
   aiRun,
+  aiTurn,
   systemSettings,
   aiInterpretation,
   aiReview,
   emailIdentity,
   emailMessage,
   emailThread,
+  aiMemory,
 } from "../schema/app.schema";
 import * as schema from "../schema/index";
+import { createAiToolCall, createAiTurn, updateAiToolCallStatus } from "./ai-persistence";
 import { EmailDocumentService } from "./email/document-service";
+import { runMailAgentLoop, type MailAgentAnalysis } from "./mail-agent-analysis";
 
 const DOC_TYPE_MAP: Record<string, string> = {
   Offer: "N",
@@ -128,11 +132,34 @@ function decryptSecret(encoded: string): string {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }
 
-function inferProvider(model: string, provider?: string): string {
-  if (model.startsWith("vertex_ai/")) return "vertex_ai";
-  if (model.startsWith("gemini/")) return "google_ai_studio";
-  if (provider) return provider;
-  return "openai";
+function inferProvider(_model: string, provider?: string): string {
+  switch (provider) {
+    case "openai":
+    case "anthropic":
+    case "openrouter":
+    case "google_ai_studio":
+    case "vertex_ai":
+      return provider;
+    case "gemini":
+      return "google_ai_studio";
+    default:
+      return "google_ai_studio";
+  }
+}
+
+function defaultModelForProvider(provider: string): string {
+  switch (provider) {
+    case "openai":
+      return "gpt-4o-mini";
+    case "anthropic":
+      return "claude-sonnet-4-5";
+    case "openrouter":
+      return "openai/gpt-5";
+    case "vertex_ai":
+    case "google_ai_studio":
+    default:
+      return "gemini-2.5-flash";
+  }
 }
 
 function formatMailPerson(value: any): string {
@@ -205,7 +232,10 @@ type LlmRuntimeConfig = {
   vertexLocation: string;
 };
 
-async function resolveLlmRuntimeConfig(): Promise<LlmRuntimeConfig> {
+export async function resolveLlmRuntimeConfig(
+  tenantId?: string,
+  userId?: string,
+): Promise<LlmRuntimeConfig> {
   let gatewayUrl = "http://localhost:11435";
   let modelName = "gemini/gemini-2.5-flash";
   let providerName = "google_ai_studio";
@@ -216,22 +246,74 @@ async function resolveLlmRuntimeConfig(): Promise<LlmRuntimeConfig> {
   let vertexProject = "";
   let vertexLocation = "";
 
-  const configRow = await db
-    .select()
-    .from(systemSettings)
-    .where(and(eq(systemSettings.scope, "global"), eq(systemSettings.key, "llm_config")))
-    .limit(1);
+  let activeTenantConfig = null;
+  if (tenantId && userId) {
+    const [userRow] = await db
+      .select({ lastCompanyId: schema.user.lastCompanyId })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId))
+      .limit(1);
 
-  if (configRow[0]) {
-    gatewayUrl = (configRow[0].value as any).endpointUrl || "http://localhost:11435";
-    modelName = (configRow[0].value as any).model || "gemini/gemini-2.5-flash";
-    providerName = inferProvider(modelName, (configRow[0].value as any).provider);
-    vertexCredentials = decryptSecret((configRow[0].value as any).vertexCredentials || "");
-    vertexProject = (configRow[0].value as any).vertexProject ?? "";
-    vertexLocation = (configRow[0].value as any).vertexLocation ?? "";
-    apiKey = decryptSecret((configRow[0].value as any).apiKey || "");
-    githubToken = decryptSecret((configRow[0].value as any).githubToken || "");
-    githubRepo = (configRow[0].value as any).githubRepo ?? "";
+    const activeCompanyId = userRow?.lastCompanyId;
+
+    if (activeCompanyId) {
+      const configRows = await db
+        .select()
+        .from(schema.tenantLlmConfig)
+        .where(
+          and(
+            eq(schema.tenantLlmConfig.tenantId, tenantId),
+            eq(schema.tenantLlmConfig.companyId, activeCompanyId),
+            eq(schema.tenantLlmConfig.isActive, true),
+          ),
+        )
+        .limit(1);
+      activeTenantConfig = configRows[0] || null;
+    }
+  }
+
+  if (activeTenantConfig) {
+    gatewayUrl = activeTenantConfig.endpointUrl || "http://localhost:11435";
+    providerName = inferProvider(modelName, (activeTenantConfig as any).provider);
+    modelName = activeTenantConfig.model || defaultModelForProvider(providerName);
+    if (activeTenantConfig.apiKey) {
+      const { decryptEmailCredentials } = await import("./email/credential-crypto");
+      try {
+        apiKey = decryptEmailCredentials<string>(activeTenantConfig.apiKey);
+      } catch {
+        apiKey = activeTenantConfig.apiKey;
+      }
+    }
+    if ((activeTenantConfig as any).githubToken) {
+      const { decryptEmailCredentials } = await import("./email/credential-crypto");
+      try {
+        githubToken = decryptEmailCredentials<string>((activeTenantConfig as any).githubToken);
+      } catch {
+        githubToken = (activeTenantConfig as any).githubToken;
+      }
+    }
+    githubRepo = (activeTenantConfig as any).githubRepo ?? "";
+    vertexCredentials = decryptSecret((activeTenantConfig as any).vertexCredentials ?? "");
+    vertexProject = (activeTenantConfig as any).vertexProject ?? "";
+    vertexLocation = (activeTenantConfig as any).vertexLocation ?? "";
+  } else {
+    const configRow = await db
+      .select()
+      .from(systemSettings)
+      .where(and(eq(systemSettings.scope, "global"), eq(systemSettings.key, "llm_config")))
+      .limit(1);
+
+    if (configRow[0]) {
+      gatewayUrl = (configRow[0].value as any).endpointUrl || "http://localhost:11435";
+      providerName = inferProvider(modelName, (configRow[0].value as any).provider);
+      modelName = (configRow[0].value as any).model || defaultModelForProvider(providerName);
+      vertexCredentials = decryptSecret((configRow[0].value as any).vertexCredentials || "");
+      vertexProject = (configRow[0].value as any).vertexProject ?? "";
+      vertexLocation = (configRow[0].value as any).vertexLocation ?? "";
+      apiKey = decryptSecret((configRow[0].value as any).apiKey || "");
+      githubToken = decryptSecret((configRow[0].value as any).githubToken || "");
+      githubRepo = (configRow[0].value as any).githubRepo ?? "";
+    }
   }
 
   return {
@@ -254,8 +336,10 @@ async function generateReplyDraftBody(params: {
   documentLabel: string | null;
   documentNo: string | null;
   extraReplyInstruction: string | null;
+  tenantId: string;
+  userId: string;
 }) {
-  const llm = await resolveLlmRuntimeConfig();
+  const llm = await resolveLlmRuntimeConfig(params.tenantId, params.userId);
   const extraReplyInstruction = params.extraReplyInstruction?.trim() || "";
   const prompt = `You are drafting a German business email reply for an ERP system.
 
@@ -299,26 +383,22 @@ ${params.sourceEmailText.slice(0, 8000)}
     .join("\n");
 
   try {
-    const res = await fetch(`${llm.gatewayUrl}/complete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt,
-        model: llm.modelName,
-        endpoint_url: llm.gatewayUrl,
-        provider: llm.providerName,
-        api_key: llm.apiKey || undefined,
-        github_token: llm.githubToken || undefined,
-        github_repo: llm.githubRepo || undefined,
-        vertex_credentials: llm.vertexCredentials || undefined,
-        vertex_project: llm.vertexProject || undefined,
-        vertex_location: llm.vertexLocation || undefined,
-      }),
+    const { createConfiguredProvider } = await import("@repo/agent");
+    const provider = createConfiguredProvider({
+      provider: llm.providerName,
+      model: llm.modelName,
+      apiKey: llm.apiKey || undefined,
+      endpointUrl: llm.gatewayUrl || undefined,
+      vertexCredentials: llm.vertexCredentials || undefined,
+      vertexProject: llm.vertexProject || undefined,
+      vertexLocation: llm.vertexLocation || undefined,
     });
 
-    if (!res.ok) throw new Error(`LLM completion route failed with status ${res.status}`);
-    const body = (await res.json()) as { content?: string };
-    const cleanContent = String(body.content ?? "")
+    const responseText = (await provider.chat({
+      messages: [{ role: "user", content: prompt }],
+    })) as string;
+
+    const cleanContent = responseText
       .replace(/^```json\n?/, "")
       .replace(/\n?```$/, "")
       .trim();
@@ -342,6 +422,48 @@ function getMailDisplayValue(value: unknown): string | null {
   const email = typeof record.email === "string" ? record.email.trim() : "";
   const name = typeof record.name === "string" ? record.name.trim() : "";
   return [name, email].filter(Boolean).join(" <") + (name && email ? ">" : "") || email || null;
+}
+
+function safeJsonParse(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function chunkToTranscriptMessage(chunk: Record<string, unknown>): string | null {
+  const chunkAny = chunk as any;
+  const type = typeof chunkAny.type === "string" ? chunkAny.type : "";
+  switch (type) {
+    case "RUN_STARTED":
+      return "Agent run started";
+    case "STEP_STARTED":
+      return `Reasoning started${typeof chunk.id === "string" ? ` (${chunk.id})` : ""}`;
+    case "STEP_FINISHED":
+      return typeof chunk.content === "string"
+        ? chunk.content
+        : typeof chunk.delta === "string"
+          ? chunk.delta
+          : "Reasoning step finished";
+    case "TEXT_MESSAGE_END":
+      return typeof chunk.content === "string" ? chunk.content : "Assistant message";
+    case "TOOL_CALL_START":
+      return typeof chunk.toolName === "string"
+        ? `Tool call started: ${chunk.toolName}`
+        : "Tool call started";
+    case "TOOL_CALL_END":
+      return typeof chunk.toolName === "string"
+        ? `Tool call completed: ${chunk.toolName}`
+        : "Tool call completed";
+    case "RUN_FINISHED":
+      return typeof chunk.finishReason === "string"
+        ? `Run finished (${chunk.finishReason})`
+        : "Run finished";
+    default:
+      return null;
+  }
 }
 
 function isOrderFromOfferIntent(intent: string) {
@@ -699,31 +821,9 @@ Response constraints:
     }
 
     // 3. Resolve LLM Config
-    let gatewayUrl = "http://localhost:11435";
-    let modelName = "gemini/gemini-2.5-flash";
-    let providerName = "google_ai_studio";
-    let _apiKey = "";
-    let _githubToken = "";
-    let _githubRepo = "";
-    let _vertexCredentials = "";
-    let _vertexProject = "";
-    let _vertexLocation = "";
-
-    const configRow = await db
-      .select()
-      .from(systemSettings)
-      .where(and(eq(systemSettings.scope, "global"), eq(systemSettings.key, "llm_config")))
-      .limit(1);
-
-    if (configRow[0]) {
-      gatewayUrl = (configRow[0].value as any).endpointUrl || "http://localhost:11435";
-      modelName = (configRow[0].value as any).model || "gemini/gemini-2.5-flash";
-      providerName = inferProvider(modelName, (configRow[0].value as any).provider);
-      _vertexCredentials = decryptSecret((configRow[0].value as any).vertexCredentials || "");
-      _vertexProject = (configRow[0].value as any).vertexProject ?? "";
-      _vertexLocation = (configRow[0].value as any).vertexLocation ?? "";
-      _apiKey = decryptSecret((configRow[0].value as any).apiKey || "");
-    }
+    const llm = await resolveLlmRuntimeConfig(params.tenantId, params.userId);
+    const modelName = llm.modelName;
+    const _apiKey = llm.apiKey;
 
     // Assemble LLM prompt
     const prompt = `${promptVer.systemPrompt}
@@ -733,15 +833,14 @@ Produce a valid JSON object matching the following structure:
 {
   "businessIntent": "order_from_existing_offer" | "new_quote_request" | "complaint" | "delivery_status_request" | "invoice_or_document" | "other_unclear",
   "confidenceScore": 0.0 to 1.0,
-  "summary": "Short German summary of what the customer wants",
+  "summary": "German one-sentence summary of request",
   "evidence": [
-    { "field": "businessIntent" | "documentReference" | "customerHint", "quote": "actual matching quote text", "confidence": 0.0 to 1.0 }
+    { "quote": "exact quote from email", "explanation": "why this matches intent" }
   ],
   "extractedReferences": {
     "documentNo": "ANG-XXXXXX" or null,
-    "documentTypeHint": "Offer" | "Order" | "Invoice" | "Unknown" | null,
-    "senderEmail": "email" or null,
-    "senderName": "name" or null,
+    "documentType": "Offer" or null,
+    "customerNo": "K-XXXXX" or null,
     "companyName": "company" or null
   },
   "requestedResolvers": [
@@ -757,26 +856,22 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
 
     let responseJson: any = {};
     try {
-      const res = await fetch(`${gatewayUrl}/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          model: modelName,
-          endpoint_url: gatewayUrl,
-          provider: providerName,
-          api_key: _apiKey || undefined,
-          github_token: _githubToken || undefined,
-          github_repo: _githubRepo || undefined,
-          vertex_credentials: _vertexCredentials || undefined,
-          vertex_project: _vertexProject || undefined,
-          vertex_location: _vertexLocation || undefined,
-        }),
+      const { createConfiguredProvider } = await import("@repo/agent");
+      const provider = createConfiguredProvider({
+        provider: llm.providerName,
+        model: modelName,
+        apiKey: _apiKey || undefined,
+        endpointUrl: llm.gatewayUrl || undefined,
+        vertexCredentials: llm.vertexCredentials || undefined,
+        vertexProject: llm.vertexProject || undefined,
+        vertexLocation: llm.vertexLocation || undefined,
       });
 
-      if (!res.ok) throw new Error(`LLM call failed with status ${res.status}`);
-      const body = (await res.json()) as { content: string };
-      const cleanContent = body.content
+      const responseText = (await provider.chat({
+        messages: [{ role: "user", content: prompt }],
+      })) as string;
+
+      const cleanContent = responseText
         .replace(/^```json\n?/, "")
         .replace(/\n?```$/, "")
         .trim();
@@ -846,6 +941,14 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
       .limit(1);
 
     if (!interp) throw new Error("Interpretation not found");
+
+    const storedResolution = (interp.rawLlmTrace as any)?.resolution;
+    if (storedResolution && typeof storedResolution === "object") {
+      return {
+        resolutionId: randomUUID(),
+        resolution: storedResolution,
+      };
+    }
 
     const requestedResolvers = (interp.requestedResolversJson || []) as any[];
     const refs = (interp.extractedReferencesJson || {}) as Record<string, any>;
@@ -1037,6 +1140,249 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
       resolutionId: randomUUID(),
       resolution,
     };
+  }
+
+  static async runMailAgentAnalysis(params: {
+    threadId: string;
+    tenantId: string;
+    userId: string;
+    rawInput?: string;
+    customInstructions?: string;
+    sessionId?: string;
+    provider?: any;
+    projection?: any;
+    onChunk?: (chunk: Record<string, unknown>) => void;
+  }): Promise<{
+    interpretationId: string;
+    interpretation: typeof aiInterpretation.$inferSelect;
+    analysis: MailAgentAnalysis;
+  }> {
+    const startedAt = Date.now();
+    const [run] = await db
+      .insert(aiRun)
+      .values({
+        tenantId: params.tenantId,
+        userId: params.userId,
+        taskScope: "mail-agent-cycle",
+        status: "running",
+      })
+      .returning();
+
+    const toolCallIds = new Map<string, string>();
+    const assistantTurnBuffer = new Map<string, string>();
+
+    const persistChunk = async (chunk: Record<string, unknown>) => {
+      if (!params.sessionId) return;
+      const chunkAny = chunk as any;
+      const type = typeof chunkAny.type === "string" ? chunkAny.type : "";
+      const transcriptMessage = chunkToTranscriptMessage(chunk);
+
+      if (type === "RUN_STARTED") {
+        await createAiTurn({
+          sessionId: params.sessionId,
+          role: "assistant",
+          message: "Mail agent run started",
+        });
+        return;
+      }
+
+      if (type === "TOOL_CALL_START") {
+        const toolCallId =
+          typeof chunkAny.toolCallId === "string"
+            ? chunkAny.toolCallId
+            : typeof chunkAny.id === "string"
+              ? chunkAny.id
+              : randomUUID();
+        const toolName = typeof chunkAny.toolName === "string" ? chunkAny.toolName : "unknown_tool";
+        const [turn] = await db
+          .insert(aiTurn)
+          .values({
+            sessionId: params.sessionId,
+            role: "assistant",
+            message: `Tool call started: ${toolName}`,
+          })
+          .returning();
+
+        const record = await createAiToolCall({
+          turnId: turn.turnId,
+          toolName,
+          input: safeJsonParse(chunk.args ?? chunk.input ?? {}) ?? {},
+          status: "running",
+        });
+        toolCallIds.set(toolCallId, record.toolCallId);
+        return;
+      }
+
+      if (type === "TOOL_CALL_ARGS") {
+        const toolCallId = typeof chunkAny.toolCallId === "string" ? chunkAny.toolCallId : "";
+        const recordId = toolCallIds.get(toolCallId);
+        if (recordId) {
+          await updateAiToolCallStatus({
+            toolCallId: recordId,
+            status: "running",
+            input: safeJsonParse(chunk.args ?? chunk.delta ?? {}),
+          });
+        }
+        return;
+      }
+
+      if (type === "TOOL_CALL_END") {
+        const toolCallId = typeof chunkAny.toolCallId === "string" ? chunkAny.toolCallId : "";
+        const recordId = toolCallIds.get(toolCallId);
+        if (recordId) {
+          await updateAiToolCallStatus({
+            toolCallId: recordId,
+            status: "done",
+            input: safeJsonParse(chunk.args ?? chunk.input ?? {}),
+            output: safeJsonParse(chunk.result ?? chunk.output ?? chunk.content ?? {}),
+          });
+        }
+      }
+
+      if (type === "TEXT_MESSAGE_START") {
+        const textId = typeof chunkAny.id === "string" ? chunkAny.id : "assistant";
+        assistantTurnBuffer.set(textId, "");
+        return;
+      }
+
+      if (type === "TEXT_MESSAGE_CONTENT") {
+        const textId = typeof chunkAny.id === "string" ? chunkAny.id : "assistant";
+        const nextValue = assistantTurnBuffer.get(textId) ?? "";
+        assistantTurnBuffer.set(
+          textId,
+          nextValue + (typeof chunkAny.delta === "string" ? chunkAny.delta : ""),
+        );
+        return;
+      }
+
+      if (type === "TEXT_MESSAGE_END") {
+        const textId = typeof chunkAny.id === "string" ? chunkAny.id : "assistant";
+        const message =
+          typeof chunkAny.content === "string"
+            ? chunkAny.content
+            : (assistantTurnBuffer.get(textId) ?? "");
+        if (message.trim()) {
+          await createAiTurn({
+            sessionId: params.sessionId,
+            role: "assistant",
+            message,
+          });
+        }
+        assistantTurnBuffer.delete(textId);
+        return;
+      }
+
+      if (type === "STEP_FINISHED") {
+        const message =
+          typeof chunkAny.content === "string"
+            ? chunkAny.content
+            : typeof chunkAny.delta === "string"
+              ? chunkAny.delta
+              : "";
+        if (message.trim()) {
+          await createAiTurn({
+            sessionId: params.sessionId,
+            role: "assistant",
+            message: `Reasoning: ${message}`,
+          });
+        }
+        return;
+      }
+
+      if (transcriptMessage) {
+        await createAiTurn({
+          sessionId: params.sessionId,
+          role: "assistant",
+          message: transcriptMessage,
+        });
+      }
+    };
+
+    try {
+      const llmConfig = await resolveLlmRuntimeConfig(params.tenantId, params.userId);
+      let [promptVer] = await db.select().from(aiPromptVersion).limit(1);
+      if (!promptVer) {
+        [promptVer] = await db
+          .insert(aiPromptVersion)
+          .values({
+            systemPrompt: "Mail agentic analysis",
+            inputSchema: { type: "object" },
+            modelConfig: { model: llmConfig.modelName, temperature: 0.1 },
+          })
+          .returning();
+      }
+
+      if (params.sessionId) {
+        await createAiTurn({
+          sessionId: params.sessionId,
+          role: "user",
+          message: [
+            `Mail thread: ${params.threadId}`,
+            params.rawInput?.trim() ? `Context: ${params.rawInput.slice(0, 8000)}` : "",
+            params.customInstructions?.trim()
+              ? `Instructions: ${params.customInstructions.trim()}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        });
+      }
+
+      const { analysis, finalText } = await runMailAgentLoop({
+        tenantId: params.tenantId,
+        threadId: params.threadId,
+        rawInput: params.rawInput,
+        customInstructions: params.customInstructions,
+        provider: params.provider,
+        projection: params.projection,
+        providerConfig: llmConfig,
+        onChunk: async (chunk) => {
+          params.onChunk?.(chunk as Record<string, unknown>);
+          await persistChunk(chunk as Record<string, unknown>);
+        },
+      });
+
+      const [interpretation] = await db
+        .insert(aiInterpretation)
+        .values({
+          tenantId: params.tenantId,
+          sourceThreadId: params.threadId,
+          runId: run.runId,
+          promptVersionId: promptVer.promptVersionId,
+          businessIntent: analysis.businessIntent || "other_unclear",
+          confidenceScore: String(analysis.confidenceScore ?? 0),
+          summary: analysis.summary || "Unklare E-Mail",
+          evidenceJson: analysis.evidence || [],
+          extractedReferencesJson: analysis.extractedReferences || {},
+          requestedResolversJson: analysis.requestedResolvers || [],
+          blockingQuestionsJson: analysis.blockingQuestions || [],
+          rawLlmTrace: {
+            response: finalText,
+            analysis,
+            resolution: analysis.resolution,
+            model: llmConfig.modelName,
+            provider: llmConfig.providerName,
+          },
+        })
+        .returning();
+
+      await db
+        .update(aiRun)
+        .set({ status: "completed", durationMs: Date.now() - startedAt })
+        .where(eq(aiRun.runId, run.runId));
+
+      return {
+        interpretationId: interpretation.interpretationId,
+        interpretation,
+        analysis,
+      };
+    } catch (error) {
+      await db
+        .update(aiRun)
+        .set({ status: "failed", durationMs: Date.now() - startedAt })
+        .where(eq(aiRun.runId, run.runId));
+      throw error;
+    }
   }
 
   /**
@@ -1305,7 +1651,12 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
     overrides?: any;
     tenantId: string;
     userId: string;
-  }): Promise<{ success: boolean; appliedCommands: any[]; nextUiActions?: any[] }> {
+  }): Promise<{
+    success: boolean;
+    appliedCommands: any[];
+    nextUiActions?: any[];
+    extractedMemories?: any[];
+  }> {
     const [review] = await db
       .select()
       .from(aiReview)
@@ -1521,6 +1872,8 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
               : null,
         documentNo: resultingOrderNo ?? finalDocumentId,
         extraReplyInstruction,
+        tenantId: params.tenantId,
+        userId: params.userId,
       });
 
       const replyDraft = await new EmailDocumentService(
@@ -1561,10 +1914,106 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
       });
     }
 
+    let extractedMemories: any[] = [];
+    try {
+      const llm = await resolveLlmRuntimeConfig(params.tenantId, params.userId);
+      const threadMsgs = await db
+        .select()
+        .from(emailMessage)
+        .where(
+          and(
+            eq(emailMessage.tenantId, params.tenantId),
+            eq(emailMessage.emailThreadId, thread.emailThreadId),
+          ),
+        )
+        .orderBy(desc(emailMessage.createdAt))
+        .limit(5);
+
+      const messagesText = [
+        thread.subject ? `Subject: ${thread.subject}` : "",
+        ...threadMsgs.map(
+          (m: any) =>
+            `From: ${formatMailPerson(m.fromJson)}\nTo: ${parseMailRecipients(m.toJson)}\nBody: ${m.bodyText || htmlToText(m.bodyHtml || "")}`,
+        ),
+      ]
+        .filter(Boolean)
+        .join("\n---\n");
+
+      const prompt = `Du bist ein KI-System zur Extraktion von langfristigen Gedächtniseinträgen (Memory Facts).
+Wir haben gerade eine E-Mail-Klassifizierung und Aktion durchgeführt.
+E-Mail-Thread:
+${messagesText}
+
+Durchgeführte Aktionen:
+- Verknüpfung mit Adresse: ${finalAddressId}
+- Erstellter/Verknüpfter Beleg: ${resultingOrderId || finalDocumentId || "Keiner"}
+- Bundle ID: ${selectedBundle.bundleId}
+
+Extrahiere wichtige langfristige geschäftliche Fakten, Klassifizierungsmuster, explizite Regeln oder Schreibstile, die für zukünftige Interaktionen mit diesem Kunden nützlich sein könnten.
+Gib eine JSON-Liste von Objekten zurück mit folgendem Format:
+\`\`\`json
+[
+  {
+    "kind": "business_fact" | "classification_pattern" | "explicit_rule" | "writing_style" | "personal_shorthand",
+    "text": "Prägnante Beschreibung des Faktums auf Deutsch (z.B. 'Kunde legt Wert auf formelle Ansprache')",
+    "confidence": 0.85
+  }
+]
+\`\`\`
+Antworte ausschließlich mit dem validen JSON-Array. Wenn keine nützlichen Fakten gefunden werden, gib ein leeres Array [] zurück.`;
+
+      const { createConfiguredProvider } = await import("@repo/agent");
+      const provider = createConfiguredProvider({
+        provider: llm.providerName,
+        model: llm.modelName,
+        apiKey: llm.apiKey || undefined,
+        endpointUrl: llm.gatewayUrl || undefined,
+        vertexCredentials: llm.vertexCredentials || undefined,
+        vertexProject: llm.vertexProject || undefined,
+        vertexLocation: llm.vertexLocation || undefined,
+      });
+
+      const responseText = (await provider.chat({
+        messages: [{ role: "user", content: prompt }],
+      })) as string;
+
+      const cleanContent = responseText
+        .replace(/^```json\n?/, "")
+        .replace(/\n?```$/, "")
+        .trim();
+      const parsed = JSON.parse(cleanContent);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (item.kind && item.text && typeof item.confidence === "number") {
+            const [inserted] = await db
+              .insert(aiMemory)
+              .values({
+                tenantId: params.tenantId,
+                userId: params.userId,
+                kind: item.kind,
+                text: item.text,
+                confidence: String(item.confidence),
+                sourceReviewId: params.reviewId,
+              })
+              .returning({
+                memoryId: aiMemory.memoryId,
+                kind: aiMemory.kind,
+                text: aiMemory.text,
+                confidence: aiMemory.confidence,
+              });
+            extractedMemories.push(inserted);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to extract memory facts:", e);
+    }
+
     return {
       success: true,
       appliedCommands,
       nextUiActions,
+      extractedMemories,
     };
   }
 }

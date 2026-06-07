@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/utils";
+import { FloatingToolbar } from "./floating-toolbar";
 
 export interface LangTextField {
   key: string;
@@ -184,6 +185,28 @@ export function LangtextEditor({
     onActiveKeyChange?.(key);
   };
 
+  const handleApplyReplacement = (replacementText: string) => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+
+    try {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      const textNode = document.createTextNode(replacementText);
+      range.insertNode(textNode);
+
+      if (editorRef.current) {
+        const html = sanitizeHtml(editorRef.current.innerHTML);
+        setDrafts((prev) => ({ ...prev, [selectedItem?.key ?? ""]: html }));
+        if (onChange && selectedItem) {
+          void onChange(selectedItem.key, html);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to apply inline replacement:", err);
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -317,6 +340,9 @@ export function LangtextEditor({
           </div>
         ) : null}
       </div>
+      {!readOnly && (
+        <FloatingToolbar editorRef={editorRef} onApplyAction={handleApplyReplacement} />
+      )}
     </div>
   );
 }

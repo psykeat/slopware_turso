@@ -145,6 +145,7 @@ export class EmailAccountService {
   }
 
   async assertGrant(accountId: string, capability: "read" | "send" | "manage") {
+    if (this.userId === "system") return;
     const column =
       capability === "read"
         ? emailAccountUserGrant.canRead

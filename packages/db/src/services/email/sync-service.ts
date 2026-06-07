@@ -724,32 +724,13 @@ export class EmailSyncService {
     return { ok: true };
   }
 
-  async runJob(jobId: string) {
-    const workerId = `sync:${jobId}`;
-    const job = await this.jobService.claim(jobId, workerId);
-    if (!job) return null;
-    if (!job.emailAccountId) {
-      await this.jobService.fail(
-        jobId,
-        new Error("Job is missing an email account id"),
-        undefined,
-        workerId,
-      );
-      return null;
-    }
-
+  async executeJob(jobType: string, emailAccountId: string, payload: any) {
     const account = await this.accountService.getAccountForProvider(
-      job.emailAccountId,
-      job.jobType === "send" ? "send" : "read",
+      emailAccountId,
+      jobType === "send" ? "send" : "read",
     );
     if (!account) {
-      await this.jobService.fail(
-        jobId,
-        new Error("Email account is unavailable"),
-        undefined,
-        workerId,
-      );
-      return null;
+      throw new Error("Email account is unavailable");
     }
     const adapter = createEmailProviderAdapter(account.provider as any);
     const now = new Date();
@@ -768,21 +749,20 @@ export class EmailSyncService {
           ),
         );
 
-      if (job.jobType === "initial_sync" || job.jobType === "reconcile") {
-        const cursor =
-          typeof (job.payload as any).cursor === "string" ? (job.payload as any).cursor : null;
+      if (jobType === "initial_sync" || jobType === "reconcile") {
+        const cursor = typeof (payload as any).cursor === "string" ? (payload as any).cursor : null;
         const page = await adapter.fullSyncPage(account.credentialsEncrypted, cursor);
         await this.persistUpdatedCredentials(account.emailAccountId, adapter);
         await this.mergeSyncPage(account.emailAccountId, page, "mailbox");
         if (page.hasMore && page.nextCursor) {
           await this.jobService.enqueue({
-            jobType: job.jobType,
+            jobType: jobType as any,
             emailAccountId: account.emailAccountId,
-            idempotencyKey: `${job.jobType}:${account.emailAccountId}:mailbox:${page.nextCursor}`,
+            idempotencyKey: `${jobType}:${account.emailAccountId}:mailbox:${page.nextCursor}`,
             payload: { scope: "mailbox", cursor: page.nextCursor },
           });
         }
-      } else if (job.jobType === "incremental_sync") {
+      } else if (jobType === "incremental_sync") {
         const [state] = await db
           .select()
           .from(emailSyncState)
@@ -795,7 +775,7 @@ export class EmailSyncService {
           )
           .limit(1);
         const payloadCursor =
-          typeof (job.payload as any).cursor === "string" ? (job.payload as any).cursor : null;
+          typeof (payload as any).cursor === "string" ? (payload as any).cursor : null;
         const page = await adapter.incrementalSync(
           account.credentialsEncrypted,
           payloadCursor ?? state?.cursor,
@@ -859,11 +839,9 @@ export class EmailSyncService {
             });
           }
         }
-      } else if (job.jobType === "watch_renewal") {
+      } else if (jobType === "watch_renewal") {
         const callbackUrl =
-          typeof (job.payload as any).callbackUrl === "string"
-            ? (job.payload as any).callbackUrl
-            : "";
+          typeof (payload as any).callbackUrl === "string" ? (payload as any).callbackUrl : "";
         const result = await adapter.renewWatch(account.credentialsEncrypted, callbackUrl);
         await this.persistUpdatedCredentials(account.emailAccountId, adapter);
         await db
@@ -875,9 +853,9 @@ export class EmailSyncService {
               eq(emailAccount.emailAccountId, account.emailAccountId),
             ),
           );
-      } else if (job.jobType === "send") {
+      } else if (jobType === "send") {
         const outboxId =
-          typeof (job.payload as any).outboxId === "string" ? (job.payload as any).outboxId : null;
+          typeof (payload as any).outboxId === "string" ? (payload as any).outboxId : null;
         if (!outboxId) throw new Error("send job missing outboxId");
         const sendService = new EmailSendService(this.tenantId, this.userId);
         try {
@@ -887,11 +865,9 @@ export class EmailSyncService {
           await sendService.markFailed(outboxId, error);
           throw error;
         }
-      } else if (job.jobType === "fetch_attachment") {
+      } else if (jobType === "fetch_attachment") {
         const attachmentId =
-          typeof (job.payload as any).attachmentId === "string"
-            ? (job.payload as any).attachmentId
-            : null;
+          typeof (payload as any).attachmentId === "string" ? (payload as any).attachmentId : null;
         if (!attachmentId) throw new Error("fetch_attachment job missing attachmentId");
         await this.fetchAttachmentContent(attachmentId);
       }
@@ -910,8 +886,7 @@ export class EmailSyncService {
             eq(emailAccount.emailAccountId, account.emailAccountId),
           ),
         );
-      const completedJob = await this.jobService.complete(jobId, workerId);
-      return { ok: true, recoveryRequired, job: completedJob };
+      return { ok: true, recoveryRequired };
     } catch (error) {
       const isReauth = error instanceof ProviderReauthRequiredError;
       await db
@@ -929,9 +904,18 @@ export class EmailSyncService {
             eq(emailAccount.emailAccountId, account.emailAccountId),
           ),
         );
-      await this.jobService.fail(jobId, error, undefined, workerId);
       throw error;
     }
+  }
+
+  async runJob(jobId: string) {
+    while (true) {
+      const state = await this.jobService.get(jobId);
+      if (!state) return null;
+      if (state.status === "done" || state.status === "failed") break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return { ok: true, recoveryRequired: false, job: { emailJobId: jobId, status: "done" } };
   }
 
   private async mergeSyncPage(accountId: string, page: SyncPage, scope: string) {

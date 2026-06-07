@@ -48,6 +48,11 @@
     "fallow:health": "npx fallow health",
     "fallow:fix": "npx fallow fix --dry-run"
   },
+  "dependencies": {
+    "@tanstack/intent": "catalog:",
+    "@tanstack/react-pacer": "catalog:",
+    "@tanstack/workflow-core": "catalog:"
+  },
   "devDependencies": {
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",

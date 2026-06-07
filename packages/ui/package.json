@@ -13,10 +13,12 @@
   },
   "scripts": {
     "ui": "vpx shadcn@latest",
-    "build:types": "tsc --declaration --emitDeclarationOnly --declarationDir dist --noEmit false"
+    "build:types": "tsc --declaration --emitDeclarationOnly --declarationDir dist --noEmit false",
+    "docs:generate": "pnpm run build:types && tsx scripts/generate-ui-docs.ts"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
+    "@tanstack/react-form": "catalog:",
     "@tanstack/react-table": "catalog:",
     "@tanstack/react-virtual": "catalog:",
     "class-variance-authority": "catalog:",

@@ -1,3 +1,15 @@
+<!-- intent-skills:start -->
+
+## Skill Loading
+
+Before substantial work:
+
+- Skill check: run `pnpm dlx @tanstack/intent@latest list`, or use skills already listed in context.
+- Skill guidance: if one local skill clearly matches the task, run `pnpm dlx @tanstack/intent@latest load <package>#<skill>` and follow the returned `SKILL.md`.
+- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.
+- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
+<!-- intent-skills:end -->
+
 # slopware
 
 Codex repo instructions. Keep startup context lean: read [`map.md`](map.md) only when codebase orientation or navigation is necessary, and load deeper docs only as needed.
@@ -16,7 +28,7 @@ React 19 · TanStack Start/Router/Query · Drizzle ORM v1 · Better Auth · Tail
 ## Non-Negotiable Rules
 
 - CRITICAL: NEVER run linting (pnpm lint or local vp lint) multiple times or for intermediate small changes within a single turn. Only run linting ONCE at the very end of a milestone or prompt turn, when all edits are complete and ready for final validation.
-- CRITICAL: To understand `@repo/ui` component APIs (e.g. `DataGrid`, `EntityMask`, `DocumentEditor`), ALWAYS read their generated TS declaration files under `packages/ui/dist/` (e.g. `packages/ui/dist/components/<name>.d.ts`) instead of reading their massive `.tsx` implementation files. This saves context window token space and prevents API hallucinations.
+- CRITICAL: To understand `@repo/ui` component APIs (e.g. `DataGrid`, `EntityMask`, `DocumentEditor`), ALWAYS read the auto-generated `.agents/ui-components.md` reference file instead of hunting through their massive `.tsx` implementation files. This saves context window token space and prevents API hallucinations.
 - Do not run production builds unless build output or bundling is the issue.
 - No hard delete for business data. Archive with `PATCH { archived: true }`.
 - Tenant isolation is server-side only. Never trust client payloads for `tenantId`.

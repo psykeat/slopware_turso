@@ -95,7 +95,7 @@ export function GlobalCommands() {
       group: "assistant",
       label: { en: "AI Assistant", de: "KI-Assistent" },
       shortcut: "Alt+A",
-      isEnabled: (state) => state.workspace === "email" && state.entity === "emailThread",
+      isEnabled: () => true,
       handler: () => {
         requestAiOverlay();
       },

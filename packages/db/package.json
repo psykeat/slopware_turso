@@ -33,6 +33,7 @@
     "auth:generate": "vpx https://pkg.pr.new/auth@9489 generate --config ../auth/src/auth.ts --y --output ./src/schema/auth.schema.ts"
   },
   "dependencies": {
+    "@repo/agent": "workspace:*",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "postgres": "catalog:"

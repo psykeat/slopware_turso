@@ -1,3 +1,4 @@
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { SearchIcon } from "lucide-react";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,6 +25,7 @@ function KbdChip({ shortcut }: { shortcut: string }) {
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedQuery] = useDebouncedValue(query, { wait: 150 });
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const { commands, executeCommand } = useCommands();
@@ -38,7 +40,7 @@ export function CommandPalette() {
   }, []);
 
   const filtered = useMemo(() => {
-    const q = query.toLowerCase();
+    const q = debouncedQuery.toLowerCase();
     return commands.filter((cmd) => {
       if (!cmd.isVisible || cmd.isVisible(focusState)) {
         const label = cmd.label[lang].toLowerCase();
@@ -46,7 +48,7 @@ export function CommandPalette() {
       }
       return false;
     });
-  }, [commands, query, focusState, lang]);
+  }, [commands, debouncedQuery, focusState, lang]);
 
   useEffect(() => {
     if (open) {

@@ -1,4 +1,4 @@
-import { formatAddressContactName } from "#/routes/api/data/address-contact-lookup";
+import { formatAddressContactName } from "#/routes/api/data/-address-contact-lookup";
 
 export type RecipientAutocompleteContact = {
   contactId: string;

@@ -214,7 +214,6 @@ function RecipientAutocompleteField({
         value={value}
         role="combobox"
         aria-autocomplete="list"
-        aria-haspopup="listbox"
         aria-expanded={isOpen && query.trim() ? true : undefined}
         aria-controls={listboxId}
         aria-activedescendant={

@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en" data-tsd-source="/src/routes/__root.tsx:70:5">
+  <head data-tsd-source="/src/routes/__root.tsx:71:7">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/src/styles.css" data-precedence="default" />
+    <link
+      rel="stylesheet"
+      href="/@tanstack-start/styles.css?routes=__root__%2C%2F_guest%2C%2F_guest%2Flogin"
+      data-tanstack-router-dev-styles="true"
+      data-precedence="default"
+    />
+    <title>slopware</title>
+    <meta name="description" content="A TanStack Start project scaffolded with create-mugnavo." />
+    <link rel="icon" href="https://mugnavo.com/favicon.ico" />
+  </head>
+  <body data-tsd-source="/src/routes/__root.tsx:74:7">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t !== "light" && t !== "dark" && t !== "system") {
+            t = "system";
+          }
+          var d = matchMedia("(prefers-color-scheme: dark)").matches;
+          var r = t === "system" ? (d ? "dark" : "light") : t;
+          var e = document.documentElement;
+          if (r === "dark") {
+            e.classList.add("dark");
+          } else {
+            e.classList.remove("dark");
+          }
+          e.style.colorScheme = r;
+          var ac = localStorage.getItem("accent-theme") || "indigo";
+          e.setAttribute("data-theme", ac);
+        } catch (e) {}
+      })();
+      document.currentScript.remove();
+    </script>
+    <!--$-->
+    <div
+      class="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10"
+      data-tsd-source="/src/routes/_guest/route.tsx:29:5"
+    >
+      <div class="w-full max-w-sm" data-tsd-source="/src/routes/_guest/route.tsx:30:7">
+        <div class="flex flex-col gap-6" data-tsd-source="/src/routes/_guest/login.tsx:52:5">
+          <form data-tsd-source="/src/routes/_guest/login.tsx:53:7">
+            <div class="flex flex-col gap-6" data-tsd-source="/src/routes/_guest/login.tsx:54:9">
+              <div
+                class="flex flex-col items-center gap-2"
+                data-tsd-source="/src/routes/_guest/login.tsx:55:11"
+              >
+                <a
+                  data-tsd-source="/src/routes/_guest/login.tsx:56:13"
+                  href="/"
+                  class="flex flex-col items-center gap-2 font-medium"
+                  ><div
+                    class="flex h-8 w-8 items-center justify-center rounded-md"
+                    data-tsd-source="/src/routes/_guest/login.tsx:57:15"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-gallery-vertical-end size-6"
+                      aria-hidden="true"
+                      data-tsd-source="/src/routes/_guest/login.tsx:58:17"
+                    >
+                      <path d="M7 2h10"></path>
+                      <path d="M5 6h14"></path>
+                      <rect width="18" height="12" x="3" y="10" rx="2"></rect>
+                    </svg>
+                  </div>
+                  <span class="sr-only" data-tsd-source="/src/routes/_guest/login.tsx:60:15"
+                    >Slopware</span
+                  ></a
+                >
+                <h1 class="text-xl font-bold" data-tsd-source="/src/routes/_guest/login.tsx:62:13">
+                  Welcome back to Slopware
+                </h1>
+              </div>
+              <div class="flex flex-col gap-5" data-tsd-source="/src/routes/_guest/login.tsx:64:11">
+                <div class="grid gap-2" data-tsd-source="/src/routes/_guest/login.tsx:65:13">
+                  <label
+                    data-slot="label"
+                    class="flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+                    for="email"
+                    data-tsd-source="/src/routes/_guest/login.tsx:66:15"
+                    >Email</label
+                  ><input
+                    id="email"
+                    type="email"
+                    data-slot="input"
+                    placeholder="hello@example.com"
+                    required=""
+                    data-tsd-source="/src/routes/_guest/login.tsx:67:15"
+                    class="h-9 w-full min-w-0 rounded-sm border border-hairline-input bg-canvas px-3 py-1 text-sm font-light text-ink transition-[border-color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-ink-mute/60 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:border-white/20 dark:bg-transparent dark:text-foreground dark:placeholder:text-muted-foreground dark:focus-visible:border-primary"
+                    name="email"
+                  />
+                </div>
+                <div class="grid gap-2" data-tsd-source="/src/routes/_guest/login.tsx:76:13">
+                  <label
+                    data-slot="label"
+                    class="flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+                    for="password"
+                    data-tsd-source="/src/routes/_guest/login.tsx:77:15"
+                    >Password</label
+                  ><input
+                    id="password"
+                    type="password"
+                    data-slot="input"
+                    placeholder="Enter password here"
+                    required=""
+                    data-tsd-source="/src/routes/_guest/login.tsx:78:15"
+                    class="h-9 w-full min-w-0 rounded-sm border border-hairline-input bg-canvas px-3 py-1 text-sm font-light text-ink transition-[border-color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-ink-mute/60 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:border-white/20 dark:bg-transparent dark:text-foreground dark:placeholder:text-muted-foreground dark:focus-visible:border-primary"
+                    name="password"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  tabindex="0"
+                  data-slot="button"
+                  data-tsd-source="/src/routes/_guest/login.tsx:87:13"
+                  class="group/button [&amp;_svg]:pointer-events-none [&amp;_svg]:shrink-0 [&amp;_svg:not([class*=&#x27;size-&#x27;])]:size-4 mt-2 inline-flex h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-4xl border border-transparent bg-primary bg-clip-padding px-4 text-sm font-medium whitespace-nowrap text-primary-foreground transition-all outline-none select-none hover:bg-primary/80 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+                >
+                  Login
+                </button>
+              </div>
+            </div>
+          </form>
+          <div class="text-center text-sm" data-tsd-source="/src/routes/_guest/login.tsx:95:7">
+            Don&#x27;t have an account?<!-- -->
+            <a
+              data-tsd-source="/src/routes/_guest/login.tsx:97:9"
+              href="/signup"
+              class="underline underline-offset-4"
+              >Sign up</a
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function (t) {
+        let s;
+        try {
+          s = JSON.parse(sessionStorage.getItem(t.storageKey) || "{}");
+        } catch (e) {
+          console.error(e);
+          return;
+        }
+        const c = t.key || window.history.state?.__TSR_key,
+          r = c ? s[c] : void 0;
+        if (t.shouldScrollRestoration && r && typeof r == "object" && Object.keys(r).length > 0) {
+          for (const e in r) {
+            const o = r[e];
+            if (!o || typeof o != "object") continue;
+            const l = o.scrollX,
+              i = o.scrollY;
+            if (!(!Number.isFinite(l) || !Number.isFinite(i))) {
+              if (e === "window") window.scrollTo({ top: i, left: l, behavior: t.behavior });
+              else if (e) {
+                let n;
+                try {
+                  n = document.querySelector(e);
+                } catch {
+                  continue;
+                }
+                n && ((n.scrollLeft = l), (n.scrollTop = i));
+              }
+            }
+          }
+          return;
+        }
+        const a = window.location.hash.split("#", 2)[1];
+        if (a) {
+          const e = window.history.state?.__hashScrollIntoViewOptions ?? !0;
+          if (e) {
+            const o = document.getElementById(a);
+            o && o.scrollIntoView(e);
+          }
+          return;
+        }
+        window.scrollTo({ top: 0, left: 0, behavior: t.behavior });
+      })({ storageKey: "tsr-scroll-restoration-v1_3", shouldScrollRestoration: true });
+      document.currentScript.remove();
+    </script>
+    <!--/$-->
+    <section
+      aria-label="Notifications alt+T"
+      tabindex="-1"
+      aria-live="polite"
+      aria-relevant="additions text"
+      aria-atomic="false"
+    ></section>
+    <div style="position: absolute"></div>
+    <script class="$tsr" id="$tsr-stream-barrier">
+      (self.$R = self.$R || {})["tsr"] = [];
+      self.$_TSR = {
+        h() {
+          ((this.hydrated = !0), this.c());
+        },
+        e() {
+          ((this.streamEnded = !0), this.c());
+        },
+        c() {
+          this.hydrated && this.streamEnded && (delete self.$_TSR, delete self.$R.tsr);
+        },
+        p(e) {
+          this.initialized ? e() : this.buffer.push(e);
+        },
+        buffer: [],
+      };
+      $_TSR.router = (($R) =>
+        ($R[0] = {
+          manifest: ($R[1] = {
+            routes: ($R[2] = {
+              __root__: ($R[3] = {
+                assets: ($R[4] = [
+                  ($R[5] = {
+                    tag: "link",
+                    attrs: ($R[6] = {
+                      rel: "stylesheet",
+                      href: "/@tanstack-start/styles.css?routes=__root__%2C%2F_guest%2C%2F_guest%2Flogin",
+                      "data-tanstack-router-dev-styles": "true",
+                    }),
+                  }),
+                  ($R[7] = {
+                    tag: "script",
+                    attrs: ($R[8] = { type: "module", async: !0 }),
+                    children:
+                      'import { injectIntoGlobalHook } from "/@react-refresh";\ninjectIntoGlobalHook(window);\nwindow.$RefreshReg$ = () => {};\nwindow.$RefreshSig$ = () => (type) => type;;;import("/@id/virtual:tanstack-start-client-entry")',
+                  }),
+                ]),
+              }),
+            }),
+          }),
+          matches: ($R[9] = [
+            ($R[10] = { i: "__root__ ", u: 1780708839438, s: "success", ssr: !0 }),
+            ($R[11] = {
+              i: " _guest ",
+              u: 1780708839438,
+              s: "success",
+              b: ($R[12] = { redirectUrl: "/app" }),
+              ssr: !0,
+            }),
+            ($R[13] = { i: " _guest login login", u: 1780708839438, s: "success", ssr: !0 }),
+          ]),
+          lastMatchId: " _guest login login",
+          dehydratedData: ($R[14] = {
+            queryStream: ($R[15] = ($R[16] = (e) =>
+              new ReadableStream({
+                start: (r) => {
+                  e.on({
+                    next: (a) => {
+                      try {
+                        r.enqueue(a);
+                      } catch (t) {}
+                    },
+                    throw: (a) => {
+                      r.error(a);
+                    },
+                    return: () => {
+                      try {
+                        r.close();
+                      } catch (a) {}
+                    },
+                  });
+                },
+              }))(
+              ($R[17] = ($R[18] = () => {
+                let e = [],
+                  r = [],
+                  t = !0,
+                  n = !1,
+                  a = 0,
+                  s = (l, g, S) => {
+                    for (S = 0; S < a; S++) r[S] && r[S][g](l);
+                  },
+                  i = (l, g, S, d) => {
+                    for (g = 0, S = e.length; g < S; g++)
+                      ((d = e[g]), !t && g === S - 1 ? l[n ? "return" : "throw"](d) : l.next(d));
+                  },
+                  u = (l, g) => (
+                    t && ((g = a++), (r[g] = l)),
+                    i(l),
+                    () => {
+                      t && ((r[g] = r[a]), (r[a--] = void 0));
+                    }
+                  );
+                return {
+                  __SEROVAL_STREAM__: !0,
+                  on: (l) => u(l),
+                  next: (l) => {
+                    t && (e.push(l), s(l, "next"));
+                  },
+                  throw: (l) => {
+                    t && (e.push(l), s(l, "throw"), (t = !1), (n = !1), (r.length = 0));
+                  },
+                  return: (l) => {
+                    t && (e.push(l), s(l, "return"), (t = !1), (n = !0), (r.length = 0));
+                  },
+                };
+              })()),
+            )),
+            dehydratedQueryClient: ($R[19] = {
+              mutations: ($R[20] = []),
+              queries: ($R[21] = [
+                ($R[22] = {
+                  dehydratedAt: 1780708839438,
+                  state: ($R[23] = {
+                    data: null,
+                    dataUpdateCount: 1,
+                    dataUpdatedAt: 1780708839438,
+                    error: null,
+                    errorUpdateCount: 0,
+                    errorUpdatedAt: 0,
+                    fetchFailureCount: 0,
+                    fetchFailureReason: null,
+                    fetchMeta: null,
+                    isInvalidated: !1,
+                    status: "success",
+                    fetchStatus: "idle",
+                  }),
+                  queryKey: ($R[24] = ["auth"]),
+                  queryHash: '["auth"]',
+                }),
+              ]),
+            }),
+          }),
+        }))($R["tsr"]);
+      document.currentScript.remove();
+    </script>
+    <script type="module" async="">
+      import { injectIntoGlobalHook } from "/@react-refresh";
+      injectIntoGlobalHook(window);
+      window.$RefreshReg$ = () => {};
+      window.$RefreshSig$ = () => (type) => type;
+      import("/@id/virtual:tanstack-start-client-entry");
+    </script>
+    <script>
+      (($R) => $R[17].return(void 0))($R["tsr"]);
+      $_TSR.e();
+      document.currentScript.remove();
+    </script>
+  </body>
+</html>

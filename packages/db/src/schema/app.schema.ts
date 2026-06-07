@@ -1827,6 +1827,7 @@ export const tenantFields = pgTable(
     groupId: text("group_id"),
     lookupTable: text("lookup_table"),
     lookupFilter: jsonb("lookup_filter"),
+    archived: boolean("archived").notNull().default(false),
   },
   (table) => [
     uniqueIndex("uq_fields_global")
@@ -2521,46 +2522,6 @@ export const emailTemplateRenderLog = pgTable(
   ],
 );
 
-export const emailJob = pgTable(
-  "email_job",
-  {
-    emailJobId: uuid("email_job_id")
-      .primaryKey()
-      .default(sql`uuidv7()`),
-    tenantId: uuid("tenant_id")
-      .notNull()
-      .references(() => tenant.tenantId),
-    emailAccountId: uuid("email_account_id").references(() => emailAccount.emailAccountId),
-    jobType: text("job_type").notNull(),
-    idempotencyKey: text("idempotency_key").notNull(),
-    payload: jsonb("payload").notNull().default({}),
-    status: text("status").notNull().default("queued"),
-    attempts: integer("attempts").notNull().default(0),
-    maxAttempts: integer("max_attempts").notNull().default(5),
-    runAfter: timestamp("run_after", { withTimezone: true }).notNull().defaultNow(),
-    lockedAt: timestamp("locked_at", { withTimezone: true }),
-    lockedBy: text("locked_by"),
-    lastError: text("last_error"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }),
-  },
-  (table) => [
-    unique("email_job_idempotency_unique").on(table.tenantId, table.idempotencyKey),
-    index("idx_email_job_queue_claim").on(
-      table.tenantId,
-      table.status,
-      table.runAfter,
-      table.createdAt,
-    ),
-    index("idx_email_job_account").on(table.tenantId, table.emailAccountId),
-    check(
-      "chk_email_job_type",
-      sql`job_type IN ('initial_sync', 'incremental_sync', 'watch_renewal', 'reconcile', 'send', 'fetch_attachment')`,
-    ),
-    check("chk_email_job_status", sql`status IN ('queued', 'running', 'done', 'failed')`),
-  ],
-);
-
 export const emailOutbox = pgTable(
   "email_outbox",
   {
@@ -2729,7 +2690,7 @@ export const aiSession = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id),
-    mode: text("mode"),
+    mode: text("mode").notNull().default("sync"),
     focusType: text("focus_type").notNull(),
     focusId: text("focus_id").notNull(),
     status: aiSessionStatus("status").notNull().default("active"),
@@ -2942,5 +2903,139 @@ export const tenantLlmConfig = pgTable(
   (table) => [
     unique("uq_tenant_llm_config_company").on(table.tenantId, table.companyId),
     index("idx_tenant_llm_config_tenant").on(table.tenantId),
+  ],
+);
+
+// ─── Issue #35: ai_turn + ai_tool_call ───────────────────────────────────────
+
+export const aiToolCallStatus = pgEnum("ai_tool_call_status", [
+  "pending",
+  "running",
+  "done",
+  "error",
+]);
+
+export const aiTurn = pgTable(
+  "ai_turn",
+  {
+    turnId: uuid("turn_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => aiSession.sessionId),
+    role: text("role").notNull(),
+    message: text("message").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("idx_ai_turn_session").on(table.sessionId)],
+);
+
+export const aiToolCall = pgTable(
+  "ai_tool_call",
+  {
+    toolCallId: uuid("tool_call_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    turnId: uuid("turn_id")
+      .notNull()
+      .references(() => aiTurn.turnId),
+    toolName: text("tool_name").notNull(),
+    input: jsonb("input").notNull(),
+    output: jsonb("output"),
+    status: aiToolCallStatus("status").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("idx_ai_tool_call_turn").on(table.turnId),
+    index("idx_ai_tool_call_status").on(table.status),
+  ],
+);
+
+// ─── Issue #47: ai_tool_review + ai_context_projection ───────────────────────
+
+export const aiToolReviewStatus = pgEnum("ai_tool_review_status", [
+  "pending",
+  "validated",
+  "applied",
+  "rejected",
+]);
+
+export const aiToolReview = pgTable(
+  "ai_tool_review",
+  {
+    reviewId: uuid("review_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => aiSession.sessionId),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    toolName: text("tool_name").notNull(),
+    proposal: jsonb("proposal").notNull(),
+    status: aiToolReviewStatus("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_ai_tool_review_session").on(table.sessionId),
+    index("idx_ai_tool_review_tenant").on(table.tenantId),
+  ],
+);
+
+export const aiContextProjection = pgTable(
+  "ai_context_projection",
+  {
+    projectionId: uuid("projection_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => aiSession.sessionId),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    focusType: text("focus_type").notNull(),
+    focusId: text("focus_id").notNull(),
+    snapshot: jsonb("snapshot").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("idx_ai_context_projection_session").on(table.sessionId)],
+);
+
+// ─── Issue #57: ai_memory ─────────────────────────────────────────────────────
+
+export const aiMemoryKind = pgEnum("ai_memory_kind", [
+  "business_fact",
+  "classification_pattern",
+  "explicit_rule",
+  "writing_style",
+  "personal_shorthand",
+]);
+
+export const aiMemory = pgTable(
+  "ai_memory",
+  {
+    memoryId: uuid("memory_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    userId: text("user_id").references(() => user.id),
+    kind: aiMemoryKind("kind").notNull(),
+    text: text("text").notNull(),
+    confidence: numeric("confidence").notNull(),
+    sourceReviewId: uuid("source_review_id").references(() => aiToolReview.reviewId),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_ai_memory_tenant").on(table.tenantId),
+    index("idx_ai_memory_user").on(table.userId),
+    index("idx_ai_memory_kind").on(table.kind),
+    index("idx_ai_memory_confirmed").on(table.confirmedAt),
   ],
 );

@@ -70,23 +70,6 @@ else
     echo "Starting all development servers..."
 fi
 
-# Start LiteLLM Python microservice
-if [ "$SKIP_LLM" != "1" ]; then
-    LLM_PORT="${LLM_SERVICE_PORT:-11435}"
-    LLM_DIR="$(cd "$(dirname "$0")/services/llm" && pwd)"
-    LLM_PYTHON="$LLM_DIR/.venv/bin/python"
-    if [ -x "$LLM_PYTHON" ] && "$LLM_PYTHON" -c "import uvicorn" > /dev/null 2>&1; then
-        echo "Starting LiteLLM service on port $LLM_PORT..."
-        START_TIME_LLM=$(date +%s)
-        (cd "$LLM_DIR" && "$LLM_PYTHON" -m uvicorn main:app --port "$LLM_PORT" --reload) &
-        LLM_PID=$!
-        echo "LiteLLM service backgrounded."
-    else
-        echo "Warning: services/llm/.venv is missing or incomplete — skipping LiteLLM service. Recreate it with: python -m venv services/llm/.venv && pip install -r services/llm/requirements.txt"
-    fi
-else
-    echo "Skipping LiteLLM service (SKIP_LLM=1)..."
-fi
 
 # Start the development server (blocks until Ctrl+C)
 echo "Development environment is ready. Press Ctrl+C to stop all services."

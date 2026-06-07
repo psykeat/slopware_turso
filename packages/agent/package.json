@@ -8,8 +8,14 @@
     "./*": "./src/*.ts"
   },
   "dependencies": {
+    "@repo/db": "workspace:*",
     "@tanstack/ai": "catalog:",
-    "@tanstack/ai-gemini": "catalog:"
+    "@tanstack/ai-anthropic": "catalog:",
+    "@tanstack/ai-gemini": "catalog:",
+    "@tanstack/ai-openai": "catalog:",
+    "@tanstack/ai-openrouter": "catalog:",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@repo/tsconfig": "workspace:*",

@@ -1,5 +1,5 @@
 import "./load-env";
-import { getColumns as getColumnsBase } from "drizzle-orm";
+import { and, eq, getColumns as getColumnsBase, not, inArray } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
 import { db } from "../index";
@@ -88,7 +88,7 @@ const fieldLabelMap: EntityLabelMap = {
   nextGroupId: { en: "Next Group", de: "Nächste Gruppe" },
   requireSerialTracking: { en: "Require Serial Tracking", de: "Seriennummernpflicht" },
   requireBatchTracking: { en: "Require Batch Tracking", de: "Chargenpflicht" },
-  endpointUrl: { en: "LiteLLM Endpoint URL", de: "LiteLLM Endpoint URL" },
+  endpointUrl: { en: "Endpoint URL", de: "Endpoint-URL" },
   model: { en: "LLM Model", de: "KI-Modell" },
   apiKey: { en: "API Key", de: "API-Key" },
 };
@@ -366,6 +366,14 @@ export async function seedMetadata() {
 
   const { fields: discoveredFields, helperTables } = discoverSchemaMetadata();
 
+  // Build set of all discovered field keys for archive reconciliation
+  const discoveredKeys = new Set(discoveredFields.map((f) => `${f.entityName}.${f.fieldName}`));
+
+  let newCount = 0;
+  let changedCount = 0;
+  let unchangedCount = 0;
+  let archivedCount = 0;
+
   await db.transaction(async (tx) => {
     const existingFields = (await tx
       .select({
@@ -376,7 +384,14 @@ export async function seedMetadata() {
       .from(tenantFields)
       .where(eq(tenantFields.scope, "global"))) as ExistingTenantField[];
 
-    const { inserts, updates } = planTenantFieldReconciliation(discoveredFields, existingFields);
+    const { inserts, updates, unchanged } = planTenantFieldReconciliation(
+      discoveredFields,
+      existingFields,
+    );
+
+    newCount = inserts.length;
+    changedCount = updates.length;
+    unchangedCount = unchanged;
 
     for (const helperTable of helperTables) {
       await tx
@@ -418,8 +433,42 @@ export async function seedMetadata() {
           ),
         );
     }
+
+    // #25: Archive fields that are no longer in the discovered schema
+    // Build composite keys of all existing fields to find removed ones
+    const existingKeys = existingFields.map((f) => `${f.entityName}.${f.fieldName}`);
+    const removedKeys = existingKeys.filter((k) => !discoveredKeys.has(k));
+
+    if (removedKeys.length > 0) {
+      // Archive each removed field individually to stay within Drizzle's type system
+      for (const key of removedKeys) {
+        const dotIdx = key.indexOf(".");
+        const entityName = key.slice(0, dotIdx);
+        const fieldName = key.slice(dotIdx + 1);
+        await tx
+          .update(tenantFields)
+          .set({ archived: true })
+          .where(
+            and(
+              eq(tenantFields.scope, "global"),
+              eq(tenantFields.entityName, entityName),
+              eq(tenantFields.fieldName, fieldName),
+            ),
+          );
+      }
+      archivedCount = removedKeys.length;
+    }
   });
 
+  // #24: Reconciliation report
+  const report = {
+    new: newCount,
+    changed: changedCount,
+    unchanged: unchangedCount,
+    archived: archivedCount,
+    total: newCount + changedCount + unchangedCount,
+  };
+  console.log("Metadata sync report:", JSON.stringify(report));
   console.log("Improved dynamic metadata discovery complete.");
 }
 

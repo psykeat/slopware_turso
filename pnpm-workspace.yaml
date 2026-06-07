@@ -33,7 +33,10 @@ catalog:
   "@tanstack/devtools-a11y": ^0.1.2
   "@tanstack/devtools-vite": ^0.6.0
   "@tanstack/ai": ^0.20.1
+  "@tanstack/ai-anthropic": 0.10.3
   "@tanstack/ai-gemini": ^0.10.10
+  "@tanstack/ai-openai": 0.10.3
+  "@tanstack/ai-openrouter": 0.9.7
   "@tanstack/eslint-plugin-query": ^5.100.10
   "@tanstack/eslint-plugin-router": ^1.161.6
   "@tanstack/react-devtools": ^0.10.3
@@ -77,13 +80,22 @@ catalog:
   vaul: ^1.1.2
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vite-plus: ^0.1.21
+  zod: ^4.4.3
+  "@tanstack/intent": ^0.0.41
+  "@tanstack/react-pacer": ^0.22.1
+  "@tanstack/workflow-core": ^0.0.3
+  "@playwright/test": ^1.60.0
+  "@tanstack/react-form": ^1.33.0
 catalogMode: prefer
 
 overrides:
   "@better-auth/drizzle-adapter": "catalog:"
   vite: "catalog:"
+  drizzle-orm: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
+    - zod
   allowedVersions:
     vite: "*"
+    zod: "*"

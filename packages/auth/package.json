@@ -9,7 +9,8 @@
   "dependencies": {
     "@better-auth/drizzle-adapter": "catalog:",
     "better-auth": "catalog:",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@repo/tsconfig": "workspace:*",

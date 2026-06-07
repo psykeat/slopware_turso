@@ -2,6 +2,8 @@ import { createDecipheriv, randomUUID } from "crypto";
 
 import { and, eq, sql, getColumns } from "drizzle-orm";
 
+import { EmailJobService } from "./email/job-service";
+
 const DOC_TYPE_MAP: Record<string, string> = {
   Offer: "N",
   Order: "A",
@@ -17,7 +19,6 @@ import {
   aiPromptVersion,
   aiRun,
   systemSettings,
-  emailJob,
 } from "../schema/app.schema";
 import * as schema from "../schema/index";
 import { AIDiscoveryService } from "./ai-discovery";
@@ -40,16 +41,39 @@ function decryptSecret(encoded: string): string {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }
 
-function inferProvider(model: string, provider?: string): string {
-  if (model.startsWith("vertex_ai/")) return "vertex_ai";
-  if (model.startsWith("gemini/")) return "google_ai_studio";
-  if (provider) return provider;
-  return "openai";
+function inferProvider(_model: string, provider?: string): string {
+  switch (provider) {
+    case "openai":
+    case "anthropic":
+    case "openrouter":
+    case "google_ai_studio":
+    case "vertex_ai":
+      return provider;
+    case "gemini":
+      return "google_ai_studio";
+    default:
+      return "google_ai_studio";
+  }
+}
+
+function defaultModelForProvider(provider: string): string {
+  switch (provider) {
+    case "openai":
+      return "gpt-4o-mini";
+    case "anthropic":
+      return "claude-sonnet-4-5";
+    case "openrouter":
+      return "openai/gpt-5";
+    case "vertex_ai":
+    case "google_ai_studio":
+    default:
+      return "gemini-2.5-flash";
+  }
 }
 
 export class AIPlanningService {
   /**
-   * Generates a new staged plan from unstructured user input using the LiteLLM gateway.
+   * Generates a new staged plan from unstructured user input using the selected provider.
    */
   static async createPlan(params: {
     taskScope: string[];
@@ -128,9 +152,9 @@ Response constraints:
 
     const activeCompanyId = userRow?.lastCompanyId;
 
-    let gatewayUrl = "http://localhost:11435";
+    let _gatewayUrl = "http://localhost:11435";
     let modelName = "gemini/gemini-2.5-flash";
-    let providerName = "google_ai_studio";
+    let _providerName = "google_ai_studio";
     let _apiKey = "";
     let _githubToken = "";
     let _githubRepo = "";
@@ -155,9 +179,9 @@ Response constraints:
     }
 
     if (activeTenantConfig) {
-      gatewayUrl = activeTenantConfig.endpointUrl || "http://localhost:11435";
-      modelName = activeTenantConfig.model || "gemini/gemini-2.5-flash";
-      providerName = inferProvider(modelName, (activeTenantConfig as any).provider);
+      _gatewayUrl = activeTenantConfig.endpointUrl || "http://localhost:11435";
+      _providerName = inferProvider(modelName, (activeTenantConfig as any).provider);
+      modelName = activeTenantConfig.model || defaultModelForProvider(_providerName);
       if (activeTenantConfig.apiKey) {
         const { decryptEmailCredentials } = await import("./email/credential-crypto");
         try {
@@ -185,23 +209,16 @@ Response constraints:
         .where(and(eq(systemSettings.scope, "global"), eq(systemSettings.key, "llm_config")))
         .limit(1);
 
-      gatewayUrl = configRow[0]
-        ? (configRow[0].value as any).endpointUrl || "http://localhost:11435"
-        : "http://localhost:11435";
-      modelName = configRow[0]
-        ? (configRow[0].value as any).model || "gemini/gemini-2.5-flash"
-        : "gemini/gemini-2.5-flash";
-      providerName = inferProvider(
-        modelName,
-        configRow[0] ? (configRow[0].value as any).provider : undefined,
-      );
-      _vertexCredentials = decryptSecret(
-        configRow[0] ? (configRow[0].value as any).vertexCredentials : "",
-      );
-      _vertexProject = configRow[0] ? ((configRow[0].value as any).vertexProject ?? "") : "";
-      _vertexLocation = configRow[0] ? ((configRow[0].value as any).vertexLocation ?? "") : "";
-      const encryptedKey = configRow[0] ? (configRow[0].value as any).apiKey : "";
-      _apiKey = decryptSecret(encryptedKey);
+      if (configRow[0]) {
+        _gatewayUrl = (configRow[0].value as any).endpointUrl || "http://localhost:11435";
+        _providerName = inferProvider(modelName, (configRow[0].value as any).provider);
+        modelName = (configRow[0].value as any).model || defaultModelForProvider(_providerName);
+        _vertexCredentials = decryptSecret((configRow[0].value as any).vertexCredentials || "");
+        _vertexProject = (configRow[0].value as any).vertexProject ?? "";
+        _vertexLocation = (configRow[0].value as any).vertexLocation ?? "";
+        const encryptedKey = (configRow[0].value as any).apiKey || "";
+        _apiKey = decryptSecret(encryptedKey);
+      }
     }
 
     // Pre-process rawInput: parse structured thread context if present
@@ -300,30 +317,22 @@ ${JSON.stringify(commands, null, 2)}
     let _completionTokens = 0;
 
     try {
-      const res = await fetch(`${gatewayUrl}/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          model: modelName,
-          endpoint_url: gatewayUrl,
-          provider: providerName,
-          api_key: _apiKey || undefined,
-          github_token: _githubToken || undefined,
-          github_repo: _githubRepo || undefined,
-          vertex_credentials: _vertexCredentials || undefined,
-          vertex_project: _vertexProject || undefined,
-          vertex_location: _vertexLocation || undefined,
-        }),
+      const { createConfiguredProvider } = await import("@repo/agent");
+      const provider = createConfiguredProvider({
+        provider: _providerName,
+        model: modelName,
+        apiKey: _apiKey || undefined,
+        endpointUrl: _gatewayUrl || undefined,
+        vertexCredentials: _vertexCredentials || undefined,
+        vertexProject: _vertexProject || undefined,
+        vertexLocation: _vertexLocation || undefined,
       });
 
-      if (!res.ok) throw new Error(`LLM completion route failed with status ${res.status}`);
-      const body = (await res.json()) as {
-        content: string;
-        usage?: { prompt_tokens: number; completion_tokens: number };
-      };
+      const responseText = (await provider.chat({
+        messages: [{ role: "user", content: prompt }],
+      })) as string;
 
-      const cleanContent = body.content
+      const cleanContent = responseText
         .replace(/^```json\n?/, "")
         .replace(/\n?```$/, "")
         .trim();
@@ -331,12 +340,12 @@ ${JSON.stringify(commands, null, 2)}
       planJson = this.normalizePlanJson(rawPlanJson);
       planJson._llmTrace = {
         prompt,
-        response: body.content,
+        response: responseText,
         model: modelName,
-        usage: body.usage,
+        usage: { prompt_tokens: 0, completion_tokens: 0 },
       };
-      _promptTokens = body.usage?.prompt_tokens ?? 0;
-      _completionTokens = body.usage?.completion_tokens ?? 0;
+      _promptTokens = 0;
+      _completionTokens = 0;
     } catch (e: any) {
       planJson = {
         taskId: run.runId,
@@ -344,7 +353,7 @@ ${JSON.stringify(commands, null, 2)}
         confidenceScore: 0,
         targetEntities: [],
         applyReadiness: "blocked",
-        blockedReasons: [`LiteLLM call failed: ${e.message}`],
+        blockedReasons: [`Gemini call failed: ${e.message}`],
         steps: [],
       };
     }
@@ -950,15 +959,13 @@ ${JSON.stringify(commands, null, 2)}
 
       // 2. Schedule Asynchronous background jobs outside transaction boundaries
       for (const job of asyncJobsToEnqueue) {
-        await db.insert(emailJob).values({
-          tenantId: params.tenantId,
-          jobType: "reconcile", // Maps to general worker retry framework
+        await new EmailJobService(params.tenantId).enqueue({
+          jobType: "reconcile" as any,
           idempotencyKey: `ai-apply-${attempt.attemptId}-${job.jobType}`,
           payload: {
             aiExecutionCommand: job.jobType,
             ...job.payload,
           },
-          status: "queued",
         });
       }
 

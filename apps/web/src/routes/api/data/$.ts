@@ -11,7 +11,7 @@ import { resolveTenantContext } from "#/lib/resolve-tenant";
 import {
   buildAddressContactSearchTerm,
   normalizeAddressContactLookupRow,
-} from "./address-contact-lookup";
+} from "./-address-contact-lookup";
 
 export const Route = createFileRoute("/api/data/$")({
   server: {

@@ -12,11 +12,13 @@ import {
   FileTextIcon,
   CheckCircle2Icon,
 } from "lucide-react";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { aiCapabilityRegistry } from "#/lib/ai/ai-capability-registry";
+
+import { upsertAiTranscriptEntry, type AiTranscriptEntry } from "./ai-transcript";
 
 type AiErrorClass =
   | "AI_UNAVAILABLE"
@@ -39,7 +41,17 @@ type AiAssistantState =
         icon: string;
       }>;
     }
-  | { status: "loading-task"; taskScope: string }
+  | {
+      status: "loading-task";
+      taskScope: string;
+      statusText?: string;
+      transcript: Array<{
+        id: string;
+        kind: "status" | "reasoning" | "tool" | "content";
+        title: string;
+        detail: string;
+      }>;
+    }
   | { status: "review"; taskScope: string; reviewId: string; payload: any; validation: any }
   | { status: "applying" }
   | { status: "success"; resultingEntity?: string; resultingId?: string }
@@ -56,6 +68,15 @@ export function AiOverlayHost() {
   const [state, setState] = useState<AiAssistantState>({ status: "idle" });
   const [allAddresses, setAllAddresses] = useState<any[]>([]);
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
+  const [pendingMemories, setPendingMemories] = useState<any[]>([]);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  const upsertTranscriptEntry = useCallback((entry: AiTranscriptEntry, replace = false) => {
+    setState((prev) => {
+      if (prev.status !== "loading-task") return prev;
+      return { ...prev, transcript: upsertAiTranscriptEntry(prev.transcript, entry, replace) };
+    });
+  }, []);
 
   // 1. Hierarchic escape / overlay focus registration in command-registry
   useEffect(() => {
@@ -82,6 +103,22 @@ export function AiOverlayHost() {
       setFocus({ area: "workspace" });
     };
   }, [isOpen, closeAiOverlay, registerCommand, setFocus]);
+
+  // Cleanup event source on close or unmount
+  useEffect(() => {
+    if (!isOpen && eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
 
   // Load all addresses for reviews
   useEffect(() => {
@@ -131,83 +168,242 @@ export function AiOverlayHost() {
   // 2. Launch Planning
   const runPlanning = useCallback(
     async (taskScope: string, sourceEntity: string, sourceId: string) => {
-      setState({ status: "loading-task", taskScope });
+      // Clean up previous event source if active
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+
+      setState({
+        status: "loading-task",
+        taskScope,
+        statusText: "Analyse wird gestartet...",
+        transcript: [],
+      });
+
       try {
         if (sourceEntity !== "emailThread" || !sourceId) {
           throw new Error("Der AI-Workflow unterstützt in diesem Kontext nur E-Mail-Threads.");
         }
 
-        const interpretRes = await fetch("/api/ai/tasks/mail/interpret-thread", {
+        // 1. Create session
+        const sessionRes = await fetch("/api/ai/sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            threadId: sourceId,
-            customInstructions: "Fokus auf Kundenzuordnung und Referenzbeleg-Auflösung.",
+            focusType: sourceEntity,
+            focusId: sourceId,
           }),
         });
 
-        if (!interpretRes.ok) {
-          const errData = await interpretRes.json().catch(() => ({}));
-          throw new Error(errData.error || "Fehler bei der Interpretation");
+        if (!sessionRes.ok) {
+          const errData = await sessionRes.json().catch(() => ({}));
+          throw new Error(errData.error || "Fehler beim Erstellen der KI-Sitzung");
         }
 
-        const interpretation = await interpretRes.json();
+        const { sessionId } = await sessionRes.json();
 
-        const resolveRes = await fetch("/api/ai/tasks/mail/resolve-thread", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            interpretationId: interpretation.interpretationId,
-          }),
+        // 2. Connect to SSE
+        const sseUrl = `/api/ai/sessions/${sessionId}/sse`;
+        const es = new EventSource(sseUrl);
+        eventSourceRef.current = es;
+
+        es.addEventListener("status", (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            setState((prev) => {
+              if (prev.status === "loading-task") {
+                let statusText = "Analyse läuft...";
+                if (data.status === "resolving-context")
+                  statusText = "Fokuskontext wird geprüft...";
+                else if (data.status === "interpreting")
+                  statusText = "E-Mail wird interpretiert...";
+                else if (data.status === "awaiting-user-input")
+                  statusText = data.message || "Benutzereingabe erforderlich...";
+                else if (data.status === "building-review") statusText = "Entwurf wird erstellt...";
+                else if (data.status === "completed") statusText = "Analyse abgeschlossen.";
+                return { ...prev, statusText };
+              }
+              return prev;
+            });
+            if (data.status === "completed") {
+              es.close();
+              if (eventSourceRef.current === es) {
+                eventSourceRef.current = null;
+              }
+            }
+          } catch {
+            // ignore
+          }
         });
 
-        if (!resolveRes.ok) {
-          const errData = await resolveRes.json().catch(() => ({}));
-          throw new Error(errData.error || "Fehler bei der Auflösung");
-        }
+        es.addEventListener("chunk", (event) => {
+          try {
+            const chunk = JSON.parse(event.data) as Record<string, unknown>;
+            const chunkAny = chunk as any;
+            const type = typeof chunkAny.type === "string" ? chunkAny.type : "";
+            const id =
+              typeof chunkAny.toolCallId === "string"
+                ? chunkAny.toolCallId
+                : typeof chunkAny.id === "string"
+                  ? chunkAny.id
+                  : `${type}-${Date.now()}`;
 
-        const resolution = await resolveRes.json();
+            if (type === "RUN_STARTED") {
+              upsertTranscriptEntry({
+                id,
+                kind: "status",
+                title: "Run gestartet",
+                detail: "Agentic cycle gestartet.",
+              });
+              return;
+            }
 
-        const reviewRes = await fetch("/api/ai/tasks/mail/build-review", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            interpretationId: interpretation.interpretationId,
-            resolution: resolution.resolution,
-          }),
+            if (type === "STEP_STARTED") {
+              upsertTranscriptEntry({
+                id,
+                kind: "reasoning",
+                title: "Denken",
+                detail: typeof chunk.delta === "string" ? chunk.delta : "Agent prüft Hinweise.",
+              });
+              return;
+            }
+
+            if (type === "STEP_FINISHED") {
+              upsertTranscriptEntry(
+                {
+                  id,
+                  kind: "reasoning",
+                  title: "Denken",
+                  detail: typeof chunk.content === "string" ? chunk.content : "",
+                },
+                true,
+              );
+              return;
+            }
+
+            if (type === "TOOL_CALL_START") {
+              upsertTranscriptEntry({
+                id,
+                kind: "tool",
+                title: `Tool: ${typeof chunkAny.toolName === "string" ? chunkAny.toolName : "lookup"}`,
+                detail:
+                  typeof chunkAny.args === "string"
+                    ? chunkAny.args
+                    : typeof chunkAny.delta === "string"
+                      ? chunkAny.delta
+                      : "wird ausgeführt",
+              });
+              return;
+            }
+
+            if (type === "TOOL_CALL_ARGS") {
+              upsertTranscriptEntry({
+                id,
+                kind: "tool",
+                title: `Tool: ${typeof chunkAny.toolName === "string" ? chunkAny.toolName : "lookup"}`,
+                detail:
+                  typeof chunkAny.args === "string"
+                    ? chunkAny.args
+                    : typeof chunkAny.delta === "string"
+                      ? chunkAny.delta
+                      : "",
+              });
+              return;
+            }
+
+            if (type === "TOOL_CALL_END") {
+              upsertTranscriptEntry(
+                {
+                  id,
+                  kind: "tool",
+                  title: `Tool: ${typeof chunkAny.toolName === "string" ? chunkAny.toolName : "lookup"}`,
+                  detail:
+                    typeof chunkAny.result === "string"
+                      ? chunkAny.result
+                      : typeof chunkAny.output === "string"
+                        ? chunkAny.output
+                        : "abgeschlossen",
+                },
+                true,
+              );
+              return;
+            }
+
+            if (type === "TEXT_MESSAGE_CONTENT" || type === "TEXT_MESSAGE_END") {
+              upsertTranscriptEntry(
+                {
+                  id,
+                  kind: "content",
+                  title: "Antwort",
+                  detail:
+                    typeof chunkAny.delta === "string"
+                      ? chunkAny.delta
+                      : typeof chunkAny.content === "string"
+                        ? chunkAny.content
+                        : "",
+                },
+                type === "TEXT_MESSAGE_END",
+              );
+              return;
+            }
+
+            if (type === "RUN_FINISHED") {
+              upsertTranscriptEntry({
+                id,
+                kind: "status",
+                title: "Run beendet",
+                detail: `Finish reason: ${
+                  typeof chunkAny.finishReason === "string" ? chunkAny.finishReason : "stop"
+                }`,
+              });
+            }
+          } catch {
+            // ignore chunk parsing errors
+          }
         });
 
-        if (!reviewRes.ok) {
-          const errData = await reviewRes.json().catch(() => ({}));
-          throw new Error(errData.error || "Fehler beim Erzeugen des Reviews");
-        }
+        es.addEventListener("review", async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            setState({
+              status: "review",
+              taskScope,
+              reviewId: data.reviewId,
+              payload: data.payload,
+              validation: data.validation,
+            });
+            es.close();
+            if (eventSourceRef.current === es) {
+              eventSourceRef.current = null;
+            }
+          } catch (err: any) {
+            setState({
+              status: "error",
+              errorClass: "SCHEMA_VALIDATION_FAILED",
+              message: err.message || "Fehler beim Laden des Entwurfs",
+            });
+          }
+        });
 
-        const reviewResult = await reviewRes.json();
-        const selectedBundle =
-          reviewResult.review.bundles?.find(
-            (bundle: any) => bundle.bundleId === reviewResult.review.selectedBundleId,
-          ) ??
-          reviewResult.review.bundles?.[0] ??
-          null;
-        const payload = {
-          ...reviewResult.review,
-          selectedBundleId: reviewResult.review.selectedBundleId ?? null,
-          selectedAddressId:
-            selectedBundle?.resolverSlots?.find((slot: any) => slot.slotKey === "customer")
-              ?.resolvedId ?? null,
-          selectedDocumentId:
-            selectedBundle?.resolverSlots?.find((slot: any) => slot.slotKey === "referenceDocument")
-              ?.resolvedId ?? null,
-          extraReplyInstruction: "",
-        };
-        const validation = await validateReview(reviewResult.reviewId, payload);
+        es.addEventListener("error", (event: any) => {
+          let errorData = { errorClass: "AI_UNAVAILABLE", message: "Analyse fehlgeschlagen" };
+          try {
+            errorData = JSON.parse(event.data);
+          } catch {
+            // ignore
+          }
 
-        setState({
-          status: "review",
-          taskScope: reviewResult.review.taskScope,
-          reviewId: reviewResult.reviewId,
-          payload,
-          validation,
+          setState({
+            status: "error",
+            errorClass: (errorData.errorClass as AiErrorClass) || "AI_UNAVAILABLE",
+            message: errorData.message || "Fehler während der Analyse",
+          });
+
+          es.close();
+          if (eventSourceRef.current === es) {
+            eventSourceRef.current = null;
+          }
         });
       } catch (err: any) {
         setState({
@@ -217,7 +413,7 @@ export function AiOverlayHost() {
         });
       }
     },
-    [validateReview],
+    [],
   );
 
   // 3. Resolve Context (Phase 2)
@@ -333,6 +529,12 @@ export function AiOverlayHost() {
       setState({ status: "success" });
       toast.success("Aktionen erfolgreich gebucht!");
       queryClient.invalidateQueries();
+
+      const extracted = applyResult.extractedMemories || [];
+      if (extracted.length > 0) {
+        setPendingMemories(extracted);
+      }
+
       const nextUiActions = Array.isArray(applyResult?.nextUiActions)
         ? applyResult.nextUiActions
         : [];
@@ -351,9 +553,12 @@ export function AiOverlayHost() {
           toast.info(action.label);
         }
       }
-      setTimeout(() => {
-        closeAiOverlay();
-      }, 1000);
+
+      if (extracted.length === 0) {
+        setTimeout(() => {
+          closeAiOverlay();
+        }, 1000);
+      }
     } catch (err: any) {
       setState({
         status: "error",
@@ -435,9 +640,45 @@ export function AiOverlayHost() {
 
           {/* Loading task */}
           {state.status === "loading-task" && (
-            <div className="flex h-64 flex-col items-center justify-center gap-3">
-              <RefreshCcwIcon className="size-6 animate-spin text-primary" />
-              <span className="text-[13px] text-ink-mute">Analyse läuft...</span>
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-3 rounded-md border border-hairline bg-canvas-soft px-4 py-3">
+                <RefreshCcwIcon className="size-6 animate-spin text-primary" />
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium text-ink">
+                    {state.statusText || "Analyse läuft..."}
+                  </div>
+                  <div className="text-[11px] text-ink-mute">
+                    Der Agent iteriert über sichere Lese-Tools und baut danach die Review auf.
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-md border border-hairline bg-canvas p-3">
+                <div className="text-[11px] font-semibold tracking-wider text-ink-mute uppercase">
+                  Live-Transkript
+                </div>
+                <div className="max-h-[22rem] space-y-2 overflow-y-auto">
+                  {state.transcript.length === 0 ? (
+                    <div className="rounded-sm border border-dashed border-hairline bg-canvas-soft px-3 py-2 text-[12px] text-ink-mute">
+                      Warten auf erste Agentenschritte...
+                    </div>
+                  ) : (
+                    state.transcript.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-sm border border-hairline bg-canvas-soft px-3 py-2"
+                      >
+                        <div className="text-[10px] font-bold tracking-wider text-ink-mute uppercase">
+                          {entry.title}
+                        </div>
+                        <div className="mt-1 text-[12px] leading-relaxed whitespace-pre-wrap text-ink">
+                          {entry.detail || " "}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -509,9 +750,71 @@ export function AiOverlayHost() {
 
           {/* Success actions */}
           {state.status === "success" && (
-            <div className="flex h-64 flex-col items-center justify-center gap-3">
-              <CheckCircle2Icon className="size-10 text-emerald-500" />
-              <span className="text-[14px] font-semibold text-ink">Erfolgreich gebucht!</span>
+            <div className="flex animate-in flex-col gap-6 py-4 duration-300 fade-in">
+              <div className="flex flex-col items-center justify-center gap-3">
+                <CheckCircle2Icon className="size-10 text-emerald-500" />
+                <span className="text-[14px] font-semibold text-ink">Erfolgreich gebucht!</span>
+              </div>
+
+              {pendingMemories.length > 0 && (
+                <div className="space-y-4 rounded-lg border border-hairline bg-canvas p-4">
+                  <div className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+                    <span>💡</span>
+                    <span>KI-Gedächtnis: Erkenntnisse bestätigen</span>
+                  </div>
+                  <div className="text-[11px] leading-relaxed text-ink-mute">
+                    Die KI hat diese Notizen aus dem Vorgang extrahiert. Möchten Sie sie für
+                    zukünftige Interaktionen speichern?
+                  </div>
+                  <div className="space-y-2">
+                    {pendingMemories.map((mem) => (
+                      <div
+                        key={mem.memoryId}
+                        className="flex items-start justify-between gap-3 rounded border border-hairline bg-canvas-soft p-3 text-[12px]"
+                      >
+                        <div className="space-y-1">
+                          <div className="inline-block rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary uppercase">
+                            {mem.kind}
+                          </div>
+                          <div className="leading-relaxed font-medium text-ink">{mem.text}</div>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await fetch(`/api/ai/memories/${mem.memoryId}/confirm`, {
+                                method: "POST",
+                              });
+                              setPendingMemories((prev) =>
+                                prev.filter((m) => m.memoryId !== mem.memoryId),
+                              );
+                              toast.success("Erkenntnis gespeichert!");
+                            }}
+                            className="cursor-pointer rounded bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/20"
+                          >
+                            Ja
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await fetch(`/api/ai/memories/${mem.memoryId}/reject`, {
+                                method: "POST",
+                              });
+                              setPendingMemories((prev) =>
+                                prev.filter((m) => m.memoryId !== mem.memoryId),
+                              );
+                              toast.info("Erkenntnis verworfen");
+                            }}
+                            className="cursor-pointer rounded bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/20"
+                          >
+                            Nein
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -564,6 +867,17 @@ export function AiOverlayHost() {
               className="h-9 rounded-sm border border-hairline px-3 text-[12px] text-ink-secondary hover:bg-canvas-soft"
             >
               Abbrechen
+            </button>
+          </div>
+        )}
+
+        {state.status === "success" && pendingMemories.length > 0 && (
+          <div className="flex shrink-0 gap-2 border-t border-hairline pt-4">
+            <button
+              onClick={closeAiOverlay}
+              className="h-9 flex-1 rounded-sm bg-primary text-[12px] font-medium text-primary-fg hover:opacity-90"
+            >
+              Fertig / Schließen
             </button>
           </div>
         )}

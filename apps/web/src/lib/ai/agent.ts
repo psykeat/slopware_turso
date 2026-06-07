@@ -1,10 +1,16 @@
 export {
   createAgentProvider,
   createAnthropicProvider,
+  createConfiguredProvider,
   createGeminiProvider,
   createOpenRouterProvider,
   type AgentProvider,
   type AnthropicProviderConfig,
+  type LlmProviderConfig,
   type GeminiProviderConfig,
   type OpenRouterProviderConfig,
+  type OpenAIProviderConfig,
+  type SupportedLlmProvider,
+  normalizeModelForProvider,
+  normalizeProvider,
 } from "@repo/agent";

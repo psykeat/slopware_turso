@@ -1,3 +1,4 @@
+import { useDebouncedCallback } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import {
   useReactTable,
@@ -569,13 +570,6 @@ function DataGridInner<T>(
     dataSignature: string;
   } | null>(null);
 
-  // Local debounced search state
-  const [localSearch, setLocalSearch] = useState(searchProp ?? "");
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Row selection
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-
   const loading = internalLoading || externalLoading;
   const hasPagination = totalCount !== undefined;
   const totalPages = hasPagination ? Math.ceil(totalCount / pageSize) : 0;
@@ -591,7 +585,12 @@ function DataGridInner<T>(
       ? focusState.field
       : designerSelectionKey;
 
-  // Column visibility persisted per entityName
+  // Local debounced search state
+  const [localSearch, setLocalSearch] = useState(searchProp ?? "");
+
+  // Row selection
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+
   const visibilityStorageKey = `datagrid-cols-${entityName}`;
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
     try {
@@ -1277,15 +1276,19 @@ function DataGridInner<T>(
     return () => document.removeEventListener("mousedown", handler);
   }, [showColPicker]);
 
+  const debouncedOnSearchChange = useDebouncedCallback(
+    (value: string) => {
+      onSearchChange?.(value);
+    },
+    { wait: 300 },
+  );
+
   const handleSearchChange = useCallback(
     (value: string) => {
       setLocalSearch(value);
-      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-      searchDebounceRef.current = setTimeout(() => {
-        onSearchChange?.(value);
-      }, 300);
+      debouncedOnSearchChange(value);
     },
-    [onSearchChange],
+    [debouncedOnSearchChange],
   );
 
   // Filter helpers
@@ -1868,10 +1871,10 @@ function DataGridInner<T>(
                     <option value="false">False</option>
                   </select>
                 ) : !noValue ? (
-                  <input
+                  <DebouncedFilterInput
                     type={colType === "number" ? "number" : colType === "date" ? "date" : "text"}
                     value={rule.val}
-                    onChange={(e) => updateFilter(rule.id, { val: e.target.value })}
+                    onChange={(val) => updateFilter(rule.id, { val })}
                     className="h-7 min-w-0 flex-1 rounded-[3px] border border-hairline bg-canvas px-2 text-[12px]"
                   />
                 ) : (
@@ -2524,6 +2527,43 @@ function DataGridInner<T>(
         </>
       )}
     </div>
+  );
+}
+
+function DebouncedFilterInput({
+  value,
+  onChange,
+  type,
+  className,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  type: string;
+  className?: string;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const debouncedOnChange = useDebouncedCallback(
+    (newVal: string) => {
+      onChange(newVal);
+    },
+    { wait: 300 },
+  );
+
+  return (
+    <input
+      type={type}
+      value={localValue}
+      onChange={(e) => {
+        setLocalValue(e.target.value);
+        debouncedOnChange(e.target.value);
+      }}
+      className={className}
+    />
   );
 }
 

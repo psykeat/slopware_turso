@@ -248,6 +248,7 @@ type DraftDocumentLineInput = {
   documentLineId?: string | null;
   lineNo: number;
   articleId?: string | null;
+  variantId?: string | null;
   articleTextSnapshot?: string | null;
   langText?: string | null;
   langTextSourceEntity?: string | null;
@@ -475,6 +476,7 @@ type DocumentPostingDoc = {
 type DocumentPostingLine = {
   documentLineId: string;
   articleId: string | null;
+  variantId: string | null;
   lineType: string;
   warehouseId: string | null;
   quantity: string | number | null;
@@ -1098,6 +1100,7 @@ async function postProductionDocumentLine(
       companyId: doc.companyId,
       warehouseId,
       articleId: line.articleId,
+      variantId: line.variantId ?? null,
       movementType,
       qtyDelta: String(signedQty),
       movementDate: now,
@@ -1490,6 +1493,7 @@ async function postStandardDocumentLine(
       sourceDocumentLineId: line.documentLineId,
       customerId: doc.customerId,
       articleId: line.articleId,
+      variantId: line.variantId ?? null,
       eventType: movementType === "R" ? "invoice" : "delivery",
       quantityDelta: String(-qty),
       amountNetDelta: line.lineTotalNet ?? "0",
@@ -1562,6 +1566,7 @@ export class DocumentService {
       documentId: string;
       lineNo: number;
       articleId?: string | null;
+      variantId?: string | null;
       articleTextSnapshot?: string | null;
       langText?: string | null;
       langTextSourceEntity?: string | null;
@@ -1597,6 +1602,7 @@ export class DocumentService {
         documentId: data.documentId,
         lineNo: Number(data.lineNo),
         articleId: data.articleId ?? null,
+        variantId: data.variantId ?? null,
         articleTextSnapshot: data.articleTextSnapshot ?? null,
         langText: data.langText ?? null,
         langTextSourceEntity: data.langTextSourceEntity ?? null,
@@ -2338,6 +2344,7 @@ export class DocumentService {
             documentId: newDoc.documentId,
             lineNo: line.lineNo,
             articleId: line.articleId,
+            variantId: line.variantId,
             articleTextSnapshot: line.articleTextSnapshot,
             langText: line.langText,
             langTextSourceEntity: line.langTextSourceEntity,
@@ -2879,6 +2886,7 @@ export class DocumentService {
           documentLineId: string;
           lineNo: number;
           articleId: string | null;
+          variantId: string | null;
           articleTextSnapshot: string | null;
           langText: string | null;
           langTextSourceEntity: string | null;
@@ -2905,6 +2913,7 @@ export class DocumentService {
           documentId: string;
           lineNo: number;
           articleId: string | null;
+          variantId: string | null;
           articleTextSnapshot: string | null;
           langText: string | null;
           langTextSourceEntity: string | null;
@@ -2931,6 +2940,7 @@ export class DocumentService {
           const normalized = {
             lineNo: Number(line.lineNo),
             articleId: line.articleId ?? null,
+            variantId: line.variantId ?? null,
             articleTextSnapshot: line.articleTextSnapshot ?? null,
             langText: line.langText ?? null,
             langTextSourceEntity: line.langTextSourceEntity ?? null,
@@ -2971,6 +2981,7 @@ export class DocumentService {
             .set({
               lineNo: row.lineNo,
               articleId: row.articleId,
+              variantId: row.variantId,
               articleTextSnapshot: row.articleTextSnapshot,
               langText: row.langText,
               langTextSourceEntity: row.langTextSourceEntity,
@@ -3199,6 +3210,7 @@ export class DocumentService {
           documentId: newDoc.documentId,
           lineNo: Number(line.lineNo),
           articleId: line.articleId ?? null,
+          variantId: line.variantId ?? null,
           articleTextSnapshot: line.articleTextSnapshot ?? null,
           langText: line.langText ?? null,
           langTextSourceEntity: line.langTextSourceEntity ?? null,

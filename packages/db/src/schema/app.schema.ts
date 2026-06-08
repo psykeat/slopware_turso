@@ -1185,6 +1185,7 @@ export const factSalesEvent = pgTable(
     ),
     customerId: uuid("customer_id").references(() => address.addressId),
     articleId: uuid("article_id").references(() => article.articleId),
+    variantId: uuid("variant_id").references(() => articleVariant.variantId),
     eventType: text("event_type"),
     quantityDelta: numeric("quantity_delta").notNull(),
     amountNetDelta: numeric("amount_net_delta").notNull(),
@@ -1196,6 +1197,7 @@ export const factSalesEvent = pgTable(
   },
   (table) => [
     index("idx_fact_sales_article").on(table.tenantId, table.articleId),
+    index("idx_fact_sales_variant").on(table.tenantId, table.variantId),
     index("idx_fact_sales_customer").on(table.tenantId, table.customerId),
     index("idx_fact_sales_period").on(table.tenantId, table.bookingPeriod),
     index("idx_fact_sales_tenant").on(table.tenantId),
@@ -3369,6 +3371,8 @@ export const articleVariant = pgTable(
   ],
 );
 
+// Introspection note: variant lookups are rendered through the helper registry as a
+// composed label (SKU + option summary + available quantity) rather than a raw UUID.
 export const articleOption = pgTable(
   "article_option",
   {

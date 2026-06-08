@@ -5,6 +5,7 @@ import { ContextTabs } from "@repo/ui/components/context-tabs";
 import { DataGrid, type DataGridHandle, type ColumnDef } from "@repo/ui/components/data-grid";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { EntityMask } from "@repo/ui/components/entity-mask";
+import { InlineEditGrid } from "@repo/ui/components/inline-edit-grid";
 import { InspectorPanel } from "@repo/ui/components/inspector-panel";
 import { InventoryBalanceTable } from "@repo/ui/components/inventory-balance-table";
 import { LangTextRecordPanel } from "@repo/ui/components/langtext-record-panel";
@@ -68,6 +69,535 @@ const ARTICLE_LANGTEXT_FIELDS = [
   { field: "kurzbeschreibung", label: "Kurzbeschreibung" },
   { field: "warntext", label: "Warntext" },
 ];
+
+const ARTICLE_VARIANT_FIELD_OVERRIDES = [
+  { key: "tenantId", visible: false },
+  { key: "articleId", visible: false },
+  { key: "optionValueHash", visible: false },
+  { key: "createdAt", visible: false },
+  { key: "updatedAt", visible: false },
+  { key: "sku", sectionLabel: "Identification", sectionLabelDe: "Identifikation" },
+  { key: "ean", sectionLabel: "Identification", sectionLabelDe: "Identifikation" },
+  { key: "price", sectionLabel: "Commercial", sectionLabelDe: "Kaufmännisch" },
+  { key: "weight", sectionLabel: "Commercial", sectionLabelDe: "Kaufmännisch" },
+  { key: "isActive", sectionLabel: "Availability", sectionLabelDe: "Verfügbarkeit" },
+];
+
+function ArticleVariantsAndOptionsTab({
+  articleId,
+  articleLabel,
+  articleNo,
+}: {
+  articleId: string | null;
+  articleLabel: string;
+  articleNo: string | null;
+}) {
+  const { t } = useTranslation("ui");
+  const queryClient = useQueryClient();
+  const variantGridRef = useRef<DataGridHandle>(null);
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  const [variantEditId, setVariantEditId] = useState<string | null>(null);
+  const [showVariantEdit, setShowVariantEdit] = useState(false);
+  const [showBulkPriceDialog, setShowBulkPriceDialog] = useState(false);
+  const [bulkPriceMode, setBulkPriceMode] = useState<"set" | "adjust">("set");
+  const [bulkPriceValue, setBulkPriceValue] = useState("");
+  const [bulkPriceVariantIds, setBulkPriceVariantIds] = useState<string[]>([]);
+  const [bulkPriceSubmitting, setBulkPriceSubmitting] = useState(false);
+
+  const { data: optionRows = EMPTY_ARRAY, isLoading: isOptionsLoading } = useQuery({
+    queryKey: ["data", "articleOption", articleId],
+    queryFn: async () => {
+      const res = await fetch(`/api/data/articleOption?articleId=${articleId}`);
+      if (!res.ok) throw new Error("Failed to fetch article options");
+      return res.json() as Promise<any[]>;
+    },
+    enabled: !!articleId,
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: variantRows = EMPTY_ARRAY, isLoading: isVariantsLoading } = useQuery({
+    queryKey: ["data", "articleVariant", articleId],
+    queryFn: async () => {
+      const res = await fetch(`/api/data/articleVariant?articleId=${articleId}`);
+      if (!res.ok) throw new Error("Failed to fetch article variants");
+      return res.json() as Promise<any[]>;
+    },
+    enabled: !!articleId,
+    placeholderData: keepPreviousData,
+  });
+  const resolvedSelectedOptionId =
+    selectedOptionId && optionRows.some((row: any) => row.optionId === selectedOptionId)
+      ? selectedOptionId
+      : (optionRows[0]?.optionId ?? null);
+
+  const selectedOption = useMemo(
+    () => optionRows.find((row: any) => row.optionId === resolvedSelectedOptionId) ?? null,
+    [optionRows, resolvedSelectedOptionId],
+  );
+  const optionsSubtitle = isOptionsLoading
+    ? t("common.loading", { defaultValue: "Loading..." })
+    : articleLabel || t("nav.articles", { defaultValue: "Articles" });
+
+  const openVariantEditor = useCallback((row: any) => {
+    setVariantEditId(row.variantId);
+    setShowVariantEdit(true);
+  }, []);
+
+  const variantById = useMemo(
+    () => new Map(variantRows.map((row: any) => [row.variantId, row])),
+    [variantRows],
+  );
+
+  const fetchJson = useCallback(async (url: string, init?: RequestInit) => {
+    const res = await fetch(url, init);
+    if (!res.ok) {
+      throw new Error((await res.text()) || `Request failed with status ${res.status}`);
+    }
+    if (res.status === 204) return null;
+    return await res.json();
+  }, []);
+
+  const patchEntity = useCallback(
+    async (entityName: string, id: string, body: Record<string, unknown>) => {
+      return await fetchJson(`/api/data/${entityName}/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    },
+    [fetchJson],
+  );
+
+  const refreshVariants = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["data", "articleVariant", articleId] });
+  }, [articleId, queryClient]);
+
+  const patchVariantInventorySku = useCallback(
+    async (variantId: string, sku: string) => {
+      const items = await fetchJson(
+        `/api/data/inventoryItem?variantId=${encodeURIComponent(variantId)}&limit=1`,
+      );
+      const item = Array.isArray(items) ? items[0] : ((items as any)?.data?.[0] ?? null);
+      if (!item?.itemId) return;
+      await patchEntity("inventoryItem", item.itemId, { sku });
+    },
+    [fetchJson, patchEntity],
+  );
+
+  const bulkVariantRows = useMemo(
+    () =>
+      bulkPriceVariantIds
+        .map((variantId) => variantById.get(variantId))
+        .filter((row): row is any => Boolean(row)),
+    [bulkPriceVariantIds, variantById],
+  );
+
+  const bulkPricePreview = useMemo(() => {
+    const parsed = Number(bulkPriceValue);
+    if (!showBulkPriceDialog || !Number.isFinite(parsed)) return [];
+
+    return bulkVariantRows.map((row: any) => {
+      const current = Number(row.price ?? 0);
+      const next = bulkPriceMode === "adjust" ? current * (1 + parsed / 100) : parsed;
+      return {
+        variantId: row.variantId as string,
+        sku: row.sku as string,
+        current,
+        next: Math.round(next * 10000) / 10000,
+      };
+    });
+  }, [bulkPriceMode, bulkPriceValue, bulkVariantRows, showBulkPriceDialog]);
+
+  const handleArchiveVariants = useCallback(
+    async (keys: string[]) => {
+      try {
+        await Promise.all(
+          keys.map((variantId) => patchEntity("articleVariant", variantId, { isActive: false })),
+        );
+        await refreshVariants();
+        toast.success(`Archived ${keys.length} variant${keys.length === 1 ? "" : "s"}.`);
+      } catch (err) {
+        toast.error(
+          err instanceof Error && err.message ? err.message : "Failed to archive variants",
+        );
+        throw err;
+      }
+    },
+    [patchEntity, refreshVariants],
+  );
+
+  const handleSuggestSku = useCallback(
+    async (keys: string[]) => {
+      try {
+        if (!articleNo) {
+          throw new Error("Article number is required to suggest SKUs.");
+        }
+
+        await Promise.all(
+          keys.map(async (variantId) => {
+            const row = variantById.get(variantId);
+            if (!row) throw new Error(`Variant ${variantId} not found.`);
+            const suggestedSku = `${articleNo}-${row.optionValueHash}`;
+            await patchEntity("articleVariant", variantId, { sku: suggestedSku });
+            await patchVariantInventorySku(variantId, suggestedSku);
+          }),
+        );
+
+        await refreshVariants();
+        toast.success(`Suggested SKUs for ${keys.length} variant${keys.length === 1 ? "" : "s"}.`);
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : "Failed to suggest SKUs");
+        throw err;
+      }
+    },
+    [articleNo, patchEntity, patchVariantInventorySku, refreshVariants, variantById],
+  );
+
+  const handleOpenBulkPriceUpdate = useCallback((keys: string[]) => {
+    setBulkPriceVariantIds(keys);
+    setBulkPriceMode("set");
+    setBulkPriceValue("");
+    setShowBulkPriceDialog(true);
+  }, []);
+
+  const handleApplyBulkPriceUpdate = useCallback(async () => {
+    const parsed = Number(bulkPriceValue);
+    if (!Number.isFinite(parsed)) {
+      toast.error("Enter a valid price value.");
+      return;
+    }
+
+    if (bulkVariantRows.length === 0) {
+      toast.error("Select at least one variant.");
+      return;
+    }
+
+    setBulkPriceSubmitting(true);
+    try {
+      await Promise.all(
+        bulkVariantRows.map(async (row: any) => {
+          const current = Number(row.price ?? 0);
+          const nextPrice = bulkPriceMode === "adjust" ? current * (1 + parsed / 100) : parsed;
+          const normalized = Math.round(nextPrice * 10000) / 10000;
+          await patchEntity("articleVariant", row.variantId, { price: String(normalized) });
+        }),
+      );
+
+      await refreshVariants();
+      setShowBulkPriceDialog(false);
+      setBulkPriceVariantIds([]);
+      toast.success(
+        `Updated prices for ${bulkVariantRows.length} variant${bulkVariantRows.length === 1 ? "" : "s"}.`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : "Failed to update prices");
+      throw err;
+    } finally {
+      setBulkPriceSubmitting(false);
+    }
+  }, [bulkPriceMode, bulkPriceValue, bulkVariantRows, patchEntity, refreshVariants]);
+
+  const handleVariantSaved = useCallback(
+    (record: unknown) => {
+      setShowVariantEdit(false);
+      queryClient.invalidateQueries({ queryKey: ["data", "articleVariant", articleId] });
+      variantGridRef.current?.restoreFocus(
+        (record as any)?.variantId ?? (record as any)?.id ?? variantEditId ?? null,
+      );
+    },
+    [articleId, queryClient, variantEditId],
+  );
+
+  const variantColumns = useMemo<ColumnDef<any>[]>(
+    () => [
+      {
+        key: "sku",
+        header: "SKU",
+        sortable: true,
+        render: (row: any) => (
+          <span className="font-mono text-[12px] text-ink tabular-nums">{row.sku ?? "—"}</span>
+        ),
+      },
+      {
+        key: "isActive",
+        header: t("form.active", { defaultValue: "Activity" }),
+        sortable: true,
+        align: "center",
+        render: (row: any) => (
+          <span
+            className={
+              row.isActive
+                ? "inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800"
+                : "inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-800"
+            }
+          >
+            {row.isActive
+              ? t("common.active", { defaultValue: "Active" })
+              : t("common.inactive", { defaultValue: "Inactive" })}
+          </span>
+        ),
+      },
+      {
+        key: "availableQty",
+        header: t("articleView.inventory.title", { defaultValue: "Stock" }),
+        sortable: true,
+        isNumeric: true,
+        align: "right",
+        render: (row: any) => (
+          <span className="font-mono text-[12px] text-ink tabular-nums">
+            {Number(row.availableQty ?? 0).toFixed(3)}
+          </span>
+        ),
+      },
+      {
+        key: "variantOptionSummary",
+        header: t("article.options", { defaultValue: "Options" }),
+        sortable: false,
+        render: (row: any) => (
+          <span className="block max-w-[32rem] truncate text-[12px] text-ink-secondary">
+            {row.variantOptionSummary || "—"}
+          </span>
+        ),
+      },
+    ],
+    [t],
+  );
+
+  if (!articleId) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-[13px] text-ink-mute">
+        {t("article.variantsAndOptionsEmpty", {
+          defaultValue: "Select an article to manage options and variants.",
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto p-3">
+      <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
+          <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
+            <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+              {t("article.options", { defaultValue: "Article Options" })}
+            </div>
+            <div className="mt-0.5 text-[12px] text-ink-secondary">{optionsSubtitle}</div>
+          </div>
+          <div className="min-h-0 flex-1">
+            <InlineEditGrid
+              key={`${articleId}-options`}
+              entityName="articleOption"
+              parentKey={{ articleId }}
+              keyColumn="optionId"
+              className="h-full"
+              onRowSelect={(row) => setSelectedOptionId(row?.optionId ?? null)}
+              columns={[
+                { key: "name", header: "Name", type: "text", required: true },
+                { key: "sortOrder", header: "Sort", type: "number", width: "88px" },
+              ]}
+            />
+          </div>
+        </section>
+
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
+          <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
+            <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+              {t("article.optionValues", { defaultValue: "Option Values" })}
+            </div>
+            <div className="mt-0.5 text-[12px] text-ink-secondary">
+              {selectedOption
+                ? selectedOption.name
+                : t("article.optionValuesSelect", {
+                    defaultValue: "Select an option to edit values.",
+                  })}
+            </div>
+          </div>
+          <div className="min-h-0 flex-1">
+            {resolvedSelectedOptionId ? (
+              <InlineEditGrid
+                key={`${resolvedSelectedOptionId}-values`}
+                entityName="articleOptionValue"
+                parentKey={{ optionId: resolvedSelectedOptionId }}
+                keyColumn="valueId"
+                className="h-full"
+                columns={[
+                  { key: "value", header: "Value", type: "text", required: true },
+                  { key: "sortOrder", header: "Sort", type: "number", width: "88px" },
+                ]}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center px-6 py-8 text-[13px] text-ink-mute">
+                {t("article.optionValuesSelect", {
+                  defaultValue: "Select an option to edit values.",
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
+        <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
+          <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+            {t("article.variants", { defaultValue: "Variants" })}
+          </div>
+          <div className="mt-0.5 text-[12px] text-ink-secondary">
+            {articleLabel || t("nav.articles", { defaultValue: "Articles" })}
+          </div>
+        </div>
+        <div className="min-h-0 flex-1">
+          <DataGrid
+            ref={variantGridRef}
+            entityName="articleVariant"
+            panelId="article-variant-grid"
+            data={variantRows}
+            isLoading={isVariantsLoading}
+            keyExtractor={(row: any) => row.variantId}
+            title={t("article.variants", { defaultValue: "Variants" })}
+            columns={variantColumns}
+            toolbar={false}
+            onRowClick={openVariantEditor}
+            onRowOpen={openVariantEditor}
+            selectable
+            bulkActions={[
+              {
+                label: "Archive",
+                variant: "destructive" as const,
+                onClick: handleArchiveVariants,
+              },
+              {
+                label: "Suggest SKU",
+                onClick: handleSuggestSku,
+              },
+              {
+                label: "Update prices",
+                onClick: handleOpenBulkPriceUpdate,
+              },
+            ]}
+            emptyTitle={t("empty.title")}
+            emptySubtitle={t("article.optionValuesSelect", {
+              defaultValue: "Generate variants after defining options and values.",
+            })}
+            className="h-full rounded-none border-none"
+          />
+        </div>
+      </section>
+
+      <Dialog open={showVariantEdit} onOpenChange={setShowVariantEdit}>
+        <DialogContent className="sw-root max-w-2xl overflow-hidden p-0" variant="form">
+          <EntityMask
+            entityName="articleVariant"
+            mode="edit"
+            recordId={variantEditId}
+            title={t("article.variants.edit", { defaultValue: "Edit Variant" })}
+            fieldOverrides={ARTICLE_VARIANT_FIELD_OVERRIDES}
+            onCancel={() => setShowVariantEdit(false)}
+            onSaved={handleVariantSaved}
+            className="rounded-none border-none shadow-none"
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showBulkPriceDialog}
+        onOpenChange={(open) => {
+          setShowBulkPriceDialog(open);
+          if (!open) setBulkPriceVariantIds([]);
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <div className="flex flex-col gap-5 p-6">
+            <div>
+              <h3 className="text-[15px] font-medium text-ink">
+                {t("article.bulkUpdatePrices", { defaultValue: "Update variant prices" })}
+              </h3>
+              <p className="mt-1 text-[13px] text-ink-mute">
+                {bulkVariantRows.length} variant{bulkVariantRows.length === 1 ? "" : "s"} selected
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <label className="flex flex-col gap-1.5 text-[13px] text-ink">
+                <span className="text-[12px] font-medium text-ink-secondary">Mode</span>
+                <select
+                  className="h-9 rounded border border-hairline bg-canvas px-2 text-[13px]"
+                  value={bulkPriceMode}
+                  onChange={(e) => setBulkPriceMode(e.target.value as "set" | "adjust")}
+                >
+                  <option value="set">Set absolute price</option>
+                  <option value="adjust">Adjust by percent</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5 text-[13px] text-ink">
+                <span className="text-[12px] font-medium text-ink-secondary">
+                  {bulkPriceMode === "adjust" ? "Percent" : "Price"}
+                </span>
+                <input
+                  type="number"
+                  step={bulkPriceMode === "adjust" ? "0.01" : "0.0001"}
+                  className="h-9 rounded border border-hairline bg-canvas px-2 text-[13px]"
+                  value={bulkPriceValue}
+                  onChange={(e) => setBulkPriceValue(e.target.value)}
+                  placeholder={bulkPriceMode === "adjust" ? "10" : "0.00"}
+                />
+              </label>
+            </div>
+
+            {bulkPricePreview.length > 0 ? (
+              <div className="max-h-64 overflow-auto rounded border border-hairline">
+                <table className="w-full border-collapse">
+                  <thead className="sticky top-0 bg-canvas-soft">
+                    <tr className="border-b border-hairline text-left text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                      <th className="px-3 py-2">SKU</th>
+                      <th className="px-3 py-2 text-right">Current</th>
+                      <th className="px-3 py-2 text-right">New</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bulkPricePreview.map((row) => (
+                      <tr key={row.variantId} className="border-b border-hairline last:border-0">
+                        <td className="px-3 py-2 font-mono text-[12px] text-ink">{row.sku}</td>
+                        <td className="px-3 py-2 text-right font-mono text-[12px] text-ink-secondary tabular-nums">
+                          {row.current.toFixed(4)}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-[12px] text-ink tabular-nums">
+                          {row.next.toFixed(4)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="rounded border border-dashed border-hairline px-3 py-4 text-[13px] text-ink-mute">
+                Enter a value to preview the affected prices.
+              </div>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="h-8 rounded border border-hairline px-4 text-[13px] hover:bg-canvas-soft"
+                onClick={() => setShowBulkPriceDialog(false)}
+                disabled={bulkPriceSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="h-8 rounded bg-primary px-4 text-[13px] text-white hover:opacity-90 disabled:opacity-60"
+                onClick={handleApplyBulkPriceUpdate}
+                disabled={bulkPriceSubmitting || bulkVariantRows.length === 0}
+              >
+                {bulkPriceSubmitting ? "Updating..." : "Apply"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 
 function ArticlesModule() {
   const { state: focusState } = useFocus();
@@ -283,6 +813,8 @@ function ArticlesModule() {
     () => articles.find((a: any) => a.articleId === activeArticleId),
     [articles, activeArticleId],
   );
+  const selectedArticleLabel =
+    selectedArticle?.name ?? t("nav.articles", { defaultValue: "Articles" });
   const modalOpen = showCreate || showEdit || deleteConfirm;
 
   const selectTreeNode = useCallback(
@@ -591,10 +1123,23 @@ function ArticlesModule() {
           </div>
         ),
       },
+      {
+        id: "variants",
+        label: t("article.variantsAndOptions", { defaultValue: "Varianten & Optionen" }),
+        content: (
+          <ArticleVariantsAndOptionsTab
+            key={activeArticleId ?? "none"}
+            articleId={activeArticleId}
+            articleLabel={selectedArticleLabel}
+            articleNo={selectedArticle?.articleNo ?? null}
+          />
+        ),
+      },
     ],
     [
       selectedArticle,
       activeArticleId,
+      selectedArticleLabel,
       unitMap,
       groupMap,
       movements,
@@ -605,6 +1150,42 @@ function ArticlesModule() {
   );
 
   useEffect(() => {
+    const unregGenerateVariants = registerCommand({
+      id: "generate-variants",
+      scope: "context",
+      group: "recordOps",
+      label: {
+        en: "Generate Variants",
+        de: "Varianten erzeugen",
+      },
+      isEnabled: () => !!activeArticleId && !modalOpen,
+      handler: async () => {
+        if (!activeArticleId) return;
+        try {
+          const res = await fetch(`/api/articles/${activeArticleId}/generate-variants`, {
+            method: "POST",
+          });
+          if (!res.ok) {
+            throw new Error(await res.text());
+          }
+          const result = (await res.json()) as {
+            createdVariants?: number;
+            skippedVariants?: number;
+          };
+          await queryClient.invalidateQueries({
+            queryKey: ["data", "articleVariant", activeArticleId],
+          });
+          toast.success(
+            `Generated ${result.createdVariants ?? 0} variant${(result.createdVariants ?? 0) === 1 ? "" : "s"}${typeof result.skippedVariants === "number" ? ` (${result.skippedVariants} skipped)` : ""}`,
+          );
+        } catch (err) {
+          toast.error(
+            err instanceof Error && err.message ? err.message : "Failed to generate variants",
+          );
+        }
+      },
+    });
+
     const navigateTree = (delta: number) => {
       if (treeNodes.length === 0) return;
       const currentId = selectedGroupId ?? "ALL";
@@ -637,12 +1218,15 @@ function ArticlesModule() {
     });
 
     return () => {
+      unregGenerateVariants();
       unregDown();
       unregUp();
     };
   }, [
+    activeArticleId,
     modalOpen,
     registerCommand,
+    queryClient,
     restoreArticleGrid,
     selectTreeNode,
     selectedGroupId,

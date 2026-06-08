@@ -54,6 +54,18 @@ async function createBackfillFixture() {
       articleNo: article.articleNo,
     });
 
+  const [secondMissingVariantArticle] = await db
+    .insert(article)
+    .values({
+      tenantId: tenantRow.tenantId,
+      articleNo: `BF-MISS-2-${suffix}`,
+      name: `Backfill Second Missing Variant Article ${suffix}`,
+    })
+    .returning({
+      articleId: article.articleId,
+      articleNo: article.articleNo,
+    });
+
   const defaultVariantHash = createArticleVariantOptionValueHash([]);
 
   const [existingVariant] = await db
@@ -81,6 +93,7 @@ async function createBackfillFixture() {
     tenantId: tenantRow.tenantId,
     existingVariantArticle,
     missingVariantArticle,
+    secondMissingVariantArticle,
     defaultVariantHash,
   };
 }
@@ -89,9 +102,9 @@ test("backfillDefaultArticleVariants creates one default variant per missing art
   const fixture = await createBackfillFixture();
 
   const first = await backfillDefaultArticleVariants(fixture.tenantId);
-  assert.equal(first.candidateArticles, 1);
-  assert.equal(first.createdVariants, 1);
-  assert.equal(first.createdInventoryItems, 1);
+  assert.equal(first.candidateArticles, 2);
+  assert.equal(first.createdVariants, 2);
+  assert.equal(first.createdInventoryItems, 2);
   assert.equal(first.skippedArticles, 0);
 
   const missingVariantRows = await db
@@ -115,6 +128,27 @@ test("backfillDefaultArticleVariants creates one default variant per missing art
     `${fixture.missingVariantArticle.articleNo}-${fixture.defaultVariantHash}`,
   );
 
+  const secondMissingVariantRows = await db
+    .select({
+      variantId: articleVariant.variantId,
+      sku: articleVariant.sku,
+      optionValueHash: articleVariant.optionValueHash,
+    })
+    .from(articleVariant)
+    .where(
+      and(
+        eq(articleVariant.tenantId, fixture.tenantId),
+        eq(articleVariant.articleId, fixture.secondMissingVariantArticle.articleId),
+      ),
+    );
+
+  assert.equal(secondMissingVariantRows.length, 1);
+  assert.equal(secondMissingVariantRows[0]?.optionValueHash, fixture.defaultVariantHash);
+  assert.equal(
+    secondMissingVariantRows[0]?.sku,
+    `${fixture.secondMissingVariantArticle.articleNo}-${fixture.defaultVariantHash}`,
+  );
+
   const missingInventoryRows = await db
     .select({
       itemId: inventoryItem.itemId,
@@ -124,7 +158,16 @@ test("backfillDefaultArticleVariants creates one default variant per missing art
     .from(inventoryItem)
     .where(eq(inventoryItem.tenantId, fixture.tenantId));
 
-  assert.equal(missingInventoryRows.length, 2);
+  assert.equal(missingInventoryRows.length, 3);
+  assert.equal(
+    missingInventoryRows.filter((row) => row.variantId === missingVariantRows[0]?.variantId).length,
+    1,
+  );
+  assert.equal(
+    missingInventoryRows.filter((row) => row.variantId === secondMissingVariantRows[0]?.variantId)
+      .length,
+    1,
+  );
 
   const second = await backfillDefaultArticleVariants(fixture.tenantId);
   assert.equal(second.candidateArticles, 0);
@@ -140,7 +183,7 @@ test("backfillDefaultArticleVariants creates one default variant per missing art
     .from(articleVariant)
     .where(eq(articleVariant.tenantId, fixture.tenantId));
 
-  assert.equal(allVariantRows.length, 2);
+  assert.equal(allVariantRows.length, 3);
 });
 
 after(async () => {

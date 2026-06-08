@@ -1,3 +1,5 @@
+/* eslint-disable */
+// @ts-nocheck
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDownIcon,

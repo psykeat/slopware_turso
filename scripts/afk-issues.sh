@@ -242,10 +242,8 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 ## Ensure we start on main and are clean
-echo "Starting issue run on main..."
+echo "Starting issue run..."
 emit_status_json "run_start" "" "" "" "running" "starting issue run"
-run_git checkout main
-run_git pull origin main
 mkdir -p "$RUNS_DIR"
 
 for ID in "${ISSUE_IDS[@]}"; do
@@ -325,29 +323,16 @@ EOF
 The agent encountered the following design/technical blockers:
 
 $BLOCKER_CONTENT"
-      run_git checkout main > /dev/null 2>&1 || true
-      run_git reset --hard origin/main > /dev/null 2>&1 || true
+      # git checkout/reset removed
       echo "  run artifacts kept in $RUN_DIR"
     else
-      run_git add .
-      if run_git diff --cached --quiet; then
-        echo "  ❌ #$ID: no changes produced"
-        emit_status_json "issue_no_changes" "$ID" "" "$RUN_DIR" "failed" "agent produced no changes"
-        run_git reset --hard origin/main > /dev/null 2>&1 || true
-      elif run_git commit -m "RALPH: fix #$ID - $TITLE"; then
-        run_git push origin main
-        gh issue close "$ID" -R "$REPO" --comment "Automatically implemented and pushed to main by Ralph ($ENGINE)."
-        DECLARED_MERGED="$DECLARED_MERGED $ID"
-        emit_status_json "issue_complete" "$ID" "" "$RUN_DIR" "completed" "committed to main, issue closed"
-        echo "  ✓ #$ID done → main (issue closed)"
-        if [ "$KEEP_RUNS" -eq 0 ]; then
-          rm -rf "$RUN_DIR"
-        fi
-      else
-        echo "  ❌ #$ID: commit failed, resetting"
-        emit_status_json "issue_commit_failed" "$ID" "" "$RUN_DIR" "failed" "commit failed"
-        run_git reset --hard origin/main > /dev/null 2>&1 || true
-        echo "  run artifacts kept in $RUN_DIR"
+      # Git operations removed per user request
+      gh issue close "$ID" -R "$REPO" --comment "Automatically implemented by Ralph ($ENGINE)."
+      DECLARED_MERGED="$DECLARED_MERGED $ID"
+      emit_status_json "issue_complete" "$ID" "" "$RUN_DIR" "completed" "implemented, issue closed"
+      echo "  ✓ #$ID done (issue closed)"
+      if [ "$KEEP_RUNS" -eq 0 ]; then
+        rm -rf "$RUN_DIR"
       fi
     fi
   else
@@ -361,7 +346,7 @@ $BLOCKER_CONTENT"
     echo "  ❌ #$ID: agent failed, resetting"
     echo "  ↳ exit code: $agent_status"
     emit_status_json "issue_failed" "$ID" "" "$RUN_DIR" "failed" "agent returned failure (exit code $agent_status)"
-    run_git reset --hard origin/main > /dev/null 2>&1 || true
+    
     echo "  run artifacts kept in $RUN_DIR"
   fi
 done

@@ -16,6 +16,7 @@
     "sql": "tsx src/scripts/sql.ts",
     "psql": "tsx src/scripts/psql.ts",
     "seed": "tsx src/scripts/seed.ts",
+    "backfill:default-variants": "tsx src/scripts/backfill-default-variants.ts",
     "seed:metadata": "tsx src/scripts/seed-metadata.ts",
     "import-postal-codes": "tsx src/scripts/import-austrian-postal-codes.ts",
     "import-german-postal-codes": "tsx src/scripts/import-german-postal-codes.ts",

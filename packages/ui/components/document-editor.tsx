@@ -1,5 +1,3 @@
-/* eslint-disable */
-// @ts-nocheck
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
@@ -110,6 +108,7 @@ interface LineRow {
   documentLineId?: string;
   lineNo: number;
   articleId: string | null;
+  variantId: string | null;
   articleNo?: string | null;
   articleTextSnapshot: string | null;
   langText?: string | null;
@@ -138,6 +137,16 @@ interface ArticleResult {
   taxClassId: string | null;
   bomType?: string | null;
   trackingMode?: string | null;
+}
+
+interface ArticleVariantRow {
+  variantId: string;
+  articleId?: string | null;
+  sku: string;
+  lookupLabel?: string | null;
+  variantOptionSummary?: string | null;
+  availableQty?: string | null;
+  isActive?: boolean | null;
 }
 
 interface TaxCodeRow {
@@ -250,6 +259,7 @@ interface DocumentAuditTrail {
 // which makes useMemo deps change every render and causes an infinite setState loop.
 const EMPTY_TAX_CODES: TaxCodeRow[] = [];
 const EMPTY_DOC_LINES: any[] = [];
+const EMPTY_VARIANT_ROWS: ArticleVariantRow[] = [];
 const BOM_SALES_DOC_TYPES = new Set(["N", "A", "L", "R", "G"]);
 const BOM_PRODUCTION_DOC_TYPES = new Set(["q", "p"]);
 
@@ -292,6 +302,7 @@ function emptyLine(parentId: string, lineNo: number): LineRow {
     _id: `new-${Date.now()}-${Math.random()}`,
     lineNo,
     articleId: null,
+    variantId: null,
     articleNo: null,
     articleTextSnapshot: null,
     langText: null,
@@ -328,6 +339,7 @@ function normalizeLineForSave(line: LineRow) {
   return {
     lineNo: line.lineNo,
     articleId: line.articleId,
+    variantId: line.variantId,
     articleNo: line.articleNo,
     articleTextSnapshot: line.articleTextSnapshot,
     langText: line.langText ?? null,
@@ -502,6 +514,15 @@ function resolveArticleLabel(line: LineRow, articleMeta?: ArticleMetaRow | null)
   );
 }
 
+function resolveVariantLabel(line: LineRow, variantMeta?: ArticleVariantRow | null) {
+  return (
+    variantMeta?.lookupLabel ??
+    variantMeta?.sku ??
+    line.variantId?.slice(0, 8) ??
+    "—"
+  );
+}
+
 function isBomHeaderLineType(lineType?: string | null) {
   return lineType === "sales_bom_header" || lineType === "production_output";
 }
@@ -540,6 +561,7 @@ function lineFromPersistedRow(row: any): LineRow {
     documentLineId: row.documentLineId ?? null,
     lineNo: Number(row.lineNo ?? 0),
     articleId: row.articleId ?? null,
+    variantId: row.variantId ?? null,
     articleNo: row.articleNo ?? null,
     articleTextSnapshot: row.articleTextSnapshot ?? null,
     langText: row.langText ?? null,
@@ -559,6 +581,12 @@ function lineFromPersistedRow(row: any): LineRow {
     isNew: false,
     isDeleted: false,
   };
+}
+
+async function fetchArticleVariants(articleId: string): Promise<ArticleVariantRow[]> {
+  const res = await fetch(`/api/data/articleVariant?articleId=${articleId}&orderBy=sku:asc&limit=500`);
+  if (!res.ok) return EMPTY_VARIANT_ROWS;
+  return (await res.json()) as ArticleVariantRow[];
 }
 
 // ─── DocLookupField ───────────────────────────────────────────────────────────
@@ -624,6 +652,7 @@ function ArticleSearchCell({
   inputRef,
   rowIndex,
   onFocus,
+  onTabForward,
 }: {
   value: string | null;
   textSnapshot: string | null;
@@ -631,6 +660,7 @@ function ArticleSearchCell({
   inputRef?: React.Ref<HTMLInputElement>;
   rowIndex: number;
   onFocus?: () => void;
+  onTabForward?: () => void;
 }) {
   const { setFocus } = useFocus();
   const source = useMemo<LookupSource<ArticleResult>>(
@@ -678,6 +708,7 @@ function ArticleSearchCell({
       placeholder="Search articles"
       ref={inputRef}
       className="min-w-0"
+      onTabForward={onTabForward}
       onFocusChange={(focused) => {
         if (!focused) return;
         setFocus({
@@ -709,6 +740,126 @@ function ArticleSearchCell({
           },
           rowIndex,
         );
+      }}
+      />
+  );
+}
+
+// ─── VariantSearchCell ───────────────────────────────────────────────────────
+
+function VariantSearchCell({
+  value,
+  variants,
+  inputRef,
+  rowIndex,
+  onSelect,
+  onFocus,
+  onTabForward,
+  disabled = false,
+  placeholder,
+}: {
+  value: string | null;
+  variants: ArticleVariantRow[];
+  inputRef?: React.Ref<HTMLInputElement>;
+  rowIndex: number;
+  onSelect: (variant: ArticleVariantRow | null, rowIndex: number) => void;
+  onFocus?: () => void;
+  onTabForward?: () => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const { setFocus } = useFocus();
+  const activeVariants = useMemo(
+    () => variants.filter((variant) => variant.isActive !== false),
+    [variants],
+  );
+  const lookupItems = useMemo(
+    () =>
+      activeVariants.map((variant) => ({
+        value: variant.variantId,
+        label: variant.sku,
+        description: [
+          variant.variantOptionSummary || "Default-Variant",
+          `${Number(variant.availableQty ?? 0).toFixed(3)} available`,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        raw: variant,
+      })),
+    [activeVariants],
+  );
+  const source = useMemo<LookupSource<ArticleVariantRow>>(
+    () => ({
+      title: "Variants",
+      placeholder: placeholder ?? "Select variant",
+      emptyLabel: "No active variants found",
+      search: async (query, options) => {
+        const normalized = query.trim().toLowerCase();
+        const rows = lookupItems.filter((item) => {
+          if (!normalized) return true;
+          return (
+            item.label.toLowerCase().includes(normalized) ||
+            (item.description ?? "").toLowerCase().includes(normalized) ||
+            item.value.toLowerCase().includes(normalized)
+          );
+        });
+        return rows.slice(0, options?.limit ?? rows.length);
+      },
+      resolve: async (variantId) => {
+        if (!variantId) return null;
+        const row = variants.find((variant) => variant.variantId === variantId);
+        if (!row) return null;
+        return {
+          value: row.variantId,
+          label: row.sku,
+          description: [
+            row.variantOptionSummary || "Default-Variant",
+            `${Number(row.availableQty ?? 0).toFixed(3)} available`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          raw: row,
+        };
+      },
+    }),
+    [lookupItems, placeholder, variants],
+  );
+
+  return (
+    <LookupField
+      value={value}
+      source={source}
+      tabIndex={undefined}
+      placeholder={placeholder ?? "Select variant"}
+      ref={inputRef}
+      disabled={disabled}
+      className="min-w-0"
+      onTabForward={onTabForward}
+      onFocusChange={(focused) => {
+        if (!focused) return;
+        setFocus({
+          workspace: "documents",
+          panel: "document-editor",
+          entity: "document",
+          area: "grid",
+          field: "variantId",
+          row: rowIndex,
+        });
+        onFocus?.();
+      }}
+      onChange={(next, item) => {
+        if (item?.raw) {
+          onSelect(item.raw as ArticleVariantRow, rowIndex);
+          return;
+        }
+        if (!next) {
+          onSelect(null, rowIndex);
+          return;
+        }
+        const fallback = variants.find((variant) => variant.variantId === next);
+        if (fallback) {
+          onSelect(fallback, rowIndex);
+        }
       }}
     />
   );
@@ -849,6 +1000,7 @@ const DocumentLinesEditor = forwardRef<
   });
 
   const articleInputRef = useRef<HTMLInputElement>(null);
+  const variantInputRef = useRef<HTMLInputElement>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
   const priceRef = useRef<HTMLInputElement>(null);
   const discRef = useRef<HTMLInputElement>(null);
@@ -923,6 +1075,78 @@ const DocumentLinesEditor = forwardRef<
     return map;
   }, [articleIds, articleQueryRows]);
 
+  const variantIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          effectiveLines
+            .map((line) => line.variantId)
+            .filter((variantId): variantId is string => !!variantId),
+        ),
+      ),
+    [effectiveLines],
+  );
+  const variantQueries = useQueries({
+    queries: variantIds.map((variantId) => ({
+      queryKey: ["data", "articleVariant", variantId],
+      queryFn: async () => {
+        const res = await fetch(`/api/data/articleVariant/${variantId}`);
+        if (!res.ok) return null;
+        return res.json() as Promise<ArticleVariantRow>;
+      },
+      enabled: !!variantId,
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  const variantQueryRows = variantQueries.map((query) => query.data);
+  const variantMetaById = useMemo(() => {
+    const map = new Map<string, ArticleVariantRow>();
+    for (let i = 0; i < variantIds.length; i++) {
+      const row = variantQueryRows[i] ?? null;
+      if (row?.variantId) map.set(variantIds[i], row);
+    }
+    return map;
+  }, [variantIds, variantQueryRows]);
+
+  const activeEditingLineType = (editVals.lineType ?? "article") as string;
+  const editingArticleId = editingId ? (editVals.articleId ?? null) : null;
+  const { data: editingArticleVariants = EMPTY_VARIANT_ROWS } = useQuery({
+    queryKey: ["data", "articleVariant", editingArticleId],
+    queryFn: async () => {
+      if (!editingArticleId) return EMPTY_VARIANT_ROWS;
+      return await fetchArticleVariants(editingArticleId);
+    },
+    enabled: !!editingId && !!editingArticleId && activeEditingLineType === "article",
+    staleTime: 5 * 60 * 1000,
+  });
+  const activeEditingArticleVariants = useMemo(
+    () => editingArticleVariants.filter((variant) => variant.isActive !== false),
+    [editingArticleVariants],
+  );
+
+  useEffect(() => {
+    if (!editingId || activeEditingLineType !== "article") return;
+    if (!editingArticleId) return;
+    if (editVals.variantId) return;
+    if (activeEditingArticleVariants.length !== 1) return;
+
+    const [onlyVariant] = activeEditingArticleVariants;
+    if (!onlyVariant) return;
+
+    queueMicrotask(() => {
+      setEditVals((prev) => {
+        if (prev.variantId === onlyVariant.variantId) return prev;
+        return { ...prev, variantId: onlyVariant.variantId };
+      });
+    });
+  }, [
+    activeEditingArticleVariants,
+    activeEditingLineType,
+    editingArticleId,
+    editingId,
+    editVals.variantId,
+  ]);
+
   function assignBomGroups(inputLines: LineRow[]) {
     const grouped: LineRow[] = [];
     let currentGroupId: string | null = null;
@@ -955,11 +1179,12 @@ const DocumentLinesEditor = forwardRef<
       const matchIndex = next.findIndex((line) => {
         if (line.documentLineId && row.documentLineId && line.documentLineId === row.documentLineId)
           return true;
-        return (
-          line.lineNo === row.lineNo &&
-          line.lineType === row.lineType &&
-          line.articleId === row.articleId
-        );
+      return (
+        line.lineNo === row.lineNo &&
+        line.lineType === row.lineType &&
+          line.articleId === row.articleId &&
+          line.variantId === row.variantId
+      );
       });
 
       if (matchIndex >= 0) {
@@ -1189,6 +1414,7 @@ const DocumentLinesEditor = forwardRef<
         documentLineId: existing?.documentLineId,
         lineNo: header.lineNo + index + 1,
         articleId: component.componentArticleId,
+        variantId: null,
         articleNo: component.articleNo,
         articleTextSnapshot: component.name,
         lineType: "bom_component",
@@ -1299,6 +1525,38 @@ const DocumentLinesEditor = forwardRef<
       return null;
     }
 
+    if ((nextHeader.lineType ?? "article") === "article" && nextHeader.articleId) {
+      const variantId = nextHeader.variantId ?? null;
+      if (!variantId) {
+        toast.error(
+          t("document.lines.variantRequired", {
+            defaultValue: "Select an active variant before saving.",
+          }),
+        );
+        setTimeout(() => {
+          variantInputRef.current?.focus();
+          variantInputRef.current?.select();
+        }, 30);
+        return null;
+      }
+
+      const selectedVariant = editingArticleVariants.find(
+        (variant) => variant.variantId === variantId,
+      );
+      if (selectedVariant && selectedVariant.isActive === false) {
+        toast.error(
+          t("document.lines.variantInactive", {
+            defaultValue: "Select an active variant before saving.",
+          }),
+        );
+        setTimeout(() => {
+          variantInputRef.current?.focus();
+          variantInputRef.current?.select();
+        }, 30);
+        return null;
+      }
+    }
+
     const next = linesRef.current.map((line) =>
       line._id === editingId
         ? {
@@ -1352,7 +1610,8 @@ const DocumentLinesEditor = forwardRef<
           row.documentLineId != null &&
           row.lineNo === line.lineNo &&
           row.lineType === line.lineType &&
-          row.articleId === line.articleId,
+          row.articleId === line.articleId &&
+          row.variantId === line.variantId,
       ) ?? null
     );
   }
@@ -1442,6 +1701,10 @@ const DocumentLinesEditor = forwardRef<
   }
 
   async function handleArticleSelect(article: ArticleResult, rowIndex: number) {
+    void queryClient.prefetchQuery({
+      queryKey: ["data", "articleVariant", article.articleId],
+      queryFn: async () => fetchArticleVariants(article.articleId),
+    });
     // Fetch pricing
     let price = 0;
     let taxCodeId: string | null = null;
@@ -1474,6 +1737,7 @@ const DocumentLinesEditor = forwardRef<
     setEditVals((prev) => ({
       ...prev,
       articleId: article.articleId,
+      variantId: null,
       articleNo: article.articleNo,
       articleTextSnapshot: article.name,
       unit: article.baseUnit ?? null,
@@ -1499,9 +1763,30 @@ const DocumentLinesEditor = forwardRef<
       void fetchBomComponents(article.articleId);
     }
 
+    pushGridFocus(resolvedLineType === "article" ? "variantId" : "qty", rowIndex);
+
+    // Advance focus to the next required field for the resolved line type.
+    setTimeout(() => {
+      if (resolvedLineType === "article") {
+        variantInputRef.current?.focus();
+        variantInputRef.current?.select();
+        return;
+      }
+      qtyRef.current?.focus();
+      qtyRef.current?.select();
+    }, 30);
+  }
+
+  function handleVariantSelect(variant: ArticleVariantRow | null, rowIndex: number) {
+    setEditVals((prev) => ({
+      ...prev,
+      variantId: variant?.variantId ?? null,
+    }));
+
+    if (!variant) return;
+
     pushGridFocus("qty", rowIndex);
 
-    // Advance focus to qty
     setTimeout(() => {
       qtyRef.current?.focus();
       qtyRef.current?.select();
@@ -1578,11 +1863,14 @@ const DocumentLinesEditor = forwardRef<
       {/* Table header */}
       <div
         className="grid shrink-0 border-b border-hairline bg-canvas-soft text-[11px] font-medium tracking-wider text-ink-mute uppercase"
-        style={{ gridTemplateColumns: "48px 180px 1fr 72px 56px 96px 64px 60px 96px 32px" }}
+        style={{
+          gridTemplateColumns: "48px 180px 240px 1fr 72px 56px 96px 64px 60px 96px 32px",
+        }}
       >
         {[
           t("document.lines.pos"),
           t("document.lines.article"),
+          t("document.lines.variant", { defaultValue: "Variant" }),
           t("document.lines.description"),
           t("document.lines.qty"),
           t("document.lines.unit"),
@@ -1641,7 +1929,7 @@ const DocumentLinesEditor = forwardRef<
                   role={canEditRow ? "button" : undefined}
                   tabIndex={canEditRow ? 0 : undefined}
                   style={{
-                    gridTemplateColumns: "48px 180px 1fr 72px 56px 96px 64px 60px 96px 32px",
+                    gridTemplateColumns: "48px 180px 240px 1fr 72px 56px 96px 64px 60px 96px 32px",
                   }}
                   onClick={() => !isEditing && canEditRow && startEdit(line, rowIndex)}
                   onKeyDown={(e) => {
@@ -1693,6 +1981,7 @@ const DocumentLinesEditor = forwardRef<
                             onSelect={handleArticleSelect}
                             inputRef={articleInputRef}
                             rowIndex={rowIndex}
+                            onTabForward={() => variantInputRef.current?.focus()}
                           />
                         </div>
                       </div>
@@ -1710,6 +1999,40 @@ const DocumentLinesEditor = forwardRef<
                           {resolveArticleLabel(line, articleMeta)}
                         </span>
                       </div>
+                    )}
+                  </div>
+
+                  {/* Variant */}
+                  <div className={cn("min-w-0 self-center px-1.5 py-1", isBomComponent && "pl-5")}>
+                    {isEditing ? (
+                      (row.lineType ?? "article") === "article" ? (
+                        <VariantSearchCell
+                          value={ev.variantId ?? null}
+                          variants={editingArticleVariants}
+                          inputRef={variantInputRef}
+                          rowIndex={rowIndex}
+                          disabled={!ev.articleId}
+                          placeholder={
+                            ev.articleId
+                              ? t("document.lines.variantPlaceholder", {
+                                  defaultValue: "Select variant",
+                                })
+                              : t("document.lines.variantSelectArticleFirst", {
+                                  defaultValue: "Select article first",
+                                })
+                          }
+                          onSelect={handleVariantSelect}
+                          onTabForward={() => qtyRef.current?.focus()}
+                        />
+                      ) : (
+                        <span className="block truncate font-mono text-[12px] text-ink-mute">
+                          {resolveVariantLabel(row, variantMetaById.get(row.variantId ?? ""))}
+                        </span>
+                      )
+                    ) : (
+                      <span className="block truncate font-mono text-[12px] text-ink-mute">
+                        {resolveVariantLabel(row, variantMetaById.get(row.variantId ?? ""))}
+                      </span>
                     )}
                   </div>
 

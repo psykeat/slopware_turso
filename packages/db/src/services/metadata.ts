@@ -15,6 +15,7 @@ import * as schema from "../schema/index";
 export interface MetadataContext {
   tenantId: string;
   organizationId?: string;
+  userId?: string;
 }
 
 export type DesignerSurfaceKind =
@@ -283,19 +284,68 @@ function resolveLookupMetadata(f: Record<string, any>, registries: any[]) {
   };
 }
 
+type LayoutScope = "global" | "org" | "tenant" | "user";
+
 function scopeMatches(context: MetadataContext, scopeRow: Record<string, any>) {
   if (scopeRow.scope === "global") return true;
   if (scopeRow.scope === "org") return scopeRow.organizationId === context.organizationId;
   if (scopeRow.scope === "tenant") return scopeRow.tenantId === context.tenantId;
+  if (scopeRow.scope === "user") {
+    return scopeRow.tenantId === context.tenantId && scopeRow.userId === context.userId;
+  }
   return false;
 }
 
 function scopePriority(scope: unknown) {
-  return scope === "global" ? 0 : scope === "org" ? 1 : scope === "tenant" ? 2 : 3;
+  return scope === "global"
+    ? 0
+    : scope === "org"
+      ? 1
+      : scope === "tenant"
+        ? 2
+        : scope === "user"
+          ? 3
+          : 4;
+}
+
+export function mergeLayoutDefinitionsByScope(rows: Array<Record<string, any>>) {
+  const rowsByScope = new Map<LayoutScope, Record<string, any>>();
+
+  for (const row of rows) {
+    if (
+      row.scope === "global" ||
+      row.scope === "org" ||
+      row.scope === "tenant" ||
+      row.scope === "user"
+    ) {
+      rowsByScope.set(row.scope, row);
+    }
+  }
+
+  let effectiveLayout: Record<string, any> = {};
+  for (const scope of ["global", "org", "tenant", "user"] as const) {
+    const row = rowsByScope.get(scope);
+    if (!row) continue;
+    effectiveLayout = {
+      ...effectiveLayout,
+      ...(row.layoutDefinition as Record<string, any>),
+    };
+  }
+
+  const effectiveScope = (["global", "org", "tenant", "user"] as const).reduce<LayoutScope>(
+    (current, scope) => (rowsByScope.has(scope) ? scope : current),
+    "global",
+  );
+  return {
+    effectiveLayout,
+    rowsByScope,
+    effectiveScope,
+  };
 }
 
 function inferOverrideMode(scope: unknown): DesignerOverrideMode {
   if (scope === "global" || scope === "org" || scope === "tenant") return scope;
+  if (scope === "user") return "draft";
   return "derived";
 }
 
@@ -735,10 +785,7 @@ export class MetadataResolver {
       (left, right) => scopePriority(left.scope) - scopePriority(right.scope),
     );
 
-    let effectiveLayout: Record<string, any> = {};
-    for (const layout of ordered) {
-      effectiveLayout = { ...effectiveLayout, ...(layout.layoutDefinition as Record<string, any>) };
-    }
+    const layoutMergeState = mergeLayoutDefinitionsByScope(ordered);
 
     const latestHistory = await this.getLatestHistory(entityName, "layout");
     const historyEntry = latestHistory.get(`layout:${layoutKey}`);
@@ -756,7 +803,9 @@ export class MetadataResolver {
       `layout:${entityName}:${layoutKey}`;
 
     return {
-      effectiveLayout,
+      effectiveLayout: layoutMergeState.effectiveLayout,
+      layoutRowsByScope: layoutMergeState.rowsByScope,
+      effectiveScope: layoutMergeState.effectiveScope,
       conflictState,
       reconciliationRequired: conflictState !== "clean",
       versionInfo: buildVersionInfo({
@@ -1126,6 +1175,15 @@ export class MetadataResolver {
       conflictState: state.conflictState,
       reconciliationRequired: state.reconciliationRequired,
       versionInfo: state.versionInfo,
+      resolution: {
+        effectiveScope: state.effectiveScope,
+        scopes: {
+          global: extractLayoutDefinition(state.layoutRowsByScope.get("global")?.layoutDefinition),
+          org: extractLayoutDefinition(state.layoutRowsByScope.get("org")?.layoutDefinition),
+          tenant: extractLayoutDefinition(state.layoutRowsByScope.get("tenant")?.layoutDefinition),
+          user: extractLayoutDefinition(state.layoutRowsByScope.get("user")?.layoutDefinition),
+        },
+      },
     };
   }
 

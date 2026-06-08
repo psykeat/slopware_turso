@@ -6,6 +6,7 @@ import {
   ProviderConfigurationError,
   ProviderOAuthError,
   ProviderReauthRequiredError,
+  type ProviderContact,
 } from "./provider-adapter";
 import type {
   EmailDraftInput,
@@ -25,6 +26,7 @@ const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/contacts.readonly",
 ];
 
 type GoogleTokenResponse = {
@@ -269,7 +271,10 @@ export class GmailProviderAdapter implements EmailProviderAdapter {
 
   private async request<T>(credentialsEncrypted: string, path: string, init: RequestInit = {}) {
     const token = await this.accessToken(credentialsEncrypted);
-    const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
+    const url = path.startsWith("http")
+      ? path
+      : `https://gmail.googleapis.com/gmail/v1/users/me${path}`;
+    const res = await fetch(url, {
       ...init,
       headers: {
         authorization: `Bearer ${token}`,
@@ -281,7 +286,7 @@ export class GmailProviderAdapter implements EmailProviderAdapter {
       const refreshed = await this.refreshAccessToken(
         decryptEmailCredentials<GmailCredentialBundle>(credentialsEncrypted),
       );
-      const retry = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
+      const retry = await fetch(url, {
         ...init,
         headers: {
           authorization: `Bearer ${refreshed}`,
@@ -397,11 +402,19 @@ export class GmailProviderAdapter implements EmailProviderAdapter {
       credentialsEncrypted,
       `/threads?${params}`,
     );
-    const threads = await Promise.all(
-      (result.threads ?? []).map((thread) =>
-        this.request<GmailThread>(credentialsEncrypted, `/threads/${thread.id}?format=full`),
-      ),
-    );
+    const threads = (
+      await Promise.all(
+        (result.threads ?? []).map((thread) =>
+          this.request<GmailThread>(
+            credentialsEncrypted,
+            `/threads/${thread.id}?format=full`,
+          ).catch((err: any) => {
+            if (err.message && err.message.includes("404")) return null;
+            throw err;
+          }),
+        ),
+      )
+    ).filter((t): t is GmailThread => t !== null);
     const profile = result.nextPageToken
       ? null
       : await this.request<{ historyId?: string }>(credentialsEncrypted, "/profile");
@@ -454,11 +467,18 @@ export class GmailProviderAdapter implements EmailProviderAdapter {
       }
     }
 
-    const messages = await Promise.all(
-      [...messageIds].map((id) =>
-        this.request<GmailMessage>(credentialsEncrypted, `/messages/${id}?format=full`),
-      ),
-    );
+    const messages = (
+      await Promise.all(
+        Array.from(messageIds).map((id) =>
+          this.request<GmailMessage>(credentialsEncrypted, `/messages/${id}?format=full`).catch(
+            (err: any) => {
+              if (err.message && err.message.includes("404")) return null;
+              throw err;
+            },
+          ),
+        ),
+      )
+    ).filter((m): m is GmailMessage => m !== null);
     const grouped = new Map<string, GmailMessage[]>();
     for (const message of messages) {
       grouped.set(message.threadId, [...(grouped.get(message.threadId) ?? []), message]);
@@ -598,5 +618,55 @@ export class GmailProviderAdapter implements EmailProviderAdapter {
       `/messages/${providerMessageId}/attachments/${providerAttachmentId}`,
     );
     return { bytes: decodeBase64Url(result.data), contentType: null };
+  }
+
+  async syncContacts(credentialsEncrypted: string): Promise<ProviderContact[]> {
+    const contacts: ProviderContact[] = [];
+    let pageToken: string | undefined = undefined;
+
+    while (true) {
+      const url = new URL("https://people.googleapis.com/v1/people/me/connections");
+      url.searchParams.set("personFields", "names,emailAddresses");
+      url.searchParams.set("pageSize", "100");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+      let response;
+      try {
+        response = await this.request<{
+          connections?: Array<{
+            resourceName: string;
+            names?: Array<{ givenName?: string; familyName?: string; displayName?: string }>;
+            emailAddresses?: Array<{ value: string }>;
+          }>;
+          nextPageToken?: string;
+        }>(credentialsEncrypted, url.toString());
+      } catch (err: any) {
+        if (err.message && err.message.includes("404")) {
+          return contacts; // If People API returns 404, just return empty/current contacts
+        }
+        throw err;
+      }
+
+      for (const person of response.connections ?? []) {
+        if (!person.emailAddresses || person.emailAddresses.length === 0) continue;
+
+        const nameObj = person.names?.[0];
+
+        for (const emailObj of person.emailAddresses) {
+          if (!emailObj.value) continue;
+          contacts.push({
+            id: `${person.resourceName}-${emailObj.value}`,
+            email: emailObj.value,
+            firstName: nameObj?.givenName ?? null,
+            lastName: nameObj?.familyName ?? null,
+            displayName: nameObj?.displayName ?? null,
+          });
+        }
+      }
+
+      pageToken = response.nextPageToken;
+      if (!pageToken) break;
+    }
+    return contacts;
   }
 }

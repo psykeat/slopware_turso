@@ -59,25 +59,47 @@ export async function buildMimeMessage(draft: EmailDraftInput) {
     )
   ).filter(Boolean) as Array<NonNullable<Awaited<ReturnType<typeof loadDraftAttachment>>>>;
 
+  const hasHtml = Boolean(draft.bodyHtml);
+
+  // Build the body part
+  let bodyPart = "";
+  if (hasHtml) {
+    const altBoundary = `slopware-alt-${randomUUID()}`;
+    const altHeaders = [`Content-Type: multipart/alternative; boundary="${altBoundary}"`];
+
+    const plainPart = [
+      `--${altBoundary}`,
+      `Content-Type: text/plain; charset=UTF-8`,
+      "Content-Transfer-Encoding: base64",
+      "",
+      base64Body(draft.bodyText ?? ""),
+    ].join("\r\n");
+
+    const htmlPart = [
+      `--${altBoundary}`,
+      `Content-Type: text/html; charset=UTF-8`,
+      "Content-Transfer-Encoding: base64",
+      "",
+      base64Body(draft.bodyHtml ?? ""),
+    ].join("\r\n");
+
+    bodyPart = `${altHeaders.join("\r\n")}\r\n\r\n${plainPart}\r\n${htmlPart}\r\n--${altBoundary}--`;
+  } else {
+    const plainHeaders = [
+      `Content-Type: text/plain; charset=UTF-8`,
+      "Content-Transfer-Encoding: base64",
+    ];
+    bodyPart = `${plainHeaders.join("\r\n")}\r\n\r\n${base64Body(draft.bodyText ?? "")}`;
+  }
+
   if (!loadedAttachments.length) {
-    const hasHtml = Boolean(draft.bodyHtml);
-    headers.push(`Content-Type: ${hasHtml ? "text/html" : "text/plain"}; charset=UTF-8`);
-    headers.push("Content-Transfer-Encoding: base64");
-    return `${headers.join("\r\n")}\r\n\r\n${base64Body(draft.bodyHtml ?? draft.bodyText ?? "")}`;
+    return `${headers.join("\r\n")}\r\n${bodyPart}`;
   }
 
   const boundary = `slopware-${randomUUID()}`;
   headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
 
-  const bodyPartHeaders = [
-    `Content-Type: ${draft.bodyHtml ? "text/html" : "text/plain"}; charset=UTF-8`,
-    "Content-Transfer-Encoding: base64",
-  ];
-  const parts = [
-    `--${boundary}\r\n${bodyPartHeaders.join("\r\n")}\r\n\r\n${base64Body(
-      draft.bodyHtml ?? draft.bodyText ?? "",
-    )}`,
-  ];
+  const parts = [`--${boundary}\r\n${bodyPart}`];
 
   for (const attachment of loadedAttachments) {
     const contentType = attachment.contentType ?? "application/octet-stream";

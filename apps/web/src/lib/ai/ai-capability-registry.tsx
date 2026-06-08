@@ -13,8 +13,6 @@ interface AiTaskDefinition<TPayload = any, TValidation = any> {
     validation: TValidation;
     onPatch: (patch: Partial<TPayload>) => void;
     onRequestLookup?: (fieldKey: string, query: string) => Promise<any[]>;
-    allAddresses: any[];
-    allDocuments?: any[];
   }) => React.ReactNode;
 }
 

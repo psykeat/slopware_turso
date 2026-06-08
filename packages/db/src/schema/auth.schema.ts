@@ -18,6 +18,7 @@ export const user = pgTable("user", {
   isActive: boolean("is_active").notNull().default(true),
   lastCompanyId: text("last_company_id"),
   isSystemAdmin: boolean("is_system_admin").notNull().default(false),
+  isTenantAdmin: boolean("is_tenant_admin").notNull().default(false),
   locale: varchar("locale", { length: 5 }).notNull().default("de"),
 });
 

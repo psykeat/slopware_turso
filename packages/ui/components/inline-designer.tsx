@@ -2,6 +2,7 @@ import {
   HistoryIcon,
   RefreshCwIcon,
   RotateCcwIcon,
+  GripVerticalIcon,
   SaveIcon,
   Settings2Icon,
   XIcon,
@@ -10,49 +11,19 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/utils";
-import {
-  type DesignerConflictRecord,
-  type DesignerHistoryEntry,
-  type DesignerPatchOp,
-  type DesignerSurface,
-  type DesignerVersionInfo,
-  type DesignerNode,
-  useDesigner,
-} from "../platform/designer-context";
+import { useDesigner } from "../platform/designer-context";
 import { useFocus } from "../platform/focus-manager";
 import { Input } from "./input";
 
-interface DesignerClientSnapshot {
-  entityName: string | null;
-  surface: DesignerSurface | null;
-  versionInfo: DesignerVersionInfo | null;
-  patchOps: DesignerPatchOp[];
-  conflicts: DesignerConflictRecord[];
-  history: DesignerHistoryEntry[];
-  selectedNodes: DesignerNode[];
-}
+type DragItemKind = "frame" | "field";
 
-interface DesignerClient {
-  load: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
-  save: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
-  reconcile: (snapshot: DesignerClientSnapshot) => Promise<DesignerClientSnapshot>;
-  history: (entityName: string | null) => Promise<DesignerHistoryEntry[]>;
+function parseDragItem(value: string | null): { kind: DragItemKind; id: string } | null {
+  if (!value) return null;
+  const [kind, ...rest] = value.split(":");
+  const id = rest.join(":");
+  if ((kind !== "frame" && kind !== "field") || !id) return null;
+  return { kind, id };
 }
-
-const designerClient: DesignerClient = {
-  async load(snapshot) {
-    return snapshot;
-  },
-  async save(snapshot) {
-    return snapshot;
-  },
-  async reconcile(snapshot) {
-    return snapshot;
-  },
-  async history() {
-    return [];
-  },
-};
 
 function formatValue(value: unknown) {
   if (value === null || value === undefined) return "∅";
@@ -113,6 +84,26 @@ function CompactSection({
   );
 }
 
+const focusableSelector = [
+  "button:not([disabled])",
+  "[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function getFocusableElements(root: HTMLElement | null) {
+  if (!root) {
+    return [];
+  }
+
+  return Array.from(root.querySelectorAll<HTMLElement>(focusableSelector)).filter((element) => {
+    const style = window.getComputedStyle(element);
+    return style.display !== "none" && style.visibility !== "hidden";
+  });
+}
+
 export function InlineDesigner() {
   const { t } = useTranslation("ui");
   const { state: focusState } = useFocus();
@@ -120,20 +111,29 @@ export function InlineDesigner() {
     isDesignMode,
     activeSurface,
     activeSurfaceState,
+    delta,
     selectedNodes,
     closeDesignMode,
     resetDelta,
+    saveDesign,
     applyDesign,
     reconcileDesign,
+    moveFrame,
+    moveField,
+    moveFieldToEnd,
     updateFrameLabel,
+    updateDelta,
+    selectDesignerNodes,
   } = useDesigner();
   const [busyAction, setBusyAction] = useState<"save" | "apply" | "reconcile" | null>(null);
   const [editingFrameId, setEditingFrameId] = useState<string | null>(null);
   const [editingFrameLabel, setEditingFrameLabel] = useState("");
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const frameLabelInputRef = useRef<HTMLInputElement>(null);
   const ignoreNextFrameBlurRef = useRef(false);
 
-  const snapshot = useMemo<DesignerClientSnapshot>(
+  const snapshot = useMemo(
     () => ({
       entityName: activeSurfaceState?.entityName ?? focusState.entity ?? null,
       surface: activeSurfaceState?.surface ?? activeSurface,
@@ -167,6 +167,36 @@ export function InlineDesigner() {
     [activeSurfaceState?.nodes],
   );
 
+  const fieldNodes = useMemo(
+    () =>
+      [...(activeSurfaceState?.nodes ?? [])]
+        .filter((node) => node.kind === "field-ref" || node.kind === "jsonb-field")
+        .sort(
+          (left, right) =>
+            left.displayOrder - right.displayOrder || left.id.localeCompare(right.id),
+        ),
+    [activeSurfaceState?.nodes],
+  );
+
+  const nodeById = useMemo(
+    () => new Map((activeSurfaceState?.nodes ?? []).map((item) => [item.id, item])),
+    [activeSurfaceState?.nodes],
+  );
+
+  const fieldsByFrameId = useMemo(() => {
+    const grouped = new Map<string, typeof fieldNodes>();
+    for (const field of fieldNodes) {
+      const frameId = field.parentId ?? "default";
+      const bucket = grouped.get(frameId);
+      if (bucket) {
+        bucket.push(field);
+      } else {
+        grouped.set(frameId, [field]);
+      }
+    }
+    return grouped;
+  }, [fieldNodes]);
+
   const node = selectedNodes[0] ?? null;
   const patchOps = snapshot.patchOps;
   const history = snapshot.history;
@@ -177,7 +207,15 @@ export function InlineDesigner() {
   const handleSave = async () => {
     setBusyAction("save");
     try {
-      await designerClient.save(snapshot);
+      await saveDesign();
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleApply = async () => {
+    setBusyAction("apply");
+    try {
       await applyDesign();
     } finally {
       setBusyAction(null);
@@ -187,7 +225,6 @@ export function InlineDesigner() {
   const handleReconcile = async () => {
     setBusyAction("reconcile");
     try {
-      await designerClient.reconcile(snapshot);
       await reconcileDesign();
     } finally {
       setBusyAction(null);
@@ -200,6 +237,112 @@ export function InlineDesigner() {
 
   const handleClose = () => {
     closeDesignMode();
+  };
+
+  const clearDragState = () => {
+    updateDelta({ activeDragId: null, hoverTargetId: null });
+  };
+
+  const handleDragStart = (kind: DragItemKind, id: string) => (event: React.DragEvent) => {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `${kind}:${id}`);
+    updateDelta({ activeDragId: id, hoverTargetId: id });
+  };
+
+  const handleDragEnd = () => {
+    clearDragState();
+  };
+
+  const handleFrameDrop = (targetFrameId: string) => (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const payload = parseDragItem(event.dataTransfer.getData("text/plain"));
+    const sourceId = payload?.id ?? delta.activeDragId;
+    const sourceNode = sourceId ? nodeById.get(sourceId) : null;
+
+    if (!sourceNode || sourceId === targetFrameId) {
+      clearDragState();
+      return;
+    }
+
+    if (sourceNode.kind === "group-frame") {
+      moveFrame(sourceId, targetFrameId);
+    } else if (sourceNode.kind === "field-ref" || sourceNode.kind === "jsonb-field") {
+      moveFieldToEnd(sourceId, targetFrameId);
+    }
+
+    clearDragState();
+  };
+
+  const handleFieldDrop = (targetFieldId: string) => (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const payload = parseDragItem(event.dataTransfer.getData("text/plain"));
+    const sourceId = payload?.id ?? delta.activeDragId;
+    const sourceNode = sourceId ? nodeById.get(sourceId) : null;
+
+    if (!sourceNode || sourceId === targetFieldId) {
+      clearDragState();
+      return;
+    }
+
+    if (sourceNode.kind === "group-frame") {
+      clearDragState();
+      return;
+    }
+
+    moveField(sourceId, targetFieldId);
+    clearDragState();
+  };
+
+  useEffect(() => {
+    if (!isDesignMode) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      const preferred = closeButtonRef.current;
+      const focusable = getFocusableElements(panelRef.current);
+      (preferred ?? focusable[0] ?? panelRef.current)?.focus();
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [isDesignMode]);
+
+  const handlePanelKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeDesignMode();
+      return;
+    }
+
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusable = getFocusableElements(panelRef.current);
+    if (focusable.length === 0) {
+      event.preventDefault();
+      panelRef.current?.focus();
+      return;
+    }
+
+    const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+    const lastIndex = focusable.length - 1;
+
+    if (event.shiftKey) {
+      if (currentIndex <= 0) {
+        event.preventDefault();
+        focusable[lastIndex]?.focus();
+      }
+      return;
+    }
+
+    if (currentIndex === -1 || currentIndex === lastIndex) {
+      event.preventDefault();
+      focusable[0]?.focus();
+    }
   };
 
   useEffect(() => {
@@ -245,7 +388,15 @@ export function InlineDesigner() {
 
   return (
     <aside className="pointer-events-none fixed right-3 bottom-3 z-50 w-[min(94vw,420px)]">
-      <div className="pointer-events-auto flex max-h-[min(72vh,680px)] flex-col overflow-hidden rounded-xl border border-hairline bg-canvas shadow-[0_24px_48px_rgba(13,37,61,0.18)]">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        onKeyDown={handlePanelKeyDown}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("designer.title", "Inline Designer")}
+        className="pointer-events-auto flex max-h-[min(72vh,680px)] flex-col overflow-hidden rounded-xl border border-hairline bg-canvas shadow-[0_24px_48px_rgba(13,37,61,0.18)] outline-none"
+      >
         <div className="flex items-start justify-between gap-3 border-b border-hairline bg-canvas-soft px-3 py-2.5">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -269,6 +420,7 @@ export function InlineDesigner() {
 
           <button
             type="button"
+            ref={closeButtonRef}
             onClick={handleClose}
             className="text-ink-muted grid size-7 shrink-0 place-items-center rounded-full border border-hairline transition-colors hover:border-hairline-input hover:text-ink"
             title={t("designer.close", "Close designer")}
@@ -283,58 +435,168 @@ export function InlineDesigner() {
             icon={<Settings2Icon className="text-ink-muted size-3.5" />}
           >
             {frameNodes.length > 0 ? (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {frameNodes.map((frame) => {
                   const isEditing = editingFrameId === frame.id;
+                  const frameFields = fieldsByFrameId.get(frame.id) ?? [];
+                  const isDraggingFrame = delta.activeDragId === frame.id;
+                  const isHoverTarget = delta.hoverTargetId === frame.id;
 
                   return (
                     <div
                       key={frame.id}
-                      className="rounded-lg border border-hairline bg-canvas-soft px-2.5 py-2 text-[11px]"
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        updateDelta({ hoverTargetId: frame.id });
+                      }}
+                      onDragLeave={(event) => {
+                        if (
+                          event.relatedTarget instanceof Node &&
+                          event.currentTarget.contains(event.relatedTarget)
+                        ) {
+                          return;
+                        }
+                        if (delta.hoverTargetId === frame.id) {
+                          updateDelta({ hoverTargetId: null });
+                        }
+                      }}
+                      onDrop={handleFrameDrop(frame.id)}
+                      className={cn(
+                        "rounded-lg border border-hairline bg-canvas-soft px-2.5 py-2 text-[11px] transition-colors",
+                        isDraggingFrame && "opacity-60",
+                        isHoverTarget &&
+                          "border-primary/55 bg-primary/[0.04] ring-1 ring-primary/20",
+                      )}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-ink-muted font-mono">{frame.id}</span>
-                        <span className="text-ink-muted rounded-full border border-hairline bg-canvas px-2 py-0.5 font-mono text-[10px]">
-                          {frame.children.length}
-                        </span>
-                      </div>
-                      <div className="mt-2">
-                        {isEditing ? (
-                          <Input
-                            ref={frameLabelInputRef}
-                            value={editingFrameLabel}
-                            onChange={(event) => setEditingFrameLabel(event.target.value)}
-                            onBlur={() => {
-                              if (ignoreNextFrameBlurRef.current) {
-                                ignoreNextFrameBlurRef.current = false;
-                                return;
-                              }
-                              commitFrameEdit(frame.id, editingFrameLabel);
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                commitFrameEdit(frame.id, editingFrameLabel);
-                              }
-                              if (event.key === "Escape") {
-                                event.preventDefault();
-                                cancelFrameEdit();
-                              }
-                            }}
-                            className="h-7 text-[12px]"
-                            aria-label={t("designer.frameLabel", "Frame label")}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => startFrameEdit(frame.id, frame.label)}
-                            className={cn(
-                              "w-full rounded-md border border-transparent px-2 py-1 text-left text-[12px] font-medium text-ink transition-colors",
-                              "hover:border-hairline hover:bg-canvas",
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          draggable
+                          onDragStart={handleDragStart("frame", frame.id)}
+                          onDragEnd={handleDragEnd}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => event.stopPropagation()}
+                          className="text-ink-muted grid size-6 shrink-0 place-items-center rounded border border-hairline bg-canvas transition-colors hover:border-hairline-input hover:text-ink"
+                          aria-label={t("designer.frameDrag", "Drag frame")}
+                        >
+                          <GripVerticalIcon className="size-3" />
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-ink-muted font-mono">{frame.id}</span>
+                            <span className="text-ink-muted rounded-full border border-hairline bg-canvas px-2 py-0.5 font-mono text-[10px]">
+                              {frameFields.length}
+                            </span>
+                          </div>
+                          <div className="mt-2">
+                            {isEditing ? (
+                              <Input
+                                ref={frameLabelInputRef}
+                                value={editingFrameLabel}
+                                onChange={(event) => setEditingFrameLabel(event.target.value)}
+                                onBlur={() => {
+                                  if (ignoreNextFrameBlurRef.current) {
+                                    ignoreNextFrameBlurRef.current = false;
+                                    return;
+                                  }
+                                  commitFrameEdit(frame.id, editingFrameLabel);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    commitFrameEdit(frame.id, editingFrameLabel);
+                                  }
+                                  if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    cancelFrameEdit();
+                                  }
+                                }}
+                                className="h-7 text-[12px]"
+                                aria-label={t("designer.frameLabel", "Frame label")}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => startFrameEdit(frame.id, frame.label)}
+                                className={cn(
+                                  "w-full rounded-md border border-transparent px-2 py-1 text-left text-[12px] font-medium text-ink transition-colors",
+                                  "hover:border-hairline hover:bg-canvas",
+                                )}
+                              >
+                                {frame.label || t("designer.node.unlabeled", "Unlabeled")}
+                              </button>
                             )}
-                          >
-                            {frame.label || t("designer.node.unlabeled", "Unlabeled")}
-                          </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2 space-y-1.5">
+                        {frameFields.length > 0 ? (
+                          frameFields.map((field) => {
+                            const isDraggingField = delta.activeDragId === field.id;
+                            const isHoveringField = delta.hoverTargetId === field.id;
+
+                            return (
+                              <div
+                                key={field.id}
+                                onDragOver={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  updateDelta({ hoverTargetId: field.id });
+                                }}
+                                onDragLeave={(event) => {
+                                  if (
+                                    event.relatedTarget instanceof Node &&
+                                    event.currentTarget.contains(event.relatedTarget)
+                                  ) {
+                                    return;
+                                  }
+                                  if (delta.hoverTargetId === field.id) {
+                                    updateDelta({ hoverTargetId: null });
+                                  }
+                                }}
+                                onDrop={handleFieldDrop(field.id)}
+                                className={cn(
+                                  "flex items-center gap-2 rounded-md border border-transparent bg-canvas px-2 py-1.5 transition-colors",
+                                  isDraggingField && "opacity-60",
+                                  isHoveringField &&
+                                    "border-primary/55 bg-primary/[0.04] ring-1 ring-primary/20",
+                                )}
+                              >
+                                <button
+                                  type="button"
+                                  draggable
+                                  onDragStart={handleDragStart("field", field.id)}
+                                  onDragEnd={handleDragEnd}
+                                  onMouseDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    selectDesignerNodes("triview-detail", [field.id], entityName);
+                                  }}
+                                  className="text-ink-muted grid size-5 shrink-0 place-items-center rounded border border-hairline transition-colors hover:border-hairline-input hover:text-ink"
+                                  aria-label={t("designer.fieldDrag", "Drag field")}
+                                >
+                                  <GripVerticalIcon className="size-2.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    selectDesignerNodes("triview-detail", [field.id], entityName)
+                                  }
+                                  className="min-w-0 flex-1 truncate text-left text-[12px] font-medium text-ink transition-colors hover:text-primary"
+                                >
+                                  {field.label}
+                                </button>
+                                <span className="text-ink-muted shrink-0 font-mono text-[9px] uppercase">
+                                  {field.kind === "jsonb-field" ? "jsonb" : "schema"}
+                                </span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-ink-muted rounded-md border border-dashed border-hairline px-2 py-2 text-[11px]">
+                            {t("designer.frameEmpty", "Drop a field here")}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -568,6 +830,18 @@ export function InlineDesigner() {
             >
               <SaveIcon className="size-3.5" />
               {busyAction === "save" ? t("designer.saving", "Saving…") : t("designer.save", "Save")}
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={busyAction !== null}
+              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-full px-3 text-[12px] text-[var(--primary-fg)] transition-colors disabled:opacity-50"
+              style={{ background: "var(--primary)" }}
+            >
+              <SaveIcon className="size-3.5" />
+              {busyAction === "apply"
+                ? t("designer.applying", "Applying…")
+                : t("designer.apply", "Apply")}
             </button>
             <button
               type="button"

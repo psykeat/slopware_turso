@@ -9,6 +9,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { useAddresses, useDocuments } from "../hooks/useAiData";
+import { formatAddressLabel, formatDocumentLabel, safeIdPrefix } from "./mail-review-labels";
+
 type ResolverCandidate = {
   id: string;
   label: string;
@@ -72,37 +75,26 @@ type BundleReviewPayload = {
 };
 
 function slotValue(slot: ResolverSlot) {
-  return slot.resolvedId ?? slot.displayValue ?? "";
+  return slot.resolvedId ?? slot.displayValue ?? "Unaufgelöst";
+}
+
+function searchText(value: unknown): string {
+  return typeof value === "string" ? value.toLowerCase() : "";
 }
 
 export function MailOrderReview({
   suggestionPayload,
   validation,
   onPatch,
-  allAddresses,
-  allDocuments = [],
 }: {
   suggestionPayload: BundleReviewPayload;
   validation: any;
   onPatch: (patch: Partial<BundleReviewPayload>) => void;
-  allAddresses: Array<{
-    addressId: string;
-    addressNo?: string | null;
-    companyName?: string | null;
-    firstName?: string | null;
-    lastName?: string | null;
-    city?: string | null;
-  }>;
-  allDocuments?: Array<{
-    documentId: string;
-    documentNo?: string | null;
-    documentType?: string | null;
-    companyName?: string | null;
-    customerName?: string | null;
-  }>;
 }) {
   const [bundleOpen, setBundleOpen] = useState(true);
   const bundles = Array.isArray(suggestionPayload.bundles) ? suggestionPayload.bundles : [];
+  const { data: addresses = [] } = useAddresses();
+  const { data: documents = [] } = useDocuments();
   const [manualLookupSlot, setManualLookupSlot] = useState<"customer" | "referenceDocument" | null>(
     null,
   );
@@ -112,25 +104,6 @@ export function MailOrderReview({
     bundles.find((bundle) => bundle.bundleId === suggestionPayload.selectedBundleId) ||
     bundles.find((bundle) => bundle.recommended) ||
     bundles[0];
-
-  const addressLabel = (addressId: string, fallback?: string) => {
-    const address = allAddresses.find((item) => item.addressId === addressId);
-    if (!address) return fallback || addressId.slice(0, 8);
-    return (
-      address.companyName?.trim() ||
-      [address.firstName, address.lastName].filter(Boolean).join(" ").trim() ||
-      `Geschäftspartner #${address.addressNo || address.addressId.slice(0, 8)}`
-    );
-  };
-
-  const documentLabel = (documentId: string, fallback?: string) => {
-    const document = allDocuments.find((item) => item.documentId === documentId);
-    if (!document) return fallback || documentId.slice(0, 8);
-    const type = document.documentType?.trim() || "Beleg";
-    const number = document.documentNo?.trim() || document.documentId.slice(0, 8);
-    const company = document.companyName?.trim() || document.customerName?.trim();
-    return company ? `${type} ${number} · ${company}` : `${type} ${number}`;
-  };
 
   const setSelectedSlotValue = (slotKey: ResolverSlot["slotKey"], id: string) => {
     if (slotKey === "customer") {
@@ -153,15 +126,15 @@ export function MailOrderReview({
   const warnings = suggestionPayload.warnings || [];
   const documentSearch = manualSearchQuery.trim().toLowerCase();
   const filteredDocuments = documentSearch
-    ? allDocuments.filter((document) => {
-        const label = documentLabel(document.documentId, "").toLowerCase();
+    ? documents.filter((document: any) => {
+        const label = formatDocumentLabel(document, "").toLowerCase();
         return (
           label.includes(documentSearch) ||
-          (document.documentNo || "").toLowerCase().includes(documentSearch) ||
-          (document.companyName || "").toLowerCase().includes(documentSearch)
+          searchText(document.documentNo).includes(documentSearch) ||
+          searchText(document.companyName).includes(documentSearch)
         );
       })
-    : allDocuments.slice(0, 12);
+    : documents.slice(0, 12);
 
   return (
     <div className="space-y-4 text-[13px]">
@@ -307,9 +280,9 @@ export function MailOrderReview({
                     </div>
 
                     <div className="mt-3 grid gap-2">
-                      {resolverSlots.map((slot) => (
+                      {resolverSlots.map((slot, slotIndex) => (
                         <div
-                          key={slot.slotKey}
+                          key={`${slot.slotKey}-${slotIndex}`}
                           className="rounded-md border border-hairline bg-canvas p-3"
                         >
                           <div className="flex items-center justify-between gap-3">
@@ -334,7 +307,7 @@ export function MailOrderReview({
 
                           {slot.candidates.length > 0 && (
                             <div className="mt-2 space-y-1.5">
-                              {slot.candidates.map((candidate) => {
+                              {slot.candidates.map((candidate, candidateIndex) => {
                                 const isSelected =
                                   slot.slotKey === "customer"
                                     ? selectedAddressId === candidate.id
@@ -344,7 +317,7 @@ export function MailOrderReview({
 
                                 return (
                                   <button
-                                    key={candidate.id}
+                                    key={candidate.id || `${slot.slotKey}-${candidateIndex}`}
                                     type="button"
                                     onClick={() => setSelectedSlotValue(slot.slotKey, candidate.id)}
                                     className={cn(
@@ -373,8 +346,17 @@ export function MailOrderReview({
                                     <div className="min-w-0 flex-1">
                                       <div className="truncate font-medium text-ink">
                                         {slot.slotKey === "customer"
-                                          ? addressLabel(candidate.id, candidate.label)
-                                          : candidate.label}
+                                          ? formatAddressLabel(
+                                              addresses.find(
+                                                (item: any) => item.addressId === candidate.id,
+                                              ) ?? {
+                                                addressId: candidate.id,
+                                                addressNo: safeIdPrefix(candidate.id),
+                                                companyName: candidate.label,
+                                              },
+                                              candidate.label || "Unaufgelöst",
+                                            )
+                                          : candidate.label || "Unaufgelöst"}
                                       </div>
                                       <div className="truncate text-[11px] text-ink-mute">
                                         {candidate.recommended ? "Vorgeschlagen" : "Alternative"}
@@ -514,16 +496,13 @@ export function MailOrderReview({
                 <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
                   {manualLookupSlot === "customer" &&
                     (manualSearchQuery.trim()
-                      ? allAddresses.filter((address) => {
-                          const label = addressLabel(address.addressId, "").toLowerCase();
+                      ? addresses.filter((address: any) => {
+                          const label = formatAddressLabel(address, "").toLowerCase();
                           const query = manualSearchQuery.toLowerCase();
-                          return (
-                            label.includes(query) ||
-                            (address.city || "").toLowerCase().includes(query)
-                          );
+                          return label.includes(query) || searchText(address.city).includes(query);
                         })
-                      : allAddresses.slice(0, 12)
-                    ).map((address) => (
+                      : addresses.slice(0, 12)
+                    ).map((address: any) => (
                       <button
                         key={address.addressId}
                         type="button"
@@ -540,7 +519,7 @@ export function MailOrderReview({
                         )}
                       >
                         <span className="truncate font-medium text-ink">
-                          {addressLabel(address.addressId)}
+                          {formatAddressLabel(address)}
                         </span>
                         {address.city && (
                           <span className="ml-2 shrink-0 text-[11px] text-ink-mute">
@@ -551,7 +530,7 @@ export function MailOrderReview({
                     ))}
 
                   {manualLookupSlot === "referenceDocument" &&
-                    filteredDocuments.map((document) => (
+                    filteredDocuments.map((document: any) => (
                       <button
                         key={document.documentId}
                         type="button"
@@ -568,7 +547,7 @@ export function MailOrderReview({
                         )}
                       >
                         <span className="truncate font-medium text-ink">
-                          {documentLabel(document.documentId)}
+                          {formatDocumentLabel(document)}
                         </span>
                         <span className="ml-2 shrink-0 text-[11px] text-ink-mute">
                           {document.documentType || "Beleg"}
@@ -581,15 +560,12 @@ export function MailOrderReview({
                   )}
                   {manualLookupSlot === "customer" &&
                     (manualSearchQuery.trim()
-                      ? allAddresses.filter((address) => {
-                          const label = addressLabel(address.addressId, "").toLowerCase();
+                      ? addresses.filter((address: any) => {
+                          const label = formatAddressLabel(address, "").toLowerCase();
                           const query = manualSearchQuery.toLowerCase();
-                          return (
-                            label.includes(query) ||
-                            (address.city || "").toLowerCase().includes(query)
-                          );
+                          return label.includes(query) || searchText(address.city).includes(query);
                         })
-                      : allAddresses.slice(0, 12)
+                      : addresses.slice(0, 12)
                     ).length === 0 && (
                       <div className="px-3 py-2 text-[12px] text-ink-mute">
                         Keine Geschäftspartner gefunden

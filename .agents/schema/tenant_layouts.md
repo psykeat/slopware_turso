@@ -8,6 +8,7 @@
 | scope             | scope             | text                     | —     | NOT NULL, DEFAULT tenant   |             |
 | organization_id   | organization_id   | uuid                     | —     |                            |             |
 | tenant_id         | tenant_id         | uuid                     | —     |                            |             |
+| user_id           | user_id           | text                     | —     |                            |             |
 | entity_name       | entity_name       | text                     | —     | NOT NULL                   |             |
 | layout_key        | layout_key        | text                     | —     | NOT NULL                   |             |
 | layout_definition | layout_definition | jsonb                    | —     | NOT NULL                   |             |
@@ -16,3 +17,4 @@
 > INDEX `uq_layouts_global` (entity_name, layout_key) [btree]
 > INDEX `uq_layouts_org` (organization_id, entity_name, layout_key) [btree]
 > INDEX `uq_layouts_tenant` (tenant_id, entity_name, layout_key) [btree]
+> INDEX `uq_layouts_user` (tenant_id, user_id, entity_name, layout_key) [btree]

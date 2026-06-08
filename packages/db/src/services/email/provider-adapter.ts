@@ -8,6 +8,14 @@ import type {
   SyncPage,
 } from "./types";
 
+export interface ProviderContact {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+}
+
 export interface EmailProviderConnection {
   provider: EmailProvider;
   providerAccountId: string;
@@ -49,6 +57,7 @@ export interface EmailProviderAdapter {
     providerMessageId: string,
     providerAttachmentId: string,
   ): Promise<{ contentType?: string | null; bytes: Uint8Array }>;
+  syncContacts(credentialsEncrypted: string): Promise<ProviderContact[]>;
   consumeUpdatedCredentials?(): string | null;
 }
 

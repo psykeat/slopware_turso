@@ -368,9 +368,10 @@ export const Route = createFileRoute("/api/ai/$")({
 
                   const { AIOrchestratorService } =
                     await import("@repo/db/services/ai-orchestrator");
+                  const rawContext = snapshot.contentText || JSON.stringify(snapshot);
                   const analysisRes = await AIOrchestratorService.runMailAgentAnalysis({
                     threadId: sessionRow.focusId,
-                    rawInput: snapshot.contentText || JSON.stringify(snapshot),
+                    rawInput: `<business_context>\n${rawContext}\n</business_context>`,
                     tenantId,
                     userId,
                     sessionId,
@@ -406,25 +407,12 @@ export const Route = createFileRoute("/api/ai/$")({
                     tenantId,
                   });
 
-                  const selectedBundle =
-                    reviewRes.review.bundles?.find(
-                      (bundle: any) => bundle.bundleId === reviewRes.review.selectedBundleId,
-                    ) ??
-                    reviewRes.review.bundles?.[0] ??
-                    null;
-                  const payload = {
+                  const { normalizeMailReviewPayload } =
+                    await import("@repo/db/services/mail-review-contract");
+                  const payload = normalizeMailReviewPayload({
                     ...reviewRes.review,
-                    selectedBundleId: reviewRes.review.selectedBundleId ?? null,
-                    selectedAddressId:
-                      selectedBundle?.resolverSlots?.find(
-                        (slot: any) => slot.slotKey === "customer",
-                      )?.resolvedId ?? null,
-                    selectedDocumentId:
-                      selectedBundle?.resolverSlots?.find(
-                        (slot: any) => slot.slotKey === "referenceDocument",
-                      )?.resolvedId ?? null,
                     extraReplyInstruction: "",
-                  };
+                  });
 
                   sendEvent("review", {
                     reviewId: reviewRes.reviewId,
@@ -901,7 +889,7 @@ export const Route = createFileRoute("/api/ai/$")({
             const { AIOrchestratorService } = await import("@repo/db/services/ai-orchestrator");
             const interpretRes = await AIOrchestratorService.interpretMailThread({
               threadId: emailThreadId || crypto.randomUUID(),
-              rawInput: body.rawInput,
+              rawInput: `<business_context>\n${body.rawInput}\n</business_context>`,
               tenantId,
               userId,
             });
@@ -921,14 +909,17 @@ export const Route = createFileRoute("/api/ai/$")({
               reviewId: reviewRes.reviewId,
               tenantId,
             });
+            const { normalizeMailReviewPayload } =
+              await import("@repo/db/services/mail-review-contract");
+            const payload = normalizeMailReviewPayload(reviewRes.review);
 
             // Convert the bundle review back to legacy step format for compatibility.
             const steps: any[] = [];
             const selectedBundle =
-              reviewRes.review.bundles?.find(
-                (bundle: any) => bundle.bundleId === reviewRes.review.selectedBundleId,
+              payload.bundles?.find(
+                (bundle: any) => bundle.bundleId === payload.selectedBundleId,
               ) ??
-              reviewRes.review.bundles?.[0] ??
+              payload.bundles?.[0] ??
               null;
             const customerSlot = selectedBundle?.resolverSlots?.find(
               (slot: any) => slot.slotKey === "customer",
@@ -1078,7 +1069,10 @@ export const Route = createFileRoute("/api/ai/$")({
               resolution: body.resolution,
               tenantId,
             });
-            return new Response(JSON.stringify(result), {
+            const { normalizeMailReviewPayload } =
+              await import("@repo/db/services/mail-review-contract");
+            const payload = normalizeMailReviewPayload(result.review);
+            return new Response(JSON.stringify({ ...result, review: payload }), {
               headers: { "content-type": "application/json" },
             });
           }
@@ -1120,7 +1114,14 @@ export const Route = createFileRoute("/api/ai/$")({
           if (path === "/api/ai/inline-edit") {
             const body = (await request.json()) as {
               text: string;
-              action: "improve" | "shorten" | "formal" | "translate";
+              action:
+                | "improve"
+                | "shorten"
+                | "formal"
+                | "translate"
+                | "rephrase"
+                | "lookup"
+                | "explain";
             };
 
             if (!body.text || !body.action) {
@@ -1134,14 +1135,18 @@ export const Route = createFileRoute("/api/ai/$")({
             const llm = await resolveLlmRuntimeConfig(tenantId, userId);
 
             let prompt = "";
-            if (body.action === "improve") {
-              prompt = `Verbessere den folgenden Text bezüglich Grammatik, Stil und Lesbarkeit. Behalte den Inhalt und die Bedeutung bei:\n\n${body.text}`;
+            if (body.action === "improve" || body.action === "rephrase") {
+              prompt = `Formuliere den folgenden Text um, verbessere Stil und Lesbarkeit. Gib nur den neuen Text zurück, ohne Optionen zur Auswahl und ohne Markdown (keine ** oder #):\n\n${body.text}`;
             } else if (body.action === "shorten") {
               prompt = `Kürze den folgenden Text auf das Wesentliche, ohne wichtige Informationen zu verlieren:\n\n${body.text}`;
             } else if (body.action === "formal") {
               prompt = `Formuliere den folgenden Text professioneller, höflicher und formeller (z.B. Sie-Form):\n\n${body.text}`;
             } else if (body.action === "translate") {
               prompt = `Übersetze den folgenden Text. Wenn er auf Deutsch ist, übersetze ihn ins Englische. Wenn er auf Englisch (oder einer anderen Sprache) ist, übersetze ihn ins Deutsche:\n\n${body.text}`;
+            } else if (body.action === "lookup") {
+              prompt = `Fasse die wichtigsten Informationen zu folgendem Begriff prägnant zusammen (bitte als reiner Text ohne Markdown):\n\n${body.text}`;
+            } else if (body.action === "explain") {
+              prompt = `Erkläre den folgenden Textabschnitt kurz und verständlich (bitte als reiner Text ohne Markdown):\n\n${body.text}`;
             }
 
             const { createConfiguredProvider } = await import("@repo/agent");
@@ -1155,9 +1160,16 @@ export const Route = createFileRoute("/api/ai/$")({
               vertexLocation: llm.vertexLocation || undefined,
             });
 
-            const responseText = (await provider.chat({
+            const response = await provider.chat({
               messages: [{ role: "user", content: prompt }],
-            })) as string;
+            });
+
+            const responseText =
+              typeof response === "string"
+                ? response
+                : response && typeof response === "object" && "content" in response
+                  ? String((response as { content: unknown }).content ?? "")
+                  : String(response ?? "");
 
             return new Response(JSON.stringify({ result: responseText.trim() }), {
               headers: { "content-type": "application/json" },

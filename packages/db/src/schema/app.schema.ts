@@ -316,11 +316,10 @@ export const addressContact = pgTable(
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenant.tenantId),
-    addressId: uuid("address_id")
-      .notNull()
-      .references(() => address.addressId),
+    addressId: uuid("address_id").references(() => address.addressId),
     firstName: text("first_name"),
     lastName: text("last_name").notNull(),
+    displayName: text("display_name"),
     notiztext: text("notiztext"),
     notiztextSourceEntity: text("notiztext_source_entity"),
     notiztextSourceId: uuid("notiztext_source_id"),
@@ -334,10 +333,42 @@ export const addressContact = pgTable(
     isPrimary: boolean("is_primary").notNull().default(false),
     archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
   (table) => [
     index("idx_address_contact_address").on(table.addressId),
     index("idx_address_contact_tenant").on(table.tenantId),
+  ],
+);
+
+export const addressContactIdentity = pgTable(
+  "address_contact_identity",
+  {
+    identityId: uuid("identity_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => addressContact.contactId),
+    sourceSystem: text("source_system").notNull(),
+    sourceAccountId: uuid("source_account_id"),
+    sourceObjectId: text("source_object_id"),
+    identityType: text("identity_type").notNull(),
+    value: text("value").notNull(),
+    normalizedValue: text("normalized_value").notNull(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    isVerified: boolean("is_verified").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_address_contact_identity_tenant").on(table.tenantId),
+    index("idx_address_contact_identity_contact").on(table.contactId),
+    index("idx_address_contact_identity_value").on(table.value),
+    index("idx_address_contact_identity_normalized").on(table.normalizedValue),
   ],
 );
 
@@ -506,6 +537,133 @@ export const articleImage = pgTable(
     unique("article_image_tenant_id_image_id_key").on(table.tenantId, table.articleImageId),
     index("idx_article_image_tenant_article").on(table.tenantId, table.articleId),
     index("idx_article_image_tenant_archived").on(table.tenantId, table.archived),
+  ],
+);
+
+export const mediaAsset = pgTable(
+  "media_asset",
+  {
+    mediaAssetId: uuid("media_asset_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    storageKey: text("storage_key").notNull(),
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    fileSize: integer("file_size"),
+    width: integer("width"),
+    height: integer("height"),
+    altText: text("alt_text"),
+    checksum: text("checksum"),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("media_asset_tenant_id_media_asset_id_key").on(table.tenantId, table.mediaAssetId),
+    unique("media_asset_tenant_id_storage_key_unique").on(table.tenantId, table.storageKey),
+    index("idx_media_asset_tenant").on(table.tenantId),
+    index("idx_media_asset_tenant_archived").on(table.tenantId, table.archived),
+  ],
+);
+
+export const articleMedia = pgTable(
+  "article_media",
+  {
+    articleMediaId: uuid("article_media_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => article.articleId),
+    variantId: uuid("variant_id").references(() => articleVariant.variantId),
+    mediaAssetId: uuid("media_asset_id")
+      .notNull()
+      .references(() => mediaAsset.mediaAssetId),
+    role: text("role").notNull().default("gallery"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("article_media_tenant_id_article_media_id_key").on(table.tenantId, table.articleMediaId),
+    unique("article_media_tenant_id_article_media_unique").on(
+      table.tenantId,
+      table.articleId,
+      table.variantId,
+      table.mediaAssetId,
+      table.role,
+    ),
+    index("idx_article_media_tenant_article").on(table.tenantId, table.articleId),
+    index("idx_article_media_tenant_variant").on(table.tenantId, table.variantId),
+    index("idx_article_media_tenant_asset").on(table.tenantId, table.mediaAssetId),
+  ],
+);
+
+export const category = pgTable(
+  "category",
+  {
+    categoryId: uuid("category_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    parentCategoryId: uuid("parent_category_id"),
+    code: text("code"),
+    name: text("name").notNull(),
+    slug: text("slug"),
+    description: text("description"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("category_tenant_id_category_id_key").on(table.tenantId, table.categoryId),
+    unique("category_tenant_id_code_unique").on(table.tenantId, table.code),
+    unique("category_tenant_id_slug_unique").on(table.tenantId, table.slug),
+    index("idx_category_tenant").on(table.tenantId),
+    index("idx_category_parent").on(table.tenantId, table.parentCategoryId),
+    index("idx_category_tenant_archived").on(table.tenantId, table.archived),
+  ],
+);
+
+export const articleCategory = pgTable(
+  "article_category",
+  {
+    articleCategoryId: uuid("article_category_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => article.articleId),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => category.categoryId),
+    sortOrder: integer("sort_order").notNull().default(0),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("article_category_tenant_id_article_category_id_key").on(
+      table.tenantId,
+      table.articleCategoryId,
+    ),
+    unique("article_category_tenant_id_article_category_unique").on(
+      table.tenantId,
+      table.articleId,
+      table.categoryId,
+    ),
+    index("idx_article_category_tenant_article").on(table.tenantId, table.articleId),
+    index("idx_article_category_tenant_category").on(table.tenantId, table.categoryId),
   ],
 );
 
@@ -834,6 +992,7 @@ export const documentLine = pgTable(
       .references(() => document.documentId),
     lineNo: integer("line_no").notNull(),
     articleId: uuid("article_id").references(() => article.articleId),
+    variantId: uuid("variant_id").references(() => articleVariant.variantId),
     articleTextSnapshot: text("article_text_snapshot"),
     langText: text("lang_text"),
     langTextSourceEntity: text("lang_text_source_entity"),
@@ -866,14 +1025,15 @@ export const documentLine = pgTable(
     ),
     unique("document_line_tenant_id_document_line_id_key").on(table.tenantId, table.documentLineId),
     index("idx_document_line_article").on(table.articleId),
+    index("idx_document_line_variant").on(table.variantId),
     index("idx_document_line_document").on(table.documentId),
     index("idx_document_line_tenant_document").on(table.tenantId, table.documentId),
     index("idx_document_line_tenant_archived").on(table.tenantId, table.archivedAt),
     index("idx_document_line_tenant").on(table.tenantId),
     index("idx_document_line_tx").on(table.tenantId, table.transactionId),
     check(
-      "chk_article_line_requires_article_id",
-      sql`line_type = 'comment' OR article_id IS NOT NULL`,
+      "chk_article_line_requires_variant_id",
+      sql`line_type <> 'article' OR variant_id IS NOT NULL`,
     ),
     check(
       "chk_document_line_movement_type",
@@ -1268,9 +1428,8 @@ export const inventoryBalance = pgTable(
     warehouseId: uuid("warehouse_id")
       .notNull()
       .references(() => warehouse.warehouseId),
-    articleId: uuid("article_id")
-      .notNull()
-      .references(() => article.articleId),
+    inventoryItemId: uuid("inventory_item_id").references(() => inventoryItem.itemId),
+    articleId: uuid("article_id").notNull(),
     onHandQty: numeric("on_hand_qty").notNull().default("0"),
     reservedQty: numeric("reserved_qty").notNull().default("0"),
     asOfAt: timestamp("as_of_at", { withTimezone: true }),
@@ -1286,7 +1445,8 @@ export const inventoryBalance = pgTable(
       table.warehouseId,
       table.articleId,
     ),
-    index("idx_inv_balance_lookup").on(table.tenantId, table.warehouseId, table.articleId),
+    index("idx_inv_balance_lookup").on(table.tenantId, table.warehouseId, table.inventoryItemId),
+    index("idx_inv_balance_article").on(table.tenantId, table.warehouseId, table.articleId),
     index("idx_inv_balance_tenant").on(table.tenantId),
   ],
 );
@@ -1304,9 +1464,9 @@ export const inventoryMovement = pgTable(
     warehouseId: uuid("warehouse_id")
       .notNull()
       .references(() => warehouse.warehouseId),
-    articleId: uuid("article_id")
-      .notNull()
-      .references(() => article.articleId),
+    inventoryItemId: uuid("inventory_item_id").references(() => inventoryItem.itemId),
+    articleId: uuid("article_id").notNull(),
+    variantId: uuid("variant_id").references(() => articleVariant.variantId),
     movementType: char("movement_type", { length: 1 }).notNull(),
     qtyDelta: numeric("qty_delta"),
     movementDate: timestamp("movement_date", { withTimezone: true }).notNull(),
@@ -1322,11 +1482,19 @@ export const inventoryMovement = pgTable(
     batchNo: text("batch_no"),
   },
   (table) => [
-    index("idx_inv_movement_date").on(table.tenantId, table.movementDate),
     index("idx_inv_movement_inventory_anchor").on(
       table.tenantId,
       table.warehouseId,
       table.articleId,
+      table.variantId,
+      table.movementDate,
+    ),
+    index("idx_inv_movement_date").on(table.tenantId, table.movementDate),
+    index("idx_inv_movement_inventory_item_anchor").on(
+      table.tenantId,
+      table.warehouseId,
+      table.inventoryItemId,
+      table.variantId,
       table.movementDate,
     ),
     index("idx_inv_movement_lookup").on(
@@ -1335,6 +1503,12 @@ export const inventoryMovement = pgTable(
       table.articleId,
       table.movementDate,
     ),
+    index("idx_inv_movement_inventory_item").on(
+      table.tenantId,
+      table.inventoryItemId,
+      table.movementDate,
+    ),
+    index("idx_inv_movement_variant").on(table.tenantId, table.variantId, table.movementDate),
     index("idx_inv_movement_tenant").on(table.tenantId),
     index("idx_inv_movement_tx").on(table.tenantId, table.transactionId),
     index("idx_inv_movement_warehouse_article").on(
@@ -1342,10 +1516,21 @@ export const inventoryMovement = pgTable(
       table.warehouseId,
       table.articleId,
     ),
+    index("idx_inv_movement_warehouse_inventory_item").on(
+      table.tenantId,
+      table.warehouseId,
+      table.inventoryItemId,
+    ),
     index("idx_inventory_movement_batch_balance").on(
       table.tenantId,
       table.warehouseId,
       table.articleId,
+      table.batchNo,
+    ),
+    index("idx_inventory_movement_batch_balance_item").on(
+      table.tenantId,
+      table.warehouseId,
+      table.inventoryItemId,
       table.batchNo,
     ),
     check(
@@ -1541,19 +1726,29 @@ export const priceListItem = pgTable(
     articleId: uuid("article_id")
       .notNull()
       .references(() => article.articleId),
+    variantId: uuid("variant_id")
+      .notNull()
+      .references(() => articleVariant.variantId),
     price: numeric("price").notNull(),
     validFrom: date("valid_from"),
     validTo: date("valid_to"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    unique("price_list_item_tenant_id_price_list_id_article_id_valid_from_u").on(
+    unique("price_list_item_tenant_id_price_list_id_article_variant_valid_from_u").on(
       table.tenantId,
       table.priceListId,
       table.articleId,
+      table.variantId,
       table.validFrom,
     ),
-    index("idx_price_list_item_lookup").on(table.priceListId, table.articleId, table.validFrom),
+    index("idx_price_list_item_article").on(table.priceListId, table.articleId, table.validFrom),
+    index("idx_price_list_item_lookup").on(
+      table.priceListId,
+      table.articleId,
+      table.variantId,
+      table.validFrom,
+    ),
     index("idx_price_list_item_tenant").on(table.tenantId),
   ],
 );
@@ -1881,6 +2076,7 @@ export const tenantLayouts = pgTable(
     scope: text("scope").notNull().default("tenant"),
     organizationId: uuid("organization_id").references(() => organization.organizationId),
     tenantId: uuid("tenant_id").references(() => tenant.tenantId),
+    userId: text("user_id").references(() => user.id),
     entityName: text("entity_name").notNull(),
     layoutKey: text("layout_key").notNull(),
     layoutDefinition: jsonb("layout_definition").notNull(),
@@ -1896,6 +2092,9 @@ export const tenantLayouts = pgTable(
     uniqueIndex("uq_layouts_tenant")
       .on(table.tenantId, table.entityName, table.layoutKey)
       .where(sql`scope = 'tenant'`),
+    uniqueIndex("uq_layouts_user")
+      .on(table.tenantId, table.userId, table.entityName, table.layoutKey)
+      .where(sql`scope = 'user'`),
   ],
 );
 
@@ -2116,6 +2315,8 @@ export const emailAccount = pgTable(
     lastSyncError: text("last_sync_error"),
     watchExpiresAt: timestamp("watch_expires_at", { withTimezone: true }),
     archived: boolean("archived").notNull().default(false),
+    grantedByUserId: text("granted_by_user_id").references(() => user.id),
+    grantedScopes: jsonb("granted_scopes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
@@ -3037,5 +3238,245 @@ export const aiMemory = pgTable(
     index("idx_ai_memory_user").on(table.userId),
     index("idx_ai_memory_kind").on(table.kind),
     index("idx_ai_memory_confirmed").on(table.confirmedAt),
+  ],
+);
+
+// E-Commerce Integrations
+
+export const externalSyncEntityType = pgEnum("external_sync_entity_type", [
+  "article",
+  "article_variant",
+  "document",
+  "document_line",
+  "inventory_item",
+  "inventory_level",
+  "media_asset",
+  "customer",
+  "customer_address",
+  "category",
+  "price_list",
+  "shipment",
+]);
+
+export const externalSyncDirection = pgEnum("external_sync_direction", [
+  "push",
+  "pull",
+  "bidirectional",
+]);
+
+export const externalSyncStatus = pgEnum("external_sync_status", ["pending", "success", "error"]);
+
+export const ecommercePlatform = pgEnum("ecommerce_platform", [
+  "shopify",
+  "shopware6",
+  "woocommerce",
+  "prestashop",
+]);
+
+export const salesChannel = pgTable(
+  "sales_channel",
+  {
+    salesChannelId: uuid("sales_channel_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    name: text("name").notNull(),
+    platform: ecommercePlatform("platform").notNull(),
+    apiUrl: text("api_url").notNull(),
+    credentials: jsonb("credentials"),
+    masterDataPolicy: text("master_data_policy"), // Defines behavior like "b2b", "b2c", etc.
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("idx_sales_channel_tenant").on(table.tenantId)],
+);
+
+export const externalSyncMapping = pgTable(
+  "external_sync_mapping",
+  {
+    mappingId: uuid("mapping_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    salesChannelId: uuid("sales_channel_id")
+      .notNull()
+      .references(() => salesChannel.salesChannelId),
+    entityType: externalSyncEntityType("entity_type").notNull(),
+    internalId: uuid("internal_id").notNull(),
+    externalId: text("external_id").notNull(),
+    externalParentId: text("external_parent_id"),
+    externalVersion: text("external_version"),
+    syncDirection: externalSyncDirection("sync_direction").notNull(),
+    payloadSnapshot: jsonb("payload_snapshot"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    syncStatus: externalSyncStatus("sync_status").notNull().default("pending"),
+    errorLog: text("error_log"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    externalDeletedAt: timestamp("external_deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_ext_sync_tenant").on(table.tenantId),
+    unique("uq_ext_sync_internal").on(
+      table.tenantId,
+      table.salesChannelId,
+      table.entityType,
+      table.internalId,
+    ),
+    unique("uq_ext_sync_external").on(
+      table.tenantId,
+      table.salesChannelId,
+      table.entityType,
+      table.externalId,
+    ),
+  ],
+);
+
+export const articleVariant = pgTable(
+  "article_variant",
+  {
+    variantId: uuid("variant_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => article.articleId),
+    sku: text("sku").notNull(),
+    ean: text("ean"),
+    optionValueHash: text("option_value_hash").notNull(),
+    price: numeric("price"),
+    weight: numeric("weight"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_article_variant_tenant").on(table.tenantId),
+    index("idx_article_variant_article").on(table.articleId),
+    unique("uq_article_variant_sku").on(table.tenantId, table.sku),
+    unique("uq_article_variant_option_hash").on(
+      table.tenantId,
+      table.articleId,
+      table.optionValueHash,
+    ),
+  ],
+);
+
+export const articleOption = pgTable(
+  "article_option",
+  {
+    optionId: uuid("option_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => article.articleId),
+    name: text("name").notNull(), // e.g. "Color", "Size"
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    index("idx_article_option_tenant").on(table.tenantId),
+    index("idx_article_option_article").on(table.articleId),
+    unique("uq_article_option_name").on(table.tenantId, table.articleId, table.name),
+  ],
+);
+
+export const articleOptionValue = pgTable(
+  "article_option_value",
+  {
+    valueId: uuid("value_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    optionId: uuid("option_id")
+      .notNull()
+      .references(() => articleOption.optionId),
+    value: text("value").notNull(), // e.g. "Red", "XL"
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    index("idx_article_optval_tenant").on(table.tenantId),
+    index("idx_article_optval_option").on(table.optionId),
+    unique("uq_article_option_value").on(table.tenantId, table.optionId, table.value),
+  ],
+);
+
+export const articleVariantOptionValue = pgTable(
+  "article_variant_option_value",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    variantId: uuid("variant_id")
+      .notNull()
+      .references(() => articleVariant.variantId),
+    valueId: uuid("value_id")
+      .notNull()
+      .references(() => articleOptionValue.valueId),
+  },
+  (table) => [
+    index("idx_variant_optval_tenant").on(table.tenantId),
+    index("idx_variant_optval_variant").on(table.variantId),
+    unique("uq_variant_optval").on(table.variantId, table.valueId),
+  ],
+);
+
+export const inventoryItem = pgTable(
+  "inventory_item",
+  {
+    itemId: uuid("item_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    variantId: uuid("variant_id")
+      .notNull()
+      .references(() => articleVariant.variantId),
+    sku: text("sku").notNull(),
+    tracked: boolean("tracked").notNull().default(true),
+  },
+  (table) => [
+    index("idx_inv_item_tenant").on(table.tenantId),
+    index("idx_inv_item_variant").on(table.variantId),
+    unique("uq_inv_item_variant").on(table.tenantId, table.variantId),
+    unique("uq_inv_item_sku").on(table.tenantId, table.sku),
+  ],
+);
+
+export const inventoryLevel = pgTable(
+  "inventory_level",
+  {
+    levelId: uuid("level_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItem.itemId),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => warehouse.warehouseId),
+    quantity: numeric("quantity").notNull().default("0"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_inv_level_tenant").on(table.tenantId),
+    index("idx_inv_level_item").on(table.itemId),
+    unique("uq_inv_level_loc").on(table.itemId, table.locationId),
   ],
 );

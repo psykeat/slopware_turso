@@ -24,7 +24,7 @@ export interface MetadataWriterContext {
   organizationId?: string;
 }
 
-type MetadataScope = "global" | "org" | "tenant";
+type MetadataScope = "global" | "org" | "tenant" | "user";
 
 export interface DesignerPatchResult {
   entityName: string;
@@ -358,6 +358,9 @@ export class MetadataWriter {
       where.push(eq(tenantLayouts.tenantId, this.context.tenantId));
     } else if (scope === "org") {
       where.push(eq(tenantLayouts.organizationId, this.context.organizationId ?? ""));
+    } else if (scope === "user") {
+      where.push(eq(tenantLayouts.tenantId, this.context.tenantId));
+      where.push(eq(tenantLayouts.userId, this.context.userId));
     }
 
     const rows = await tx
@@ -599,16 +602,14 @@ export class MetadataWriter {
     entityName: string,
     layoutKey: string,
     data: any,
+    scope: MetadataScope,
     patchMeta?: Record<string, unknown>,
   ) {
-    const scope = this.getScope();
     const scopeIdentity = {
       scope,
-      organizationId:
-        scope === "org"
-          ? (this.context.organizationId ?? null)
-          : (this.context.organizationId ?? null),
-      tenantId: scope === "tenant" ? this.context.tenantId : null,
+      organizationId: this.context.organizationId ?? null,
+      tenantId: scope === "tenant" || scope === "user" ? this.context.tenantId : null,
+      userId: scope === "user" ? this.context.userId : null,
     };
 
     const where = [
@@ -621,6 +622,9 @@ export class MetadataWriter {
       where.push(eq(tenantLayouts.tenantId, this.context.tenantId));
     } else if (scope === "org") {
       where.push(eq(tenantLayouts.organizationId, this.context.organizationId ?? ""));
+    } else if (scope === "user") {
+      where.push(eq(tenantLayouts.tenantId, this.context.tenantId));
+      where.push(eq(tenantLayouts.userId, this.context.userId));
     }
 
     const existingRows = await tx
@@ -659,6 +663,7 @@ export class MetadataWriter {
       scope,
       organizationId: scopeIdentity.organizationId,
       tenantId: scopeIdentity.tenantId,
+      userId: scopeIdentity.userId,
       layoutDefinition: values,
     });
 
@@ -993,6 +998,7 @@ export class MetadataWriter {
         entityName,
         layoutKey,
         { layoutDefinition: nextLayout },
+        this.getScope(),
         buildPatchMeta(patch, this.getScope(), "clean"),
       );
       return { applied: true };
@@ -1010,6 +1016,7 @@ export class MetadataWriter {
         entityName,
         layoutKey,
         { layoutDefinition: nextLayout },
+        this.getScope(),
         buildPatchMeta(patch, this.getScope(), "tombstoned"),
       );
       return { applied: true };
@@ -1026,6 +1033,7 @@ export class MetadataWriter {
         entityName,
         layoutKey,
         { layoutDefinition: nextLayout },
+        this.getScope(),
         buildPatchMeta(patch, this.getScope(), "clean"),
       );
       return { applied: true };
@@ -1040,6 +1048,7 @@ export class MetadataWriter {
           entityName,
           layoutKey,
           { layoutDefinition: setLayout },
+          this.getScope(),
           buildPatchMeta(patch, this.getScope(), "clean"),
         );
         return { applied: true };
@@ -1051,6 +1060,7 @@ export class MetadataWriter {
         entityName,
         layoutKey,
         { layoutDefinition: setLayout },
+        this.getScope(),
         buildPatchMeta(
           patch,
           this.getScope(),
@@ -1071,6 +1081,7 @@ export class MetadataWriter {
         entityName,
         layoutKey,
         { layoutDefinition: nextLayout },
+        this.getScope(),
         buildPatchMeta(patch, this.getScope(), "needs_review"),
       );
       return { applied: true };
@@ -1285,10 +1296,15 @@ export class MetadataWriter {
     });
   }
 
-  async saveLayoutOverride(entityName: string, layoutKey: string, data: any) {
+  async saveLayoutOverride(
+    entityName: string,
+    layoutKey: string,
+    data: any,
+    scope: MetadataScope = this.getScope(),
+  ) {
     this.assertKnownEntity(entityName);
     return await db.transaction(async (tx) => {
-      await this.upsertLayoutOverrideTx(tx, entityName, layoutKey, data);
+      await this.upsertLayoutOverrideTx(tx, entityName, layoutKey, data, scope);
     });
   }
 }

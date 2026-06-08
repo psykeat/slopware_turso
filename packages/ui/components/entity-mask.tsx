@@ -1,5 +1,5 @@
 import { useForm } from "@tanstack/react-form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircleIcon, EyeIcon, EyeOffIcon, GripVerticalIcon, PlusIcon } from "lucide-react";
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -105,6 +105,35 @@ function normalizeStyleBinding(field: FieldDef, config: FieldDesignConfig | null
   const toneToken = labelTone === "default" ? null : `label-${labelTone}`;
   const styleToken = labelStyle === "normal" ? null : `label-${labelStyle}`;
   return config?.styleTokenBinding ?? toneToken ?? styleToken ?? field.styleTokenBinding ?? null;
+}
+
+type DragItemKind = "field";
+
+function parseDragItem(value: string | null): { kind: DragItemKind; id: string } | null {
+  if (!value) return null;
+  const [kind, ...rest] = value.split(":");
+  const id = rest.join(":");
+  if (kind !== "field" || !id) return null;
+  return { kind, id };
+}
+
+function parseFieldDropTarget(
+  value: string | null,
+):
+  | { position: "before" | "after"; fieldKey: string }
+  | { position: "frame"; frameKey: string }
+  | null {
+  if (!value) return null;
+  const [kind, ...rest] = value.split(":");
+  const id = rest.join(":");
+  if (!id) return null;
+  if (kind === "before" || kind === "after") {
+    return { position: kind, fieldKey: id };
+  }
+  if (kind === "frame") {
+    return { position: "frame", frameKey: id };
+  }
+  return null;
 }
 
 function FieldInput({
@@ -276,6 +305,7 @@ export function EntityMask({
     removeFieldDraft,
     removeFrameDraft,
     selectDesignerNodes,
+    updateDelta,
   } = useDesigner();
   const { state: focusState, setFocus } = useFocus();
 
@@ -308,12 +338,10 @@ export function EntityMask({
         if (parsed && typeof parsed === "object" && parsed.error) {
           throw new Error(parsed.error);
         } else if (parsed && Array.isArray(parsed.issues)) {
-          let hasFieldErrors = false;
           parsed.issues.forEach((issue: any) => {
             const path = issue.path?.join(".") || "";
             if (path) {
               formApi.setFieldMeta(path as any, (meta) => ({ ...meta, errors: [issue.message] }));
-              hasFieldErrors = true;
             } else {
               setGlobalError(issue.message);
             }
@@ -542,55 +570,79 @@ export function EntityMask({
   }, [designerFieldConfigs, delta.fieldConfigs, fields, isDesignMode]);
 
   const groupedFields = useMemo(() => {
-    const groups: { frameId: string; label: string; fields: FieldDef[] }[] = [];
-    const fieldsInFrames = new Set<string>();
-
-    if (frameNodes.length > 0) {
-      // Create a map from fieldKey to parentId
-      const fieldToParent = new Map<string, string>();
-      if (activeSurfaceState?.nodes) {
-        for (const node of activeSurfaceState.nodes) {
-          if ((node.kind === "field-ref" || node.kind === "jsonb-field") && node.parentId) {
-            fieldToParent.set(node.id, node.parentId);
-          }
-        }
+    const fieldToFrame = new Map<string, string>();
+    for (const config of delta.fieldConfigs) {
+      if (config.frameKey) {
+        fieldToFrame.set(config.key, config.frameKey);
       }
+    }
 
-      // Group fields by defined frames
-      for (const frame of frameNodes) {
-        const frameFields = effectiveFields.filter((field) => {
-          const parentId = fieldToParent.get(field.key);
-          return parentId === frame.id;
-        });
-
-        groups.push({
-          frameId: frame.id,
-          label: frame.label,
-          fields: frameFields,
-        });
-
-        for (const f of frameFields) {
-          fieldsInFrames.add(f.key);
+    if (activeSurfaceState?.nodes) {
+      for (const node of activeSurfaceState.nodes) {
+        if ((node.kind === "field-ref" || node.kind === "jsonb-field") && node.parentId) {
+          fieldToFrame.set(node.id, node.parentId);
         }
       }
     }
 
-    // Capture any remaining fields that aren't in any frame
-    const remaining = effectiveFields.filter((f) => !fieldsInFrames.has(f.key));
-    if (remaining.length > 0) {
-      groups.push({
-        frameId: "default",
-        label: "", // no label for general/remaining fields
-        fields: remaining,
+    const frameLabelById = new Map<string, string>();
+    for (const frame of frameNodes) {
+      frameLabelById.set(frame.id, frame.label);
+    }
+
+    const groups = new Map<string, { frameId: string; label: string; fields: FieldDef[] }>();
+    const orderedGroupIds: string[] = [];
+
+    const ensureGroup = (frameId: string, label: string) => {
+      const existing = groups.get(frameId);
+      if (existing) {
+        if (!existing.label && label) {
+          existing.label = label;
+        }
+        return existing;
+      }
+
+      const next = { frameId, label, fields: [] as FieldDef[] };
+      groups.set(frameId, next);
+      orderedGroupIds.push(frameId);
+      return next;
+    };
+
+    for (const frame of frameNodes) {
+      ensureGroup(frame.id, frame.label);
+    }
+
+    for (const field of effectiveFields) {
+      const frameId = fieldToFrame.get(field.key) ?? "default";
+      const label = frameId === "default" ? "" : (frameLabelById.get(frameId) ?? frameId);
+      ensureGroup(frameId, label).fields.push(field);
+    }
+
+    if (!groups.has("default")) {
+      const remaining = effectiveFields.filter((field) => !fieldToFrame.has(field.key));
+      if (remaining.length > 0 || frameNodes.length === 0) {
+        groups.set("default", { frameId: "default", label: "", fields: remaining });
+        orderedGroupIds.push("default");
+      }
+    }
+
+    return orderedGroupIds
+      .map((groupId) => groups.get(groupId))
+      .filter((group): group is { frameId: string; label: string; fields: FieldDef[] } => {
+        if (!group) return false;
+        if (group.frameId === "default") return group.fields.length > 0 || frameNodes.length === 0;
+        return group.fields.length > 0 || isDesignMode;
       });
-    }
-
-    return groups;
-  }, [frameNodes, effectiveFields, activeSurfaceState]);
+  }, [activeSurfaceState?.nodes, delta.fieldConfigs, effectiveFields, frameNodes, isDesignMode]);
 
   const fieldByKey = useMemo(
     () => new Map(effectiveFields.map((field) => [field.key, field])),
     [effectiveFields],
+  );
+
+  const designerNodeById = useMemo(
+    () => new Map((activeSurfaceState?.nodes ?? []).map((node) => [node.id, node])),
+    [activeSurfaceState?.nodes],
   );
 
   const visibleFieldInLiveView = useCallback(
@@ -791,6 +843,132 @@ export function EntityMask({
     return order[nextIndex];
   };
 
+  const clearDragState = useCallback(() => {
+    updateDelta({ activeDragId: null, hoverTargetId: null });
+  }, [updateDelta]);
+
+  const setFieldHoverTarget = useCallback(
+    (targetFieldKey: string, event: React.DragEvent) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const before = event.clientY < rect.top + rect.height / 2;
+      updateDelta({
+        hoverTargetId: `${before ? "before" : "after"}:${targetFieldKey}`,
+      });
+    },
+    [updateDelta],
+  );
+
+  const handleFieldDragStart = useCallback(
+    (fieldKey: string) => (event: React.DragEvent) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", `field:${fieldKey}`);
+      updateDelta({ activeDragId: fieldKey, hoverTargetId: fieldKey });
+    },
+    [updateDelta],
+  );
+
+  const handleFieldDragEnd = useCallback(() => {
+    clearDragState();
+  }, [clearDragState]);
+
+  const handleFieldDrop = useCallback(
+    (targetFieldKey: string) => (event: React.DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const payload = parseDragItem(event.dataTransfer.getData("text/plain"));
+      const sourceFieldKey = payload?.id ?? delta.activeDragId;
+      if (!sourceFieldKey || sourceFieldKey === targetFieldKey) {
+        clearDragState();
+        return;
+      }
+
+      const target = parseFieldDropTarget(delta.hoverTargetId);
+      if (target?.position === "before" || target?.position === "after") {
+        const sourceNode = designerNodeById.get(sourceFieldKey) ?? null;
+        const targetNode = designerNodeById.get(target.fieldKey) ?? null;
+        if (!targetNode) {
+          clearDragState();
+          return;
+        }
+
+        if (target.position === "before") {
+          if (sourceNode?.parentId !== targetNode.parentId) {
+            moveFieldToFrame(sourceFieldKey, targetNode.parentId ?? "", target.fieldKey);
+          }
+          moveField(sourceFieldKey, target.fieldKey);
+        } else {
+          if (sourceNode?.parentId !== targetNode.parentId) {
+            moveFieldToFrame(sourceFieldKey, targetNode.parentId ?? "", target.fieldKey);
+            clearDragState();
+            return;
+          }
+          const group = groupedFields.find((item) =>
+            item.fields.some((field) => field.key === target.fieldKey),
+          );
+          const visibleFields = group?.fields.filter(visibleFieldInLiveView) ?? [];
+          const targetIndex = visibleFields.findIndex((field) => field.key === target.fieldKey);
+          const nextField = visibleFields[targetIndex + 1];
+          if (nextField) {
+            moveField(sourceFieldKey, nextField.key);
+          } else {
+            moveFieldToEnd(sourceFieldKey, targetNode.parentId ?? undefined);
+          }
+        }
+        clearDragState();
+        return;
+      }
+
+      clearDragState();
+    },
+    [
+      clearDragState,
+      delta.activeDragId,
+      delta.hoverTargetId,
+      designerNodeById,
+      groupedFields,
+      moveField,
+      moveFieldToEnd,
+      moveFieldToFrame,
+    ],
+  );
+
+  const handleFrameDrop = useCallback(
+    (frameKey: string) => (event: React.DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const payload = parseDragItem(event.dataTransfer.getData("text/plain"));
+      const sourceFieldKey = payload?.id ?? delta.activeDragId;
+      if (!sourceFieldKey) {
+        clearDragState();
+        return;
+      }
+      moveFieldToEnd(sourceFieldKey, frameKey);
+      clearDragState();
+    },
+    [clearDragState, delta.activeDragId, moveFieldToEnd],
+  );
+
+  const handleDragLeave = useCallback(
+    (targetId: string) => (event: React.DragEvent) => {
+      if (
+        event.relatedTarget instanceof Node &&
+        event.currentTarget.contains(event.relatedTarget)
+      ) {
+        return;
+      }
+      const target = parseFieldDropTarget(delta.hoverTargetId);
+      if (
+        delta.hoverTargetId === targetId ||
+        target?.position === "before" ||
+        target?.position === "after" ||
+        target?.position === "frame"
+      ) {
+        updateDelta({ hoverTargetId: null });
+      }
+    },
+    [delta.hoverTargetId, updateDelta],
+  );
+
   if (loading) {
     return (
       <div className={cn(shellClassName, className)}>
@@ -809,6 +987,12 @@ export function EntityMask({
     const designerConfig = designerFieldConfigs.get(field.key);
     const visibilityChecked = designerConfig?.visible ?? field.visible !== false;
     const hiddenClass = isDesignMode && !visibilityChecked ? "opacity-55" : "";
+    const isDragging = delta.activeDragId === field.key;
+    const dragTarget = parseFieldDropTarget(delta.hoverTargetId);
+    const isBeforeDropTarget =
+      dragTarget?.position === "before" && dragTarget.fieldKey === field.key;
+    const isAfterDropTarget = dragTarget?.position === "after" && dragTarget.fieldKey === field.key;
+    const isDropTarget = isBeforeDropTarget || isAfterDropTarget;
 
     const path = field.jsonPath ?? field.key;
 
@@ -879,6 +1063,17 @@ export function EntityMask({
           return (
             <div
               ref={(node) => setFieldRef(field.key, node)}
+              onDragOver={
+                isDesignMode
+                  ? (event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setFieldHoverTarget(field.key, event);
+                    }
+                  : undefined
+              }
+              onDragLeave={isDesignMode ? handleDragLeave(field.key) : undefined}
+              onDrop={isDesignMode ? handleFieldDrop(field.key) : undefined}
               onClick={isDesignMode ? () => openFieldEditor(field.key, "compact") : undefined}
               onDoubleClick={
                 isDesignMode ? () => openFieldEditor(field.key, "expanded") : undefined
@@ -901,25 +1096,39 @@ export function EntityMask({
                 "relative flex min-w-0 flex-col gap-1.5 rounded-md transition-all",
                 field.fullWidth && fieldGridClass === "grid-cols-2" && "col-span-2",
                 hiddenClass,
+                isDragging && "opacity-60",
                 isDesignMode &&
                   (isSelected
                     ? "bg-primary/[0.04] shadow-[0_0_0_1px_rgba(83,58,253,0.08)] ring-1 ring-primary/60 ring-inset"
-                    : "ring-1 ring-primary/20 ring-inset hover:bg-primary/[0.02] hover:ring-primary/45"),
+                    : isBeforeDropTarget
+                      ? "bg-primary/[0.04] ring-1 ring-primary/60 ring-inset"
+                      : isAfterDropTarget
+                        ? "bg-primary/[0.04] ring-1 ring-primary/60 ring-inset"
+                        : "ring-1 ring-primary/20 ring-inset hover:bg-primary/[0.02] hover:ring-primary/45"),
               )}
             >
               {isDesignMode && (
-                <div className="pointer-events-none absolute top-1 left-2 z-10 flex items-center gap-1">
-                  <span
+                <div className="absolute top-1 left-2 z-10 flex items-center gap-1">
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={handleFieldDragStart(field.key)}
+                    onDragEnd={handleFieldDragEnd}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full border bg-canvas px-1.5 py-0.5 font-mono text-[9px] font-medium tracking-[0.14em] shadow-sm",
+                      "inline-flex items-center gap-1 rounded-full border bg-canvas px-1.5 py-0.5 font-mono text-[9px] font-medium tracking-[0.14em] shadow-sm transition-colors",
                       isSelected
                         ? "border-primary/40 text-primary"
-                        : "border-hairline text-ink-mute",
+                        : isDropTarget
+                          ? "border-primary/55 text-primary"
+                          : "border-hairline text-ink-mute",
                     )}
+                    aria-label={t("designer.fieldDrag", "Drag field")}
                   >
                     <GripVerticalIcon className="size-2.5 shrink-0 opacity-70" />
                     {field.key}
-                  </span>
+                  </button>
                   {field.jsonPath ? (
                     <span className="text-ink-muted rounded-full border border-hairline bg-canvas px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] uppercase">
                       jsonb
@@ -927,6 +1136,12 @@ export function EntityMask({
                   ) : null}
                 </div>
               )}
+              {isDesignMode && isBeforeDropTarget ? (
+                <div className="pointer-events-none absolute top-0 right-0 left-0 h-0.5 rounded-t-md bg-primary" />
+              ) : null}
+              {isDesignMode && isAfterDropTarget ? (
+                <div className="pointer-events-none absolute right-0 bottom-0 left-0 h-0.5 rounded-b-md bg-primary" />
+              ) : null}
 
               {field.type !== "boolean" && (
                 <div className="flex items-center gap-1 text-[12px] font-medium select-none">
@@ -990,7 +1205,12 @@ export function EntityMask({
 
       {groupedFields.map((group) => {
         const visibleFields = group.fields.filter(visibleFieldInLiveView);
-        if (visibleFields.length === 0 && !isDesignMode) return null;
+        if (visibleFields.length === 0 && !isDesignMode) {
+          return null;
+        }
+        const frameDropTarget = parseFieldDropTarget(delta.hoverTargetId);
+        const isFrameDropTarget =
+          frameDropTarget?.position === "frame" && frameDropTarget.frameKey === group.frameId;
 
         const content = (
           <div className={cn("grid gap-x-6 gap-y-5", fieldGridClass)}>
@@ -1016,9 +1236,13 @@ export function EntityMask({
                 ))
               : isDesignMode && (
                   <div className="text-ink-muted col-span-full rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
-                    {i18n.language === "de"
-                      ? "Keine Felder in diesem Rahmen."
-                      : "No fields in this frame."}
+                    {group.frameId === "default"
+                      ? i18n.language === "de"
+                        ? "Keine Felder verfügbar."
+                        : "No fields available."
+                      : i18n.language === "de"
+                        ? "Keine Felder in diesem Rahmen."
+                        : "No fields in this frame."}
                   </div>
                 )}
           </div>
@@ -1028,7 +1252,24 @@ export function EntityMask({
           return (
             <fieldset
               key={group.frameId}
-              className="space-y-4 rounded-lg border border-hairline bg-canvas-soft p-4 shadow-sm"
+              onDragOver={
+                isDesignMode
+                  ? (event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      updateDelta({ hoverTargetId: `frame:${group.frameId}` });
+                    }
+                  : undefined
+              }
+              onDragLeave={isDesignMode ? handleDragLeave(group.frameId) : undefined}
+              onDrop={isDesignMode ? handleFrameDrop(group.frameId) : undefined}
+              className={cn(
+                "space-y-4 rounded-lg border border-hairline bg-canvas-soft p-4 shadow-sm transition-colors",
+                isDesignMode &&
+                  (isFrameDropTarget
+                    ? "border-primary/60 bg-primary/[0.04] ring-1 ring-primary/20"
+                    : "hover:border-hairline-input"),
+              )}
             >
               <legend className="text-ink-muted px-2 text-[12px] font-semibold tracking-wide uppercase">
                 {group.label}
@@ -1038,7 +1279,31 @@ export function EntityMask({
           );
         }
 
-        return <div key={group.frameId}>{content}</div>;
+        return (
+          <section
+            key={group.frameId}
+            onDragOver={
+              isDesignMode
+                ? (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    updateDelta({ hoverTargetId: `frame:${group.frameId}` });
+                  }
+                : undefined
+            }
+            onDragLeave={isDesignMode ? handleDragLeave(group.frameId) : undefined}
+            onDrop={isDesignMode ? handleFrameDrop(group.frameId) : undefined}
+            className={cn(
+              "space-y-4 transition-colors",
+              isDesignMode &&
+                (isFrameDropTarget
+                  ? "rounded-lg border border-primary/60 bg-primary/[0.04] p-4 ring-1 ring-primary/20"
+                  : "hover:bg-canvas-soft/40"),
+            )}
+          >
+            {content}
+          </section>
+        );
       })}
 
       {isDesignMode && (
@@ -1396,12 +1661,6 @@ export function EntityMask({
           document.body,
         )
       : null;
-
-  const globalErrorNode = globalError ? (
-    <div className="mb-4 rounded-md bg-destructive/10 p-3 text-[13px] text-destructive">
-      {globalError}
-    </div>
-  ) : null;
 
   const childSectionNode = hasChildContent ? (
     <form.Subscribe selector={(state) => state.values}>

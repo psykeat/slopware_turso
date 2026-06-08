@@ -12,14 +12,6 @@ import { toast } from "sonner";
 import { useCommands } from "./command-registry";
 import { type FocusContextState, useFocus } from "./focus-manager";
 
-interface ColumnDesignConfig {
-  key: string;
-  visible: boolean;
-  width?: string;
-  pin?: "left" | "right" | null;
-  order: number;
-}
-
 export interface FieldDesignConfig {
   key: string;
   visible: boolean;
@@ -36,18 +28,14 @@ export interface FieldDesignConfig {
 }
 
 interface DesignerDelta {
-  columns: ColumnDesignConfig[];
   fieldConfigs: FieldDesignConfig[];
   activeDragId: string | null;
   hoverTargetId: string | null;
 }
 
 export type DesignerSurface =
-  | "triview-tree"
-  | "triview-grid"
   | "triview-detail"
   | "inspector-panel"
-  | "dependent-grid"
   | "document-header"
   | "document-lines";
 
@@ -170,10 +158,9 @@ interface DesignerContextValue {
   delta: DesignerDelta;
   updateDelta: (update: Partial<DesignerDelta>) => void;
   resetDelta: () => void;
-  updateColumn: (key: string, patch: Partial<ColumnDesignConfig>) => void;
-  moveColumn: (key: string, targetKey: string) => void;
   updateField: (key: string, patch: Partial<FieldDesignConfig>) => void;
   updateFrameLabel: (key: string, label: string) => void;
+  moveFrame: (key: string, targetKey: string) => void;
   moveField: (key: string, targetKey: string) => void;
   moveFieldToStart: (key: string, frameKey?: string | null) => void;
   moveFieldToEnd: (key: string, frameKey?: string | null) => void;
@@ -183,19 +170,9 @@ interface DesignerContextValue {
     frameKey?: string | null,
     patch?: Partial<FieldDesignConfig>,
   ) => void;
-  addColumnDraft: (label?: string) => void;
   addFrameDraft: (label?: string) => void;
   removeFieldDraft: (key: string) => void;
   removeFrameDraft: (key: string) => void;
-  initColumns: (
-    cols: {
-      key: string;
-      header: string;
-      visible?: boolean;
-      width?: string;
-      pin?: "left" | "right" | null;
-    }[],
-  ) => void;
   initFields: (
     fields: { key: string; visible?: boolean; labelEn?: string; labelDe?: string }[],
   ) => void;
@@ -205,6 +182,7 @@ interface DesignerContextValue {
     entityName?: string | null,
   ) => void;
   setDesignerSurface: (surface: DesignerSurface, entityName?: string | null) => void;
+  saveDesign: () => Promise<boolean>;
   applyDesign: () => Promise<boolean>;
   reconcileDesign: () => Promise<void>;
 }
@@ -216,7 +194,7 @@ const defaultVersionInfo: DesignerVersionInfo = {
   conflictState: "clean",
   reconciliationRequired: false,
   supersededFieldRef: null,
-  clientRevision: "rev-0",
+  clientRevision: createClientRevision(),
 };
 
 const defaultSurfaceState = (
@@ -231,7 +209,7 @@ const defaultSurfaceState = (
   draftPatchOps: [],
   conflicts: [],
   history: [],
-  versionInfo: { ...defaultVersionInfo },
+  versionInfo: { ...defaultVersionInfo, clientRevision: createClientRevision() },
 });
 
 const defaultRuntimeState: DesignerRuntimeState = {
@@ -240,7 +218,6 @@ const defaultRuntimeState: DesignerRuntimeState = {
 };
 
 const defaultDelta: DesignerDelta = {
-  columns: [],
   fieldConfigs: [],
   activeDragId: null,
   hoverTargetId: null,
@@ -248,30 +225,48 @@ const defaultDelta: DesignerDelta = {
 
 const DesignerContext = createContext<DesignerContextValue | undefined>(undefined);
 
-let historyCounter = 0;
-let draftCounter = 0;
-
-function nextHistoryId() {
-  historyCounter += 1;
-  return `designer-history-${historyCounter}`;
+function createClientRevision() {
+  return crypto.randomUUID();
 }
 
-function nextRevision(revision: string) {
-  const match = /^rev-(\d+)$/.exec(revision);
-  return match ? `rev-${Number(match[1]) + 1}` : "rev-1";
+function nextHistoryId() {
+  return `designer-history-${crypto.randomUUID()}`;
+}
+
+function nextRevision() {
+  return createClientRevision();
+}
+
+function extractClientRevision(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as {
+    clientRevision?: unknown;
+    revision?: unknown;
+    versionInfo?: { clientRevision?: unknown };
+    updatedContract?: { versionInfo?: { clientRevision?: unknown } };
+  };
+
+  if (typeof record.clientRevision === "string") return record.clientRevision;
+  if (typeof record.revision === "string") return record.revision;
+  if (typeof record.versionInfo?.clientRevision === "string") {
+    return record.versionInfo.clientRevision;
+  }
+  if (typeof record.updatedContract?.versionInfo?.clientRevision === "string") {
+    return record.updatedContract.versionInfo.clientRevision;
+  }
+
+  return null;
 }
 
 function nextDraftId(kind: DesignerNodeKind) {
-  draftCounter += 1;
-  return `draft:${kind}:${draftCounter}`;
+  return `draft:${kind}:${crypto.randomUUID()}`;
 }
 
 function inferSurfaceFromFocus(area: FocusContextState["area"]): DesignerSurface {
   switch (area) {
-    case "grid":
-      return "triview-grid";
-    case "tree":
-      return "triview-tree";
     case "panel":
       return "inspector-panel";
     case "form":
@@ -297,7 +292,7 @@ function createSurfaceNode(
 ): DesignerNode {
   const versionInfo = overrides?.versionInfo
     ? { ...defaultVersionInfo, ...overrides.versionInfo }
-    : { ...defaultVersionInfo };
+    : { ...defaultVersionInfo, clientRevision: createClientRevision() };
   return {
     id: key,
     kind,
@@ -326,6 +321,7 @@ function createSurfaceNode(
 function createBaseVersionInfo(baseVersion: string): DesignerVersionInfo {
   return {
     ...defaultVersionInfo,
+    clientRevision: createClientRevision(),
     baseVersion,
     derivedFromVersion: baseVersion,
     overrideMode: "base",
@@ -398,13 +394,10 @@ function getPrimaryFrameId(nodes: DesignerNode[]) {
   return getFrameNodes(nodes)[0]?.id ?? null;
 }
 
-function mergeNodePatch(
-  node: DesignerNode,
-  patch: Partial<ColumnDesignConfig & FieldDesignConfig>,
-) {
+function mergeNodePatch(node: DesignerNode, patch: Partial<FieldDesignConfig>) {
   const nextVersionInfo = {
     ...node.versionInfo,
-    clientRevision: nextRevision(node.versionInfo.clientRevision),
+    clientRevision: nextRevision(),
   };
   const readonly = patch.readonlyOverride !== undefined ? patch.readonlyOverride : node.readonly;
   const required = patch.requiredOverride !== undefined ? patch.requiredOverride : node.required;
@@ -464,23 +457,11 @@ function removeNodeFromTree(nodes: DesignerNode[], key: string) {
   return nodes.filter((node) => !descendants.has(node.id));
 }
 
-function surfaceToDelta(surfaceState: DesignerSurfaceState | null, kind: "grid" | "detail") {
+function surfaceToDelta(surfaceState: DesignerSurfaceState | null) {
   if (!surfaceState) return [];
-  const nodes = sortByDisplayOrder(surfaceState.nodes).filter((node) =>
-    kind === "grid"
-      ? node.kind === "grid-column"
-      : node.kind !== "group-frame" && node.kind !== "surface",
+  const nodes = sortByDisplayOrder(surfaceState.nodes).filter(
+    (node) => node.kind !== "group-frame" && node.kind !== "surface",
   );
-  if (kind === "grid") {
-    return nodes.map<ColumnDesignConfig>((node, order) => ({
-      key: node.id,
-      visible: node.visible,
-      width: node.width,
-      pin: node.pin ?? null,
-      order,
-    }));
-  }
-
   return nodes.map<FieldDesignConfig>((node, order) => ({
     key: node.id,
     visible: node.visible,
@@ -526,7 +507,7 @@ function appendHistory(
 function applyNodePatch(
   bucket: DesignerSurfaceState,
   key: string,
-  patch: Partial<ColumnDesignConfig & FieldDesignConfig>,
+  patch: Partial<FieldDesignConfig>,
 ) {
   const nodeIndex = bucket.nodes.findIndex((node) => node.id === key);
   const existing = nodeIndex >= 0 ? bucket.nodes[nodeIndex] : null;
@@ -535,7 +516,7 @@ function applyNodePatch(
     createSurfaceNode(
       bucket.surface,
       bucket.entityName,
-      bucket.surface === "triview-grid" ? "grid-column" : "field-ref",
+      "field-ref",
       key,
       key,
       bucket.nodes.length,
@@ -556,7 +537,7 @@ function applyNodePatch(
   }));
   const nextVersion = {
     ...bucket.versionInfo,
-    clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+    clientRevision: nextRevision(),
   };
   const nextBucket = {
     ...bucket,
@@ -589,7 +570,7 @@ function updateFrameLabelInBucket(bucket: DesignerSurfaceState, key: string, lab
     label,
     versionInfo: {
       ...existing.versionInfo,
-      clientRevision: nextRevision(existing.versionInfo.clientRevision),
+      clientRevision: nextRevision(),
     },
   };
   const nextNodes = bucket.nodes.map((node, index) => (index === nodeIndex ? nextNode : node));
@@ -601,7 +582,7 @@ function updateFrameLabelInBucket(bucket: DesignerSurfaceState, key: string, lab
   };
   const nextVersion = {
     ...bucket.versionInfo,
-    clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+    clientRevision: nextRevision(),
   };
   const nextBucket = {
     ...bucket,
@@ -664,7 +645,7 @@ function moveNodeInBucket(
   };
   const nextVersion = {
     ...bucket.versionInfo,
-    clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+    clientRevision: nextRevision(),
   };
   const parentNode = targetParentId
     ? (reorderedNodes.find((node) => node.id === targetParentId) ?? null)
@@ -731,7 +712,7 @@ function moveNodeToBoundaryInBucket(
   };
   const nextVersion = {
     ...bucket.versionInfo,
-    clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+    clientRevision: nextRevision(),
   };
   const parentNode = targetParentId
     ? (reorderedNodes.find((node) => node.id === targetParentId) ?? null)
@@ -777,7 +758,7 @@ function insertNodeInBucket(
   }
   const nextVersion = {
     ...bucket.versionInfo,
-    clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+    clientRevision: nextRevision(),
   };
   const patchOp: DesignerPatchOp = {
     op: "add",
@@ -814,7 +795,7 @@ function resetBucket(bucket: DesignerSurfaceState) {
       ...bucket.versionInfo,
       conflictState: "clean",
       reconciliationRequired: false,
-      clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+      clientRevision: nextRevision(),
     },
   };
   return appendHistory(nextBucket, {
@@ -857,7 +838,7 @@ function persistBucketAction(
     ...bucket,
     versionInfo: {
       ...bucket.versionInfo,
-      clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+      clientRevision: nextRevision(),
     },
   });
   return appendHistory(nextBucket, {
@@ -870,11 +851,9 @@ function persistBucketAction(
 }
 
 function buildLegacyDelta(runtime: DesignerRuntimeState): DesignerDelta {
-  const grid = runtime.surfaces["triview-grid"] ?? null;
   const detail = runtime.surfaces["triview-detail"] ?? null;
   return {
-    columns: surfaceToDelta(grid, "grid"),
-    fieldConfigs: surfaceToDelta(detail, "detail"),
+    fieldConfigs: surfaceToDelta(detail),
     activeDragId: defaultDelta.activeDragId,
     hoverTargetId: defaultDelta.hoverTargetId,
   };
@@ -899,6 +878,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
   });
   const previousFocusRef = useRef<FocusContextState | null>(null);
   const wasDesignModeRef = useRef(false);
+  const wasDesignerContextRef = useRef(false);
 
   const updateRuntime = useCallback(
     (updater: (state: DesignerRuntimeState) => DesignerRuntimeState) => {
@@ -941,58 +921,92 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     setIsDesignMode((prev) => !prev);
   }, []);
 
-  const persistActiveSurface = useCallback(async () => {
-    const entityName = focusState.entity;
-    const surface = runtimeState.activeSurface ?? inferSurfaceFromFocus(focusState.area);
-    if (!entityName) return false;
+  const isDesignerContext = useCallback(
+    (area: FocusContextState["area"]) =>
+      area === "form" || area === "designer" || area === "lookup" || area === "dialog",
+    [],
+  );
 
-    const bucket = ensureSurfaceBucket(runtimeState, surface, entityName);
-    if (bucket.draftPatchOps.length === 0) return true;
+  const persistActiveSurface = useCallback(
+    async (action: "patch" | "apply" = "apply") => {
+      const entityName = focusState.entity;
+      const surface = runtimeState.activeSurface ?? inferSurfaceFromFocus(focusState.area);
+      if (!entityName) return false;
 
-    const response = await fetch(`/api/metadata/designer/${entityName}/${surface}/apply`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        baseVersion: bucket.versionInfo.baseVersion,
-        derivedFromVersion: bucket.versionInfo.derivedFromVersion,
-        surface: bucket.surface,
-        ops: bucket.draftPatchOps,
-        clientRevision: bucket.versionInfo.clientRevision,
-      }),
-    });
+      const bucket = ensureSurfaceBucket(runtimeState, surface, entityName);
+      if (bucket.draftPatchOps.length === 0) return true;
 
-    if (!response.ok) {
-      throw new Error(`Failed to apply designer surface (${response.status})`);
-    }
-
-    updateRuntime((prev) => {
-      const currentBucket = ensureSurfaceBucket(prev, surface, entityName);
-      const committedNodes = cloneDesignerNodes(currentBucket.nodes);
-      const nextBucket: DesignerSurfaceState = {
-        ...currentBucket,
-        baselineNodes: cloneDesignerNodes(committedNodes),
-        nodes: committedNodes,
-        draftPatchOps: [],
-        versionInfo: {
-          ...currentBucket.versionInfo,
-          clientRevision: nextRevision(currentBucket.versionInfo.clientRevision),
+      const response = await fetch(`/api/metadata/designer/${entityName}/${surface}/${action}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
         },
-      };
-      return {
-        ...prev,
-        activeSurface: surface,
-        surfaces: { ...prev.surfaces, [surface]: nextBucket },
-      };
-    });
+        body: JSON.stringify({
+          baseVersion: bucket.versionInfo.baseVersion,
+          derivedFromVersion: bucket.versionInfo.derivedFromVersion,
+          surface: bucket.surface,
+          ops: bucket.draftPatchOps,
+          clientRevision: bucket.versionInfo.clientRevision,
+        }),
+      });
 
-    return true;
-  }, [focusState.area, focusState.entity, runtimeState, updateRuntime]);
+      if (!response.ok) {
+        throw new Error(`Failed to ${action} designer surface (${response.status})`);
+      }
+
+      let responseBody: unknown = null;
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        try {
+          responseBody = await response.json();
+        } catch {
+          responseBody = null;
+        }
+      }
+
+      const clientRevision = extractClientRevision(responseBody) ?? createClientRevision();
+
+      updateRuntime((prev) => {
+        const currentBucket = ensureSurfaceBucket(prev, surface, entityName);
+        const committedNodes = cloneDesignerNodes(currentBucket.nodes);
+        const nextBucket: DesignerSurfaceState = {
+          ...currentBucket,
+          baselineNodes:
+            action === "apply" ? cloneDesignerNodes(committedNodes) : currentBucket.baselineNodes,
+          nodes: committedNodes,
+          draftPatchOps: [],
+          versionInfo: {
+            ...currentBucket.versionInfo,
+            clientRevision,
+          },
+        };
+        return {
+          ...prev,
+          activeSurface: surface,
+          surfaces: { ...prev.surfaces, [surface]: nextBucket },
+        };
+      });
+
+      return true;
+    },
+    [focusState.area, focusState.entity, runtimeState, updateRuntime],
+  );
+
+  const saveDesign = useCallback(async () => {
+    try {
+      const saved = await persistActiveSurface("patch");
+      toast.success("Designer draft saved");
+      return saved;
+    } catch (error) {
+      console.error("Failed to save designer surface:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to save designer surface");
+      return false;
+    }
+  }, [persistActiveSurface]);
 
   const applyDesign = useCallback(async () => {
     try {
-      const applied = await persistActiveSurface();
+      const applied = await persistActiveSurface("apply");
       toast.success("Designer applied");
       return applied;
     } catch (error) {
@@ -1068,38 +1082,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     setIsDesignMode(false);
   }, [runtimeState.surfaces, persistActiveSurface, resetDelta]);
 
-  const updateColumn = useCallback(
-    (key: string, patch: Partial<ColumnDesignConfig>) => {
-      updateRuntime((prev) => {
-        const surface = "triview-grid";
-        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
-        const nextBucket = applyNodePatch(bucket, key, patch);
-        return {
-          ...prev,
-          activeSurface: surface,
-          surfaces: { ...prev.surfaces, [surface]: nextBucket },
-        };
-      });
-    },
-    [focusState.entity, updateRuntime],
-  );
-
-  const moveColumn = useCallback(
-    (key: string, targetKey: string) => {
-      updateRuntime((prev) => {
-        const surface = "triview-grid";
-        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
-        const nextBucket = moveNodeInBucket(bucket, key, targetKey);
-        return {
-          ...prev,
-          activeSurface: surface,
-          surfaces: { ...prev.surfaces, [surface]: nextBucket },
-        };
-      });
-    },
-    [focusState.entity, updateRuntime],
-  );
-
   const updateField = useCallback(
     (key: string, patch: Partial<FieldDesignConfig>) => {
       updateRuntime((prev) => {
@@ -1128,6 +1110,22 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
             ...prev.surfaces,
             [surface]: updateFrameLabelInBucket(bucket, key, label),
           },
+        };
+      });
+    },
+    [focusState.entity, updateRuntime],
+  );
+
+  const moveFrame = useCallback(
+    (key: string, targetKey: string) => {
+      updateRuntime((prev) => {
+        const surface = "triview-detail";
+        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
+        const nextBucket = moveNodeInBucket(bucket, key, targetKey, null);
+        return {
+          ...prev,
+          activeSurface: surface,
+          surfaces: { ...prev.surfaces, [surface]: nextBucket },
         };
       });
     },
@@ -1207,7 +1205,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         }
         const nextVersion = {
           ...bucket.versionInfo,
-          clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+          clientRevision: nextRevision(),
         };
         const patchOp: DesignerPatchOp = {
           op: "move",
@@ -1284,7 +1282,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         nextNodes.push(node);
         const nextVersion = {
           ...bucket.versionInfo,
-          clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+          clientRevision: nextRevision(),
         };
         const patchOp: DesignerPatchOp = {
           op: "add",
@@ -1300,36 +1298,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
           draftPatchOps: [...bucket.draftPatchOps, patchOp],
           versionInfo: nextVersion,
         };
-        return {
-          ...prev,
-          activeSurface: surface,
-          surfaces: { ...prev.surfaces, [surface]: nextBucket },
-        };
-      });
-    },
-    [focusState.entity, updateRuntime],
-  );
-
-  const addColumnDraft = useCallback(
-    (label?: string) => {
-      updateRuntime((prev) => {
-        const surface = "triview-grid";
-        const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
-        const nodeId = nextDraftId("grid-column");
-        const node = createSurfaceNode(
-          surface,
-          focusState.entity,
-          "grid-column",
-          nodeId,
-          label ?? "New column",
-          bucket.nodes.length,
-          {
-            visible: true,
-            placement: { mode: "flat", slot: "grid", index: bucket.nodes.length },
-            versionInfo: createBaseVersionInfo(`schema:${focusState.entity ?? "draft"}:${nodeId}`),
-          },
-        );
-        const nextBucket = insertNodeInBucket(bucket, node);
         return {
           ...prev,
           activeSurface: surface,
@@ -1378,7 +1346,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         const nextNodes = removeNodeFromTree(bucket.nodes, key);
         const nextVersion = {
           ...bucket.versionInfo,
-          clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+          clientRevision: nextRevision(),
         };
         const patchOp: DesignerPatchOp = { op: "remove", nodeKey: key };
         const nextBucket = {
@@ -1437,7 +1405,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         const withoutFrame = removeNodeFromTree(nextNodes, key);
         const nextVersion = {
           ...bucket.versionInfo,
-          clientRevision: nextRevision(bucket.versionInfo.clientRevision),
+          clientRevision: nextRevision(),
         };
         const patchOp: DesignerPatchOp = { op: "remove", nodeKey: key };
         const nextBucket = {
@@ -1455,83 +1423,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       });
     },
     [focusState.entity, updateRuntime],
-  );
-
-  const initColumns = useCallback(
-    (
-      cols: {
-        key: string;
-        header: string;
-        visible?: boolean;
-        width?: string;
-        pin?: "left" | "right" | null;
-      }[],
-    ) => {
-      updateRuntime((prev) => {
-        const surface = "triview-grid";
-        const existing = ensureSurfaceBucket(prev, surface, focusState.entity);
-        const existingKeys = new Set(existing.nodes.map((node) => node.id));
-        const incomingKeys = new Set(cols.map((col) => col.key));
-        const sameSet =
-          existingKeys.size === incomingKeys.size &&
-          [...incomingKeys].every((key) => existingKeys.has(key));
-        if (sameSet && existing.nodes.length > 0) {
-          return {
-            ...prev,
-            activeSurface: focusState.area === "grid" ? surface : (prev.activeSurface ?? surface),
-            surfaces: { ...prev.surfaces, [surface]: existing },
-          };
-        }
-
-        const nodes = cols.map((col, index) =>
-          createSurfaceNode(
-            surface,
-            focusState.entity,
-            "grid-column",
-            col.key,
-            col.header || col.key,
-            index,
-            {
-              visible: col.visible !== false,
-              width: col.width,
-              pin: col.pin ?? null,
-              placement: { mode: "flat", slot: "grid", index },
-              styleTokenBinding: null,
-              ruleBinding: null,
-              versionInfo: createBaseVersionInfo(
-                `schema:${focusState.entity ?? "unknown"}:${col.key}`,
-              ),
-            },
-          ),
-        );
-
-        const bucket = {
-          ...defaultSurfaceState(surface, focusState.entity),
-          baselineNodes: nodes.map((node) => ({ ...node })),
-          nodes,
-          selectedNodeIds: nodes.length > 0 ? [nodes[0].id] : [],
-          versionInfo: {
-            ...defaultVersionInfo,
-            clientRevision: "rev-1",
-          },
-        };
-        return {
-          ...prev,
-          activeSurface: focusState.area === "grid" ? surface : (prev.activeSurface ?? surface),
-          surfaces: {
-            ...prev.surfaces,
-            [surface]: appendHistory(bucket, {
-              action: "init",
-              surface,
-              summary: `Initialized ${nodes.length} grid column(s)`,
-              patchOps: [],
-              revision: bucket.versionInfo.clientRevision,
-            }),
-          },
-        };
-      });
-    },
-    [focusState.area, focusState.entity, updateRuntime],
   );
 
   const initFields = useCallback(
@@ -1605,7 +1496,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
           selectedNodeIds: fields.length > 0 ? [fields[0].key] : [frameId],
           versionInfo: {
             ...defaultVersionInfo,
-            clientRevision: "rev-1",
+            clientRevision: createClientRevision(),
           },
         };
         return {
@@ -1636,15 +1527,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
           ...(update.hoverTargetId !== undefined ? { hoverTargetId: update.hoverTargetId } : null),
         }));
       }
-      if (update.columns) {
-        update.columns.forEach((column) => {
-          updateColumn(column.key, {
-            visible: column.visible,
-            width: column.width,
-            pin: column.pin ?? null,
-          });
-        });
-      }
       if (update.fieldConfigs) {
         update.fieldConfigs.forEach((field) => {
           updateField(field.key, {
@@ -1662,7 +1544,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [updateColumn, updateField],
+    [updateField],
   );
 
   const activeSurfaceState = runtimeState.activeSurface
@@ -1685,7 +1567,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
   );
 
   const syncDesignerFocus = useCallback(() => {
-    if (!isDesignMode) return;
+    if (!isDesignMode || !isDesignerContext(focusState.area)) return;
     const entityName = activeSurfaceState?.entityName ?? focusState.entity;
     const surface = activeSurfaceState?.surface ?? inferSurfaceFromFocus(focusState.area);
     setFocus({
@@ -1699,6 +1581,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     focusState.area,
     focusState.entity,
     isDesignMode,
+    isDesignerContext,
     setFocus,
   ]);
 
@@ -1721,6 +1604,16 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
   }, [focusState, isDesignMode, resetFocus, setFocus, syncDesignerFocus]);
 
   useEffect(() => {
+    const designerContext = isDesignerContext(focusState.area);
+
+    if (isDesignMode && wasDesignerContextRef.current && !designerContext) {
+      void closeDesignMode();
+    }
+
+    wasDesignerContextRef.current = designerContext;
+  }, [closeDesignMode, focusState.area, isDesignMode, isDesignerContext]);
+
+  useEffect(() => {
     if (!isDesignMode) return;
     syncDesignerFocus();
   }, [
@@ -1737,7 +1630,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       group: "workflow",
       label: { en: "Toggle Designer", de: "Designer umschalten" },
       shortcut: "Ctrl+Shift+F2",
-      isEnabled: () => true,
+      isEnabled: (state) => isDesignerContext(state.area),
       handler: () => toggleDesignMode(),
     });
     const unregisterReset = registerCommand({
@@ -1814,41 +1707,38 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       delta: designerDelta,
       updateDelta,
       resetDelta,
-      updateColumn,
-      moveColumn,
       updateField,
       updateFrameLabel,
+      moveFrame,
       moveField,
       moveFieldToStart,
       moveFieldToEnd,
       moveFieldToFrame,
       addFieldDraft,
-      addColumnDraft,
       addFrameDraft,
       removeFieldDraft,
       removeFrameDraft,
-      initColumns,
       initFields,
       selectDesignerNodes,
       setDesignerSurface,
+      saveDesign,
       applyDesign,
       reconcileDesign,
     }),
     [
       activeSurfaceState,
+      saveDesign,
       applyDesign,
       closeDesignMode,
       designerDelta,
-      initColumns,
       initFields,
       isDesignMode,
-      moveColumn,
+      moveFrame,
       moveField,
       moveFieldToStart,
       moveFieldToEnd,
       moveFieldToFrame,
       addFieldDraft,
-      addColumnDraft,
       addFrameDraft,
       removeFieldDraft,
       removeFrameDraft,
@@ -1859,7 +1749,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       selectedNodes,
       setDesignerSurface,
       toggleDesignMode,
-      updateColumn,
       updateDelta,
       updateField,
       updateFrameLabel,

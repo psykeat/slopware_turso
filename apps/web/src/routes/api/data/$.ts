@@ -1,6 +1,6 @@
 import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
-import { addressContact } from "@repo/db/schema";
+import { addressContact, addressContactIdentity } from "@repo/db/schema";
 import { DataService } from "@repo/db/services/data";
 import { DocumentService } from "@repo/db/services/document-service";
 import { createFileRoute } from "@tanstack/react-router";
@@ -54,7 +54,7 @@ export const Route = createFileRoute("/api/data/$")({
                 ? Math.min(Math.max(requestedLimit, 1), 25)
                 : 10;
               const searchTerm = buildAddressContactSearchTerm(term);
-              const rows = await db
+              const allRows = await db
                 .select({
                   contactId: addressContact.contactId,
                   addressId: addressContact.addressId,
@@ -62,18 +62,29 @@ export const Route = createFileRoute("/api/data/$")({
                   lastName: addressContact.lastName,
                   email: addressContact.email,
                   isPrimary: addressContact.isPrimary,
+                  sourceSystem: addressContactIdentity.sourceSystem,
                 })
                 .from(addressContact)
+                .leftJoin(
+                  addressContactIdentity,
+                  eq(addressContact.contactId, addressContactIdentity.contactId),
+                )
                 .where(
                   and(
                     eq(addressContact.tenantId, context?.tenantId ?? ""),
                     eq(addressContact.archived, false),
-                    isNotNull(addressContact.email),
-                    sql`${addressContact.email} <> ''`,
                     or(
-                      ilike(addressContact.firstName, searchTerm),
-                      ilike(addressContact.lastName, searchTerm),
-                      ilike(addressContact.email, searchTerm),
+                      and(
+                        isNotNull(addressContact.email),
+                        sql`${addressContact.email} <> ''`,
+                        or(
+                          ilike(addressContact.firstName, searchTerm),
+                          ilike(addressContact.lastName, searchTerm),
+                          ilike(addressContact.email, searchTerm),
+                        ),
+                      ),
+                      ilike(addressContactIdentity.value, searchTerm),
+                      ilike(addressContactIdentity.normalizedValue, searchTerm),
                     ),
                   ),
                 )
@@ -82,11 +93,22 @@ export const Route = createFileRoute("/api/data/$")({
                   asc(addressContact.firstName),
                   asc(addressContact.email),
                 )
-                .limit(limit);
+                .limit(limit * 5);
+
+              const dedupedMap = new Map();
+              for (const row of allRows) {
+                if (!dedupedMap.has(row.contactId)) {
+                  dedupedMap.set(row.contactId, {
+                    ...row,
+                    sourceSystem: row.sourceSystem ?? "crm",
+                  });
+                }
+              }
+              const finalRows = Array.from(dedupedMap.values()).slice(0, limit);
 
               return new Response(
                 JSON.stringify(
-                  rows.map((row) =>
+                  finalRows.map((row) =>
                     normalizeAddressContactLookupRow({
                       ...row,
                       name: null,

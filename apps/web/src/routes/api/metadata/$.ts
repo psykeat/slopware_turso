@@ -9,6 +9,8 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
+import { canWriteLayoutScope, resolveLayoutBody } from "./-layout-utils";
+
 type DesignerAction = "patch" | "apply" | "reconcile";
 
 type DesignerFallbackResponse = {
@@ -147,7 +149,7 @@ export const Route = createFileRoute("/api/metadata/$")({
           context = { tenantId: "", organizationId: "" };
         }
 
-        const resolver = new MetadataResolver(context);
+        const resolver = new MetadataResolver({ ...context, userId: session.user.id });
         const pathname = getPathname(request);
         console.log(`[Metadata API] Request: ${request.method} ${pathname}`);
 
@@ -399,14 +401,19 @@ async function handleUpdate({ request, method }: { request: Request; method: "PO
       if (!entityName || !layoutKey) return new Response("Bad Request", { status: 400 });
 
       const tenantRole = await getUserTenantRole(session.user.id, context.tenantId);
-      const canWriteLayout =
-        tenantInfo &&
-        ((tenantInfo.isBase && (isSystemAdmin || tenantRole === "owner")) ||
-          tenantRole === "owner");
-      if (!canWriteLayout) return new Response("Forbidden", { status: 403 });
+      const { layoutDefinition, scope } = resolveLayoutBody(body);
+      if (
+        !canWriteLayoutScope({
+          scope,
+          tenantRole,
+          isSystemAdmin,
+          isBaseTenant: tenantInfo?.isBase ?? false,
+        })
+      ) {
+        return new Response("Forbidden", { status: 403 });
+      }
 
-      // Expects the layout definition directly as body
-      await writer.saveLayoutOverride(entityName, layoutKey, body);
+      await writer.saveLayoutOverride(entityName, layoutKey, layoutDefinition, scope);
       return new Response(JSON.stringify({ success: true }), {
         headers: { "content-type": "application/json" },
       });

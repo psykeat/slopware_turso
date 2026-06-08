@@ -25,6 +25,7 @@
 | group_id          | group_id          | text                     | —     |                            |             |
 | lookup_table      | lookup_table      | text                     | —     |                            |             |
 | lookup_filter     | lookup_filter     | jsonb                    | —     |                            |             |
+| archived          | archived          | boolean                  | —     | NOT NULL                   |             |
 
 > INDEX `uq_fields_global` (entity_name, field_name) [btree]
 > INDEX `uq_fields_org` (organization_id, entity_name, field_name) [btree]

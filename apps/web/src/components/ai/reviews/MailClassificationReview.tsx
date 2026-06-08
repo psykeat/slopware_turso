@@ -2,6 +2,9 @@ import { cn } from "@repo/ui/lib/utils";
 import { CheckCircle2Icon, ChevronDownIcon, SearchIcon, UserIcon } from "lucide-react";
 import React, { useState } from "react";
 
+import { useAddresses } from "../hooks/useAiData";
+import { formatAddressLabel, safeIdPrefix } from "./mail-review-labels";
+
 export interface AddressOption {
   addressId: string;
   addressNo?: string | null;
@@ -21,11 +24,11 @@ const TRANSACTION_INTENTIONS = new Set([
 ]);
 
 function addressLabel(a: AddressOption): string {
-  return (
-    a.companyName?.trim() ||
-    [a.firstName, a.lastName].filter(Boolean).join(" ").trim() ||
-    `Geschäftspartner #${a.addressNo || a.addressId.slice(0, 8)}`
-  );
+  return formatAddressLabel(a);
+}
+
+function searchText(value: unknown): string {
+  return typeof value === "string" ? value.toLowerCase() : "";
 }
 
 export interface MailClassificationReviewProps {
@@ -39,22 +42,14 @@ export interface MailClassificationReviewProps {
   };
   validation: any;
   onPatch: (patch: Partial<any>) => void;
-  allAddresses: AddressOption[];
-  allDocuments?: Array<{
-    documentId: string;
-    documentNo?: string | null;
-    documentType?: string | null;
-    companyName?: string | null;
-    customerName?: string | null;
-  }>;
 }
 
 export function MailClassificationReview({
   suggestionPayload,
   validation,
   onPatch,
-  allAddresses,
 }: MailClassificationReviewProps) {
+  const { data: allAddresses = [] } = useAddresses();
   const rawSteps = suggestionPayload.steps || [];
   const steps = rawSteps.map((s: any, idx: number) => ({
     ...s,
@@ -125,16 +120,16 @@ export function MailClassificationReview({
 
   // Resolve display name for a candidate ID using allAddresses
   const resolveCandidate = (candidateId: string, displayValue?: string) => {
-    const addr = allAddresses.find((a) => a.addressId === candidateId);
-    return addr ? addressLabel(addr) : displayValue || candidateId.slice(0, 8);
+    const addr = allAddresses.find((a: any) => a.addressId === candidateId);
+    return addr ? addressLabel(addr) : displayValue || safeIdPrefix(candidateId);
   };
 
   // Filtered addresses for manual search
   const filteredAddresses = searchQuery.trim()
-    ? allAddresses.filter((a) => {
+    ? allAddresses.filter((a: any) => {
         const label = addressLabel(a).toLowerCase();
         const q = searchQuery.toLowerCase();
-        return label.includes(q) || (a.city || "").toLowerCase().includes(q);
+        return label.includes(q) || searchText(a.city).includes(q);
       })
     : allAddresses.slice(0, 12);
 
@@ -331,7 +326,7 @@ export function MailClassificationReview({
               {candidateMatches.map((cand) => {
                 const isSelected = currentAddressId === cand.id;
                 const label = resolveCandidate(cand.id, cand.displayValue);
-                const addr = allAddresses.find((a) => a.addressId === cand.id);
+                const addr = allAddresses.find((a: any) => a.addressId === cand.id);
                 return (
                   <button
                     key={cand.id}
@@ -407,7 +402,7 @@ export function MailClassificationReview({
                 >
                   — Nicht zugeordnet
                 </button>
-                {filteredAddresses.map((addr) => (
+                {filteredAddresses.map((addr: any) => (
                   <button
                     key={addr.addressId}
                     type="button"

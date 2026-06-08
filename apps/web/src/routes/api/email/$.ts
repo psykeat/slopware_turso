@@ -25,6 +25,7 @@ export const Route = createFileRoute("/api/email/$")({
       GET: async ({ request }) => withEmailContext(request, handleGet),
       POST: async ({ request }) => withEmailContext(request, handlePost),
       PATCH: async ({ request }) => withEmailContext(request, handlePatch),
+      DELETE: async ({ request }) => withEmailContext(request, handleDelete),
     },
   },
 });
@@ -52,6 +53,7 @@ const GMAIL_SCOPES = [
   "openid",
   "email",
   "profile",
+  "https://www.googleapis.com/auth/contacts.readonly",
   "https://www.googleapis.com/auth/gmail.labels",
   "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/gmail.compose",
@@ -65,6 +67,7 @@ const GRAPH_SCOPES = [
   "profile",
   "email",
   "User.Read",
+  "Contacts.Read",
   "Mail.ReadWrite",
   "Mail.Send",
 ];
@@ -562,6 +565,17 @@ async function handlePost(context: EmailContext) {
 
 async function handlePatch(context: EmailContext) {
   return await handlePost(context);
+}
+
+async function handleDelete(context: EmailContext) {
+  const { segments, tenantId, userId } = context;
+
+  if (segments[0] === "accounts" && segments[1]) {
+    await new EmailAccountService(tenantId, userId).revoke(segments[1]);
+    return json({ ok: true });
+  }
+
+  return new Response("Not Found", { status: 404 });
 }
 
 function providerFromSegment(segment: string): EmailProvider | null {

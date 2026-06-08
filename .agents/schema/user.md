@@ -15,4 +15,5 @@
 | is_active       | is_active       | boolean                  | —     | NOT NULL, DEFAULT true  |             |
 | last_company_id | last_company_id | text                     | —     |                         |             |
 | is_system_admin | is_system_admin | boolean                  | —     | NOT NULL                |             |
+| is_tenant_admin | is_tenant_admin | boolean                  | —     | NOT NULL                |             |
 | locale          | locale          | varchar(5)               | —     | NOT NULL, DEFAULT de    |             |

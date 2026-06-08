@@ -2,6 +2,7 @@ import { cn } from "@repo/ui/lib/utils";
 import { ArrowRightIcon, FileTextIcon } from "lucide-react";
 import React from "react";
 
+import { safeIdPrefix } from "./mail-review-labels";
 import { AddressOption, MailClassificationReview } from "./MailClassificationReview";
 
 /** Intentions for which we must NEVER show document actions */
@@ -20,21 +21,12 @@ export interface MailToDocumentDraftReviewProps {
   };
   validation: any;
   onPatch: (patch: Partial<any>) => void;
-  allAddresses: AddressOption[];
-  allDocuments?: Array<{
-    documentId: string;
-    documentNo?: string | null;
-    documentType?: string | null;
-    companyName?: string | null;
-    customerName?: string | null;
-  }>;
 }
 
 export function MailToDocumentDraftReview({
   suggestionPayload,
   validation,
   onPatch,
-  allAddresses,
 }: MailToDocumentDraftReviewProps) {
   const rawSteps = suggestionPayload.steps || [];
   const steps = rawSteps.map((s: any, idx: number) => ({
@@ -93,7 +85,6 @@ export function MailToDocumentDraftReview({
         suggestionPayload={suggestionPayload}
         validation={validation}
         onPatch={onPatch}
-        allAddresses={allAddresses}
       />
 
       {/* Conversion card: Quote → Order (takes priority over create-draft) */}
@@ -176,7 +167,7 @@ export function MailToDocumentDraftReview({
                         {line.articleName || line.articleNo || "Gesuchter Artikel"}
                       </div>
                       <div className="truncate font-mono text-[10px] text-ink-mute">
-                        ID: {line.articleId ? line.articleId.slice(0, 8) : "unbekannt"}
+                        ID: {safeIdPrefix(line.articleId, "unbekannt")}
                       </div>
                     </div>
                     <div className="shrink-0 text-right font-mono font-medium text-ink-secondary">

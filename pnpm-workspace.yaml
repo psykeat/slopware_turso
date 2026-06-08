@@ -86,6 +86,27 @@ catalog:
   "@tanstack/workflow-core": ^0.0.3
   "@playwright/test": ^1.60.0
   "@tanstack/react-form": ^1.33.0
+  lexical: ^0.45.0
+  "@lexical/react": ^0.45.0
+  "@lexical/rich-text": ^0.45.0
+  "@lexical/selection": ^0.45.0
+  "@lexical/utils": ^0.45.0
+  "@lexical/html": ^0.45.0
+  "@lexical/list": ^0.45.0
+  "@lexical/link": ^0.45.0
+  novel: ^1.0.2
+  tiptap-markdown: 0.8.10
+  "@tiptap/react": ^2.23.0
+  "@tiptap/core": ^2.23.0
+  "@tiptap/starter-kit": ^2.23.0
+  "@tiptap/pm": ^2.23.0
+  "@tiptap/extension-color": ^2.23.0
+  "@tiptap/extension-text-style": ^2.23.0
+  prosemirror-state: ^1.4.4
+  prosemirror-view: ^1.41.8
+  prosemirror-model: ^1.25.7
+  "@tiptap/extension-text-align": ^3.24.0
+  "@tiptap/extension-font-family": ^3.24.0
 catalogMode: prefer
 
 overrides:

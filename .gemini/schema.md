@@ -1,7 +1,7 @@
 # Slopware — Live Schema Index
 
-> Generated: 2026-06-05 19:32:53 UTC
-> Tables: 97
+> Generated: 2026-06-07 20:43:10 UTC
+> Tables: 102
 
 Here is the index of all database tables. Click on a table name to view its detailed columns, types, and business annotations.
 
@@ -14,15 +14,21 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [address](file:///home/ubuntu/slopware/.agents/schema/address.md) (_address_id_)
 - [address_category](file:///home/ubuntu/slopware/.agents/schema/address_category.md) (_category_id_)
 - [address_contact](file:///home/ubuntu/slopware/.agents/schema/address_contact.md) (_contact_id_)
+- [address_contact_identity](file:///home/ubuntu/slopware/.agents/schema/address_contact_identity.md) (_identity_id_)
 - [address_seq](file:///home/ubuntu/slopware/.agents/schema/address_seq.md) (_tenant_id_)
 - [ai_apply_attempt](file:///home/ubuntu/slopware/.agents/schema/ai_apply_attempt.md) (_attempt_id_)
+- [ai_context_projection](file:///home/ubuntu/slopware/.agents/schema/ai_context_projection.md) (_projection_id_)
 - [ai_evidence](file:///home/ubuntu/slopware/.agents/schema/ai_evidence.md) (_evidence_id_)
 - [ai_interpretation](file:///home/ubuntu/slopware/.agents/schema/ai_interpretation.md) (_interpretation_id_)
+- [ai_memory](file:///home/ubuntu/slopware/.agents/schema/ai_memory.md) (_memory_id_)
 - [ai_plan](file:///home/ubuntu/slopware/.agents/schema/ai_plan.md) (_plan_id_)
 - [ai_prompt_version](file:///home/ubuntu/slopware/.agents/schema/ai_prompt_version.md) (_prompt_version_id_)
 - [ai_review](file:///home/ubuntu/slopware/.agents/schema/ai_review.md) (_review_id_)
 - [ai_run](file:///home/ubuntu/slopware/.agents/schema/ai_run.md) (_run_id_)
-- [ai_session](file:///home/ubuntu/slopware/.agents/schema/ai_session.md)
+- [ai_session](file:///home/ubuntu/slopware/.agents/schema/ai_session.md) (_session_id_)
+- [ai_tool_call](file:///home/ubuntu/slopware/.agents/schema/ai_tool_call.md) (_tool_call_id_)
+- [ai_tool_review](file:///home/ubuntu/slopware/.agents/schema/ai_tool_review.md) (_review_id_)
+- [ai_turn](file:///home/ubuntu/slopware/.agents/schema/ai_turn.md) (_turn_id_)
 - [article](file:///home/ubuntu/slopware/.agents/schema/article.md) (_article_id_)
 - [article_bom](file:///home/ubuntu/slopware/.agents/schema/article_bom.md) (_bom_id_)
 - [article_group](file:///home/ubuntu/slopware/.agents/schema/article_group.md) (_article_group_id_)
@@ -48,7 +54,6 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [email_account_user_grant](file:///home/ubuntu/slopware/.agents/schema/email_account_user_grant.md) (_email_account_user_grant_id_)
 - [email_attachment](file:///home/ubuntu/slopware/.agents/schema/email_attachment.md) (_email_attachment_id_)
 - [email_identity](file:///home/ubuntu/slopware/.agents/schema/email_identity.md) (_email_identity_id_)
-- [email_job](file:///home/ubuntu/slopware/.agents/schema/email_job.md) (_email_job_id_)
 - [email_label](file:///home/ubuntu/slopware/.agents/schema/email_label.md) (_email_label_id_)
 - [email_message](file:///home/ubuntu/slopware/.agents/schema/email_message.md) (_email_message_id_)
 - [email_message_label](file:///home/ubuntu/slopware/.agents/schema/email_message_label.md) (_email_message_label_id_)

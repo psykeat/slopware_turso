@@ -1,11 +1,12 @@
 export type AddressContactLookupRow = {
   contactId: string;
-  addressId: string;
+  addressId: string | null;
   name: string;
   firstName: string | null;
   lastName: string;
   email: string | null;
   isPrimary: boolean;
+  sourceSystem?: string;
 };
 
 export function formatAddressContactName(firstName: string | null, lastName: string) {
@@ -18,12 +19,13 @@ export function buildAddressContactSearchTerm(value: string) {
 
 export function normalizeAddressContactLookupRow(row: {
   contactId: string;
-  addressId: string;
+  addressId: string | null;
   name: string | null;
   firstName: string | null;
   lastName: string;
   email: string | null;
   isPrimary: boolean;
+  sourceSystem?: string;
 }): AddressContactLookupRow {
   return {
     ...row,

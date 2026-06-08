@@ -21,8 +21,6 @@ import {
   ChevronUpIcon,
   XIcon,
   SearchIcon,
-  GripVerticalIcon,
-  PinIcon,
 } from "lucide-react";
 import React, {
   forwardRef,
@@ -37,7 +35,6 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { cn } from "../lib/utils";
-import { useDesigner } from "../platform/designer-context";
 import { useFocus } from "../platform/focus-manager";
 import type { FilterOp, FilterRule } from "../types/grid";
 import {
@@ -52,6 +49,7 @@ import { Skeleton } from "./skeleton";
 export type { FilterOp, FilterRule };
 
 export type RelationFilterMode = "lookup-eq" | "join-text";
+type LayoutScope = "global" | "org" | "tenant" | "user";
 
 export interface ColumnDef<T> {
   key: string;
@@ -172,6 +170,10 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function parseColumnOrder(value: unknown): string[] | null {
   if (isStringArray(value)) return value;
   if (isRecord(value)) {
@@ -227,254 +229,55 @@ function isSameColumnOrder(left: string[] | null, right: string[] | null) {
   return left.every((key, index) => key === right[index]);
 }
 
-type DesignerColumnDraft = {
-  key: string;
-  visible: boolean;
-  width?: string;
-  pin?: "left" | "right" | null;
-  order: number;
-  identity: string;
-  conflictState: string | null;
-};
-
-type DesignerRuntimeContext = {
-  isDesignMode: boolean;
-  delta: {
-    columns: DesignerColumnDraft[];
-    fieldConfigs: unknown[];
-    activeDragId: string | null;
-    hoverTargetId: string | null;
-  };
-  initColumns: (
-    cols: {
-      key: string;
-      header: string;
-      visible?: boolean;
-      width?: string;
-      pin?: "left" | "right" | null;
-    }[],
-  ) => void;
-  addColumnDraft?: (label?: string) => void;
-  normalized?: unknown;
-  normalizedState?: unknown;
-  state?: { normalized?: unknown };
-  selectedNodeKey?: string | null;
-  selection?: { nodeKey?: string | null; selectedNodeKey?: string | null } | null;
-  surface?: string | null;
-  activeSurface?: string | null;
-  currentSurface?: string | null;
-  entityName?: string | null;
-  entity?: string | null;
-};
-
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+export function getGridColumnOrderStorageKey(
+  entityName: string,
+  panelId: string,
+  userId: string | null,
+) {
+  return userId ? `col-order:${entityName}:${panelId}:${userId}` : null;
 }
 
-function readPath(value: unknown, path: string[]): unknown {
-  let current: unknown = value;
-  for (const segment of path) {
-    if (!isRecord(current)) return undefined;
-    current = current[segment];
-  }
-  return current;
-}
-
-function firstArrayAtPaths(value: unknown, paths: string[][]): unknown[] | null {
-  for (const path of paths) {
-    const candidate = readPath(value, path);
-    if (Array.isArray(candidate)) return candidate;
-  }
-  return null;
-}
-
-function collectDesignerObjects(
-  value: unknown,
-  out: Record<string, any>[] = [],
-  seen = new Set<object>(),
-): Record<string, any>[] {
-  if (!value || typeof value !== "object") return out;
-  if (seen.has(value as object)) return out;
-  seen.add(value as object);
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectDesignerObjects(item, out, seen);
-    }
-    return out;
-  }
-
-  const record = value as Record<string, any>;
-  const kind = typeof record.kind === "string" ? record.kind : null;
-  const nodeKind = typeof record.nodeKind === "string" ? record.nodeKind : null;
-  const type = typeof record.type === "string" ? record.type : null;
-  if (kind || nodeKind || type) {
-    out.push(record);
-  }
-
-  for (const key of [
-    "nodes",
-    "children",
-    "columns",
-    "gridColumns",
-    "items",
-    "layout",
-    "contract",
-  ]) {
-    collectDesignerObjects(record[key], out, seen);
-  }
-
-  return out;
-}
-
-function readDesignerRoot(designer: DesignerRuntimeContext): unknown {
-  return designer.normalized ?? designer.normalizedState ?? designer.state?.normalized ?? null;
-}
-
-function readDesignerSelectionKey(designer: DesignerRuntimeContext): string | null {
-  const root = readDesignerRoot(designer);
-  const candidates = [
-    designer.selectedNodeKey,
-    designer.selection?.selectedNodeKey ?? null,
-    designer.selection?.nodeKey ?? null,
-    (isRecord(root) ? (root.selectedNodeKey as string | null | undefined) : null) ?? null,
-    (isRecord(root) ? (root.selectedNode?.id as string | null | undefined) : null) ?? null,
-    (isRecord(root) ? (root.selection?.selectedNodeKey as string | null | undefined) : null) ??
-      null,
-    (isRecord(root) ? (root.selection?.nodeKey as string | null | undefined) : null) ?? null,
-  ];
-  return (
-    candidates.find((value): value is string => typeof value === "string" && value.length > 0) ??
-    null
+export function resolveGridLayoutState(params: {
+  columns: Array<{ key: string }>;
+  layoutResponse: Record<string, unknown> | null | undefined;
+  storedColumnOrder: string[] | null;
+}) {
+  const layoutResolution = isRecord(params.layoutResponse)
+    ? (params.layoutResponse.resolution as Record<string, any> | undefined)
+    : undefined;
+  const serverEffectiveColumnOrder = parseColumnOrder(params.layoutResponse);
+  const serverBaseColumnOrder = normalizeColumnOrder(
+    parseColumnOrder(layoutResolution?.scopes?.global) ??
+      params.columns.map((column) => column.key),
+    params.columns,
   );
-}
-
-function readDesignerIdentityContext(designer: DesignerRuntimeContext) {
-  const entityName =
-    designer.entityName ??
-    designer.entity ??
-    (isRecord(designer.normalized)
-      ? (designer.normalized.entityName as string | null | undefined)
-      : null) ??
-    (isRecord(designer.normalizedState)
-      ? (designer.normalizedState.entityName as string | null | undefined)
-      : null) ??
-    null;
-  const surface =
-    designer.surface ??
-    designer.activeSurface ??
-    designer.currentSurface ??
-    (isRecord(designer.normalized)
-      ? (designer.normalized.surface as string | null | undefined)
-      : null) ??
-    (isRecord(designer.normalizedState)
-      ? (designer.normalizedState.surface as string | null | undefined)
-      : null) ??
-    null;
-  return { entityName, surface };
-}
-
-function normalizeDesignerColumnDraft(
-  value: unknown,
-  index: number,
-  entityName: string | null,
-  surface: string | null,
-): DesignerColumnDraft | null {
-  if (!isRecord(value)) return null;
-
-  const key =
-    (typeof value.key === "string" && value.key) ||
-    (typeof value.nodeKey === "string" && value.nodeKey) ||
-    (typeof value.fieldKey === "string" && value.fieldKey) ||
-    (typeof value.metadataKey === "string" && value.metadataKey) ||
-    (typeof value.id === "string" && value.id) ||
-    null;
-  if (!key) return null;
-
-  const nodeEntityName =
-    (typeof value.entityName === "string" && value.entityName) ||
-    (typeof value.entity === "string" && value.entity) ||
-    null;
-  if (entityName && nodeEntityName && nodeEntityName !== entityName) return null;
-
-  const nodeSurface =
-    (typeof value.surface === "string" && value.surface) ||
-    (typeof value.surfaceName === "string" && value.surfaceName) ||
-    null;
-  if (surface && nodeSurface && nodeSurface !== surface) return null;
-
-  const rawKind = typeof value.kind === "string" ? value.kind : null;
-  const identity =
-    (typeof value.id === "string" && value.id) ||
-    (typeof value.metadataKey === "string" && value.metadataKey) ||
-    (typeof value.nodeId === "string" && value.nodeId) ||
-    (rawKind ? `${rawKind}:${key}` : `grid-column:${key}`);
-  const conflictState =
-    (typeof value.conflictState === "string" && value.conflictState) ||
-    (typeof value.state === "string" && value.state) ||
-    null;
-
-  const order =
-    (typeof value.displayOrder === "number" && value.displayOrder) ||
-    (typeof value.order === "number" && value.order) ||
-    index;
-  const width =
-    (typeof value.width === "string" && value.width) ||
-    (typeof value.size === "string" && value.size) ||
-    undefined;
-  const pin =
-    value.pin === "left" || value.pin === "right"
-      ? value.pin
-      : value.pinned === "left" || value.pinned === "right"
-        ? value.pinned
-        : null;
+  const serverTenantColumnOrder = normalizeColumnOrder(
+    parseColumnOrder(layoutResolution?.scopes?.tenant) ??
+      parseColumnOrder(layoutResolution?.scopes?.org) ??
+      serverBaseColumnOrder,
+    params.columns,
+  );
+  const normalizedServerEffectiveColumnOrder = normalizeColumnOrder(
+    serverEffectiveColumnOrder ?? params.columns.map((column) => column.key),
+    params.columns,
+  );
+  const hasServerUserOverride = Boolean(layoutResolution?.scopes?.user);
+  const defaultColumnOrder = hasServerUserOverride
+    ? normalizedServerEffectiveColumnOrder
+    : normalizeColumnOrder(
+        params.storedColumnOrder ?? normalizedServerEffectiveColumnOrder,
+        params.columns,
+      );
 
   return {
-    key,
-    visible: value.visible !== false,
-    width,
-    pin,
-    order,
-    identity,
-    conflictState,
+    layoutResolution,
+    serverEffectiveColumnOrder,
+    serverBaseColumnOrder,
+    serverTenantColumnOrder,
+    normalizedServerEffectiveColumnOrder,
+    hasServerUserOverride,
+    defaultColumnOrder,
   };
-}
-
-function readDesignerColumns(designer: DesignerRuntimeContext): DesignerColumnDraft[] {
-  const root = readDesignerRoot(designer);
-  if (!root) return [];
-
-  const { entityName, surface } = readDesignerIdentityContext(designer);
-  const arrayCandidate =
-    firstArrayAtPaths(root, [
-      ["columns"],
-      ["gridColumns"],
-      ["nodes"],
-      ["layout", "columns"],
-      ["layout", "nodes"],
-      ["contract", "columns"],
-      ["contract", "nodes"],
-    ]) ?? [];
-
-  if (arrayCandidate.length > 0) {
-    return arrayCandidate
-      .map((value, index) => normalizeDesignerColumnDraft(value, index, entityName, surface))
-      .filter((value): value is DesignerColumnDraft => value !== null);
-  }
-
-  return collectDesignerObjects(root)
-    .filter((value) => {
-      const kind = typeof value.kind === "string" ? value.kind : null;
-      const nodeKind = typeof value.nodeKind === "string" ? value.nodeKind : null;
-      return (
-        kind === "grid-column" ||
-        kind === "column" ||
-        nodeKind === "grid-column" ||
-        nodeKind === "column"
-      );
-    })
-    .map((value, index) => normalizeDesignerColumnDraft(value, index, entityName, surface))
-    .filter((value): value is DesignerColumnDraft => value !== null);
 }
 
 let _ruleIdCounter = 0;
@@ -520,8 +323,7 @@ function DataGridInner<T>(
   "use no memo";
   const { t, i18n } = useTranslation("ui");
   const { state: focusState, setFocus } = useFocus();
-  const designer = useDesigner() as unknown as DesignerRuntimeContext;
-  const { isDesignMode, delta, initColumns, addColumnDraft } = designer;
+  const isDesignMode = false;
   const { data: tenantInfo } = useQuery({
     queryKey: ["me", "grid-tenant"],
     queryFn: async () => {
@@ -546,6 +348,7 @@ function DataGridInner<T>(
   const scrollRef = useRef<HTMLDivElement>(null);
   const colPickerRef = useRef<HTMLDivElement>(null);
   const headerCheckRef = useRef<HTMLInputElement>(null);
+  const legacyPromotionAttemptedRef = useRef(false);
   // Tracks what we last set as focus so the effect doesn't loop on stale focusState
   const lastFocusRef = useRef<{ id: string; entity: string; panel: string; row: number } | null>(
     null,
@@ -558,11 +361,6 @@ function DataGridInner<T>(
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(
     (initialColumns ?? []).map((column) => column.key),
   );
-  const [draggedColumnKey, setDraggedColumnKey] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{
-    key: string;
-    position: "before" | "after";
-  } | null>(null);
   const [restoreRequest, setRestoreRequest] = useState<{
     token: number;
     recordId: string | null;
@@ -573,17 +371,6 @@ function DataGridInner<T>(
   const loading = internalLoading || externalLoading;
   const hasPagination = totalCount !== undefined;
   const totalPages = hasPagination ? Math.ceil(totalCount / pageSize) : 0;
-  const designerColumns = useMemo(() => readDesignerColumns(designer), [designer]);
-  const designerColumnByKey = useMemo(() => {
-    return new Map(designerColumns.map((column) => [column.key, column]));
-  }, [designerColumns]);
-  const designerSelectionKey = readDesignerSelectionKey(designer);
-  const activeDesignerHeaderKey =
-    focusState.area === "designer" &&
-    focusState.entity === entityName &&
-    focusState.panel === panelId
-      ? focusState.field
-      : designerSelectionKey;
 
   // Local debounced search state
   const [localSearch, setLocalSearch] = useState(searchProp ?? "");
@@ -608,7 +395,7 @@ function DataGridInner<T>(
     } catch {}
   }, [columnVisibility, visibilityStorageKey]);
 
-  const columnOrderStorageKey = userId ? `col-order:${entityName}:${panelId}:${userId}` : null;
+  const columnOrderStorageKey = getGridColumnOrderStorageKey(entityName, panelId, userId);
   const [storedColumnOrder, setStoredColumnOrder] = useState<string[] | null>(() => {
     if (typeof window === "undefined" || !columnOrderStorageKey) return null;
     try {
@@ -618,30 +405,101 @@ function DataGridInner<T>(
       return null;
     }
   });
-  const { data: publishedLayout } = useQuery({
-    queryKey: ["metadata", "layout", entityName, "grid"],
+  const { data: layoutResponse } = useQuery({
+    queryKey: ["metadata", "layout", entityName, panelId],
     queryFn: async () => {
       if (!entityName) return null;
-      const res = await fetch(`/api/metadata/layout/${entityName}/grid`);
+      const res = await fetch(`/api/metadata/layout/${entityName}/${panelId}`);
       if (!res.ok) return null;
       return res.json() as Promise<Record<string, unknown>>;
     },
     enabled: Boolean(entityName),
     staleTime: 5 * 60 * 1000,
   });
-  const publishedColumnOrder = useMemo(() => parseColumnOrder(publishedLayout), [publishedLayout]);
-  const publishedDefaultColumnOrder = useMemo(() => {
-    const candidate = publishedColumnOrder ?? resolvedColumns.map((column) => column.key);
-    return normalizeColumnOrder(candidate, resolvedColumns);
-  }, [publishedColumnOrder, resolvedColumns]);
+  const {
+    serverBaseColumnOrder,
+    serverTenantColumnOrder,
+    normalizedServerEffectiveColumnOrder,
+    hasServerUserOverride,
+    defaultColumnOrder,
+  } = useMemo(
+    () =>
+      resolveGridLayoutState({
+        columns: resolvedColumns,
+        layoutResponse,
+        storedColumnOrder,
+      }),
+    [layoutResponse, resolvedColumns, storedColumnOrder],
+  );
   const canPersistPublishedColumnOrder = Boolean(
     tenantInfo &&
     (tenantInfo.tenantRole === "owner" || (tenantInfo.isSystemAdmin && tenantInfo.isBase)),
   );
-  const defaultColumnOrder = useMemo(
-    () => normalizeColumnOrder(storedColumnOrder ?? publishedDefaultColumnOrder, resolvedColumns),
-    [publishedDefaultColumnOrder, resolvedColumns, storedColumnOrder],
+
+  const persistLayoutOrder = useCallback(
+    async (scope: LayoutScope, nextOrder: string[]) => {
+      if (!entityName) return;
+
+      const normalized = normalizeColumnOrder(nextOrder, resolvedColumns);
+      const res = await fetch(`/api/metadata/layout/${entityName}/${panelId}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          scope,
+          layoutDefinition: {
+            columnOrder: normalized,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Layout persist failed with status ${res.status}`);
+      }
+
+      try {
+        if (columnOrderStorageKey) {
+          localStorage.setItem(columnOrderStorageKey, JSON.stringify(normalized));
+        }
+      } catch {
+        // Ignore storage failures in restrictive browser modes.
+      }
+
+      setStoredColumnOrder(normalized);
+      return normalized;
+    },
+    [columnOrderStorageKey, entityName, panelId, resolvedColumns],
   );
+
+  useEffect(() => {
+    if (
+      !entityName ||
+      !layoutResponse ||
+      hasServerUserOverride ||
+      legacyPromotionAttemptedRef.current ||
+      !storedColumnOrder
+    ) {
+      return;
+    }
+
+    if (isSameColumnOrder(storedColumnOrder, normalizedServerEffectiveColumnOrder)) {
+      return;
+    }
+
+    legacyPromotionAttemptedRef.current = true;
+    void persistLayoutOrder("user", storedColumnOrder).catch((error) => {
+      console.error("Failed to promote legacy column order", error);
+      toast.error("Failed to save grid preference");
+    });
+  }, [
+    entityName,
+    hasServerUserOverride,
+    layoutResponse,
+    normalizedServerEffectiveColumnOrder,
+    persistLayoutOrder,
+    storedColumnOrder,
+  ]);
 
   // Sync localSearch when prop changes externally
   useEffect(() => {
@@ -697,8 +555,6 @@ function DataGridInner<T>(
                       : "text",
             }));
           setResolvedColumns(mapped);
-          // Seed designer delta with resolved columns (no-op if already initialized)
-          initColumns(mapped.map((c) => ({ key: c.key, header: c.header, visible: true })));
           setInternalLoading(false);
         })
         .catch((err) => {
@@ -712,7 +568,7 @@ function DataGridInner<T>(
     return () => {
       mounted = false;
     };
-  }, [entityName, i18n.language, initColumns, initialColumns]);
+  }, [entityName, i18n.language, initialColumns]);
 
   useEffect(() => {
     if (!columnOrderStorageKey) {
@@ -785,55 +641,13 @@ function DataGridInner<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedColumns]);
 
-  // In design mode, honour the delta column order and visibility
   const effectiveColumns = useMemo(() => {
-    const activeDraftColumns = designerColumns.length > 0 ? designerColumns : delta.columns;
     const orderedResolvedColumns = orderColumns(
       resolvedColumns,
       normalizeColumnOrder(columnOrder, resolvedColumns),
     );
-    if (!isDesignMode || activeDraftColumns.length === 0) return orderedResolvedColumns;
-
-    const draftByKey = new Map(activeDraftColumns.map((column) => [column.key, column]));
-    const orderedKeys = activeDraftColumns
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((column) => column.key);
-
-    const orderedResolved = orderedKeys
-      .map((key) => {
-        const baseColumn = orderedResolvedColumns.find((column) => column.key === key);
-        if (!baseColumn) return null;
-        const draftColumn = draftByKey.get(key);
-        if (draftColumn?.visible === false) return null;
-        return {
-          ...baseColumn,
-          width: draftColumn?.width ?? baseColumn.width,
-          pin: draftColumn?.pin ?? baseColumn.pin,
-        };
-      })
-      .filter(Boolean) as typeof resolvedColumns;
-
-    const remainingResolved = orderedResolvedColumns.filter(
-      (column) => !draftByKey.has(column.key),
-    );
-
-    const draftOnlyColumns = activeDraftColumns
-      .filter((column) => !orderedResolvedColumns.some((resolved) => resolved.key === column.key))
-      .filter((column) => column.visible)
-      .map((column) => ({
-        key: column.key,
-        header: column.identity,
-        width: column.width,
-        pin: column.pin ?? null,
-        align: "left" as const,
-        isNumeric: false,
-        sortable: false,
-        type: "text" as const,
-      }));
-
-    return [...orderedResolved, ...remainingResolved, ...draftOnlyColumns];
-  }, [columnOrder, delta.columns, designerColumns, isDesignMode, resolvedColumns]);
+    return orderedResolvedColumns;
+  }, [columnOrder, resolvedColumns]);
 
   // TanStack Table column definitions
   const tanstackColumns = useMemo<TsColumnDef<T>[]>(
@@ -956,20 +770,6 @@ function DataGridInner<T>(
       });
     },
     [rows.length, scrollRowIntoView],
-  );
-
-  const selectDesignerHeader = useCallback(
-    (headerId: string) => {
-      setFocus({
-        area: "designer",
-        entity: entityName,
-        panel: panelId,
-        field: headerId,
-        recordId: null,
-        row: null,
-      });
-    },
-    [entityName, panelId, setFocus],
   );
 
   const restoreFocus = useCallback(
@@ -1316,62 +1116,31 @@ function DataGridInner<T>(
     onFiltersChange?.(activeFilters.filter((r) => r.id !== id));
   };
 
-  const persistColumnOrder = useCallback(
-    (nextOrder: ColumnOrderState) => {
+  const applyColumnOrder = useCallback(
+    (nextOrder: string[]) => {
       const normalized = normalizeColumnOrder(nextOrder, resolvedColumns);
       const selectedKey = columnOrder[selectedColIndex];
       setColumnOrder(normalized);
-      setStoredColumnOrder(normalized);
       if (selectedKey) {
         const nextIndex = normalized.indexOf(selectedKey);
         if (nextIndex >= 0) {
           setSelectedColIndex(nextIndex);
         }
       }
-
-      if (columnOrderStorageKey) {
-        try {
-          localStorage.setItem(columnOrderStorageKey, JSON.stringify(normalized));
-        } catch {
-          // Ignore storage failures in restrictive browser modes.
-        }
-      }
-
-      if (
-        canPersistPublishedColumnOrder &&
-        entityName &&
-        !isSameColumnOrder(normalized, publishedDefaultColumnOrder)
-      ) {
-        void (async () => {
-          const res = await fetch(`/api/metadata/layout/${entityName}/grid`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              layoutDefinition: {
-                columnOrder: normalized,
-              },
-            }),
-          });
-          if (!res.ok) {
-            throw new Error(`Layout persist failed with status ${res.status}`);
-          }
-        })().catch((error) => {
-          console.error("Failed to persist published column order", error);
-          toast.error("Failed to save published column order");
-        });
-      }
+      return normalized;
     },
-    [
-      canPersistPublishedColumnOrder,
-      columnOrder,
-      columnOrderStorageKey,
-      entityName,
-      publishedDefaultColumnOrder,
-      resolvedColumns,
-      selectedColIndex,
-    ],
+    [columnOrder, resolvedColumns, selectedColIndex],
+  );
+
+  const persistColumnOrder = useCallback(
+    (nextOrder: ColumnOrderState) => {
+      const normalized = applyColumnOrder(nextOrder);
+      void persistLayoutOrder("user", normalized).catch((error) => {
+        console.error("Failed to persist personal column order", error);
+        toast.error("Failed to save grid preference");
+      });
+    },
+    [applyColumnOrder, persistLayoutOrder],
   );
 
   function handleColumnOrderChange(
@@ -1395,42 +1164,59 @@ function DataGridInner<T>(
       // Ignore storage failures in restrictive browser modes.
     }
     setStoredColumnOrder(null);
-    const selectedKey = columnOrder[selectedColIndex];
-    setColumnOrder(publishedDefaultColumnOrder);
-    if (selectedKey) {
-      const nextIndex = publishedDefaultColumnOrder.indexOf(selectedKey);
-      if (nextIndex >= 0) {
-        setSelectedColIndex(nextIndex);
-      }
-    }
+    const resetOrder = hasServerUserOverride
+      ? normalizedServerEffectiveColumnOrder
+      : normalizeColumnOrder(
+          storedColumnOrder ?? normalizedServerEffectiveColumnOrder,
+          resolvedColumns,
+        );
+    applyColumnOrder(resetOrder);
     toast.success("Grid view reset successfully.");
   };
 
-  const handleColumnDragStart = useCallback((columnKey: string) => {
-    setDraggedColumnKey(columnKey);
-    setDropTarget(null);
-  }, []);
-
-  const handleColumnDrop = useCallback(
-    (targetKey: string, position: "before" | "after") => {
-      if (!draggedColumnKey || draggedColumnKey === targetKey) {
-        setDraggedColumnKey(null);
-        setDropTarget(null);
-        return;
+  const handleResetToTenantDefault = () => {
+    void (async () => {
+      const nextOrder = await persistLayoutOrder("user", serverTenantColumnOrder);
+      if (nextOrder) {
+        applyColumnOrder(nextOrder);
+        toast.success("Personal grid preference reset to tenant default.");
       }
+    })().catch((error) => {
+      console.error("Failed to reset to tenant default", error);
+      toast.error("Failed to reset to tenant default");
+    });
+  };
 
-      const nextOrder = reorderColumnKeys(
-        normalizeColumnOrder(columnOrder, resolvedColumns),
-        draggedColumnKey,
-        targetKey,
-        position,
-      );
-      persistColumnOrder(nextOrder);
-      setDraggedColumnKey(null);
-      setDropTarget(null);
-    },
-    [columnOrder, draggedColumnKey, persistColumnOrder, resolvedColumns],
-  );
+  const handleResetToBaseDefault = () => {
+    void (async () => {
+      const nextOrder = await persistLayoutOrder("user", serverBaseColumnOrder);
+      if (nextOrder) {
+        applyColumnOrder(nextOrder);
+        toast.success("Personal grid preference reset to base default.");
+      }
+    })().catch((error) => {
+      console.error("Failed to reset to base default", error);
+      toast.error("Failed to reset to base default");
+    });
+  };
+
+  const handlePublishTenantDefault = () => {
+    if (!canPersistPublishedColumnOrder) {
+      toast.error("You do not have permission to publish tenant defaults.");
+      return;
+    }
+
+    void (async () => {
+      const nextOrder = await persistLayoutOrder("tenant", columnOrder);
+      if (nextOrder) {
+        applyColumnOrder(nextOrder);
+        toast.success("Tenant default updated.");
+      }
+    })().catch((error) => {
+      console.error("Failed to publish tenant default", error);
+      toast.error("Failed to publish tenant default");
+    });
+  };
 
   const handleCopyToClipboard = async () => {
     if (!data || data.length === 0) {
@@ -1733,6 +1519,28 @@ function DataGridInner<T>(
                 >
                   <span>Reset Grid View</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleResetToTenantDefault}
+                  className="flex cursor-pointer items-center gap-2 rounded-[3px] px-2 py-1.5 text-ink transition-colors hover:bg-canvas-soft"
+                >
+                  <span>Reset to Tenant Default</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleResetToBaseDefault}
+                  className="flex cursor-pointer items-center gap-2 rounded-[3px] px-2 py-1.5 text-ink transition-colors hover:bg-canvas-soft"
+                >
+                  <span>Reset to Base Default</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handlePublishTenantDefault}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 rounded-[3px] px-2 py-1.5 text-ink transition-colors hover:bg-canvas-soft",
+                    !canPersistPublishedColumnOrder &&
+                      "cursor-not-allowed text-ink-mute opacity-60",
+                  )}
+                >
+                  <span>Publish Tenant Default</span>
+                </DropdownMenuItem>
 
                 <DropdownMenuSeparator className="my-1 border-t border-hairline" />
 
@@ -1775,17 +1583,6 @@ function DataGridInner<T>(
               >
                 <ColumnsIcon size={14} />
               </button>
-              {isDesignMode && (
-                <button
-                  type="button"
-                  title="Add column"
-                  onClick={() => addColumnDraft?.()}
-                  className="ml-1 inline-flex h-7 items-center gap-1 rounded-sm border border-hairline px-2 text-[12px] text-ink-mute transition-colors hover:border-primary/35 hover:text-primary"
-                >
-                  <PlusIcon size={12} />
-                  Column
-                </button>
-              )}
               {showColPicker && resolvedColumns.length > 0 && (
                 <div className="absolute top-full right-0 z-50 min-w-[160px] rounded-[var(--radius-sm)] border border-hairline bg-canvas p-1 shadow-sm">
                   {table.getAllColumns().map((col) => {
@@ -2039,119 +1836,21 @@ function DataGridInner<T>(
               )}
               {table.getHeaderGroups()[0]?.headers.map((header) => {
                 const col = effectiveColumns.find((c) => c.key === header.id);
-                const isSortable = (col?.sortable ?? false) && !isDesignMode;
+                const isSortable = col?.sortable ?? false;
                 const sortEntry = effectiveSorting.find((s) => s.id === header.id);
-                const designCol = isDesignMode
-                  ? (designerColumnByKey.get(header.id) ?? null)
-                  : null;
                 const headerLabel = col?.header ?? header.id;
-                const isDesignerSelected = activeDesignerHeaderKey === header.id;
-                const isDragged = draggedColumnKey === header.id;
-                const isDropBefore =
-                  dropTarget?.key === header.id && dropTarget.position === "before";
-                const isDropAfter =
-                  dropTarget?.key === header.id && dropTarget.position === "after";
-
-                if (isDesignMode) {
-                  return (
-                    <button
-                      key={header.id}
-                      type="button"
-                      aria-pressed={isDesignerSelected}
-                      aria-label={`Select column ${headerLabel}`}
-                      onClick={() => selectDesignerHeader(header.id)}
-                      className={cn(
-                        "flex h-9 shrink-0 items-center gap-1 px-4 text-[12px] font-medium text-ink-mute transition-all outline-none select-none",
-                        (col?.isNumeric || col?.align === "right") && "justify-end",
-                        col?.align === "center" && "justify-center",
-                        isDesignerSelected
-                          ? "bg-[color-mix(in_oklab,var(--primary)_8%,transparent)] text-ink shadow-sm ring-1 ring-primary/60 ring-inset"
-                          : "ring-1 ring-primary/20 ring-inset hover:bg-[color-mix(in_oklab,var(--primary)_4%,transparent)] hover:ring-primary/50",
-                      )}
-                      style={colFlexStyle(col?.width)}
-                    >
-                      <GripVerticalIcon className="size-3 flex-none text-primary/40" />
-                      <span className="truncate text-ink">{headerLabel}</span>
-                      <span
-                        className={cn(
-                          "ml-auto inline-flex max-w-[56%] shrink-0 items-center rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px] leading-none tracking-[0.04em]",
-                          isDesignerSelected
-                            ? "border-primary/30 bg-primary/10 text-primary"
-                            : "border-hairline bg-canvas text-ink-mute",
-                        )}
-                        title={designCol?.identity ?? `grid-column:${header.id}`}
-                      >
-                        {designCol?.identity ?? `grid-column:${header.id}`}
-                      </span>
-                      {designCol?.pin && <PinIcon className="size-2.5 flex-none text-primary" />}
-                    </button>
-                  );
-                }
 
                 return (
                   <div
                     key={header.id}
-                    onDragOver={(e) => {
-                      if (isDesignMode || !draggedColumnKey || draggedColumnKey === header.id)
-                        return;
-                      e.preventDefault();
-                      const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-                      const position = e.clientX < rect.left + rect.width / 2 ? "before" : "after";
-                      setDropTarget({ key: header.id, position });
-                    }}
-                    onDrop={(e) => {
-                      if (isDesignMode) return;
-                      e.preventDefault();
-                      const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-                      const position = e.clientX < rect.left + rect.width / 2 ? "before" : "after";
-                      handleColumnDrop(header.id, position);
-                    }}
-                    onDragLeave={(e) => {
-                      if (
-                        e.relatedTarget instanceof Node &&
-                        e.currentTarget.contains(e.relatedTarget)
-                      ) {
-                        return;
-                      }
-                      setDropTarget((current) => (current?.key === header.id ? null : current));
-                    }}
                     className={cn(
-                      "group flex h-9 shrink-0 items-center gap-1 px-4 text-[12px] font-medium text-ink-mute select-none",
+                      "flex h-9 shrink-0 items-center gap-1 px-4 text-[12px] font-medium text-ink-mute select-none",
                       (col?.isNumeric || col?.align === "right") && "justify-end",
                       col?.align === "center" && "justify-center",
                       isSortable && "cursor-pointer transition-colors hover:text-ink",
-                      isDragged && "opacity-40",
-                      isDropBefore && "border-l-2 border-primary/60",
-                      isDropAfter && "border-r-2 border-primary/60",
-                      (isDropBefore || isDropAfter) &&
-                        "bg-[color-mix(in_oklab,var(--primary)_5%,transparent)]",
                     )}
                     style={colFlexStyle(col?.width)}
                   >
-                    <button
-                      type="button"
-                      aria-label={`Reorder column ${headerLabel}`}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
-                      draggable
-                      onDragStart={(e) => {
-                        if (isDesignMode) return;
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", header.id);
-                        handleColumnDragStart(header.id);
-                      }}
-                      onDragEnd={() => {
-                        setDraggedColumnKey(null);
-                        setDropTarget(null);
-                      }}
-                      className={cn(
-                        "flex size-4 shrink-0 cursor-grab items-center justify-center rounded-sm text-ink-mute opacity-0 transition-opacity group-hover:opacity-100",
-                        draggedColumnKey === header.id && "text-primary opacity-100",
-                        isDesignMode && "pointer-events-none",
-                      )}
-                    >
-                      <GripVerticalIcon size={11} />
-                    </button>
                     {isSortable ? (
                       <button
                         type="button"

@@ -9,7 +9,7 @@ import { useDismiss } from "@repo/ui/lib/use-dismiss";
 import { cn } from "@repo/ui/lib/utils";
 import { ActionBarProvider, useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
-import { DesignerProvider, useDesigner } from "@repo/ui/platform/designer-context";
+import { DesignerProvider } from "@repo/ui/platform/designer-context";
 import { useFocus } from "@repo/ui/platform/focus-manager";
 import { TelemetryProvider, useTelemetry } from "@repo/ui/platform/telemetry-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -612,10 +612,9 @@ function AppLayoutInner({
   tenantId: string;
 }) {
   const { subCrumb } = useActionBar();
-  const { state: focusState, setFocus } = useFocus();
+  const { state: focusState } = useFocus();
   const { registerCommand } = useCommands();
   const { getSnapshot } = useTelemetry();
-  const { isDesignMode } = useDesigner();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<FeedbackSnapshot>(DEFAULT_SNAPSHOT);
   const prevFeedbackOpen = useRef(false);
@@ -624,12 +623,6 @@ function AppLayoutInner({
   useEffect(() => {
     focusSnapshotRef.current = focusState;
   }, [focusState]);
-
-  useEffect(() => {
-    if (isDesignMode && focusState.area !== "designer") {
-      setFocus({ area: "designer" });
-    }
-  }, [isDesignMode, focusState.area, setFocus]);
 
   // Capture snapshot when modal transitions to open
   useEffect(() => {

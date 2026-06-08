@@ -576,6 +576,12 @@ function EmailWorkspace() {
     activeAccount?.provider === "microsoft" ? "Microsoft Graph" : "Gmail";
   const accountStatusLabel = activeAccount ? formatStatusLabel(activeAccount.status) : "No account";
   const accountSyncLabel = activeAccount ? formatStatusLabel(activeAccount.lastSyncStatus) : "Idle";
+  const accountSyncTimeLabel = activeAccount?.lastSyncAt
+    ? new Date(activeAccount.lastSyncAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
   const accountNeedsRecovery =
     activeAccount?.status === "reauth_required" ||
     activeAccount?.lastSyncStatus === "recovery_required";
@@ -669,7 +675,9 @@ function EmailWorkspace() {
   }, []);
 
   const saveDraft = useCallback(
-    async (options: { close?: boolean; value?: EmailComposeSubmitValue } = {}) => {
+    async (
+      options: { close?: boolean; value?: EmailComposeSubmitValue; silent?: boolean } = {},
+    ) => {
       if (!activeAccountId || !selectedIdentity) {
         toast.error("No sending identity available");
         return null;
@@ -711,12 +719,12 @@ function EmailWorkspace() {
         }),
       });
       if (!res.ok) {
-        toast.error(await res.text());
+        if (!options.silent) toast.error(await res.text());
         return null;
       }
       const result = await res.json();
       setSavedOutboxId(result.outbox?.emailOutboxId ?? null);
-      toast.success("Draft saved");
+      if (!options.silent) toast.success("Draft saved");
       if (options.close) {
         setComposerOpen(false);
         setSavedOutboxId(null);
@@ -789,8 +797,8 @@ function EmailWorkspace() {
       });
       setComposerMode(value.mode);
       setComposerAttachments(value.attachments);
-      if (action === "save-draft") {
-        await saveDraft({ value });
+      if (action === "save-draft" || action === ("auto-save" as any)) {
+        await saveDraft({ value, silent: action === ("auto-save" as any) });
         return;
       }
       await actOnDraft(action, value);
@@ -1238,24 +1246,6 @@ function EmailWorkspace() {
                 }
               }}
             />
-            <div className="mt-auto border-t border-hairline p-2">
-              <div className="grid grid-cols-2 gap-1">
-                <button
-                  onClick={() => connectProvider("google")}
-                  className="flex h-8 items-center justify-center gap-1.5 rounded-sm border border-hairline text-[12px] text-ink-secondary hover:bg-canvas"
-                >
-                  <AtSignIcon className="size-3.5" />
-                  Gmail
-                </button>
-                <button
-                  onClick={() => connectProvider("microsoft")}
-                  className="flex h-8 items-center justify-center gap-1.5 rounded-sm border border-hairline text-[12px] text-ink-secondary hover:bg-canvas"
-                >
-                  <AtSignIcon className="size-3.5" />
-                  Graph
-                </button>
-              </div>
-            </div>
           </div>
         }
         primaryGrid={
@@ -1277,7 +1267,8 @@ function EmailWorkspace() {
                       {accountStatusLabel}
                     </span>
                     <span className="rounded-full border border-hairline px-1.5 py-0.5">
-                      Sync {accountSyncLabel}
+                      Sync {accountSyncLabel}{" "}
+                      {accountSyncTimeLabel ? `(${accountSyncTimeLabel})` : ""}
                     </span>
                   </div>
                 )}

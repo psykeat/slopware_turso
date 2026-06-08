@@ -1,5 +1,6 @@
 import { Button } from "@repo/ui/components/button";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
+import { RichTextEditor } from "@repo/ui/components/rich-text-editor";
 import { cn } from "@repo/ui/lib/utils";
 import { CheckIcon, ClockIcon, MailIcon, SendIcon, XIcon } from "lucide-react";
 import {
@@ -214,6 +215,7 @@ function RecipientAutocompleteField({
         value={value}
         role="combobox"
         aria-autocomplete="list"
+        aria-haspopup="listbox"
         aria-expanded={isOpen && query.trim() ? true : undefined}
         aria-controls={listboxId}
         aria-activedescendant={
@@ -305,6 +307,28 @@ export function EmailComposeDialog({
   const [composeMode, setComposeMode] = useState<EmailComposeMode>(mode);
   const [attachmentRows, setAttachmentRows] = useState<EmailComposeAttachment[]>(attachments);
   const [uploading, setUploading] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges || !open) return;
+    if (!hasAnyRecipient(draft) || !draft.subject.trim()) return;
+
+    const timer = setTimeout(() => {
+      submit("auto-save" as EmailComposeAction);
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [hasUnsavedChanges, draft]);
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.currentTarget.files;
@@ -348,12 +372,11 @@ export function EmailComposeDialog({
 
   useEffect(() => {
     if (!open) return;
-    queueMicrotask(() => {
-      setDraft(value);
-      setComposeMode(mode);
-      setAttachmentRows(attachments);
-    });
-  }, [attachments, mode, open, value]);
+    // Only initialize when opening a new draft to prevent overwriting user input
+    setDraft(value);
+    setComposeMode(mode);
+    setAttachmentRows(attachments);
+  }, [open]); // Rely on open to reset state only when dialog opens
 
   const selectedIdentityId = draft.identityId || identities[0]?.emailIdentityId || "";
   const canAddAttachments = useMemo(
@@ -372,7 +395,44 @@ export function EmailComposeDialog({
       toast.error("Add at least one recipient before sending");
       return;
     }
+    setHasUnsavedChanges(false);
     await onSubmit(action, { ...next, mode: composeMode, attachments: attachmentRows });
+  };
+
+  const handleFilesDropped = async (files: File[]) => {
+    setUploading(true);
+    setHasUnsavedChanges(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/email/attachments/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        const data = await res.json();
+        setAttachmentRows((prev) => [
+          ...prev,
+          {
+            id: "draft-" + Date.now() + i,
+            messageId: "",
+            providerAttachmentId: null,
+            fileName: file.name,
+            contentType: file.type || "application/octet-stream",
+            sizeBytes: file.size,
+            storageKey: data.url || data.storageKey,
+            inlineContentId: null,
+          },
+        ]);
+        toast.success(`Uploaded ${file.name}`);
+      }
+    } catch (err) {
+      toast.error("Failed to upload file(s)");
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -401,27 +461,12 @@ export function EmailComposeDialog({
               >
                 {identities.map((identity) => (
                   <option key={identity.emailIdentityId} value={identity.emailIdentityId}>
-                    {identity.displayName || identity.email}
+                    {identity.displayName
+                      ? `${identity.displayName} (${identity.email})`
+                      : identity.email}
                   </option>
                 ))}
               </select>
-              <div className="flex items-center gap-1">
-                {(["plain", "html"] as const).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className={cn(
-                      "rounded-sm border px-2 py-1 text-[12px]",
-                      composeMode === item
-                        ? "border-primary bg-[color-mix(in_oklab,var(--primary)_9%,transparent)] text-ink"
-                        : "border-hairline text-ink-secondary",
-                    )}
-                    onClick={() => setComposeMode(item)}
-                  >
-                    {item === "plain" ? "Plain" : "HTML"}
-                  </button>
-                ))}
-              </div>
             </div>
             <div className="rounded-sm border border-hairline bg-canvas-soft px-2 py-1 text-[11px] text-ink-mute">
               Save Draft keeps the local draft editable. Provider Draft writes the provider copy,
@@ -434,54 +479,55 @@ export function EmailComposeDialog({
             )}
             <RecipientAutocompleteField
               value={draft.to}
-              onChange={(nextValue) => setDraft((prev) => ({ ...prev, to: nextValue }))}
+              onChange={(nextValue) => {
+                setHasUnsavedChanges(true);
+                setDraft((prev) => ({ ...prev, to: nextValue }));
+              }}
               placeholder="To"
             />
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <RecipientAutocompleteField
                 value={draft.cc}
-                onChange={(nextValue) => setDraft((prev) => ({ ...prev, cc: nextValue }))}
+                onChange={(nextValue) => {
+                  setHasUnsavedChanges(true);
+                  setDraft((prev) => ({ ...prev, cc: nextValue }));
+                }}
                 placeholder="Cc"
               />
               <RecipientAutocompleteField
                 value={draft.bcc}
-                onChange={(nextValue) => setDraft((prev) => ({ ...prev, bcc: nextValue }))}
+                onChange={(nextValue) => {
+                  setHasUnsavedChanges(true);
+                  setDraft((prev) => ({ ...prev, bcc: nextValue }));
+                }}
                 placeholder="Bcc"
               />
             </div>
             <input
               value={draft.subject}
-              onChange={(event) => setDraft((prev) => ({ ...prev, subject: event.target.value }))}
+              onChange={(event) => {
+                setHasUnsavedChanges(true);
+                setDraft((prev) => ({ ...prev, subject: event.target.value }));
+              }}
               placeholder="Subject"
               className="h-9 rounded-sm border border-hairline bg-canvas px-2 text-[13px] outline-none focus:border-primary"
             />
-            {composeMode === "plain" ? (
-              <textarea
-                value={draft.bodyText}
-                onChange={(event) =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    bodyText: event.target.value,
-                    bodyHtml: event.target.value.replace(/\n/g, "<br />"),
-                  }))
-                }
-                placeholder="Message"
-                className="min-h-48 resize-none rounded-sm border border-hairline bg-canvas p-2 text-[13px] outline-none focus:border-primary"
-              />
-            ) : (
-              <textarea
-                value={draft.bodyHtml}
-                onChange={(event) =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    bodyHtml: event.target.value,
-                    bodyText: htmlToText(event.target.value),
-                  }))
-                }
-                placeholder="<p>HTML message</p>"
-                className="min-h-48 resize-none rounded-sm border border-hairline bg-canvas p-2 font-mono text-[12px] outline-none focus:border-primary"
-              />
-            )}
+            <RichTextEditor
+              className="min-h-[250px]"
+              mode={composeMode}
+              onChangeMode={setComposeMode}
+              onAttachmentsChange={handleFilesDropped}
+              initialValue={composeMode === "html" ? draft.bodyHtml : draft.bodyText}
+              onChange={(value, newMode) => {
+                setHasUnsavedChanges(true);
+                setDraft((prev) => ({
+                  ...prev,
+                  ...(newMode === "html"
+                    ? { bodyHtml: value, bodyText: htmlToText(value) }
+                    : { bodyText: value, bodyHtml: value.replace(/\n/g, "<br />") }),
+                }));
+              }}
+            />
             <div className="rounded-sm border border-hairline bg-canvas-soft p-2">
               <div className="mb-2 flex items-center justify-between text-[11px] tracking-wider text-ink-mute uppercase">
                 <span>Attachments</span>
@@ -535,31 +581,55 @@ export function EmailComposeDialog({
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap justify-end gap-2 border-t border-hairline p-3">
-          <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>
-            Close
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => submit("save-draft")} disabled={busy}>
-            <CheckIcon className="size-4" />
-            Save Draft
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => submit("provider-draft")}
-            disabled={busy}
-          >
-            <MailIcon className="size-4" />
-            Provider Draft
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => submit("queue")} disabled={busy}>
-            <ClockIcon className="size-4" />
-            Queue
-          </Button>
-          <Button size="sm" onClick={() => submit("send")} disabled={busy}>
-            <SendIcon className="size-4" />
-            Send
-          </Button>
+        <div className="flex flex-wrap items-center justify-between border-t border-hairline p-3">
+          <div className="flex items-center gap-1">
+            {(["plain", "html"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={cn(
+                  "rounded-sm border px-2 py-1 text-[12px]",
+                  composeMode === item
+                    ? "border-primary bg-[color-mix(in_oklab,var(--primary)_9%,transparent)] text-ink"
+                    : "border-hairline text-ink-secondary",
+                )}
+                onClick={() => setComposeMode(item)}
+              >
+                {item === "plain" ? "Plain text" : "HTML / Rich Text"}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>
+              Close
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => submit("save-draft")}
+              disabled={busy}
+            >
+              <CheckIcon className="size-4" />
+              Save Draft
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => submit("provider-draft")}
+              disabled={busy}
+            >
+              <MailIcon className="size-4" />
+              Provider Draft
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => submit("queue")} disabled={busy}>
+              <ClockIcon className="size-4" />
+              Queue
+            </Button>
+            <Button size="sm" onClick={() => submit("send")} disabled={busy}>
+              <SendIcon className="size-4" />
+              Send
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -9,6 +9,8 @@ import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import { createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
+import { DefaultCatchBoundary } from "#/components/default-catch-boundary";
+
 import appCss from "#/styles.css?url";
 
 interface MyRouterContext {
@@ -48,6 +50,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       { rel: "stylesheet", href: appCss },
     ],
   }),
+  errorComponent: DefaultCatchBoundary,
   shellComponent: RootDocument,
 });
 

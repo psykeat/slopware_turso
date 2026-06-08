@@ -19,6 +19,10 @@ import * as schema from "../schema/index";
 import { createAiToolCall, createAiTurn, updateAiToolCallStatus } from "./ai-persistence";
 import { EmailDocumentService } from "./email/document-service";
 import { runMailAgentLoop, type MailAgentAnalysis } from "./mail-agent-analysis";
+import {
+  normalizeMailReviewPayload,
+  type NormalizedMailReviewPayload,
+} from "./mail-review-contract";
 
 const DOC_TYPE_MAP: Record<string, string> = {
   Offer: "N",
@@ -82,36 +86,6 @@ type MailActionBundle = {
     enabledByDefault: boolean;
   }>;
   warnings: string[];
-};
-
-type MailActionReview = {
-  reviewId: string;
-  taskScope: string;
-  sourceContext: {
-    contextType: "email_thread";
-    threadId: string;
-  };
-  headline: string;
-  summary: string;
-  intentBadge: {
-    label: string;
-    confidenceScore: number;
-  };
-  businessCase: string;
-  reviewStatus: string;
-  bundles: MailActionBundle[];
-  selectedBundleId: MailBundleId;
-  warnings: string[];
-  blockingIssues: Array<{
-    code: string;
-    message: string;
-    resolutionType: string;
-  }>;
-  proposedApplyPayload: {
-    bundleId: MailBundleId;
-    overrides: Record<string, unknown>;
-  };
-  _llmTrace?: unknown;
 };
 
 // Encryption secret helper matching slopware configuration
@@ -1392,7 +1366,7 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
     interpretationId: string;
     resolution: any;
     tenantId: string;
-  }): Promise<{ reviewId: string; review: MailActionReview }> {
+  }): Promise<{ reviewId: string; review: NormalizedMailReviewPayload }> {
     const [interp] = await db
       .select()
       .from(aiInterpretation)
@@ -1443,7 +1417,7 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
       : `Die E-Mail wird als Klassifizierungsfall behandelt.`;
 
     const reviewId = randomUUID();
-    const reviewPayload: MailActionReview = {
+    const reviewPayload = normalizeMailReviewPayload({
       reviewId,
       taskScope: "mail-order-review",
       sourceContext: {
@@ -1467,7 +1441,7 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
         overrides: {},
       },
       _llmTrace: interp.rawLlmTrace,
-    };
+    });
 
     const [reviewRow] = await db
       .insert(aiReview)
@@ -1529,19 +1503,24 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
     if (!interpretation.sourceThreadId) {
       throw new Error("Missing source thread reference");
     }
-    const sections = review.sectionsJson as any;
+    const sections = normalizeMailReviewPayload({
+      reviewId: review.reviewId,
+      taskScope: "mail-order-review",
+      ...(review.sectionsJson as any),
+      selectedBundleId: (review.proposedApplyPayloadJson as any)?.bundleId ?? null,
+    });
     const overrides = params.overrides || {};
     const legacyOverrides = extractLegacyBundleOverrides(overrides.steps);
     const extraReplyInstruction =
       typeof overrides.extraReplyInstruction === "string"
         ? overrides.extraReplyInstruction.trim()
         : "";
-    const bundles = (sections?.bundles ?? []) as MailActionBundle[];
+    const bundles = sections.bundles;
     const selectedBundle = resolveBundleSelection(
-      bundles,
+      bundles as MailActionBundle[],
       overrides.bundleId ??
         legacyOverrides.bundleId ??
-        sections?.selectedBundleId ??
+        sections.selectedBundleId ??
         (review.proposedApplyPayloadJson as any)?.bundleId,
     );
 
@@ -1665,19 +1644,24 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
 
     if (!review) throw new Error("Review not found");
 
-    const sections = review.sectionsJson as any;
+    const sections = normalizeMailReviewPayload({
+      reviewId: review.reviewId,
+      taskScope: "mail-order-review",
+      ...(review.sectionsJson as any),
+      selectedBundleId: (review.proposedApplyPayloadJson as any)?.bundleId ?? null,
+    });
     const overrides = params.overrides || {};
     const legacyOverrides = extractLegacyBundleOverrides(overrides.steps);
     const extraReplyInstruction =
       typeof overrides.extraReplyInstruction === "string"
         ? overrides.extraReplyInstruction.trim()
         : "";
-    const bundles = (sections?.bundles ?? []) as MailActionBundle[];
+    const bundles = sections.bundles;
     const selectedBundle = resolveBundleSelection(
-      bundles,
+      bundles as MailActionBundle[],
       overrides.bundleId ??
         legacyOverrides.bundleId ??
-        sections?.selectedBundleId ??
+        sections.selectedBundleId ??
         (review.proposedApplyPayloadJson as any)?.bundleId,
     );
     const finalAddressId =

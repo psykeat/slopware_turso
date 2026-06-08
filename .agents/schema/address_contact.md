@@ -6,9 +6,10 @@
 | :---------------------- | :---------------------- | :----------------------- | :---- | :------------------------- | :---------- |
 | contact_id              | contact_id              | uuid                     | PK    | NOT NULL, DEFAULT uuidv7() |             |
 | tenant_id               | tenant_id               | uuid                     | —     | NOT NULL                   |             |
-| address_id              | address_id              | uuid                     | —     | NOT NULL                   |             |
+| address_id              | address_id              | uuid                     | —     |                            |             |
 | first_name              | first_name              | text                     | —     |                            |             |
 | last_name               | last_name               | text                     | —     | NOT NULL                   |             |
+| display_name            | display_name            | text                     | —     |                            |             |
 | notiztext               | notiztext               | text                     | —     |                            |             |
 | notiztext_source_entity | notiztext_source_entity | text                     | —     |                            |             |
 | notiztext_source_id     | notiztext_source_id     | uuid                     | —     |                            |             |
@@ -22,6 +23,7 @@
 | is_primary              | is_primary              | boolean                  | —     | NOT NULL                   |             |
 | archived                | archived                | boolean                  | —     | NOT NULL                   |             |
 | created_at              | created_at              | timestamp with time zone | —     | NOT NULL, DEFAULT now()    |             |
+| updated_at              | updated_at              | timestamp with time zone | —     |                            |             |
 
 > INDEX `idx_address_contact_address` (address_id) [btree]
 > INDEX `idx_address_contact_tenant` (tenant_id) [btree]

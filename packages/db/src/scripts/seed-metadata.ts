@@ -54,6 +54,7 @@ const entityLabelMap: EntityLabelMap = {
   article: { en: "Articles", de: "Artikel" },
   document: { en: "Documents", de: "Belege" },
   tenantLlmConfig: { en: "Tenant LLM Config", de: "Mandanten-KI-Konfiguration" },
+  tenantEmailSettings: { en: "Email Settings", de: "E-Mail Einstellungen" },
 };
 
 const fieldLabelMap: EntityLabelMap = {
@@ -103,7 +104,12 @@ const technicalFieldNames = new Set([
 ]);
 
 const groupedEntitySets = {
-  organisation: new Set(["bankAccount", "numberSequence", "tenantLlmConfig"]),
+  organisation: new Set([
+    "bankAccount",
+    "numberSequence",
+    "tenantLlmConfig",
+    "tenantEmailSettings",
+  ]),
   vertrieb: new Set([
     "paymentTerm",
     "shippingMethod",
@@ -316,6 +322,33 @@ function discoverSchemaMetadata(): {
       });
     }
   }
+
+  helperTables.push({
+    payload: {
+      tableName: "tenantEmailSettings",
+      label: getEntityLabel("tenantEmailSettings"),
+      pkColumn: "id",
+      displayColumn: "name",
+      codeColumn: undefined,
+      valueColumn: undefined,
+      sortColumn: "createdAt",
+      isTenantScoped: true,
+      displayIsI18n: false,
+      group: "organisation",
+      category: "settings",
+    },
+    conflictSet: {
+      pkColumn: "id",
+      displayColumn: "name",
+      codeColumn: undefined,
+      valueColumn: undefined,
+      sortColumn: "createdAt",
+      isTenantScoped: true,
+      group: "organisation",
+      category: "settings",
+      label: getEntityLabel("tenantEmailSettings"),
+    },
+  });
 
   return { fields: discoveredFields, helperTables };
 }

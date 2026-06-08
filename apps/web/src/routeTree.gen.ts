@@ -57,6 +57,7 @@ import { Route as AuthAppAdminRouteRouteImport } from './routes/_auth/app/admin/
 import { Route as ApiAdminDocumentGroupsIndexRouteImport } from './routes/api/admin/document-groups/index'
 import { Route as AuthAppSettingsIndexRouteImport } from './routes/_auth/app/settings/index'
 import { Route as AuthAppAdminIndexRouteImport } from './routes/_auth/app/admin/index'
+import { Route as ApiStoragePreviewSplatRouteImport } from './routes/api/storage/preview/$'
 import { Route as ApiStorageArticleImagesImageIdRouteImport } from './routes/api/storage/article-images/$imageId'
 import { Route as ApiStatsArticleArticleIdRouteImport } from './routes/api/stats/article/$articleId'
 import { Route as ApiStatsAddressAddressIdRouteImport } from './routes/api/stats/address/$addressId'
@@ -338,6 +339,11 @@ const AuthAppAdminIndexRoute = AuthAppAdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthAppAdminRouteRoute,
+} as any)
+const ApiStoragePreviewSplatRoute = ApiStoragePreviewSplatRouteImport.update({
+  id: '/api/storage/preview/$',
+  path: '/api/storage/preview/$',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiStorageArticleImagesImageIdRoute =
   ApiStorageArticleImagesImageIdRouteImport.update({
@@ -639,6 +645,7 @@ export interface FileRoutesByFullPath {
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
+  '/api/storage/preview/$': typeof ApiStoragePreviewSplatRoute
   '/app/admin/': typeof AuthAppAdminIndexRoute
   '/app/settings/': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
@@ -724,6 +731,7 @@ export interface FileRoutesByTo {
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
+  '/api/storage/preview/$': typeof ApiStoragePreviewSplatRoute
   '/app/admin': typeof AuthAppAdminIndexRoute
   '/app/settings': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups': typeof ApiAdminDocumentGroupsIndexRoute
@@ -814,6 +822,7 @@ export interface FileRoutesById {
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
+  '/api/storage/preview/$': typeof ApiStoragePreviewSplatRoute
   '/_auth/app/admin/': typeof AuthAppAdminIndexRoute
   '/_auth/app/settings/': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
@@ -903,6 +912,7 @@ export interface FileRouteTypes {
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
     | '/api/storage/article-images/$imageId'
+    | '/api/storage/preview/$'
     | '/app/admin/'
     | '/app/settings/'
     | '/api/admin/document-groups/'
@@ -988,6 +998,7 @@ export interface FileRouteTypes {
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
     | '/api/storage/article-images/$imageId'
+    | '/api/storage/preview/$'
     | '/app/admin'
     | '/app/settings'
     | '/api/admin/document-groups'
@@ -1077,6 +1088,7 @@ export interface FileRouteTypes {
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
     | '/api/storage/article-images/$imageId'
+    | '/api/storage/preview/$'
     | '/_auth/app/admin/'
     | '/_auth/app/settings/'
     | '/api/admin/document-groups/'
@@ -1147,6 +1159,7 @@ export interface RootRouteChildren {
   ApiStatsAddressAddressIdRoute: typeof ApiStatsAddressAddressIdRoute
   ApiStatsArticleArticleIdRoute: typeof ApiStatsArticleArticleIdRoute
   ApiStorageArticleImagesImageIdRoute: typeof ApiStorageArticleImagesImageIdRoute
+  ApiStoragePreviewSplatRoute: typeof ApiStoragePreviewSplatRoute
   ApiAdminDocumentGroupsIndexRoute: typeof ApiAdminDocumentGroupsIndexRoute
   ApiDocumentsLinesLineIdDeltaRoute: typeof ApiDocumentsLinesLineIdDeltaRoute
   ApiDocumentsDocumentIdLinesLineIdTrackingRoute: typeof ApiDocumentsDocumentIdLinesLineIdTrackingRouteWithChildren
@@ -1489,6 +1502,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/admin/'
       preLoaderRoute: typeof AuthAppAdminIndexRouteImport
       parentRoute: typeof AuthAppAdminRouteRoute
+    }
+    '/api/storage/preview/$': {
+      id: '/api/storage/preview/$'
+      path: '/api/storage/preview/$'
+      fullPath: '/api/storage/preview/$'
+      preLoaderRoute: typeof ApiStoragePreviewSplatRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/storage/article-images/$imageId': {
       id: '/api/storage/article-images/$imageId'
@@ -2035,6 +2055,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiStatsAddressAddressIdRoute: ApiStatsAddressAddressIdRoute,
   ApiStatsArticleArticleIdRoute: ApiStatsArticleArticleIdRoute,
   ApiStorageArticleImagesImageIdRoute: ApiStorageArticleImagesImageIdRoute,
+  ApiStoragePreviewSplatRoute: ApiStoragePreviewSplatRoute,
   ApiAdminDocumentGroupsIndexRoute: ApiAdminDocumentGroupsIndexRoute,
   ApiDocumentsLinesLineIdDeltaRoute: ApiDocumentsLinesLineIdDeltaRoute,
   ApiDocumentsDocumentIdLinesLineIdTrackingRoute:

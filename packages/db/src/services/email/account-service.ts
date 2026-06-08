@@ -29,6 +29,8 @@ export class EmailAccountService {
         lastSyncAt: emailAccount.lastSyncAt,
         lastSyncStatus: emailAccount.lastSyncStatus,
         watchExpiresAt: emailAccount.watchExpiresAt,
+        grantedByUserId: emailAccount.grantedByUserId,
+        grantedScopes: emailAccount.grantedScopes,
       })
       .from(emailAccount)
       .innerJoin(
@@ -142,6 +144,19 @@ export class EmailAccountService {
 
       return account;
     });
+  }
+
+  async revoke(accountId: string) {
+    await this.assertGrant(accountId, "manage");
+    const account = await this.getAccountForProvider(accountId, "manage");
+    if (!account) return;
+
+    await db
+      .update(emailAccount)
+      .set({ archived: true, status: "disabled", updatedAt: new Date() })
+      .where(
+        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
+      );
   }
 
   async assertGrant(accountId: string, capability: "read" | "send" | "manage") {

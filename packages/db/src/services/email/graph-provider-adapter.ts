@@ -6,6 +6,7 @@ import {
   ProviderConfigurationError,
   ProviderOAuthError,
   ProviderReauthRequiredError,
+  type ProviderContact,
 } from "./provider-adapter";
 import type {
   EmailDraftInput,
@@ -274,7 +275,7 @@ export class GraphProviderAdapter implements EmailProviderAdapter {
     return {
       subject: draft.subject,
       body: {
-        contentType: draft.bodyHtml ? "HTML" : "Text",
+        contentType: draft.bodyHtml ? "html" : "text",
         content: draft.bodyHtml ?? draft.bodyText ?? "",
       },
       from: { emailAddress: { address: draft.identityId } },
@@ -491,6 +492,42 @@ export class GraphProviderAdapter implements EmailProviderAdapter {
       contentType: result.contentType ?? null,
       bytes: new Uint8Array(Buffer.from(result.contentBytes, "base64")),
     };
+  }
+
+  async syncContacts(credentialsEncrypted: string): Promise<ProviderContact[]> {
+    const contacts: ProviderContact[] = [];
+    let nextLink: string | undefined =
+      "/me/contacts?$select=id,emailAddresses,givenName,surname,displayName&$top=100";
+
+    while (nextLink) {
+      const response = await this.request<{
+        value: Array<{
+          id: string;
+          emailAddresses?: Array<{ address: string; name?: string }>;
+          givenName?: string;
+          surname?: string;
+          displayName?: string;
+        }>;
+        "@odata.nextLink"?: string;
+      }>(credentialsEncrypted, nextLink);
+
+      for (const contact of response.value ?? []) {
+        if (!contact.emailAddresses || contact.emailAddresses.length === 0) continue;
+        for (const emailObj of contact.emailAddresses) {
+          if (!emailObj.address) continue;
+          contacts.push({
+            id: `${contact.id}-${emailObj.address}`,
+            email: emailObj.address,
+            firstName: contact.givenName ?? null,
+            lastName: contact.surname ?? null,
+            displayName: contact.displayName ?? null,
+          });
+        }
+      }
+
+      nextLink = response["@odata.nextLink"];
+    }
+    return contacts;
   }
 
   private async deltaPage(credentialsEncrypted: string, cursor?: string | null) {

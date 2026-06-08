@@ -18,6 +18,8 @@
 | last_sync_error       | last_sync_error       | text                     | —     |                             |             |
 | watch_expires_at      | watch_expires_at      | timestamp with time zone | —     |                             |             |
 | archived              | archived              | boolean                  | —     | NOT NULL                    |             |
+| granted_by_user_id    | granted_by_user_id    | text                     | —     |                             |             |
+| granted_scopes        | granted_scopes        | jsonb                    | —     |                             |             |
 | created_at            | created_at            | timestamp with time zone | —     | NOT NULL, DEFAULT now()     |             |
 | updated_at            | updated_at            | timestamp with time zone | —     |                             |             |
 

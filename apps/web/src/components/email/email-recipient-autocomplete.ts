@@ -8,6 +8,7 @@ export type RecipientAutocompleteContact = {
   email: string | null;
   isPrimary?: boolean;
   name?: string | null;
+  sourceSystem?: string;
 };
 
 export function formatRecipientAutocompleteContact(contact: RecipientAutocompleteContact) {

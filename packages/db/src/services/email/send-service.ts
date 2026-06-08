@@ -84,6 +84,7 @@ export class EmailSendService {
           emailMessageId: message.emailMessageId,
           status: "draft",
           payload: input as any,
+
           createdBy: this.userId,
         })
         .returning();

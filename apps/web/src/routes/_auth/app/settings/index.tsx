@@ -12,6 +12,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { TenantEmailSettingsPanel } from "#/components/email/TenantEmailSettingsPanel";
 import { LlmConfigForm } from "#/components/llm/LlmConfigForm";
 import { SetupGuide } from "#/components/setup/SetupGuide";
 import { YearEndAssistant } from "#/components/setup/YearEndAssistant";
@@ -881,6 +882,10 @@ function SettingsView() {
               description="Configure the tenant-specific LLM service, credentials and provider settings for the selected company."
               companyId={selectedCompanyId}
             />
+          </div>
+        ) : selectedKey === "tenantEmailSettings" ? (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <TenantEmailSettingsPanel title={tableLabel} />
           </div>
         ) : (
           <DataGrid

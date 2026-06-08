@@ -22,6 +22,15 @@ function parseMailRecipients(recipients: any): string {
   return formatMailPerson(recipients);
 }
 
+function stripEmailQuotes(text: string): string {
+  if (!text) return "";
+  return text
+    .split("\n")
+    .filter((line) => !line.trim().startsWith(">") && !line.trim().match(/^On .* wrote:$/i))
+    .join("\n")
+    .trim();
+}
+
 export async function buildMailThreadProjection(threadId: string, tenantId: string) {
   const [thread] = await db
     .select()
@@ -46,13 +55,25 @@ export async function buildMailThreadProjection(threadId: string, tenantId: stri
       ),
     );
 
-  const messagesText = messages
+  const recentMessages = messages.slice(-5);
+  const skippedCount = Math.max(0, messages.length - 5);
+
+  let messagesText = recentMessages
     .map((msg: any) => {
       const from = formatMailPerson(msg.fromJson);
       const to = parseMailRecipients(msg.toJson);
-      return `From: ${from}\nTo: ${to}\nSubject: ${msg.subject || ""}\nBody: ${msg.bodyText || ""}`;
+      const cleanBody = stripEmailQuotes(msg.bodyText);
+      let text = `From: ${from}\nTo: ${to}`;
+      if (msg.subject) text += `\nSubject: ${msg.subject}`;
+      text += `\n\n${cleanBody}`;
+      return text;
     })
-    .join("\n---\n");
+    .join("\n\n---\n\n");
+
+  if (skippedCount > 0) {
+    messagesText =
+      `[... ${skippedCount} ältere Nachrichten ausgeblendet ...]\n\n---\n\n` + messagesText;
+  }
 
   return {
     threadId: thread.emailThreadId,
@@ -117,6 +138,7 @@ export async function buildDocumentProjection(documentId: string, tenantId: stri
       netPrice: l.netPrice,
       lineTotalNet: l.lineTotalNet,
     })),
+    contentText: `Document Type: ${doc.documentType || "Unknown"}\nDocument No: ${doc.documentNo || "Unknown"}\nDate: ${doc.documentDate ? String(doc.documentDate).split("T")[0] : "Unknown"}\nTotal Net: ${doc.totalNet}\nTotal Gross: ${doc.totalGross}\n\nLines:\n${lines.map((l: any) => `- ${l.quantity || 1}x ${l.unit || ""} ${l.langText || "Item"} (Total Net: ${l.lineTotalNet || 0})`).join("\n")}`,
   };
 }
 
@@ -145,6 +167,22 @@ export async function buildAddressProjection(addressId: string, tenantId: string
     vatId: addr.vatId,
     notiztext: addr.notiztext,
     langtext: addr.langtext,
+    contentText: [
+      addr.companyName ? `Company: ${addr.companyName}` : "",
+      addr.firstName || addr.lastName
+        ? `Contact: ${addr.firstName || ""} ${addr.lastName || ""}`.trim()
+        : "",
+      addr.addressLine1 ? `Address: ${addr.addressLine1}` : "",
+      addr.addressLine2 ? `Address 2: ${addr.addressLine2}` : "",
+      addr.city || addr.postalCode
+        ? `City/ZIP: ${addr.postalCode || ""} ${addr.city || ""}`.trim()
+        : "",
+      addr.countryCode ? `Country: ${addr.countryCode}` : "",
+      addr.vatId ? `VAT ID: ${addr.vatId}` : "",
+      addr.notiztext ? `Notes:\n${addr.notiztext}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
   };
 }
 
@@ -165,6 +203,15 @@ export async function buildArticleProjection(articleId: string, tenantId: string
     description: art.description,
     notiztext: art.notiztext,
     langtext: art.langtext,
+    contentText: [
+      art.articleNo ? `Article No: ${art.articleNo}` : "",
+      art.name ? `Name: ${art.name}` : "",
+      art.kurzbeschreibung ? `Short Desc: ${art.kurzbeschreibung}` : "",
+      art.description ? `Description:\n${art.description}` : "",
+      art.notiztext ? `Notes:\n${art.notiztext}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
   };
 }
 

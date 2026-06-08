@@ -44,6 +44,9 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ["@react-pdf/renderer"],
   },
+  ssr: {
+    noExternal: ["react-tweet", "novel"],
+  },
   plugins: [
     devtools(),
     {

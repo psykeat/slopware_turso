@@ -2,7 +2,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@repo/ui/component
 import { useAiOverlay } from "@repo/ui/platform/ai-overlay";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useFocus } from "@repo/ui/platform/focus-manager";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircleIcon,
   ChevronRightIcon,
@@ -12,71 +11,90 @@ import {
   FileTextIcon,
   CheckCircle2Icon,
 } from "lucide-react";
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { aiCapabilityRegistry } from "#/lib/ai/ai-capability-registry";
 
-import { upsertAiTranscriptEntry, type AiTranscriptEntry } from "./ai-transcript";
+import { AiAssistantState, AiErrorClass } from "./ai-types";
+import { useAiActionApply } from "./hooks/useAiActionApply";
+import { useAiContextResolution } from "./hooks/useAiContextResolution";
+import { useAiTaskStream } from "./hooks/useAiTaskStream";
 
-type AiErrorClass =
-  | "AI_UNAVAILABLE"
-  | "TASK_NOT_SUPPORTED_IN_CONTEXT"
-  | "CONTEXT_NOT_RESOLVABLE"
-  | "MODEL_TIMEOUT"
-  | "SCHEMA_VALIDATION_FAILED"
-  | "APPLY_VALIDATION_FAILED"
-  | "STALE_CONTEXT"
-  | "UNAUTHORIZED";
+class ReviewRenderBoundary extends React.Component<
+  {
+    taskScope: string;
+    onReset: () => void;
+    children: React.ReactNode;
+  },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
 
-type AiAssistantState =
-  | { status: "idle" }
-  | { status: "resolving-context" }
-  | {
-      status: "task-selection";
-      supportedTasks: Array<{
-        taskScope: string;
-        label: string | { en: string; de: string };
-        icon: string;
-      }>;
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("AI review renderer crashed", {
+      taskScope: this.props.taskScope,
+      error,
+      info,
+    });
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-4 text-[12px] text-red-800">
+          <div className="font-semibold">KI-Review konnte nicht gerendert werden</div>
+          <div>
+            Der Entwurf enthält unvollständige oder ungültige Daten. Sie können den AI-Flow
+            schließen und neu starten.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => this.setState({ error: null })}
+              className="rounded-full border border-red-200 bg-white px-3 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+            >
+              Erneut versuchen
+            </button>
+            <button
+              type="button"
+              onClick={this.props.onReset}
+              className="rounded-full border border-red-200 bg-white px-3 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+            >
+              Overlay schließen
+            </button>
+          </div>
+        </div>
+      );
     }
-  | {
-      status: "loading-task";
-      taskScope: string;
-      statusText?: string;
-      transcript: Array<{
-        id: string;
-        kind: "status" | "reasoning" | "tool" | "content";
-        title: string;
-        detail: string;
-      }>;
-    }
-  | { status: "review"; taskScope: string; reviewId: string; payload: any; validation: any }
-  | { status: "applying" }
-  | { status: "success"; resultingEntity?: string; resultingId?: string }
-  | { status: "error"; errorClass: AiErrorClass; message: string };
+
+    return this.props.children;
+  }
+}
 
 export function AiOverlayHost() {
   const { isOpen, setIsOpen, closeAiOverlay, options } = useAiOverlay();
   const { state: focusState, setFocus } = useFocus();
   const { registerCommand } = useCommands();
-  const queryClient = useQueryClient();
   const { i18n } = useTranslation("ui");
   const isDe = i18n.language?.startsWith("de");
 
   const [state, setState] = useState<AiAssistantState>({ status: "idle" });
-  const [allAddresses, setAllAddresses] = useState<any[]>([]);
-  const [allDocuments, setAllDocuments] = useState<any[]>([]);
   const [pendingMemories, setPendingMemories] = useState<any[]>([]);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
-  const upsertTranscriptEntry = useCallback((entry: AiTranscriptEntry, replace = false) => {
-    setState((prev) => {
-      if (prev.status !== "loading-task") return prev;
-      return { ...prev, transcript: upsertAiTranscriptEntry(prev.transcript, entry, replace) };
-    });
-  }, []);
+  const { runPlanning } = useAiTaskStream(setState, isOpen);
+  const { resolveFocusContext } = useAiContextResolution(setState, runPlanning);
+  const { handleApply, handlePatch } = useAiActionApply(
+    state,
+    setState,
+    setPendingMemories,
+    closeAiOverlay,
+  );
 
   // 1. Hierarchic escape / overlay focus registration in command-registry
   useEffect(() => {
@@ -104,387 +122,13 @@ export function AiOverlayHost() {
     };
   }, [isOpen, closeAiOverlay, registerCommand, setFocus]);
 
-  // Cleanup event source on close or unmount
-  useEffect(() => {
-    if (!isOpen && eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-    };
-  }, []);
-
-  // Load all addresses for reviews
-  useEffect(() => {
-    if (isOpen) {
-      fetch("/api/data/address")
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => setAllAddresses(data))
-        .catch(() => setAllAddresses([]));
-
-      fetch("/api/data/document?limit=100&orderBy=documentNo:asc")
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => setAllDocuments(Array.isArray(data) ? data : (data?.data ?? [])))
-        .catch(() => setAllDocuments([]));
-    }
-  }, [isOpen]);
-
-  const extractOverrides = useCallback(
-    (payload: any) => ({
-      bundleId: payload?.selectedBundleId || undefined,
-      selectedAddressId: payload?.selectedAddressId || undefined,
-      selectedDocumentId: payload?.selectedDocumentId || undefined,
-      extraReplyInstruction: payload?.extraReplyInstruction || undefined,
-    }),
-    [],
-  );
-
-  const validateReview = useCallback(
-    async (reviewId: string, payload: any) => {
-      const res = await fetch(`/api/ai/reviews/${reviewId}/validate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          overrides: extractOverrides(payload),
-        }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Validierung fehlgeschlagen");
-      }
-
-      return res.json();
-    },
-    [extractOverrides],
-  );
-
-  // 2. Launch Planning
-  const runPlanning = useCallback(
-    async (taskScope: string, sourceEntity: string, sourceId: string) => {
-      // Clean up previous event source if active
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-
-      setState({
-        status: "loading-task",
-        taskScope,
-        statusText: "Analyse wird gestartet...",
-        transcript: [],
-      });
-
-      try {
-        if (sourceEntity !== "emailThread" || !sourceId) {
-          throw new Error("Der AI-Workflow unterstützt in diesem Kontext nur E-Mail-Threads.");
-        }
-
-        // 1. Create session
-        const sessionRes = await fetch("/api/ai/sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            focusType: sourceEntity,
-            focusId: sourceId,
-          }),
-        });
-
-        if (!sessionRes.ok) {
-          const errData = await sessionRes.json().catch(() => ({}));
-          throw new Error(errData.error || "Fehler beim Erstellen der KI-Sitzung");
-        }
-
-        const { sessionId } = await sessionRes.json();
-
-        // 2. Connect to SSE
-        const sseUrl = `/api/ai/sessions/${sessionId}/sse`;
-        const es = new EventSource(sseUrl);
-        eventSourceRef.current = es;
-
-        es.addEventListener("status", (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            setState((prev) => {
-              if (prev.status === "loading-task") {
-                let statusText = "Analyse läuft...";
-                if (data.status === "resolving-context")
-                  statusText = "Fokuskontext wird geprüft...";
-                else if (data.status === "interpreting")
-                  statusText = "E-Mail wird interpretiert...";
-                else if (data.status === "awaiting-user-input")
-                  statusText = data.message || "Benutzereingabe erforderlich...";
-                else if (data.status === "building-review") statusText = "Entwurf wird erstellt...";
-                else if (data.status === "completed") statusText = "Analyse abgeschlossen.";
-                return { ...prev, statusText };
-              }
-              return prev;
-            });
-            if (data.status === "completed") {
-              es.close();
-              if (eventSourceRef.current === es) {
-                eventSourceRef.current = null;
-              }
-            }
-          } catch {
-            // ignore
-          }
-        });
-
-        es.addEventListener("chunk", (event) => {
-          try {
-            const chunk = JSON.parse(event.data) as Record<string, unknown>;
-            const chunkAny = chunk as any;
-            const type = typeof chunkAny.type === "string" ? chunkAny.type : "";
-            const id =
-              typeof chunkAny.toolCallId === "string"
-                ? chunkAny.toolCallId
-                : typeof chunkAny.id === "string"
-                  ? chunkAny.id
-                  : `${type}-${Date.now()}`;
-
-            if (type === "RUN_STARTED") {
-              upsertTranscriptEntry({
-                id,
-                kind: "status",
-                title: "Run gestartet",
-                detail: "Agentic cycle gestartet.",
-              });
-              return;
-            }
-
-            if (type === "STEP_STARTED") {
-              upsertTranscriptEntry({
-                id,
-                kind: "reasoning",
-                title: "Denken",
-                detail: typeof chunk.delta === "string" ? chunk.delta : "Agent prüft Hinweise.",
-              });
-              return;
-            }
-
-            if (type === "STEP_FINISHED") {
-              upsertTranscriptEntry(
-                {
-                  id,
-                  kind: "reasoning",
-                  title: "Denken",
-                  detail: typeof chunk.content === "string" ? chunk.content : "",
-                },
-                true,
-              );
-              return;
-            }
-
-            if (type === "TOOL_CALL_START") {
-              upsertTranscriptEntry({
-                id,
-                kind: "tool",
-                title: `Tool: ${typeof chunkAny.toolName === "string" ? chunkAny.toolName : "lookup"}`,
-                detail:
-                  typeof chunkAny.args === "string"
-                    ? chunkAny.args
-                    : typeof chunkAny.delta === "string"
-                      ? chunkAny.delta
-                      : "wird ausgeführt",
-              });
-              return;
-            }
-
-            if (type === "TOOL_CALL_ARGS") {
-              upsertTranscriptEntry({
-                id,
-                kind: "tool",
-                title: `Tool: ${typeof chunkAny.toolName === "string" ? chunkAny.toolName : "lookup"}`,
-                detail:
-                  typeof chunkAny.args === "string"
-                    ? chunkAny.args
-                    : typeof chunkAny.delta === "string"
-                      ? chunkAny.delta
-                      : "",
-              });
-              return;
-            }
-
-            if (type === "TOOL_CALL_END") {
-              upsertTranscriptEntry(
-                {
-                  id,
-                  kind: "tool",
-                  title: `Tool: ${typeof chunkAny.toolName === "string" ? chunkAny.toolName : "lookup"}`,
-                  detail:
-                    typeof chunkAny.result === "string"
-                      ? chunkAny.result
-                      : typeof chunkAny.output === "string"
-                        ? chunkAny.output
-                        : "abgeschlossen",
-                },
-                true,
-              );
-              return;
-            }
-
-            if (type === "TEXT_MESSAGE_CONTENT" || type === "TEXT_MESSAGE_END") {
-              upsertTranscriptEntry(
-                {
-                  id,
-                  kind: "content",
-                  title: "Antwort",
-                  detail:
-                    typeof chunkAny.delta === "string"
-                      ? chunkAny.delta
-                      : typeof chunkAny.content === "string"
-                        ? chunkAny.content
-                        : "",
-                },
-                type === "TEXT_MESSAGE_END",
-              );
-              return;
-            }
-
-            if (type === "RUN_FINISHED") {
-              upsertTranscriptEntry({
-                id,
-                kind: "status",
-                title: "Run beendet",
-                detail: `Finish reason: ${
-                  typeof chunkAny.finishReason === "string" ? chunkAny.finishReason : "stop"
-                }`,
-              });
-            }
-          } catch {
-            // ignore chunk parsing errors
-          }
-        });
-
-        es.addEventListener("review", async (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            setState({
-              status: "review",
-              taskScope,
-              reviewId: data.reviewId,
-              payload: data.payload,
-              validation: data.validation,
-            });
-            es.close();
-            if (eventSourceRef.current === es) {
-              eventSourceRef.current = null;
-            }
-          } catch (err: any) {
-            setState({
-              status: "error",
-              errorClass: "SCHEMA_VALIDATION_FAILED",
-              message: err.message || "Fehler beim Laden des Entwurfs",
-            });
-          }
-        });
-
-        es.addEventListener("error", (event: any) => {
-          let errorData = { errorClass: "AI_UNAVAILABLE", message: "Analyse fehlgeschlagen" };
-          try {
-            errorData = JSON.parse(event.data);
-          } catch {
-            // ignore
-          }
-
-          setState({
-            status: "error",
-            errorClass: (errorData.errorClass as AiErrorClass) || "AI_UNAVAILABLE",
-            message: errorData.message || "Fehler während der Analyse",
-          });
-
-          es.close();
-          if (eventSourceRef.current === es) {
-            eventSourceRef.current = null;
-          }
-        });
-      } catch (err: any) {
-        setState({
-          status: "error",
-          errorClass: err.errorClass || "AI_UNAVAILABLE",
-          message: err.message || "Analyse fehlgeschlagen",
-        });
-      }
-    },
-    [],
-  );
-
-  // 3. Resolve Context (Phase 2)
-  const resolveFocusContext = useCallback(async () => {
-    setState({ status: "resolving-context" });
-    try {
-      const invocationContext = {
-        workspace: focusState.workspace,
-        panel: focusState.panel,
-        focusArea: focusState.area,
-        entityName: focusState.entity,
-        recordId: focusState.recordId,
-        mode: focusState.mode,
-        invocationSource: "hotkey",
-      };
-
-      const res = await fetch("/api/ai/context/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(invocationContext),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw {
-          errorClass: errData.errorClass || "CONTEXT_NOT_RESOLVABLE",
-          message: errData.error || "Fokuskontext konnte nicht aufgelöst werden.",
-        };
-      }
-
-      const capabilitySet = await res.json();
-      const { supportedTasks, sourceEntity, sourceId } = capabilitySet;
-
-      if (!supportedTasks || supportedTasks.length === 0) {
-        setState({
-          status: "error",
-          errorClass: "TASK_NOT_SUPPORTED_IN_CONTEXT",
-          message: "Keine unterstützten KI-Aktionen in diesem Kontext gefunden.",
-        });
-        return;
-      }
-
-      // Check if a specific scope is requested in options
-      if (
-        options?.taskScope &&
-        supportedTasks.some((t: any) => t.taskScope === options.taskScope)
-      ) {
-        void runPlanning(options.taskScope, sourceEntity, sourceId);
-      } else if (supportedTasks.length === 1) {
-        // Trigger directly if only 1 action is possible
-        void runPlanning(supportedTasks[0].taskScope, sourceEntity, sourceId);
-      } else {
-        // Render Selection list
-        setState({ status: "task-selection", supportedTasks });
-      }
-    } catch (err: any) {
-      setState({
-        status: "error",
-        errorClass: err.errorClass || "AI_UNAVAILABLE",
-        message: err.message || "Fehler bei der Kontextauflösung",
-      });
-    }
-  }, [focusState, options, runPlanning]);
-
   // Hook trigger on open
   useEffect(() => {
     let active = true;
     if (isOpen) {
       const run = async () => {
         if (active) {
-          await resolveFocusContext();
+          await resolveFocusContext(focusState, options);
         }
       };
       void run();
@@ -492,7 +136,7 @@ export function AiOverlayHost() {
     return () => {
       active = false;
     };
-  }, [isOpen, resolveFocusContext]);
+  }, [isOpen, resolveFocusContext, focusState, options]);
 
   // Reset state on close
   useEffect(() => {
@@ -504,88 +148,6 @@ export function AiOverlayHost() {
       }
     }
   }, [isOpen, state.status]);
-
-  const handleApply = async () => {
-    if (state.status !== "review") return;
-    const { reviewId, payload } = state;
-    setState({ status: "applying" });
-
-    try {
-      const res = await fetch(`/api/ai/reviews/${reviewId}/apply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          overrides: extractOverrides(payload),
-        }),
-      });
-
-      const applyResult = await res.json();
-      if (!res.ok || applyResult.success === false) {
-        throw new Error(
-          applyResult.errorLogs || applyResult.error || "Aktion konnte nicht gebucht werden",
-        );
-      }
-
-      setState({ status: "success" });
-      toast.success("Aktionen erfolgreich gebucht!");
-      queryClient.invalidateQueries();
-
-      const extracted = applyResult.extractedMemories || [];
-      if (extracted.length > 0) {
-        setPendingMemories(extracted);
-      }
-
-      const nextUiActions = Array.isArray(applyResult?.nextUiActions)
-        ? applyResult.nextUiActions
-        : [];
-      for (const action of nextUiActions) {
-        if (action?.type === "open_document" && action.targetId) {
-          window.dispatchEvent(
-            new CustomEvent("slopware:open-document", { detail: { documentId: action.targetId } }),
-          );
-        }
-        if (action?.type === "open_email_draft" && action.targetId) {
-          window.dispatchEvent(
-            new CustomEvent("slopware:open-email-draft", { detail: { draftId: action.targetId } }),
-          );
-        }
-        if (action?.type === "show_toast" && action.label) {
-          toast.info(action.label);
-        }
-      }
-
-      if (extracted.length === 0) {
-        setTimeout(() => {
-          closeAiOverlay();
-        }, 1000);
-      }
-    } catch (err: any) {
-      setState({
-        status: "error",
-        errorClass: "APPLY_VALIDATION_FAILED",
-        message: err.message || "Aktion fehlgeschlagen",
-      });
-    }
-  };
-
-  const handlePatch = (patch: any) => {
-    if (state.status !== "review") return;
-    const nextPayload = { ...state.payload, ...patch };
-    setState((prev: any) => ({
-      ...prev,
-      payload: nextPayload,
-    }));
-    void validateReview(state.reviewId, nextPayload)
-      .then((validation) => {
-        setState((prev: any) => {
-          if (prev.status !== "review" || prev.reviewId !== state.reviewId) return prev;
-          return { ...prev, validation };
-        });
-      })
-      .catch(() => {
-        // Keep the optimistic selection if validation cannot be refreshed immediately.
-      });
-  };
 
   const getIcon = (iconName: string) => {
     switch (iconName) {
@@ -727,13 +289,19 @@ export function AiOverlayHost() {
                     <div className="text-[13px] text-ink-mute">Review Renderer nicht gefunden.</div>
                   );
                 }
-                return taskDef.renderReview({
-                  suggestionPayload: state.payload,
-                  validation: state.validation,
-                  onPatch: handlePatch,
-                  allAddresses,
-                  allDocuments,
-                });
+                return (
+                  <ReviewRenderBoundary
+                    key={`${state.reviewId || state.taskScope}`}
+                    taskScope={state.taskScope}
+                    onReset={closeAiOverlay}
+                  >
+                    {taskDef.renderReview({
+                      suggestionPayload: state.payload,
+                      validation: state.validation,
+                      onPatch: handlePatch,
+                    })}
+                  </ReviewRenderBoundary>
+                );
               })()}
             </div>
           )}
@@ -831,9 +399,9 @@ export function AiOverlayHost() {
                   onClick={() => {
                     if (state.errorClass === "APPLY_VALIDATION_FAILED" && focusState.recordId) {
                       setState({ status: "idle" });
-                      void resolveFocusContext();
+                      void resolveFocusContext(focusState, options);
                     } else {
-                      void resolveFocusContext();
+                      void resolveFocusContext(focusState, options);
                     }
                   }}
                   className="rounded-sm bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-fg hover:opacity-90"

@@ -14,4 +14,8 @@ export const db = drizzle({
   relations: { ...authRelations, ...relations },
 });
 
+export async function closeDb() {
+  await client.end({ timeout: 5 });
+}
+
 export { eq, sql, and, or } from "drizzle-orm";

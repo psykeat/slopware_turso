@@ -152,11 +152,13 @@ test("generateArticleVariants creates the cartesian product and is idempotent", 
   const first = await generateArticleVariants(fixture.tenantId, fixture.articleId);
   assert.equal(first.combinations, 4);
   assert.equal(first.createdVariants, 4);
+  assert.equal(first.createdInventoryItems, 4);
   assert.equal(first.skippedVariants, 0);
 
   const second = await generateArticleVariants(fixture.tenantId, fixture.articleId);
   assert.equal(second.combinations, 4);
   assert.equal(second.createdVariants, 0);
+  assert.equal(second.createdInventoryItems, 0);
   assert.equal(second.skippedVariants, 4);
 
   const variantRows = await db
@@ -243,6 +245,39 @@ test("generateArticleVariants creates the cartesian product and is idempotent", 
   assert.deepEqual(
     [...new Set(variantRows.map((row) => row.optionValueHash))].sort(),
     [...new Set(expectedHashes)].sort(),
+  );
+
+  const [firstVariantRow] = variantRows;
+  assert.ok(firstVariantRow);
+
+  await db
+    .delete(inventoryItem)
+    .where(
+      and(
+        eq(inventoryItem.tenantId, fixture.tenantId),
+        eq(inventoryItem.variantId, firstVariantRow.variantId),
+      ),
+    );
+
+  const repairRun = await generateArticleVariants(fixture.tenantId, fixture.articleId);
+  assert.equal(repairRun.combinations, 4);
+  assert.equal(repairRun.createdVariants, 0);
+  assert.equal(repairRun.createdInventoryItems, 1);
+  assert.equal(repairRun.skippedVariants, 4);
+
+  const repairedInventoryRows = await db
+    .select({
+      itemId: inventoryItem.itemId,
+      variantId: inventoryItem.variantId,
+      sku: inventoryItem.sku,
+    })
+    .from(inventoryItem)
+    .where(eq(inventoryItem.tenantId, fixture.tenantId));
+
+  assert.equal(repairedInventoryRows.length, 4);
+  assert.equal(
+    repairedInventoryRows.filter((row) => row.variantId === firstVariantRow.variantId).length,
+    1,
   );
 });
 

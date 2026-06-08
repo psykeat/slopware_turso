@@ -33,6 +33,7 @@ export type GenerateArticleVariantsResult = {
   articleId: string;
   combinations: number;
   createdVariants: number;
+  createdInventoryItems: number;
   skippedVariants: number;
 };
 
@@ -168,9 +169,9 @@ async function ensureInventoryItem(
   tenantId: string,
   variantId: string,
   sku: string,
-) {
+): Promise<{ itemId: string; sku: string; created: boolean } | null> {
   const existing = await findInventoryItemByVariantId(tx, tenantId, variantId);
-  if (existing) return existing;
+  if (existing) return { ...existing, created: false };
 
   const [inserted] = await tx
     .insert(inventoryItem)
@@ -183,9 +184,10 @@ async function ensureInventoryItem(
     .onConflictDoNothing()
     .returning({ itemId: inventoryItem.itemId, sku: inventoryItem.sku });
 
-  if (inserted) return inserted;
+  if (inserted) return { ...inserted, created: true };
 
-  return await findInventoryItemByVariantId(tx, tenantId, variantId);
+  const row = await findInventoryItemByVariantId(tx, tenantId, variantId);
+  return row ? { ...row, created: false } : null;
 }
 
 export async function generateArticleVariantsInTransaction(
@@ -218,12 +220,14 @@ export async function generateArticleVariantsInTransaction(
       articleId,
       combinations: 0,
       createdVariants: 0,
+      createdInventoryItems: 0,
       skippedVariants: 0,
     };
   }
 
   const combinations = cartesianProduct(axes.map((axis) => axis.values));
   let createdVariants = 0;
+  let createdInventoryItems = 0;
   let skippedVariants = 0;
 
   for (const combination of combinations) {
@@ -262,13 +266,17 @@ export async function generateArticleVariantsInTransaction(
     }
 
     await createVariantOptionAssignments(tx, tenantId, variantId, optionValues);
-    await ensureInventoryItem(tx, tenantId, variantId, sku);
+    const inventoryItemRow = await ensureInventoryItem(tx, tenantId, variantId, sku);
+    if (inventoryItemRow?.created) {
+      createdInventoryItems += 1;
+    }
   }
 
   return {
     articleId,
     combinations: combinations.length,
     createdVariants,
+    createdInventoryItems,
     skippedVariants,
   };
 }

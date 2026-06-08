@@ -20,6 +20,13 @@ import {
 } from "drizzle-orm";
 
 import { db } from "../index";
+import {
+  articleOption,
+  articleOptionValue,
+  articleVariantOptionValue,
+  inventoryBalance,
+  inventoryItem,
+} from "../schema/app.schema";
 import * as schema from "../schema";
 
 export class DataService {
@@ -140,6 +147,82 @@ export class DataService {
     }
 
     return update;
+  }
+
+  private async enrichArticleVariantRows(rows: any[]) {
+    if (!rows.length) return rows;
+
+    const variantIds = rows
+      .map((row) => row?.variantId)
+      .filter((value): value is string => typeof value === "string" && value.length > 0);
+
+    if (variantIds.length === 0) return rows;
+
+    const [optionRows, availabilityRows] = await Promise.all([
+      db
+        .select({
+          variantId: articleVariantOptionValue.variantId,
+          optionName: articleOption.name,
+          value: articleOptionValue.value,
+        })
+        .from(articleVariantOptionValue)
+        .innerJoin(articleOptionValue, eq(articleVariantOptionValue.valueId, articleOptionValue.valueId))
+        .innerJoin(articleOption, eq(articleOptionValue.optionId, articleOption.optionId))
+        .where(inArray(articleVariantOptionValue.variantId, variantIds))
+        .orderBy(
+          asc(articleVariantOptionValue.variantId),
+          asc(articleOption.sortOrder),
+          asc(articleOption.name),
+          asc(articleOptionValue.sortOrder),
+          asc(articleOptionValue.value),
+        ),
+      db
+        .select({
+          variantId: inventoryItem.variantId,
+          availableQty: sql<string>`COALESCE(
+            SUM(COALESCE(${inventoryBalance.availableQty}, ${inventoryBalance.onHandQty} - ${inventoryBalance.reservedQty} + ${inventoryBalance.expectedPurchaseQty})),
+            0
+          )`,
+        })
+        .from(inventoryItem)
+        .leftJoin(inventoryBalance, eq(inventoryBalance.inventoryItemId, inventoryItem.itemId))
+        .where(inArray(inventoryItem.variantId, variantIds))
+        .groupBy(inventoryItem.variantId),
+    ]);
+
+    const optionSummaries = new Map<string, string[]>();
+    for (const row of optionRows) {
+      const bucket = optionSummaries.get(row.variantId) ?? [];
+      const optionValue = `${row.optionName}: ${row.value}`;
+      if (!bucket.includes(optionValue)) {
+        bucket.push(optionValue);
+      }
+      optionSummaries.set(row.variantId, bucket);
+    }
+
+    const availabilityByVariant = new Map<string, string>();
+    for (const row of availabilityRows) {
+      availabilityByVariant.set(row.variantId, String(row.availableQty ?? "0"));
+    }
+
+    return rows.map((row) => {
+      const optionSummary = optionSummaries.get(row.variantId)?.join(" / ") ?? "";
+      const availableQty = availabilityByVariant.get(row.variantId) ?? "0";
+      const lookupPieces = [row.sku, optionSummary, `${availableQty} available`].filter(Boolean);
+      return {
+        ...row,
+        lookupLabel: lookupPieces.join(" · "),
+        variantOptionSummary: optionSummary,
+        availableQty,
+      };
+    });
+  }
+
+  private async enrichRows(entityName: string, rows: any[]) {
+    if (entityName === "articleVariant") {
+      return await this.enrichArticleVariantRows(rows);
+    }
+    return rows;
   }
 
   async list(
@@ -298,16 +381,18 @@ export class DataService {
 
     if (!options.count) {
       const rows = await dataQ;
-      await this.decryptLlmApiKeyListIfNeeded(entityName, rows);
-      return rows;
+      const enrichedRows = await this.enrichRows(entityName, rows);
+      await this.decryptLlmApiKeyListIfNeeded(entityName, enrichedRows);
+      return enrichedRows;
     }
 
     const countQ = db.select({ total: drizzleCount() }).from(table);
     if (whereClause) countQ.where(whereClause);
 
     const [data, countRows] = await Promise.all([dataQ, countQ]);
-    await this.decryptLlmApiKeyListIfNeeded(entityName, data);
-    return { data, total: Number(countRows[0]?.total ?? 0) };
+    const enrichedRows = await this.enrichRows(entityName, data);
+    await this.decryptLlmApiKeyListIfNeeded(entityName, enrichedRows);
+    return { data: enrichedRows, total: Number(countRows[0]?.total ?? 0) };
   }
 
   async get(entityName: string, id: string) {
@@ -328,7 +413,9 @@ export class DataService {
       .limit(1);
     const row = results[0] || null;
     if (row) {
-      await this.decryptLlmApiKeyListIfNeeded(entityName, [row]);
+      const [enrichedRow] = await this.enrichRows(entityName, [row]);
+      await this.decryptLlmApiKeyListIfNeeded(entityName, [enrichedRow]);
+      return enrichedRow;
     }
     return row;
   }

@@ -3,18 +3,18 @@
 import { TOGGLE_LINK_COMMAND } from "@lexical/link";
 import { INSERT_UNORDERED_LIST_COMMAND, INSERT_ORDERED_LIST_COMMAND } from "@lexical/list";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $createQuoteNode, $createHeadingNode } from "@lexical/rich-text";
+import { $createQuoteNode } from "@lexical/rich-text";
 import { $setBlocksType } from "@lexical/selection";
 import { mergeRegister } from "@lexical/utils";
 import {
   $getSelection,
   $isRangeSelection,
+  $isTextNode,
   COMMAND_PRIORITY_LOW,
   SELECTION_CHANGE_COMMAND,
   FORMAT_TEXT_COMMAND,
   UNDO_COMMAND,
   REDO_COMMAND,
-  LexicalEditor,
 } from "lexical";
 import {
   SparklesIcon,
@@ -193,7 +193,7 @@ export function AiFloatingMenuPlugin() {
       if ($isRangeSelection(selection)) {
         const nodes = selection.getNodes();
         nodes.forEach((node) => {
-          if (node.getType() === "text") {
+          if ($isTextNode(node)) {
             node.setFormat(0);
             node.setStyle("");
           }

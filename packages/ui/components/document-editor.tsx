@@ -348,7 +348,9 @@ function normalizeLineForSave(line: LineRow) {
     langTextSourceField: line.langTextSourceField ?? null,
     langTextLinkedAt: line.langTextLinkedAt ?? null,
     langTextOverriddenAt: line.langTextOverriddenAt ?? null,
-    lineType: line.lineType ?? "article",
+    lineType: line.variantId 
+      ? (line.lineType ?? "article") 
+      : (line.lineType === "article" || !line.lineType ? "text" : line.lineType),
     quantity: String(line.quantity),
     unit: line.unit,
     netPrice: String(line.netPrice),
@@ -1212,7 +1214,8 @@ const DocumentLinesEditor = forwardRef<
         _id: l.documentLineId,
         documentLineId: l.documentLineId,
         lineNo: l.lineNo,
-        articleId: l.articleId ?? null,
+        articleId: l.articleId || null,
+        variantId: l.variantId || null,
         articleNo: l.articleNo ?? null,
         articleTextSnapshot: l.articleTextSnapshot ?? null,
         langText: l.langText ?? null,

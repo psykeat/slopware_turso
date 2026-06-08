@@ -4,7 +4,7 @@ import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/_auth/app/email-templates")({
   component: EmailTemplatesRoute,
@@ -37,6 +37,16 @@ type EmailTemplateBindingRow = {
 };
 
 const EMPTY: never[] = [];
+
+const EMPTY_CREATE_TEMPLATE_VALUES = {
+  category: "document",
+  code: "",
+  name: "",
+  subjectTemplate: "",
+  bodyHtmlTemplate: "<p></p>",
+  bodyTextTemplate: "",
+  language: null,
+} as const;
 
 const TEMPLATE_FIELDS: FieldDef[] = [
   {
@@ -125,6 +135,20 @@ function EmailTemplatesRoute() {
 
   const selectedTemplate =
     templates.find((template) => template.emailTemplateId === selectedTemplateId) ?? null;
+  const createTemplateInitialValues = useMemo(
+    () => (selectedTemplateId ? undefined : { ...EMPTY_CREATE_TEMPLATE_VALUES }),
+    [selectedTemplateId],
+  );
+  const createBindingInitialValues = useMemo(
+    () =>
+      selectedBindingId
+        ? undefined
+        : {
+            emailTemplateId: selectedTemplateId,
+            priority: 100,
+          },
+    [selectedBindingId, selectedTemplateId],
+  );
 
   useEffect(() => {
     const unregNewTemplate = registerCommand({
@@ -198,19 +222,7 @@ function EmailTemplatesRoute() {
             mode={selectedTemplateId ? "edit" : "create"}
             title={selectedTemplate ? `Edit ${selectedTemplate.code}` : "Create template"}
             fields={TEMPLATE_FIELDS}
-            initialValues={
-              selectedTemplateId
-                ? undefined
-                : {
-                    category: "document",
-                    code: "",
-                    name: "",
-                    subjectTemplate: "",
-                    bodyHtmlTemplate: "<p></p>",
-                    bodyTextTemplate: "",
-                    language: null,
-                  }
-            }
+            initialValues={createTemplateInitialValues}
             onSaved={(record) => {
               const next = record as EmailTemplateRow;
               setSelectedTemplateId(next.emailTemplateId);
@@ -225,14 +237,7 @@ function EmailTemplatesRoute() {
                 mode={selectedBindingId ? "edit" : "create"}
                 title={selectedBindingId ? "Edit binding" : "Create binding"}
                 fields={TEMPLATE_BINDING_FIELDS}
-                initialValues={
-                  selectedBindingId
-                    ? undefined
-                    : {
-                        emailTemplateId: selectedTemplateId,
-                        priority: 100,
-                      }
-                }
+                initialValues={createBindingInitialValues}
                 onSaved={(record) => {
                   const next = record as EmailTemplateBindingRow;
                   setSelectedBindingId(next.emailTemplateBindingId);

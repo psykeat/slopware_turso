@@ -76,6 +76,7 @@ import { Route as ApiDataTenantLlmConfigTestRouteImport } from './routes/api/dat
 import { Route as ApiArticlesArticleIdSerialNumbersRouteImport } from './routes/api/articles/$articleId/serial-numbers'
 import { Route as ApiArticlesArticleIdPricingRouteImport } from './routes/api/articles/$articleId/pricing'
 import { Route as ApiArticlesArticleIdImagesRouteImport } from './routes/api/articles/$articleId/images'
+import { Route as ApiArticlesArticleIdGenerateVariantsRouteImport } from './routes/api/articles/$articleId/generate-variants'
 import { Route as ApiArticlesArticleIdBomRouteImport } from './routes/api/articles/$articleId/bom'
 import { Route as ApiArticlesArticleIdBatchesRouteImport } from './routes/api/articles/$articleId/batches'
 import { Route as ApiAdminLlmConfigTestRouteImport } from './routes/api/admin/llm-config.test'
@@ -452,6 +453,12 @@ const ApiArticlesArticleIdImagesRoute =
     path: '/api/articles/$articleId/images',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiArticlesArticleIdGenerateVariantsRoute =
+  ApiArticlesArticleIdGenerateVariantsRouteImport.update({
+    id: '/api/articles/$articleId/generate-variants',
+    path: '/api/articles/$articleId/generate-variants',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiArticlesArticleIdBomRoute = ApiArticlesArticleIdBomRouteImport.update({
   id: '/api/articles/$articleId/bom',
   path: '/api/articles/$articleId/bom',
@@ -627,6 +634,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
+  '/api/articles/$articleId/generate-variants': typeof ApiArticlesArticleIdGenerateVariantsRoute
   '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
@@ -713,6 +721,7 @@ export interface FileRoutesByTo {
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
+  '/api/articles/$articleId/generate-variants': typeof ApiArticlesArticleIdGenerateVariantsRoute
   '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
@@ -804,6 +813,7 @@ export interface FileRoutesById {
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
+  '/api/articles/$articleId/generate-variants': typeof ApiArticlesArticleIdGenerateVariantsRoute
   '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
@@ -894,6 +904,7 @@ export interface FileRouteTypes {
     | '/api/admin/llm-config/test'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
+    | '/api/articles/$articleId/generate-variants'
     | '/api/articles/$articleId/images'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
@@ -980,6 +991,7 @@ export interface FileRouteTypes {
     | '/api/admin/llm-config/test'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
+    | '/api/articles/$articleId/generate-variants'
     | '/api/articles/$articleId/images'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
@@ -1070,6 +1082,7 @@ export interface FileRouteTypes {
     | '/api/admin/llm-config/test'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
+    | '/api/articles/$articleId/generate-variants'
     | '/api/articles/$articleId/images'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
@@ -1143,6 +1156,7 @@ export interface RootRouteChildren {
   ApiAdminDocumentGroupsIdRoute: typeof ApiAdminDocumentGroupsIdRoute
   ApiArticlesArticleIdBatchesRoute: typeof ApiArticlesArticleIdBatchesRoute
   ApiArticlesArticleIdBomRoute: typeof ApiArticlesArticleIdBomRouteWithChildren
+  ApiArticlesArticleIdGenerateVariantsRoute: typeof ApiArticlesArticleIdGenerateVariantsRoute
   ApiArticlesArticleIdImagesRoute: typeof ApiArticlesArticleIdImagesRoute
   ApiArticlesArticleIdPricingRoute: typeof ApiArticlesArticleIdPricingRoute
   ApiArticlesArticleIdSerialNumbersRoute: typeof ApiArticlesArticleIdSerialNumbersRoute
@@ -1636,6 +1650,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiArticlesArticleIdImagesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/articles/$articleId/generate-variants': {
+      id: '/api/articles/$articleId/generate-variants'
+      path: '/api/articles/$articleId/generate-variants'
+      fullPath: '/api/articles/$articleId/generate-variants'
+      preLoaderRoute: typeof ApiArticlesArticleIdGenerateVariantsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/articles/$articleId/bom': {
       id: '/api/articles/$articleId/bom'
       path: '/api/articles/$articleId/bom'
@@ -2038,6 +2059,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminDocumentGroupsIdRoute: ApiAdminDocumentGroupsIdRoute,
   ApiArticlesArticleIdBatchesRoute: ApiArticlesArticleIdBatchesRoute,
   ApiArticlesArticleIdBomRoute: ApiArticlesArticleIdBomRouteWithChildren,
+  ApiArticlesArticleIdGenerateVariantsRoute:
+    ApiArticlesArticleIdGenerateVariantsRoute,
   ApiArticlesArticleIdImagesRoute: ApiArticlesArticleIdImagesRoute,
   ApiArticlesArticleIdPricingRoute: ApiArticlesArticleIdPricingRoute,
   ApiArticlesArticleIdSerialNumbersRoute:

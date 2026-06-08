@@ -16,7 +16,7 @@ function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
 }
 
-function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
+function DialogClose({ ...props }: any) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
@@ -38,10 +38,12 @@ function DialogContent({
   children,
   showCloseButton = true,
   variant = "default",
+  showOverlay = true,
   ...props
-}: DialogPrimitive.Popup.Props & {
+}: any & {
   showCloseButton?: boolean;
   variant?: "default" | "form";
+  showOverlay?: boolean;
 }) {
   const contentClassName =
     variant === "form"
@@ -50,7 +52,7 @@ function DialogContent({
 
   return (
     <DialogPortal>
-      <DialogOverlay />
+      {showOverlay ? <DialogOverlay /> : null}
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(contentClassName, className)}

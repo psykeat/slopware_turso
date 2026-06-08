@@ -127,11 +127,11 @@ catalogs:
       specifier: ^2.23.0
       version: 2.27.2
     '@tiptap/extension-font-family':
-      specifier: ^3.24.0
-      version: 3.24.0
+      specifier: ^2.23.0
+      version: 2.27.2
     '@tiptap/extension-text-align':
-      specifier: ^3.24.0
-      version: 3.24.0
+      specifier: ^2.23.0
+      version: 2.27.2
     '@tiptap/extension-text-style':
       specifier: ^2.23.0
       version: 2.27.2
@@ -569,10 +569,10 @@ importers:
         version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))(@tiptap/extension-text-style@2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2)))
       '@tiptap/extension-font-family':
         specifier: 'catalog:'
-        version: 3.24.0(@tiptap/extension-text-style@2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2)))
+        version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))(@tiptap/extension-text-style@2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2)))
       '@tiptap/extension-text-align':
         specifier: 'catalog:'
-        version: 3.24.0(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))
+        version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))
       '@tiptap/extension-text-style':
         specifier: 'catalog:'
         version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))
@@ -3329,10 +3329,11 @@ packages:
       '@tiptap/core': ^2.7.0
       '@tiptap/pm': ^2.7.0
 
-  '@tiptap/extension-font-family@3.24.0':
-    resolution: {integrity: sha512-3JaJfc6jfuylcZc3V2VGq4L92VSPuf4CoRkvxVBvbFB6+P1Vmjwq6Ixsth2zUDf9TfBu+vubuWx8V+gA0q91ug==}
+  '@tiptap/extension-font-family@2.27.2':
+    resolution: {integrity: sha512-Lc3fAF/t3QXuG5AiOjGiCoyxJH7QyAOj5P+X4O6NfFtHST2wxoqIKqnlXkROv+g49Th/ypVGQ/z47wb6EG4iQg==}
     peerDependencies:
-      '@tiptap/extension-text-style': 3.24.0
+      '@tiptap/core': ^2.7.0
+      '@tiptap/extension-text-style': ^2.7.0
 
   '@tiptap/extension-gapcursor@2.27.2':
     resolution: {integrity: sha512-/c9VF1HBxj+AP54XGVgCmD9bEGYc5w5OofYCFQgM7l7PB1J00A4vOke0oPkHJnqnOOyPlFaxO/7N6l3XwFcnKA==}
@@ -3420,10 +3421,10 @@ packages:
     peerDependencies:
       '@tiptap/core': ^2.7.0
 
-  '@tiptap/extension-text-align@3.24.0':
-    resolution: {integrity: sha512-WKFtYXGthtkUc+Cwy2fItSr+9FKwLZjkJVAY1GhkRdcq35qTuVhkb4Q4wR2Rhkb6QRqtlxF1NDuTf2vxiQmfBQ==}
+  '@tiptap/extension-text-align@2.27.2':
+    resolution: {integrity: sha512-0Pyks6Hu+Q/+9+5/osoSv0SP6jIerdWMYbi13aaZLsJoj3lBj5WNaE11JtAwSFN5sx0IbqhDSlp1zkvRnzgZ8g==}
     peerDependencies:
-      '@tiptap/core': 3.24.0
+      '@tiptap/core': ^2.7.0
 
   '@tiptap/extension-text-style@2.27.2':
     resolution: {integrity: sha512-Omk+uxjJLyEY69KStpCw5fA9asvV+MGcAX2HOxyISDFoLaL49TMrNjhGAuz09P1L1b0KGXo4ml7Q3v/Lfy4WPA==}
@@ -9389,8 +9390,9 @@ snapshots:
       '@tiptap/pm': 2.27.2
       tippy.js: 6.3.7
 
-  '@tiptap/extension-font-family@3.24.0(@tiptap/extension-text-style@2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2)))':
+  '@tiptap/extension-font-family@2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))(@tiptap/extension-text-style@2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2)))':
     dependencies:
+      '@tiptap/core': 2.27.2(@tiptap/pm@2.27.2)
       '@tiptap/extension-text-style': 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))
 
   '@tiptap/extension-gapcursor@2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))(@tiptap/pm@2.27.2)':
@@ -9464,7 +9466,7 @@ snapshots:
     dependencies:
       '@tiptap/core': 2.27.2(@tiptap/pm@2.27.2)
 
-  '@tiptap/extension-text-align@3.24.0(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))':
+  '@tiptap/extension-text-align@2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))':
     dependencies:
       '@tiptap/core': 2.27.2(@tiptap/pm@2.27.2)
 

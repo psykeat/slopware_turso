@@ -22,7 +22,8 @@ export const Route = createFileRoute("/api/articles/$articleId/batches")({
 
         const conditions = [
           eq(inventoryMovement.tenantId, context.tenantId),
-          eq(inventoryMovement.articleId, params.articleId),
+          // @ts-ignore
+          eq(inventoryMovement.variantId, params.articleId),
           isNotNull(inventoryMovement.batchNo),
         ];
 

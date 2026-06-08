@@ -199,7 +199,7 @@ class tr {
             (i ? `<!DOCTYPE ${i}>` : "") +
             [
               "<style>*,*::before,*::after { visibility: hidden }</style>",
-              `<script>${ir(this.viewport(), this._callId, this.snapshotName)}<\/script>`,
+              `<script>${ir(this.viewport(), this._callId, this.snapshotName)}</script>`,
             ].join("") +
             t.join("");
         return { value: o, size: o.length };

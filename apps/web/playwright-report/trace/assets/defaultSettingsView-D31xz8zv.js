@@ -6601,7 +6601,7 @@ Error generating stack: ` +
                     break;
                   case "script":
                     ((p = y.createElement("div")),
-                      (p.innerHTML = "<script><\/script>"),
+                      (p.innerHTML = "<script></script>"),
                       (p = p.removeChild(p.firstChild)));
                     break;
                   case "select":
@@ -16770,7 +16770,7 @@ async function tE(n, e) {
       '^"' +
       S.replace(/\\/g, "\\\\")
         .replace(/"/g, '\\"')
-        .replace(/[^a-zA-Z0-9\s_\-:=+~'\/.',?;()*`]/g, "^$&")
+        .replace(/[^a-zA-Z0-9\s_\-:=+~'/.',?;()*`]/g, "^$&")
         .replace(/%(?=[a-zA-Z0-9_])/g, "%^")
         .replace(/[^ -~\r\n]/g, " ")
         .replace(
@@ -16788,10 +16788,10 @@ async function tE(n, e) {
       for (; _.length < 4; ) _ = "0" + _;
       return "\\u" + _;
     }
-    return /[\0-\x1F\x7F-\x9F!]|\'/.test(S)
+    return /[\0-\x1F\x7F-\x9F!]|'/.test(S)
       ? "$'" +
           S.replace(/\\/g, "\\\\")
-            .replace(/\'/g, "\\'")
+            .replace(/'/g, "\\'")
             .replace(/\n/g, "\\n")
             .replace(/\r/g, "\\r")
             .replace(/[\0-\x1F\x7F-\x9F!]/g, w) +
@@ -21251,7 +21251,7 @@ function ZT(n, e, i) {
   return (qh(r), r);
 }
 function zv(n) {
-  return /^[a-zA-Z][a-zA-Z0-9\-\_]+$/.test(n) ? "#" + n : `[id=${dr(n)}]`;
+  return /^[a-zA-Z][a-zA-Z0-9\-_]+$/.test(n) ? "#" + n : `[id=${dr(n)}]`;
 }
 function mh(n) {
   return n.some(
@@ -21385,7 +21385,7 @@ function hs(n) {
   );
 }
 function ti(n) {
-  return n.nodeName.toLocaleLowerCase().replace(/[:\.]/g, (e) => "\\" + e);
+  return n.nodeName.toLocaleLowerCase().replace(/[:.]/g, (e) => "\\" + e);
 }
 function eA(n) {
   let e = "";
@@ -25049,7 +25049,7 @@ function Vv(n, e, i) {
     e = x.concat([{ quote: '"', text: E }]).concat(_);
   }
   n = n
-    .replace(/\,set([\w]+)\(([^)]+)\)/g, (l, o, u) => "," + o.toLowerCase() + "=" + u.toLowerCase())
+    .replace(/,set([\w]+)\(([^)]+)\)/g, (l, o, u) => "," + o.toLowerCase() + "=" + u.toLowerCase())
     .replace(/framelocator\(([^)]+)\)/g, "$1.internal:control=enter-frame")
     .replace(/contentframe(\(\))?/g, "internal:control=enter-frame")
     .replace(/locator\(([^)]+),hastext=([^),]+)\)/g, "locator($1).internal:has-text=$2")
@@ -25074,7 +25074,7 @@ function Vv(n, e, i) {
     .replace(/(,name=\$\d+)(,description=\$\d+),exact=true/g, "$1s$2s")
     .replace(/,exact=true/g, "s")
     .replace(/,includehidden=/g, ",include-hidden=")
-    .replace(/\,/g, "][");
+    .replace(/,/g, "][");
   const r = n.split(".");
   for (let l = 0; l < r.length - 1; l++)
     if (r[l] === "internal:control=enter-frame" && r[l + 1].startsWith("nth=")) {

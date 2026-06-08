@@ -21,6 +21,7 @@ test.describe("Global Search (Command Palette)", () => {
 
     // 2. Debouncing the search query
     // Get the initial list of items (before typing)
+    // eslint-disable-next-line
     const initialItemsCount = await palette.locator("button").count();
 
     // Type "Artic"

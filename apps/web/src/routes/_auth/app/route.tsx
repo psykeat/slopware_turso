@@ -2,7 +2,6 @@ import { authClient } from "@repo/auth/auth-client";
 import { authQueryOptions } from "@repo/auth/tanstack/queries";
 import { ActionBar } from "@repo/ui/components/action-bar";
 import { FeedbackModal } from "@repo/ui/components/feedback-modal";
-import { InlineDesigner } from "@repo/ui/components/inline-designer";
 import { StatusBar } from "@repo/ui/components/status-bar";
 import { useTheme, type AccentTheme } from "@repo/ui/lib/theme-provider";
 import { useDismiss } from "@repo/ui/lib/use-dismiss";
@@ -688,7 +687,6 @@ function AppLayoutInner({
         onClose={() => setFeedbackOpen(false)}
         snapshot={snapshot}
       />
-      <InlineDesigner />
     </div>
   );
 }

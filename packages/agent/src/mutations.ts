@@ -161,7 +161,7 @@ export const createDocumentDraftTool = toolDefinition({
     customerId: z.string(),
     lines: z.array(
       z.object({
-        articleId: z.string(),
+        variantId: z.string(),
         quantity: z.number(),
         netPrice: z.number(),
         unit: z.string().optional().default("Stk"),
@@ -219,7 +219,7 @@ export const createDocumentDraftTool = toolDefinition({
     await docService.createDocumentLine(args.tenantId, {
       documentId: docResult.documentId,
       lineNo: (i + 1) * 10,
-      articleId: line.articleId,
+      variantId: line.variantId,
       quantity: line.quantity,
       netPrice: line.netPrice,
       unit: line.unit,

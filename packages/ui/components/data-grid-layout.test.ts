@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getGridColumnOrderStorageKey, resolveGridLayoutState } from "./data-grid.tsx";
+import { getGridColumnOrderStorageKey, resolveGridLayoutState } from "./data-grid";
 
 test("getGridColumnOrderStorageKey includes panelId so grids do not collide", () => {
   assert.equal(
@@ -13,7 +13,11 @@ test("getGridColumnOrderStorageKey includes panelId so grids do not collide", ()
 
 test("resolveGridLayoutState keeps legacy storage as bootstrap when no user override exists", () => {
   const state = resolveGridLayoutState({
-    columns: [{ key: "a" }, { key: "b" }, { key: "c" }],
+    columns: [
+      { key: "a", header: "A" },
+      { key: "b", header: "B" },
+      { key: "c", header: "C" },
+    ],
     layoutResponse: {
       columnOrder: ["b", "a", "c"],
       resolution: {
@@ -35,7 +39,11 @@ test("resolveGridLayoutState keeps legacy storage as bootstrap when no user over
 
 test("resolveGridLayoutState prefers the server user override over legacy storage", () => {
   const state = resolveGridLayoutState({
-    columns: [{ key: "a" }, { key: "b" }, { key: "c" }],
+    columns: [
+      { key: "a", header: "A" },
+      { key: "b", header: "B" },
+      { key: "c", header: "C" },
+    ],
     layoutResponse: {
       columnOrder: ["c", "b", "a"],
       resolution: {

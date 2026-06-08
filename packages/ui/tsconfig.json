@@ -2,9 +2,10 @@
   "extends": "@repo/tsconfig/base.json",
   "compilerOptions": {
     "paths": {
-      "@repo/ui/*": ["./*"]
+      "@repo/ui/*": ["./*"],
+      "@/*": ["./*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx"],
+  "include": ["**/*.ts", "**/*.tsx", "**/*.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

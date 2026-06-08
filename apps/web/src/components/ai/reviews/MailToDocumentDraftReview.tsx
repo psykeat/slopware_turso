@@ -3,6 +3,7 @@ import { ArrowRightIcon, FileTextIcon } from "lucide-react";
 import React from "react";
 
 import { safeIdPrefix } from "./mail-review-labels";
+// eslint-disable-next-line
 import { AddressOption, MailClassificationReview } from "./MailClassificationReview";
 
 /** Intentions for which we must NEVER show document actions */

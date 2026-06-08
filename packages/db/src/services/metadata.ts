@@ -211,6 +211,18 @@ function isDesignerNodeKind(value: unknown): value is DesignerNodeKind {
 }
 
 function resolveLookupTable(entityName: string, colName: string) {
+  if (colName === "variantId") {
+    return "articleVariant";
+  }
+
+  if (colName === "optionId") {
+    return "articleOption";
+  }
+
+  if (colName === "valueId") {
+    return "articleOptionValue";
+  }
+
   if (entityName === "documentGroup" && colName === "nextGroupId") {
     return "documentGroup";
   }
@@ -687,7 +699,8 @@ function normalizeLayoutTree(
   };
 }
 
-function extractLayoutDefinition(layout: Record<string, any>) {
+function extractLayoutDefinition(layout: Record<string, any> | undefined | null) {
+  if (!layout) return {};
   if (isRecord(layout.layoutDefinition)) {
     return layout.layoutDefinition;
   }

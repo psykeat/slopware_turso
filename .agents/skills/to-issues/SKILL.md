@@ -1,65 +1,138 @@
 ---
 name: to-issues
-description: Break a plan, spec, or PRD into independently-grabbable, vertical slice issues. Use when the user wants to convert a plan into issues or break down work.
+description: Break a plan, spec, or PRD into small, independently-grabbable vertical-slice issues for agentic implementation.
 ---
 
 # Skill: To Issues
 
 ## Goal
 
-Break a plan, spec, or PRD into independently-grabbable, vertical slice issues.
+Turn a plan, spec, or PRD into thin vertical-slice issues that are easy to implement, verify, and merge.
 
-## Triggers
+## Use When
 
-- User wants to convert a plan into issues.
-- User wants to create implementation tickets.
-- User asks to "break down work".
+- The user wants to break down a PRD or plan into implementation issues.
+- The user wants issue tracker tickets for an agentic loop.
+- The user wants to check whether a breakdown is too coarse or too fine.
 
-## Core Instructions
+## Core Rules
 
-- **Vertical Slices:** Create "tracer bullet" issues that cut through all integration layers (schema, API, UI, tests). Avoid horizontal layering (e.g., "build the API" then "build the UI").
-- **Categorize:**
-  - **HITL:** Human-In-The-Loop (requires decision, review, or manual step).
-  - **AFK:** Agent-Friendly (can be implemented and merged without human interaction).
-- **Quiz:** Present the breakdown to the user to confirm granularity and dependencies before final publishing.
-- **Template:**
-  - **Parent:** [Link to PRD/Main issue]
-  - **What:** [Concise description]
-  - **Acceptance Criteria:** [Checklist]
-  - **Blocked by:** [Dependencies]
+- Create **vertical slices**, not horizontal layers.
+- Each slice should be narrow but complete enough to verify on its own.
+- Prefer **AFK** slices over **HITL** slices where possible.
+- Keep the breakdown flat unless the user explicitly asks for an umbrella or epic.
+- Do not final-publish until the user confirms granularity and dependency order.
 
-## Sizing Heuristics
+## Slice Constraints
 
-- Split immediately when one issue spans more than one independent concern, especially across these boundaries:
-  - UI + API
-  - API + schema/migration
-  - UI + schema/migration
-  - runtime logic + background job/worker
-  - behavior change + data backfill/reconciliation
-- Split again if a child issue still contains more than one write path, more than one persistence target, or both load and save behavior in the same slice.
-- A single child issue should normally introduce at most one new endpoint, one new persistence target, and one new UI affordance. If it needs more than one of those, split it again.
-- Prefer one primary file cluster per child issue. If the change clearly requires different owners of state, data, or persistence, it is probably too broad.
-- A short issue can still be too broad. Use the scope, not the line count, as the sizing signal.
-- If an issue combines a read path and a write/persist path, split them unless they are the same small component and the same file cluster.
-- If the acceptance criteria mention several unrelated outcomes, create a parent epic and separate child issues for each outcome.
-- Keep parents as umbrellas when the feature is still too wide, but only publish child issues that are independently grabbable.
-- If a child issue introduces a new abstraction boundary, ask whether that abstraction can itself be split into a smaller tracer bullet. If yes, split again.
-- If you cannot describe the expected diff in one file cluster and one sentence, the slice is still too wide.
+A child issue should normally contain:
 
-## Recommended Split Order
+- one user-visible behavior
+- one primary file cluster
+- one write path at most
+- one persistence target at most
+- one endpoint at most
+- one UI affordance at most
+- one clear dependency chain
+- one clear acceptance set
 
-- First slice the read path or visible UI.
-- Second slice the write path or persistence.
-- Third slice schema/migration or service integration.
-- Fourth slice reporting, cleanup, or follow-up automation.
-- If any of those steps still bundles multiple writes, split that step before publishing it.
+If any slice contains more than one independent concern, split it again.
 
-## Publishing Rule
+Split immediately when a slice combines:
 
-- Do not final-publish a breakdown until each slice has:
-  - one clear owner
-  - one clear dependency chain
-  - one clear acceptance set
-  - a label classification of `AFK` or `HITL`
-- If any slice still needs a human decision, mark that slice `HITL` and stop the breakdown there.
-- If a proposed slice would require a second autonomous issue just to make its acceptance criteria testable, split it again before publishing.
+- UI and API work that can be verified separately
+- API and schema/migration work that can be verified separately
+- read behavior and write behavior in different file clusters
+- runtime behavior and background job/worker behavior
+- behavior change and data backfill/reconciliation
+- more than one write path
+- more than one persistence target
+- more than one endpoint
+- more than one unrelated observable outcome
+
+If you cannot describe the expected diff as one primary file cluster plus one sentence, the slice is still too broad.
+
+## File Cluster Rule
+
+Each child issue must include a bounded **File Cluster** section.
+
+The file cluster should name the likely files, folders, or module area to touch, using stable repo-relative paths when possible.
+
+Good:
+- `app/features/invoices/*`
+- `src/modules/auth/login.ts`, `src/modules/auth/login.test.ts`
+- `db/schema/invoices.ts` and `api/invoices/*`
+
+Bad:
+- “frontend”
+- “backend”
+- “database stuff”
+- a huge cross-repo list with no primary locus of change
+
+Use enough path detail to constrain the agent, but do not over-specify line-level implementation.
+
+## Labels
+
+- **AFK**: can be implemented, tested, and merged without human judgment during execution.
+- **HITL**: requires a human decision, review, approval, design choice, or manual external step.
+
+If a slice needs human judgment to become testable, mark it **HITL** and stop decomposition there.
+
+## Quiz Before Publish
+
+Present the draft breakdown as a numbered list.
+
+For each slice, show:
+
+- **Title**
+- **Type**: AFK or HITL
+- **What**
+- **File Cluster**
+- **Blocked by**
+- **Acceptance shape**: read path, write path, schema, integration, or validation
+
+Ask the user:
+
+- Is any slice too coarse or too fine?
+- Are dependencies correct?
+- Should any slice be merged or split?
+- Are any AFK slices actually HITL?
+- Does each slice have exactly one primary file cluster and one clear observable outcome?
+
+Iterate until approved.
+
+## Issue Template
+
+### Parent
+[Link to PRD or main issue, if any]
+
+### What
+[Concise end-to-end behavior for this slice]
+
+### File Cluster
+- [Primary repo-relative file/folder cluster]
+- [Secondary cluster only if truly necessary]
+
+### Acceptance Criteria
+- [Observable outcome 1]
+- [Observable outcome 2]
+- [Tests or verification path]
+
+### Blocked by
+[Dependency issue reference or “None - can start immediately”]
+
+### Type
+AFK / HITL
+
+## Publish Rule
+
+Do not publish until each slice has:
+
+- one clear owner
+- one clear dependency chain
+- one primary file cluster
+- one observable behavior
+- one bounded acceptance set
+- one label: `AFK` or `HITL`
+
+If a slice would require a second autonomous issue just to make its acceptance criteria testable, split it again first.

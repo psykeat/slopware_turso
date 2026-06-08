@@ -149,7 +149,7 @@ interface DesignerRuntimeState {
 interface DesignerContextValue {
   isDesignMode: boolean;
   toggleDesignMode: () => void;
-  closeDesignMode: () => void;
+  closeDesignMode: () => Promise<boolean>;
   activeSurface: DesignerSurface | null;
   activeSurfaceState: DesignerSurfaceState | null;
   selectedNodes: DesignerNode[];
@@ -174,7 +174,13 @@ interface DesignerContextValue {
   removeFieldDraft: (key: string) => void;
   removeFrameDraft: (key: string) => void;
   initFields: (
-    fields: { key: string; visible?: boolean; labelEn?: string; labelDe?: string }[],
+    fields: {
+      key: string;
+      visible?: boolean;
+      labelEn?: string;
+      labelDe?: string;
+      frameKey?: string | null;
+    }[],
   ) => void;
   selectDesignerNodes: (
     surface: DesignerSurface,
@@ -263,6 +269,15 @@ function extractClientRevision(payload: unknown) {
 
 function nextDraftId(kind: DesignerNodeKind) {
   return `draft:${kind}:${crypto.randomUUID()}`;
+}
+
+function humanizeFrameKey(frameKey: string) {
+  const compact = frameKey
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim();
+  if (!compact) return frameKey;
+  return compact.charAt(0).toUpperCase() + compact.slice(1);
 }
 
 function inferSurfaceFromFocus(area: FocusContextState["area"]): DesignerSurface {
@@ -406,7 +421,11 @@ function mergeNodePatch(node: DesignerNode, patch: Partial<FieldDesignConfig>) {
     visible: patch.visible ?? node.visible,
     readonly,
     required,
+    // @ts-expect-error
+    // eslint-disable-next-line
     width: patch.width ?? node.width,
+    // @ts-expect-error
+    // eslint-disable-next-line
     pin: patch.pin ?? node.pin ?? null,
     path: typeof patch.path === "string" ? patch.path : (node.path ?? null),
     parentId: typeof patch.frameKey === "string" ? patch.frameKey : node.parentId,
@@ -879,6 +898,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
   const previousFocusRef = useRef<FocusContextState | null>(null);
   const wasDesignModeRef = useRef(false);
   const wasDesignerContextRef = useRef(false);
+  const closeInProgressRef = useRef(false);
 
   const updateRuntime = useCallback(
     (updater: (state: DesignerRuntimeState) => DesignerRuntimeState) => {
@@ -927,17 +947,27 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const persistActiveSurface = useCallback(
-    async (action: "patch" | "apply" = "apply") => {
-      const entityName = focusState.entity;
-      const surface = runtimeState.activeSurface ?? inferSurfaceFromFocus(focusState.area);
-      if (!entityName) return false;
+  const persistSurface = useCallback(
+    async (
+      surface: DesignerSurface,
+      action: "patch" | "apply" = "apply",
+      state: DesignerRuntimeState = runtimeState,
+    ) => {
+      const bucket = state.surfaces[surface];
+      if (!bucket || bucket.draftPatchOps.length === 0) return true;
 
-      const bucket = ensureSurfaceBucket(runtimeState, surface, entityName);
-      if (bucket.draftPatchOps.length === 0) return true;
+      const entityName = bucket.entityName ?? focusState.entity;
+      if (!entityName) {
+        throw new Error(`Missing entity for designer surface ${surface}`);
+      }
 
-      const response = await fetch(`/api/metadata/designer/${entityName}/${surface}/${action}`, {
-        method: "POST",
+      const url = action === "patch"
+        ? `/api/metadata/designer/${entityName}/${surface}`
+        : `/api/metadata/designer/${entityName}/${surface}/${action}`;
+      const method = action === "patch" ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: {
           "content-type": "application/json",
         },
@@ -990,6 +1020,15 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       return true;
     },
     [focusState.area, focusState.entity, runtimeState, updateRuntime],
+  );
+
+  const persistActiveSurface = useCallback(
+    async (action: "patch" | "apply" = "apply") => {
+      const surface = runtimeState.activeSurface ?? inferSurfaceFromFocus(focusState.area);
+      if (!surface) return false;
+      return persistSurface(surface, action);
+    },
+    [focusState.area, persistSurface, runtimeState.activeSurface],
   );
 
   const saveDesign = useCallback(async () => {
@@ -1059,28 +1098,62 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
   }, [updateRuntime]);
 
   const closeDesignMode = useCallback(async () => {
-    const hasUnsaved = Object.values(runtimeState.surfaces).some(
-      (bucket) => bucket && bucket.draftPatchOps.length > 0,
-    );
-    if (hasUnsaved) {
-      const confirmSave = window.confirm(
-        "Es gibt ungespeicherte Änderungen. Möchten Sie diese speichern und übernehmen?\n\nYou have unsaved changes. Would you like to save and apply them?",
-      );
-      if (confirmSave) {
-        try {
-          await persistActiveSurface();
-          toast.success("Designer-Änderungen erfolgreich angewendet");
-        } catch (error) {
-          console.error("Failed to apply design on exit:", error);
-          toast.error("Failed to apply design changes");
-          return; // Keep designer open on error
+    if (!isDesignMode || closeInProgressRef.current) return false;
+    closeInProgressRef.current = true;
+
+    try {
+      const dirtySurfaces = (Object.entries(runtimeState.surfaces) as [
+        DesignerSurface,
+        DesignerSurfaceState | undefined,
+      ][]).filter(([, bucket]) => !!bucket && bucket.draftPatchOps.length > 0);
+
+      if (dirtySurfaces.length > 0) {
+        const targetSurface =
+          runtimeState.activeSurface &&
+          dirtySurfaces.some(([surface]) => surface === runtimeState.activeSurface)
+            ? runtimeState.activeSurface
+            : dirtySurfaces[0][0];
+        const targetBucket = runtimeState.surfaces[targetSurface] ?? null;
+        const entityName = targetBucket?.entityName ?? focusState.entity ?? null;
+        if (entityName) {
+          setFocus({
+            area: "designer",
+            entity: entityName,
+            panel: targetSurface,
+            recordId: focusState.recordId,
+            mode: focusState.mode,
+            field: focusState.field,
+            row: focusState.row,
+          });
         }
-      } else {
-        resetDelta();
+
+        for (const [surface] of dirtySurfaces) {
+          await persistSurface(surface, "apply", runtimeState);
+        }
+
+        toast.success("Designer-Änderungen beim Verlassen übernommen");
       }
+
+      setIsDesignMode(false);
+      return true;
+    } catch (error) {
+      console.error("Failed to apply design on exit:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to apply design changes");
+      return false;
+    } finally {
+      closeInProgressRef.current = false;
     }
-    setIsDesignMode(false);
-  }, [runtimeState.surfaces, persistActiveSurface, resetDelta]);
+  }, [
+    focusState.entity,
+    focusState.field,
+    focusState.mode,
+    focusState.recordId,
+    focusState.row,
+    isDesignMode,
+    persistSurface,
+    runtimeState,
+    setFocus,
+  ]);
 
   const updateField = useCallback(
     (key: string, patch: Partial<FieldDesignConfig>) => {
@@ -1426,7 +1499,15 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
   );
 
   const initFields = useCallback(
-    (fields: { key: string; visible?: boolean; labelEn?: string; labelDe?: string }[]) => {
+    (
+      fields: {
+        key: string;
+        visible?: boolean;
+        labelEn?: string;
+        labelDe?: string;
+        frameKey?: string | null;
+      }[],
+    ) => {
       updateRuntime((prev) => {
         const surface = "triview-detail";
         const existing = ensureSurfaceBucket(prev, surface, focusState.entity);
@@ -1450,26 +1531,61 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
-        const frameId = nextDraftId("group-frame");
-        const frameNode = createSurfaceNode(
-          surface,
-          focusState.entity,
-          "group-frame",
-          frameId,
-          "Main frame",
-          0,
-          {
-            visible: true,
-            placement: { mode: "stack", slot: null, index: 0 },
-            versionInfo: createBaseVersionInfo(
-              `layout:${focusState.entity ?? "unknown"}:${frameId}`,
-            ),
-          },
+        const seedFields = fields.map((field) => ({
+          ...field,
+          frameKey:
+            typeof field.frameKey === "string" && field.frameKey.trim().length > 0
+              ? field.frameKey.trim()
+              : null,
+        }));
+        const explicitFrameKeys = Array.from(
+          new Set(
+            seedFields
+              .map((field) => field.frameKey)
+              .filter((frameKey): frameKey is string => !!frameKey),
+          ),
         );
+        const hasExplicitFrames = explicitFrameKeys.length > 0;
+        const primaryFrameId = hasExplicitFrames ? explicitFrameKeys[0] : nextDraftId("group-frame");
+        const frameNodes = hasExplicitFrames
+          ? explicitFrameKeys.map((frameKey, index) =>
+              createSurfaceNode(
+                surface,
+                focusState.entity,
+                "group-frame",
+                frameKey,
+                humanizeFrameKey(frameKey),
+                index,
+                {
+                  visible: true,
+                  placement: { mode: "stack", slot: null, index },
+                  versionInfo: createBaseVersionInfo(
+                    `layout:${focusState.entity ?? "unknown"}:${frameKey}`,
+                  ),
+                },
+              ),
+            )
+          : [
+              createSurfaceNode(
+                surface,
+                focusState.entity,
+                "group-frame",
+                primaryFrameId,
+                "Main frame",
+                0,
+                {
+                  visible: true,
+                  placement: { mode: "stack", slot: null, index: 0 },
+                  versionInfo: createBaseVersionInfo(
+                    `layout:${focusState.entity ?? "unknown"}:${primaryFrameId}`,
+                  ),
+                },
+              ),
+            ];
 
         const nodes = [
-          frameNode,
-          ...fields.map((field, index) =>
+          ...frameNodes,
+          ...seedFields.map((field, index) =>
             createSurfaceNode(
               surface,
               focusState.entity,
@@ -1479,7 +1595,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
               index,
               {
                 visible: field.visible !== false,
-                parentId: frameId,
+                parentId: field.frameKey ?? primaryFrameId,
                 placement: { mode: "stack", slot: "body", index },
                 versionInfo: createBaseVersionInfo(
                   `schema:${focusState.entity ?? "unknown"}:${field.key}`,
@@ -1493,7 +1609,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
           ...defaultSurfaceState(surface, focusState.entity),
           baselineNodes: nodes.map((node) => ({ ...node, children: [...node.children] })),
           nodes: normalizeTreeNodes(nodes),
-          selectedNodeIds: fields.length > 0 ? [fields[0].key] : [frameId],
+          selectedNodeIds: seedFields.length > 0 ? [seedFields[0].key] : [primaryFrameId],
           versionInfo: {
             ...defaultVersionInfo,
             clientRevision: createClientRevision(),
@@ -1507,7 +1623,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
             [surface]: appendHistory(bucket, {
               action: "init",
               surface,
-              summary: `Initialized ${nodes.length} field(s)`,
+              summary: `Initialized ${seedFields.length} field(s) and ${frameNodes.length} frame(s)`,
               patchOps: [],
               revision: bucket.versionInfo.clientRevision,
             }),
@@ -1633,40 +1749,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       isEnabled: (state) => isDesignerContext(state.area),
       handler: () => toggleDesignMode(),
     });
-    const unregisterReset = registerCommand({
-      id: "designer.reset",
-      scope: "context",
-      group: "workflow",
-      label: { en: "Reset Designer Draft", de: "Designer-Entwurf zurücksetzen" },
-      isEnabled: () => isDesignMode,
-      handler: () => {
-        resetDelta();
-      },
-    });
-    const unregisterApply = registerCommand({
-      id: "designer.apply",
-      scope: "context",
-      group: "workflow",
-      label: { en: "Save & Close Designer", de: "Speichern & Schließen" },
-      shortcut: "F10",
-      isEnabled: () => isDesignMode,
-      handler: async () => {
-        const applied = await applyDesign();
-        if (applied && isDesignMode) {
-          await closeDesignMode();
-        }
-      },
-    });
-    const unregisterReconcile = registerCommand({
-      id: "designer.reconcile",
-      scope: "context",
-      group: "workflow",
-      label: { en: "Reconcile Designer Draft", de: "Designer-Entwurf abgleichen" },
-      isEnabled: () => isDesignMode,
-      handler: () => {
-        void reconcileDesign();
-      },
-    });
     const unregisterClose = registerCommand({
       id: "designer.close",
       scope: "global",
@@ -1674,23 +1756,18 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       label: { en: "Close Designer", de: "Designer schließen" },
       shortcut: "Escape",
       isEnabled: (state) => state.area === "designer" || isDesignMode,
-      handler: () => closeDesignMode(),
+      handler: async () => { closeDesignMode(); },
     });
 
     return () => {
       unregisterToggle();
-      unregisterReset();
-      unregisterApply();
-      unregisterReconcile();
       unregisterClose();
     };
+  // eslint-disable-next-line
   }, [
-    applyDesign,
     closeDesignMode,
     isDesignMode,
     registerCommand,
-    reconcileDesign,
-    resetDelta,
     toggleDesignMode,
   ]);
 

@@ -35,4 +35,6 @@ yarn-error.log*
 .tanstack
 worker-configuration.d.ts
 .runs/
-
+playwright-report/
+test-results/
+zero-mail-reference/

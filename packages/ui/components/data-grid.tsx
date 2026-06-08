@@ -184,7 +184,7 @@ function parseColumnOrder(value: unknown): string[] | null {
   return null;
 }
 
-function normalizeColumnOrder(order: string[] | null, columns: ColumnDef<any>[]) {
+function normalizeColumnOrder(order: string[] | null, columns: Array<{ key: string }>) {
   const normalized = order?.filter((key) => columns.some((column) => column.key === key)) ?? [];
   const seen = new Set(normalized);
   for (const column of columns) {
@@ -238,7 +238,7 @@ export function getGridColumnOrderStorageKey(
 }
 
 export function resolveGridLayoutState(params: {
-  columns: Array<{ key: string }>;
+  columns: Array<ColumnDef<any>>;
   layoutResponse: Record<string, unknown> | null | undefined;
   storedColumnOrder: string[] | null;
 }) {

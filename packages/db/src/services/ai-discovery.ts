@@ -99,8 +99,55 @@ const SEMANTIC_RELATIONSHIPS: SemanticRelationship[] = [
   },
 ];
 
+function inferLookupTableName(entityName: string, colName: string, schemaRef: typeof schema) {
+  if (colName === "variantId") return "articleVariant";
+  if (colName === "optionId") return "articleOption";
+  if (colName === "valueId") return "articleOptionValue";
+
+  if (colName.endsWith("Id")) {
+    const potentialEntity = colName.slice(0, -2);
+    if ((schemaRef as any)[potentialEntity] && potentialEntity !== entityName) {
+      return potentialEntity;
+    }
+  }
+
+  return undefined;
+}
+
 // Fallback seed commands when the database entity_commands table is empty
 const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
+  {
+    commandKey: "generateVariants",
+    label: "Varianten erzeugen",
+    description:
+      "Erzeugt fehlende article_variant- und inventory_item-Datensätze aus den definierten Artikeloptionen.",
+    writesTables: ["article", "article_variant", "article_variant_option_value", "inventory_item"],
+    inputSchema: {
+      type: "object",
+      required: ["articleId"],
+      properties: {
+        articleId: { type: "string", format: "uuid" },
+      },
+    },
+  },
+  {
+    commandKey: "archiveVariants",
+    label: "Varianten archivieren",
+    description:
+      "Archiviert die aktiven Varianten eines Artikels, ohne historische Referenzen hart zu löschen.",
+    writesTables: ["article", "article_variant", "inventory_item"],
+    inputSchema: {
+      type: "object",
+      required: ["articleId"],
+      properties: {
+        articleId: { type: "string", format: "uuid" },
+        variantIds: {
+          type: "array",
+          items: { type: "string", format: "uuid" },
+        },
+      },
+    },
+  },
   {
     commandKey: "create-document-draft-from-ai-plan",
     label: "Belegentwurf aus KI-Plan erstellen",
@@ -267,6 +314,29 @@ export class AIDiscoveryService {
         ],
       },
       {
+        entityName: "articleVariant",
+        businessName: "Artikelvariante",
+        module: "Articles",
+        description:
+          "Operative SKU-Einheit eines Artikels mit Optionskombination, Lageranbindung und eigener Verfügbarkeit.",
+        scopes: ["erp_documents", "sales", "purchase", "logistics"],
+      },
+      {
+        entityName: "articleOption",
+        businessName: "Artikeloption",
+        module: "Articles",
+        description: "Variantenachse wie Farbe, Größe oder Material für einen Artikel.",
+        scopes: ["erp_documents", "sales", "purchase", "logistics"],
+      },
+      {
+        entityName: "inventoryItem",
+        businessName: "Lagerartikel",
+        module: "Articles",
+        description:
+          "Lagerführende Einheit einer Variante als operativer Anker für Bestände und Bewegungen.",
+        scopes: ["erp_documents", "sales", "purchase", "logistics"],
+      },
+      {
         entityName: "articleGroup",
         businessName: "Warengruppe",
         module: "Articles",
@@ -383,9 +453,7 @@ export class AIDiscoveryService {
       else if (colType === "PgBoolean") dataType = "boolean";
       else if (colType === "PgTimestamp" || colType === "PgDate") dataType = "timestamp";
 
-      const lookupTable =
-        tf?.lookupTable ||
-        (colKey.endsWith("Id") && colKey !== "tenantId" ? colKey.slice(0, -2) : undefined);
+      const lookupTable = tf?.lookupTable || inferLookupTableName(entityName, colKey, schema);
       if (lookupTable && (schema as any)[lookupTable]) {
         dataType = "lookup";
       }

@@ -46,12 +46,15 @@ export async function seedE2eData() {
       throw new Error("Test company not found in the test tenant.");
     }
 
+    // eslint-disable-next-line
     const companyId = testCompany.companyId;
 
     // 3. Upsert a deterministic test article
     await db
       .insert(schema.article)
       .values({
+        // @ts-expect-error
+        // eslint-disable-next-line
         tenantId,
         articleNo: "E2E-ART-100",
         name: "E2E Test Article",

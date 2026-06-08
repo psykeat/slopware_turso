@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { cn } from "../lib/utils";
 import { useDesigner, type FieldDesignConfig } from "../platform/designer-context";
 import { useFocus } from "../platform/focus-manager";
+import { InlineDesigner } from "./inline-designer";
 import { LookupField, buildLookupConfigFromField, createRemoteLookupSource } from "./lookup-field";
 import { Skeleton } from "./skeleton";
 
@@ -16,6 +17,7 @@ export interface FieldDef {
   key: string;
   label: string;
   labelDe?: string;
+  frameKey?: string | null;
   type: "text" | "number" | "date" | "boolean" | "lookup" | "textarea" | "select" | "password";
   required?: boolean;
   readonly?: boolean;
@@ -37,7 +39,6 @@ export interface FieldDef {
   styleTokenBinding?: string | null;
   labelStyle?: "normal" | "bold" | "italic";
   labelTone?: "default" | "muted" | "accent" | "danger";
-  /** Renders a visual section divider above this field */
   sectionLabel?: string;
   sectionLabelDe?: string;
   visible?: boolean;
@@ -89,6 +90,15 @@ const LABEL_TONE_CLASSES: Record<NonNullable<FieldDesignConfig["labelTone"]>, st
   accent: "text-primary",
   danger: "text-destructive",
 };
+
+function formatFrameLabel(frameKey: string) {
+  const compact = frameKey
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim();
+  if (!compact) return frameKey;
+  return compact.charAt(0).toUpperCase() + compact.slice(1);
+}
 
 function getFieldLabelClasses(field: FieldDef) {
   return cn(
@@ -307,7 +317,7 @@ export function EntityMask({
     selectDesignerNodes,
     updateDelta,
   } = useDesigner();
-  const { state: focusState, setFocus } = useFocus();
+  const { state: focusState, setFocus, resetFocus } = useFocus();
 
   const [metaFields, setMetaFields] = useState<FieldDef[]>([]);
   const [loading, setLoading] = useState(!propFields && !!entityName);
@@ -478,6 +488,7 @@ export function EntityMask({
         visible: f.visible !== false,
         labelEn: f.label,
         labelDe: f.labelDe,
+        frameKey: f.frameKey ?? null,
       })),
     );
   }, [entityName, fields, initFields]);
@@ -517,6 +528,7 @@ export function EntityMask({
           ...baseField,
           label: config.labelEnOverride ?? baseField.label,
           labelDe: config.labelDeOverride ?? baseField.labelDe,
+          frameKey: config.frameKey ?? baseField.frameKey ?? null,
           readonly: config.readonlyOverride ?? baseField.readonly,
           required: config.requiredOverride ?? baseField.required,
           visible: config.visible,
@@ -537,6 +549,7 @@ export function EntityMask({
           ...field,
           label: config.labelEnOverride ?? field.label,
           labelDe: config.labelDeOverride ?? field.labelDe,
+          frameKey: config.frameKey ?? field.frameKey ?? null,
           readonly: config.readonlyOverride ?? field.readonly,
           required: config.requiredOverride ?? field.required,
           visible: config.visible,
@@ -558,6 +571,7 @@ export function EntityMask({
         readonly: config.readonlyOverride ?? false,
         visible: config.visible,
         jsonPath: config.path ?? config.key,
+        frameKey: config.frameKey ?? null,
         styleTokenBinding: normalizeStyleBinding(
           { key: config.key, label: config.labelEnOverride ?? config.key, type: "text" },
           config,
@@ -569,22 +583,31 @@ export function EntityMask({
     return [...orderedFields, ...remainingFields, ...draftOnlyFields];
   }, [designerFieldConfigs, delta.fieldConfigs, fields, isDesignMode]);
 
-  const groupedFields = useMemo(() => {
-    const fieldToFrame = new Map<string, string>();
+  const fieldFrameByKey = useMemo(() => {
+    const resolved = new Map<string, string>();
+
+    for (const field of fields) {
+      if (field.frameKey) {
+        resolved.set(field.key, field.frameKey);
+      }
+    }
+
     for (const config of delta.fieldConfigs) {
       if (config.frameKey) {
-        fieldToFrame.set(config.key, config.frameKey);
+        resolved.set(config.key, config.frameKey);
       }
     }
 
-    if (activeSurfaceState?.nodes) {
-      for (const node of activeSurfaceState.nodes) {
-        if ((node.kind === "field-ref" || node.kind === "jsonb-field") && node.parentId) {
-          fieldToFrame.set(node.id, node.parentId);
-        }
+    for (const node of activeSurfaceState?.nodes ?? []) {
+      if ((node.kind === "field-ref" || node.kind === "jsonb-field") && node.parentId) {
+        resolved.set(node.id, node.parentId);
       }
     }
 
+    return resolved;
+  }, [activeSurfaceState?.nodes, delta.fieldConfigs, fields]);
+
+  const groupedFields = useMemo(() => {
     const frameLabelById = new Map<string, string>();
     for (const frame of frameNodes) {
       frameLabelById.set(frame.id, frame.label);
@@ -592,6 +615,7 @@ export function EntityMask({
 
     const groups = new Map<string, { frameId: string; label: string; fields: FieldDef[] }>();
     const orderedGroupIds: string[] = [];
+    const primaryFrameId = frameNodes[0]?.id ?? null;
 
     const ensureGroup = (frameId: string, label: string) => {
       const existing = groups.get(frameId);
@@ -613,13 +637,18 @@ export function EntityMask({
     }
 
     for (const field of effectiveFields) {
-      const frameId = fieldToFrame.get(field.key) ?? "default";
-      const label = frameId === "default" ? "" : (frameLabelById.get(frameId) ?? frameId);
+      const frameId = fieldFrameByKey.get(field.key) ?? primaryFrameId ?? "default";
+      const label =
+        frameId === "default"
+          ? ""
+          : (frameLabelById.get(frameId) || formatFrameLabel(frameId));
       ensureGroup(frameId, label).fields.push(field);
     }
 
     if (!groups.has("default")) {
-      const remaining = effectiveFields.filter((field) => !fieldToFrame.has(field.key));
+      const remaining = effectiveFields.filter(
+        (field) => !fieldFrameByKey.has(field.key) && primaryFrameId === null,
+      );
       if (remaining.length > 0 || frameNodes.length === 0) {
         groups.set("default", { frameId: "default", label: "", fields: remaining });
         orderedGroupIds.push("default");
@@ -633,7 +662,7 @@ export function EntityMask({
         if (group.frameId === "default") return group.fields.length > 0 || frameNodes.length === 0;
         return group.fields.length > 0 || isDesignMode;
       });
-  }, [activeSurfaceState?.nodes, delta.fieldConfigs, effectiveFields, frameNodes, isDesignMode]);
+  }, [effectiveFields, fieldFrameByKey, frameNodes, isDesignMode]);
 
   const fieldByKey = useMemo(
     () => new Map(effectiveFields.map((field) => [field.key, field])),
@@ -674,15 +703,18 @@ export function EntityMask({
   );
 
   useEffect(() => {
-    if (!isDesignMode || !entityName) return;
+    if (!entityName) return;
     setFocus({
-      area: "designer",
+      area: isDesignMode ? "designer" : "form",
       entity: entityName,
       recordId: recordId ?? null,
       mode: mode ?? (recordId ? "edit" : null),
       field: null,
     });
-  }, [entityName, isDesignMode, mode, recordId, setFocus]);
+    return () => {
+      resetFocus();
+    };
+  }, [entityName, isDesignMode, mode, recordId, setFocus, resetFocus]);
 
   // Sync editorFieldKey state on render instead of effect to avoid setState-in-effect warning
   const lastSelectedFieldKeyRef = useRef(selectedFieldKey);
@@ -1216,23 +1248,7 @@ export function EntityMask({
           <div className={cn("grid gap-x-6 gap-y-5", fieldGridClass)}>
             {visibleFields.length > 0
               ? visibleFields.map((field) => (
-                  <React.Fragment key={field.key}>
-                    {field.sectionLabel && (
-                      <div
-                        className={cn(
-                          "-mb-2 border-t border-hairline pt-2",
-                          fieldGridClass === "grid-cols-2" ? "col-span-2" : "",
-                        )}
-                      >
-                        <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                          {i18n.language === "de" && field.sectionLabelDe
-                            ? field.sectionLabelDe
-                            : field.sectionLabel}
-                        </span>
-                      </div>
-                    )}
-                    {renderFieldCard(field)}
-                  </React.Fragment>
+                  <React.Fragment key={field.key}>{renderFieldCard(field)}</React.Fragment>
                 ))
               : isDesignMode && (
                   <div className="text-ink-muted col-span-full rounded-lg border border-dashed border-hairline px-3 py-4 text-[12px]">
@@ -1327,11 +1343,15 @@ export function EntityMask({
   const editorIsJsonb = !!editorField?.jsonPath && editorField.jsonPath !== editorField.key;
   const editorFrameId = editorFieldKey
     ? (delta.fieldConfigs.find((config) => config.key === editorFieldKey)?.frameKey ??
+      fieldFrameByKey.get(editorFieldKey) ??
       frameNodes[0]?.id ??
       "frame:main")
     : (frameNodes[0]?.id ?? "frame:main");
   const editorFrameLabel =
-    frameNodes.find((frame) => frame.id === editorFrameId)?.label ?? "Main frame";
+    frameNodes.find((frame) => frame.id === editorFrameId)?.label ||
+    (editorFrameId === "frame:main" || editorFrameId === "default"
+      ? "Main frame"
+      : formatFrameLabel(editorFrameId));
   const editorSiblings = effectiveFields.filter(visibleFieldInLiveView);
   const editorIndex = editorFieldKey
     ? editorSiblings.findIndex((field) => field.key === editorFieldKey)
@@ -1702,8 +1722,10 @@ export function EntityMask({
 
   const footer = <div className="mt-6 border-t border-hairline pt-5">{footerButtons}</div>;
 
+  let renderedContent;
+
   if (inline) {
-    return (
+    renderedContent = (
       <div ref={formRef} className={cn("p-4", className)}>
         {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
         <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
@@ -1713,10 +1735,8 @@ export function EntityMask({
         {footer}
       </div>
     );
-  }
-
-  if (embedded && childLayout === "side" && hasChildContent) {
-    return (
+  } else if (embedded && childLayout === "side" && hasChildContent) {
+    renderedContent = (
       <div ref={formRef} className={cn("flex h-full flex-col overflow-hidden", className)}>
         <div className="flex min-h-0 flex-1 divide-x divide-hairline overflow-hidden">
           <div className="w-[40%] shrink-0 overflow-y-auto bg-canvas-soft/30 p-6">
@@ -1744,11 +1764,20 @@ export function EntityMask({
         <div className="shrink-0 border-t border-hairline bg-canvas px-6 py-4">{footerButtons}</div>
       </div>
     );
-  }
-
-  if (embedded) {
-    return (
+  } else if (embedded) {
+    renderedContent = (
       <div ref={formRef} className={cn("overflow-auto p-4", className)}>
+        {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
+        <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
+        {fieldsGrid}
+        {editorOverlay}
+        {childSectionNode}
+        {footer}
+      </div>
+    );
+  } else {
+    renderedContent = (
+      <div ref={formRef} className={cn("mx-auto my-8 max-w-2xl", shellClassName, className)}>
         {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
         <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
         {fieldsGrid}
@@ -1760,13 +1789,9 @@ export function EntityMask({
   }
 
   return (
-    <div ref={formRef} className={cn("mx-auto my-8 max-w-2xl", shellClassName, className)}>
-      {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
-      <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
-      {fieldsGrid}
-      {editorOverlay}
-      {childSectionNode}
-      {footer}
-    </div>
+    <>
+      {renderedContent}
+      {isDesignMode && <InlineDesigner />}
+    </>
   );
 }

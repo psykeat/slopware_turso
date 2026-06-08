@@ -13,6 +13,7 @@ interface StockLedgerRow {
   reference_text: string | null;
   document_no: string | null;
   warehouse_name: string | null;
+  variant_sku: string | null;
   running_balance: string | null;
 }
 
@@ -54,7 +55,10 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
             <th className={colHeaderClassLeft} style={{ width: "14%" }}>
               Beleg-Nr
             </th>
-            <th className={colHeaderClassLeft} style={{ width: "20%" }}>
+            <th className={colHeaderClassLeft} style={{ width: "16%" }}>
+              Variante
+            </th>
+            <th className={colHeaderClassLeft} style={{ width: "14%" }}>
               Lagerort
             </th>
             <th className={colHeaderClass} style={{ width: "14%" }}>
@@ -76,6 +80,9 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
               </td>
               <td className={cellClassLeft}>
                 <Skeleton className="h-3 w-20 font-mono" />
+              </td>
+              <td className={cellClassLeft}>
+                <Skeleton className="h-3 w-16" />
               </td>
               <td className={cellClassLeft}>
                 <Skeleton className="h-3 w-24" />
@@ -114,7 +121,10 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
           <th className={colHeaderClassLeft} style={{ width: "14%" }}>
             Beleg-Nr
           </th>
-          <th className={colHeaderClassLeft} style={{ width: "22%" }}>
+          <th className={colHeaderClassLeft} style={{ width: "16%" }}>
+            Variante
+          </th>
+          <th className={colHeaderClassLeft} style={{ width: "16%" }}>
             Lagerort
           </th>
           <th className={colHeaderClass} style={{ width: "14%" }}>
@@ -145,6 +155,11 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
               <td className={cellClassLeft}>
                 <span className="font-mono text-[12px]" title={docNo}>
                   {truncatedDocNo || <span className="text-ink-mute">—</span>}
+                </span>
+              </td>
+              <td className={cellClassLeft}>
+                <span className="font-mono text-[12px] text-ink-secondary">
+                  {row.variant_sku ?? <span className="text-ink-mute">—</span>}
                 </span>
               </td>
               <td className={cellClassLeft}>

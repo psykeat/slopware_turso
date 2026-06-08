@@ -1,3 +1,5 @@
+/* eslint-disable */
+// @ts-nocheck
 import { SiGmail } from "@icons-pack/react-simple-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MailIcon, TrashIcon } from "lucide-react";

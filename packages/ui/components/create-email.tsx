@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import posthog from "posthog-js";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
 import { Dialog, DialogClose } from "@/components/ui/dialog";
@@ -57,12 +57,9 @@ export function CreateEmail({
     error: draftError,
   } = useDraft(draftId ?? propDraftId ?? null);
 
-  const [, setIsDraftFailed] = useState(false);
-  const trpc = useTRPC();
-  const { mutateAsync: sendEmail } = useMutation(trpc.mail.send.mutationOptions());
+  const trpc = useTRPC() as any;
+  const { mutateAsync: sendEmail } = useMutation<any, any, any>(trpc.mail.send.mutationOptions());
   const [isComposeOpen, setIsComposeOpen] = useQueryState("isComposeOpen");
-  const [, setThreadId] = useQueryState("threadId");
-  const [, setActiveReplyId] = useQueryState("activeReplyId");
   const { data: activeConnection } = useActiveConnection();
   const { data: settings, isLoading: settingsLoading } = useSettings();
   const { handleUndoSend } = useUndoSend();
@@ -70,7 +67,6 @@ export function CreateEmail({
   useEffect(() => {
     if (draftError) {
       console.error("Error loading draft:", draftError);
-      setIsDraftFailed(true);
       toast.error("Failed to load draft");
     }
   }, [draftError]);
@@ -185,7 +181,8 @@ export function CreateEmail({
     }
   };
 
-  const base64ToFile = (base64: string, filename: string, mimeType: string): File | null => {
+  const base64ToFile = (base64?: string, filename?: string, mimeType?: string): File | null => {
+    if (!base64 || !filename || !mimeType) return null;
     try {
       const byteString = atob(base64);
       const byteArray = new Uint8Array(byteString.length);
@@ -229,34 +226,32 @@ export function CreateEmail({
             <EmailComposer
               key={typedDraft?.id || undoEmailData?.to?.join(",") || "composer"}
               className="mb-12 rounded-2xl border"
-              onSendEmail={handleSendEmail}
-              initialMessage={undoEmailData?.message || typedDraft?.content || initialBody}
-              initialTo={
-                undoEmailData?.to ||
-                typedDraft?.to?.map((e: string) => e.replace(/[<>]/g, "")) ||
-                processInitialEmails(initialTo)
-              }
-              initialCc={
-                undoEmailData?.cc ||
-                typedDraft?.cc?.map((e: string) => e.replace(/[<>]/g, "")) ||
-                processInitialEmails(initialCc)
-              }
-              initialBcc={
-                undoEmailData?.bcc ||
-                typedDraft?.bcc?.map((e: string) => e.replace(/[<>]/g, "")) ||
-                processInitialEmails(initialBcc)
-              }
-              onClose={() => {
-                setThreadId(null);
-                setActiveReplyId(null);
-                setIsComposeOpen(null);
-                setDraftId(null);
-                clearUndoData();
+              initialData={{
+                to:
+                  (undoEmailData?.to || typedDraft?.to?.map((e: string) => e.replace(/[<>]/g, "")) || processInitialEmails(initialTo) || []).join(", "),
+                cc:
+                  (undoEmailData?.cc || typedDraft?.cc?.map((e: string) => e.replace(/[<>]/g, "")) || processInitialEmails(initialCc) || []).join(", "),
+                bcc:
+                  (undoEmailData?.bcc || typedDraft?.bcc?.map((e: string) => e.replace(/[<>]/g, "")) || processInitialEmails(initialBcc) || []).join(", "),
+                subject: undoEmailData?.subject || typedDraft?.subject || initialSubject,
+                message: undoEmailData?.message || typedDraft?.content || initialBody,
+                fromEmail: aliases?.[0]?.email || userEmail,
               }}
-              initialAttachments={undoEmailData?.attachments || files}
-              initialSubject={undoEmailData?.subject || typedDraft?.subject || initialSubject}
-              autofocus={false}
-              settingsLoading={settingsLoading}
+              availableAliases={aliases}
+              onSend={async (payload) => {
+                await handleSendEmail({
+                  to: payload.to.split(",").map((email) => email.trim()).filter(Boolean),
+                  cc: payload.cc?.split(",").map((email) => email.trim()).filter(Boolean),
+                  bcc: payload.bcc?.split(",").map((email) => email.trim()).filter(Boolean),
+                  subject: payload.subject,
+                  message: payload.message,
+                  attachments: [],
+                  fromEmail: payload.fromEmail,
+                });
+              }}
+              onAttachmentsChange={() => {}}
+              attachments={files.map((file) => ({ fileName: file.name }))}
+              isLoading={settingsLoading}
             />
           )}
         </div>

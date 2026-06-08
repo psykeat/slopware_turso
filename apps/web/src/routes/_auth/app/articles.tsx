@@ -76,11 +76,6 @@ const ARTICLE_VARIANT_FIELD_OVERRIDES = [
   { key: "optionValueHash", visible: false },
   { key: "createdAt", visible: false },
   { key: "updatedAt", visible: false },
-  { key: "sku", sectionLabel: "Identification", sectionLabelDe: "Identifikation" },
-  { key: "ean", sectionLabel: "Identification", sectionLabelDe: "Identifikation" },
-  { key: "price", sectionLabel: "Commercial", sectionLabelDe: "Kaufmännisch" },
-  { key: "weight", sectionLabel: "Commercial", sectionLabelDe: "Kaufmännisch" },
-  { key: "isActive", sectionLabel: "Availability", sectionLabelDe: "Verfügbarkeit" },
 ];
 
 function ArticleVariantsAndOptionsTab({

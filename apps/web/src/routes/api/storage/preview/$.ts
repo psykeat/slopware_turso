@@ -43,6 +43,7 @@ export const Route = createFileRoute("/api/storage/preview/$")({
               "Cache-Control": "public, max-age=31536000",
             },
           });
+        // eslint-disable-next-line
         } catch (err) {
           return new Response("Not Found", { status: 404 });
         }

@@ -10,5 +10,16 @@ services:
       - POSTGRES_PASSWORD=bvh9j35v
       - POSTGRES_DB=slopware
 
+  shopware:
+    image: dockware/play:latest
+    container_name: shopware
+    ports:
+      - "8080:80"
+      - "3306:3306"
+      - "2222:22"
+    environment:
+      - XDEBUG_ENABLED=0
+      - PHP_VERSION=8.2
+
 volumes:
   postgres_data_slopware:

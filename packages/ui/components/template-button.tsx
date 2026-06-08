@@ -55,7 +55,7 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
   bcc,
   setRecipients,
 }) => {
-  const trpc = useTRPC();
+  const trpc = useTRPC() as any;
   const queryClient = useQueryClient();
   const { data } = useTemplates();
 
@@ -78,8 +78,8 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
     return new Map(templates.map((t) => [t.id, t] as const));
   }, [templates]);
 
-  const { mutateAsync: createTemplate } = useMutation(trpc.templates.create.mutationOptions());
-  const { mutateAsync: deleteTemplateMutation } = useMutation(
+  const { mutateAsync: createTemplate } = useMutation<any, any, any>(trpc.templates.create.mutationOptions());
+  const { mutateAsync: deleteTemplateMutation } = useMutation<any, any, any>(
     trpc.templates.delete.mutationOptions(),
   );
 

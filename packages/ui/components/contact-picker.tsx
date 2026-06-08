@@ -1,6 +1,6 @@
 "use client";
 
-import { XIcon, SearchIcon, MailIcon, UserIcon } from "lucide-react";
+import { XIcon, MailIcon, UserIcon } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 
 import { cn } from "../lib/utils";
@@ -8,7 +8,6 @@ import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "./command-palette";
@@ -46,11 +45,7 @@ export function ContactPicker({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!query) {
-      setResults([]);
-      return;
-    }
-
+    if (!query) return;
     // Simulate debounce
     const timer = setTimeout(async () => {
       setIsLoading(true);
@@ -99,7 +94,15 @@ export function ContactPicker({
         "flex flex-wrap items-center gap-1.5 border-b border-border bg-background px-3 py-2 transition-colors focus-within:bg-muted/10",
         className,
       )}
+      role="group"
+      tabIndex={0}
       onClick={() => inputRef.current?.focus()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          inputRef.current?.focus();
+        }
+      }}
     >
       <span className="w-12 shrink-0 text-sm font-medium text-muted-foreground">{label}:</span>
 
@@ -149,7 +152,7 @@ export function ContactPicker({
           <PopoverContent
             className="w-[300px] p-0"
             align="start"
-            onOpenAutoFocus={(e) => e.preventDefault()}
+            onOpenAutoFocus={(e: { preventDefault: () => void }) => e.preventDefault()}
           >
             <Command>
               <CommandList>

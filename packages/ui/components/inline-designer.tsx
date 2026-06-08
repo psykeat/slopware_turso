@@ -266,9 +266,9 @@ export function InlineDesigner() {
     }
 
     if (sourceNode.kind === "group-frame") {
-      moveFrame(sourceId, targetFrameId);
+      moveFrame(sourceId!, targetFrameId);
     } else if (sourceNode.kind === "field-ref" || sourceNode.kind === "jsonb-field") {
-      moveFieldToEnd(sourceId, targetFrameId);
+      moveFieldToEnd(sourceId!, targetFrameId);
     }
 
     clearDragState();
@@ -291,7 +291,7 @@ export function InlineDesigner() {
       return;
     }
 
-    moveField(sourceId, targetFieldId);
+    moveField(sourceId!, targetFieldId);
     clearDragState();
   };
 

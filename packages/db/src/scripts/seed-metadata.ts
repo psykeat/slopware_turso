@@ -52,6 +52,10 @@ const entityLabelMap: EntityLabelMap = {
   postalCode: { en: "Postal Codes", de: "PLZ-Verzeichnis" },
   address: { en: "Addresses", de: "Adressen" },
   article: { en: "Articles", de: "Artikel" },
+  articleVariant: { en: "Article Variants", de: "Artikelvarianten" },
+  articleOption: { en: "Article Options", de: "Artikeloptionen" },
+  articleOptionValue: { en: "Article Option Values", de: "Artikeloptionswerte" },
+  inventoryItem: { en: "Inventory Items", de: "Lagerartikel" },
   document: { en: "Documents", de: "Belege" },
   tenantLlmConfig: { en: "Tenant LLM Config", de: "Mandanten-KI-Konfiguration" },
   tenantEmailSettings: { en: "Email Settings", de: "E-Mail Einstellungen" },
@@ -173,6 +177,18 @@ function getLookupTableName(
   key: string,
   schemaRef: typeof schema,
 ): string | undefined {
+  if (colName === "variantId") {
+    return "articleVariant";
+  }
+
+  if (colName === "optionId") {
+    return "articleOption";
+  }
+
+  if (colName === "valueId") {
+    return "articleOptionValue";
+  }
+
   if (colName.endsWith(lookupSuffix)) {
     const potentialEntity = colName.slice(0, -lookupSuffix.length);
     if ((schemaRef as any)[potentialEntity] && potentialEntity !== key) {
@@ -266,6 +282,128 @@ function getHelperTablePayload(key: string, columns: Record<string, unknown>) {
   };
 }
 
+function buildExplicitHelperTableRegistrations(key: string): HelperTableRegistration[] {
+  const registrations: HelperTableRegistration[] = [];
+
+  if (key === "articleVariant") {
+    registrations.push({
+      payload: {
+        tableName: key,
+        label: getEntityLabel(key),
+        pkColumn: "variantId",
+        displayColumn: "lookupLabel",
+        codeColumn: "sku",
+        valueColumn: "variantId",
+        sortColumn: "sku",
+        isTenantScoped: true,
+        displayIsI18n: false,
+        group: "lager_artikel",
+        category: "commerce",
+      },
+      conflictSet: {
+        pkColumn: "variantId",
+        displayColumn: "lookupLabel",
+        codeColumn: "sku",
+        valueColumn: "variantId",
+        sortColumn: "sku",
+        isTenantScoped: true,
+        group: "lager_artikel",
+        category: "commerce",
+        label: getEntityLabel(key),
+      },
+    });
+  }
+
+  if (key === "articleOption") {
+    registrations.push({
+      payload: {
+        tableName: key,
+        label: getEntityLabel(key),
+        pkColumn: "optionId",
+        displayColumn: "name",
+        codeColumn: "name",
+        valueColumn: "optionId",
+        sortColumn: "sortOrder",
+        isTenantScoped: true,
+        displayIsI18n: false,
+        group: "lager_artikel",
+        category: "commerce",
+      },
+      conflictSet: {
+        pkColumn: "optionId",
+        displayColumn: "name",
+        codeColumn: "name",
+        valueColumn: "optionId",
+        sortColumn: "sortOrder",
+        isTenantScoped: true,
+        group: "lager_artikel",
+        category: "commerce",
+        label: getEntityLabel(key),
+      },
+    });
+  }
+
+  if (key === "articleOptionValue") {
+    registrations.push({
+      payload: {
+        tableName: key,
+        label: getEntityLabel(key),
+        pkColumn: "valueId",
+        displayColumn: "value",
+        codeColumn: "value",
+        valueColumn: "valueId",
+        sortColumn: "sortOrder",
+        isTenantScoped: true,
+        displayIsI18n: false,
+        group: "lager_artikel",
+        category: "commerce",
+      },
+      conflictSet: {
+        pkColumn: "valueId",
+        displayColumn: "value",
+        codeColumn: "value",
+        valueColumn: "valueId",
+        sortColumn: "sortOrder",
+        isTenantScoped: true,
+        group: "lager_artikel",
+        category: "commerce",
+        label: getEntityLabel(key),
+      },
+    });
+  }
+
+  if (key === "inventoryItem") {
+    registrations.push({
+      payload: {
+        tableName: key,
+        label: getEntityLabel(key),
+        pkColumn: "itemId",
+        displayColumn: "sku",
+        codeColumn: "sku",
+        valueColumn: "itemId",
+        sortColumn: "sku",
+        isTenantScoped: true,
+        displayIsI18n: false,
+        group: "lager_artikel",
+        category: "commerce",
+      },
+      conflictSet: {
+        pkColumn: "itemId",
+        displayColumn: "sku",
+        codeColumn: "sku",
+        valueColumn: "itemId",
+        sortColumn: "sku",
+        isTenantScoped: true,
+        group: "lager_artikel",
+        category: "commerce",
+        label: getEntityLabel(key),
+      },
+    });
+  }
+
+  return registrations;
+}
+
 function getTenantFieldPayload(key: string, colName: string, col: any, schemaRef: typeof schema) {
   const columnType = col.columnType;
   const lookupTable = getLookupTableName(colName, key, schemaRef);
@@ -307,6 +445,10 @@ function discoverSchemaMetadata(): {
         payload: helperTable.payload,
         conflictSet: helperTable.conflictSet,
       });
+    }
+
+    for (const explicitHelperTable of buildExplicitHelperTableRegistrations(key)) {
+      helperTables.push(explicitHelperTable);
     }
 
     for (const [colName, col] of Object.entries(columns)) {
@@ -366,6 +508,7 @@ export function planTenantFieldReconciliation(
 
   for (const field of discoveredFields) {
     const fieldKey = `${field.entityName}:${field.fieldName}`;
+    // @ts-ignore
     const existingField = existingFieldMap.get(fieldKey);
 
     if (!existingField) {

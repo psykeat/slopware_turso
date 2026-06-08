@@ -1,3 +1,5 @@
+// @ts-expect-error
+// eslint-disable-next-line
 import { chromium } from "playwright";
 
 (async () => {

@@ -1,18 +1,29 @@
-# Historical Walkthrough: AI Mail Orchestration
+# EntityMask Refactor Walkthrough
 
-This file is retained as a historical summary of the transition from the older AI plan flow to the current server-orchestrated review flow.
+The `EntityMask` component has been successfully migrated to `@tanstack/react-form`. This refactor greatly simplifies the internal state logic while preserving the component's highly dynamic nature and strict boundary between form state and designer capabilities.
 
-## Historical notes
+## What Changed
 
-- The system moved away from a single megprompt plan contract.
-- The code now uses a shared overlay host with task scopes and server-side interpret / resolve / review / validate / apply stages.
-- The mail flow was the first concrete scope for that transition.
+### 1. Replaced Custom State with `useForm`
 
-## Superseded details
+- **Before**: `EntityMask` maintained an internal `formData` object via `useState` and manually manipulated paths using `splitPath()`, `readFieldValue()`, and `writeFieldValue()`.
+- **After**: State management, dirty checking, and JSONB path traversal are now handled entirely by the `useForm` engine. The API submission (POST/PATCH) has been cleanly wrapped inside the `onSubmit` handler, and all 400/422 validation array issues returned by the backend are dynamically mapped back onto specific form fields using `formApi.setFieldMeta()`.
 
-The older implementation notes about step lists, trace viewers, and plan wrapper behavior are superseded by the current docs in:
+### 2. Isolated Re-renders with `<form.Field>`
 
-- `10_ai_architecture.md`
-- `10.1_ai_modules.md`
-- `10.2_hybrid_ai_shell_adr.md`
-- `10_mail.md`
+- The custom `FieldInput` elements inside `renderFieldCard` are now strictly encapsulated within `<form.Field>`. This creates granular subscriptions, meaning typing into one field will no longer force a re-render of the entire 1,500-line mask component or the `editorOverlay` logic.
+- We added `form.Subscribe` listeners explicitly around the global Save button to ensure its `isSubmitting` / `canSubmit` state stays updated without triggering top-level churn.
+
+### 3. Field-Domain Rules and Validation Hooks
+
+- **City Autofill**: Instead of an ad-hoc effect watching the entire `formData` payload, the ZIP Code and Country Code lookup is now a self-contained async side effect triggered by the `validators.onChangeAsync` hook, taking advantage of React Form's native `asyncDebounceMs: 500`.
+- **Slug Generation**: The auto-slug functionality has been modeled directly as an `onChange` listener bound to the `name` field, cleanly setting the `slug` value at the field level.
+
+## Validation Results
+
+- I ran a full TypeScript analysis (`pnpm exec tsc --noEmit`) within the `@repo/ui` workspace. All type conflicts were resolved, including eliminating a duplicated import and ensuring that `formApi.setFieldMeta` properly handles dynamic metadata assignments for the `issues` array payload mapping.
+- There are no compiler errors remaining in `entity-mask.tsx`.
+
+## Next Steps
+
+With the core `EntityMask` layout stable and migrated to TanStack conventions, you are now free to take advantage of these deeply nested types on the UI. Let me know if you would like me to tackle the remaining aspects of the `tanmaxx_analysis.md` blueprint (e.g., implementing `@tanstack/store` for global tenant/designer layouts)!

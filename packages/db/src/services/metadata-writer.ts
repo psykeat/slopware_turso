@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "../index";
 import { metadataHistory, tenantFields, tenantGroups, tenantLayouts } from "../schema/app.schema";
@@ -225,9 +225,24 @@ function buildPatchMeta(
 
 export class MetadataWriter {
   private context: MetadataWriterContext;
+  private metadataHistoryTableExistsPromise: Promise<boolean> | null = null;
 
   constructor(context: MetadataWriterContext) {
     this.context = context;
+  }
+
+  private async hasMetadataHistoryTable() {
+    if (!this.metadataHistoryTableExistsPromise) {
+      this.metadataHistoryTableExistsPromise = (async () => {
+        const rows = (await db.execute(sql`
+          SELECT to_regclass('public.metadata_history') IS NOT NULL AS table_exists
+        `)) as Array<{ table_exists: boolean }>;
+
+        return rows[0]?.table_exists ?? false;
+      })().catch(() => false);
+    }
+
+    return await this.metadataHistoryTableExistsPromise;
   }
 
   private getScope() {
@@ -266,6 +281,10 @@ export class MetadataWriter {
       changeType: "insert" | "update" | "delete";
     },
   ) {
+    if (!(await this.hasMetadataHistoryTable())) {
+      return;
+    }
+
     try {
       await tx.insert(metadataHistory).values({
         tenantId: this.context.tenantId,

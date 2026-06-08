@@ -156,7 +156,15 @@ else
     exit 1
   fi
   echo "Fetching open issues from $REPO..."
-  mapfile -t ISSUE_IDS < <(gh issue list -R "$REPO" --limit "$ISSUE_LIMIT" --json number --jq '.[].number' | sort -n)
+  mapfile -t ISSUE_IDS < <(
+    gh issue list -R "$REPO" --limit "$ISSUE_LIMIT" --json number,title,milestone,labels --jq '
+      map(select(
+        ((.milestone.title // "") | test("^Epic(\\s|:)") | not)
+        and (.title | test("^Epic(\\s|:)") | not)
+        and (([.labels[].name] | index("epic")) | not)
+      )) | .[].number
+    ' | sort -n
+  )
 fi
 
 if [ "${#ISSUE_IDS[@]}" -eq 0 ]; then
@@ -226,6 +234,18 @@ run_git() {
   git "$@"
 }
 
+is_umbrella_issue() {
+  local title="$1"
+  local milestone="$2"
+  local labels="$3"
+
+  [[ "$milestone" =~ ^Epic([[:space:]:]|$) ]] && return 0
+  [[ "$title" =~ ^Epic([[:space:]:]|$) ]] && return 0
+  [[ " $labels " == *" epic "* ]] && return 0
+
+  return 1
+}
+
 if [ "$DRY_RUN" -eq 1 ]; then
   mkdir -p "$RUNS_DIR"
   for ID in "${ISSUE_IDS[@]}"; do
@@ -250,9 +270,18 @@ for ID in "${ISSUE_IDS[@]}"; do
   printf '\n[#%s] filtering...\n' "$ID"
   emit_status_json "issue_filter" "$ID" "" "" "running" "checking issue dependencies"
 
-  # Fetch body to check dependencies
-  BODY=$(gh issue view "$ID" -R "$REPO" --json body --jq '.body')
-  BODY="${BODY//\\n/$'\n'}"
+  # Fetch issue metadata once so umbrella issues can be skipped even when passed explicitly.
+  META=$(gh issue view "$ID" -R "$REPO" --json title,body,milestone,labels)
+  TITLE=$(printf '%s\n' "$META" | jq -r '.title // ""')
+  BODY=$(printf '%s\n' "$META" | jq -r '.body // ""')
+  MILESTONE=$(printf '%s\n' "$META" | jq -r '.milestone.title // ""')
+  LABELS=$(printf '%s\n' "$META" | jq -r '[.labels[].name] | join(" ")')
+
+  if is_umbrella_issue "$TITLE" "$MILESTONE" "$LABELS"; then
+    printf '  ⚠ skip #%s: umbrella issue (%s)\n' "$ID" "${MILESTONE:-epic}"
+    emit_status_json "issue_skipped" "$ID" "" "" "skipped" "umbrella issue"
+    continue
+  fi
 
   mapfile -t DEP_IDS < <(extract_blocker_ids "$BODY" | sort -u)
 
@@ -283,7 +312,6 @@ for ID in "${ISSUE_IDS[@]}"; do
     fi
   fi
 
-  TITLE=$(gh issue view "$ID" -R "$REPO" --json title --jq '.title')
   RUN_DIR=$(mktemp -d "$RUNS_DIR/issue-$ID.XXXXXX")
   printf '[#%s] processing "%s"\n' "$ID" "$(echo "$TITLE" | head -c 60)"
   emit_status_json "issue_start" "$ID" "" "" "running" "starting issue processing"

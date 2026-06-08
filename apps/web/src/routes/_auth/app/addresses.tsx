@@ -26,17 +26,13 @@ export const Route = createFileRoute("/_auth/app/addresses")({
 
 const EMPTY_ARRAY: any[] = [];
 
-const ADDRESS_FIELD_OVERRIDES = [
-  { key: "addressNo", sectionLabel: "Identification", sectionLabelDe: "Identifikation" },
-  { key: "addressLine1", sectionLabel: "Postal Address", sectionLabelDe: "Postanschrift" },
-  { key: "vatId", sectionLabel: "Commercial", sectionLabelDe: "Kaufmännisch" },
-];
-
 const ADDRESS_TEXT_FIELD_OVERRIDES = [
   { key: "notiztext", visible: false },
   { key: "warntext", visible: false },
   { key: "langtext", visible: false },
 ];
+
+const ADDRESS_FIELD_OVERRIDES_ALL = ADDRESS_TEXT_FIELD_OVERRIDES;
 
 const ADDRESS_LANGTEXT_FIELDS = [
   { field: "notiztext", label: "Notiztext" },
@@ -912,7 +908,7 @@ function AddressesModule() {
             onCancel={() => setShowCreate(false)}
             onSaved={handleCreateSaved}
             className="rounded-none border-none shadow-none"
-            fieldOverrides={[...ADDRESS_FIELD_OVERRIDES, ...ADDRESS_TEXT_FIELD_OVERRIDES]}
+            fieldOverrides={ADDRESS_FIELD_OVERRIDES_ALL}
           />
         </DialogContent>
       </Dialog>
@@ -969,7 +965,7 @@ function AddressesModule() {
             recordId={activeAddressId ?? undefined}
             onCancel={() => setShowEdit(false)}
             onSaved={handleEditSaved}
-            fieldOverrides={[...ADDRESS_FIELD_OVERRIDES, ...ADDRESS_TEXT_FIELD_OVERRIDES]}
+            fieldOverrides={ADDRESS_FIELD_OVERRIDES_ALL}
             embedded
             childLayout="side"
             childSection={(record, onChange) => (

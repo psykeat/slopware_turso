@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/documents/$documentId/print")({
             .select({
               documentLineId: documentLine.documentLineId,
               lineNo: documentLine.lineNo,
-              articleId: documentLine.articleId,
+              variantId: documentLine.variantId,
               articleTextSnapshot: documentLine.articleTextSnapshot,
               langText: documentLine.langText,
               quantity: documentLine.quantity,
@@ -60,7 +60,7 @@ export const Route = createFileRoute("/api/documents/$documentId/print")({
               primaryImageId: article.primaryImageId,
             })
             .from(documentLine)
-            .leftJoin(article, eq(documentLine.articleId, article.articleId))
+            .leftJoin(article, eq(documentLine.variantId, article.articleId))
             .where(
               and(
                 eq(documentLine.documentId, params.documentId),

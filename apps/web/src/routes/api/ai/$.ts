@@ -1168,7 +1168,9 @@ export const Route = createFileRoute("/api/ai/$")({
               typeof response === "string"
                 ? response
                 : response && typeof response === "object" && "content" in response
+                  // eslint-disable-next-line
                   ? String((response as { content: unknown }).content ?? "")
+                  // eslint-disable-next-line
                   : String(response ?? "");
 
             return new Response(JSON.stringify({ result: responseText.trim() }), {

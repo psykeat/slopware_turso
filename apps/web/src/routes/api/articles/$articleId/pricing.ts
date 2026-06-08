@@ -26,7 +26,7 @@ export const Route = createFileRoute("/api/articles/$articleId/pricing")({
 
         try {
           const svc = new DocumentService();
-          const result = await svc.resolveArticlePricing(
+          const result = await svc.resolveVariantPricing(
             params.articleId,
             customerId,
             documentDate,

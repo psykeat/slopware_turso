@@ -991,7 +991,6 @@ export const documentLine = pgTable(
       .notNull()
       .references(() => document.documentId),
     lineNo: integer("line_no").notNull(),
-    articleId: uuid("article_id").references(() => article.articleId),
     variantId: uuid("variant_id").references(() => articleVariant.variantId),
     articleTextSnapshot: text("article_text_snapshot"),
     langText: text("lang_text"),
@@ -1024,7 +1023,7 @@ export const documentLine = pgTable(
       table.archivedAt,
     ),
     unique("document_line_tenant_id_document_line_id_key").on(table.tenantId, table.documentLineId),
-    index("idx_document_line_article").on(table.articleId),
+    index("idx_document_line_article").on(table.variantId),
     index("idx_document_line_variant").on(table.variantId),
     index("idx_document_line_document").on(table.documentId),
     index("idx_document_line_tenant_document").on(table.tenantId, table.documentId),
@@ -1466,8 +1465,7 @@ export const inventoryMovement = pgTable(
     warehouseId: uuid("warehouse_id")
       .notNull()
       .references(() => warehouse.warehouseId),
-    inventoryItemId: uuid("inventory_item_id").references(() => inventoryItem.itemId),
-    articleId: uuid("article_id").notNull(),
+    inventoryItemId: uuid("inventory_item_id").notNull().references(() => inventoryItem.itemId),
     variantId: uuid("variant_id").references(() => articleVariant.variantId),
     movementType: char("movement_type", { length: 1 }).notNull(),
     qtyDelta: numeric("qty_delta"),
@@ -1484,25 +1482,12 @@ export const inventoryMovement = pgTable(
     batchNo: text("batch_no"),
   },
   (table) => [
-    index("idx_inv_movement_inventory_anchor").on(
-      table.tenantId,
-      table.warehouseId,
-      table.articleId,
-      table.variantId,
-      table.movementDate,
-    ),
     index("idx_inv_movement_date").on(table.tenantId, table.movementDate),
     index("idx_inv_movement_inventory_item_anchor").on(
       table.tenantId,
       table.warehouseId,
       table.inventoryItemId,
       table.variantId,
-      table.movementDate,
-    ),
-    index("idx_inv_movement_lookup").on(
-      table.tenantId,
-      table.warehouseId,
-      table.articleId,
       table.movementDate,
     ),
     index("idx_inv_movement_inventory_item").on(
@@ -1513,11 +1498,6 @@ export const inventoryMovement = pgTable(
     index("idx_inv_movement_variant").on(table.tenantId, table.variantId, table.movementDate),
     index("idx_inv_movement_tenant").on(table.tenantId),
     index("idx_inv_movement_tx").on(table.tenantId, table.transactionId),
-    index("idx_inv_movement_warehouse_article").on(
-      table.tenantId,
-      table.warehouseId,
-      table.articleId,
-    ),
     index("idx_inv_movement_warehouse_inventory_item").on(
       table.tenantId,
       table.warehouseId,
@@ -1526,7 +1506,7 @@ export const inventoryMovement = pgTable(
     index("idx_inventory_movement_batch_balance").on(
       table.tenantId,
       table.warehouseId,
-      table.articleId,
+      table.variantId,
       table.batchNo,
     ),
     index("idx_inventory_movement_batch_balance_item").on(
@@ -1740,14 +1720,14 @@ export const priceListItem = pgTable(
     unique("price_list_item_tenant_id_price_list_id_article_variant_valid_from_u").on(
       table.tenantId,
       table.priceListId,
-      table.articleId,
+      table.variantId,
       table.variantId,
       table.validFrom,
     ),
-    index("idx_price_list_item_article").on(table.priceListId, table.articleId, table.validFrom),
+    index("idx_price_list_item_article").on(table.priceListId, table.variantId, table.validFrom),
     index("idx_price_list_item_lookup").on(
       table.priceListId,
-      table.articleId,
+      table.variantId,
       table.variantId,
       table.validFrom,
     ),

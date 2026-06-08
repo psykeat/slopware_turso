@@ -6,6 +6,45 @@ import { useTranslation } from "react-i18next";
 import { useCommands } from "../platform/command-registry";
 import { useFocus } from "../platform/focus-manager";
 
+function Command({ children, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="command" {...props}>{children}</div>;
+}
+
+function CommandList({ children, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="command-list" {...props}>{children}</div>;
+}
+
+function CommandGroup({ children, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="command-group" {...props}>{children}</div>;
+}
+
+function CommandEmpty({ children, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="command-empty" {...props}>{children}</div>;
+}
+
+function CommandItem({
+  children,
+  onSelect,
+  ...props
+}: React.ComponentProps<"button"> & {
+  onSelect?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-slot="command-item"
+      onClick={onSelect}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CommandInput({ ...props }: React.ComponentProps<"input">) {
+  return <input data-slot="command-input" {...props} />;
+}
+
 function KbdChip({ shortcut }: { shortcut: string }) {
   const tokens = shortcut.split("+");
   return (
@@ -162,3 +201,5 @@ export function CommandPalette() {
     </div>
   );
 }
+
+export { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList };

@@ -568,9 +568,9 @@ b`.split(/\n/).length != 3
               var t = Ht[e.name];
               (typeof t == "string" && (t = { name: t }), (e = K(t, e)), (e.name = t.name));
             } else {
-              if (typeof e == "string" && /^[\w\-]+\/[\w\-]+\+xml$/.test(e))
+              if (typeof e == "string" && /^[\w-]+\/[\w-]+\+xml$/.test(e))
                 return Ir("application/xml");
-              if (typeof e == "string" && /^[\w\-]+\/[\w\-]+\+json$/.test(e))
+              if (typeof e == "string" && /^[\w-]+\/[\w-]+\+json$/.test(e))
                 return Ir("application/json");
             }
             return typeof e == "string" ? { name: e } : e || { name: "null" };
@@ -6200,7 +6200,7 @@ b`.split(/\n/).length != 3
             if (i) {
               if (Gl(t)) return "handled";
               if (
-                (/\'$/.test(t)
+                (/'$/.test(t)
                   ? (e.state.keySeq = null)
                   : Du.set(50, function () {
                       e.state.keySeq == i && ((e.state.keySeq = null), e.display.input.reset());
@@ -8734,36 +8734,36 @@ function Xa() {
                 var ze = G[K](E, ee);
                 if (ze !== !1) return ze;
               }
-              if (K == "@") return (E.eatWhile(/[\w\\\-]/), ve("def", E.current()));
+              if (K == "@") return (E.eatWhile(/[\w\\-]/), ve("def", E.current()));
               if (K == "=" || ((K == "~" || K == "|") && E.eat("="))) return ve(null, "compare");
               if (K == '"' || K == "'") return ((ee.tokenize = qe(K)), ee.tokenize(E, ee));
-              if (K == "#") return (E.eatWhile(/[\w\\\-]/), ve("atom", "hash"));
+              if (K == "#") return (E.eatWhile(/[\w\\-]/), ve("atom", "hash"));
               if (K == "!") return (E.match(/^\s*\w*/), ve("keyword", "important"));
               if (/\d/.test(K) || (K == "." && E.eat(/\d/)))
                 return (E.eatWhile(/[\w.%]/), ve("number", "unit"));
               if (K === "-") {
                 if (/[\d.]/.test(E.peek())) return (E.eatWhile(/[\w.%]/), ve("number", "unit"));
-                if (E.match(/^-[\w\\\-]*/))
+                if (E.match(/^-[\w\\-]*/))
                   return (
-                    E.eatWhile(/[\w\\\-]/),
+                    E.eatWhile(/[\w\\-]/),
                     E.match(/^\s*:/, !1)
                       ? ve("variable-2", "variable-definition")
                       : ve("variable-2", "variable")
                   );
                 if (E.match(/^\w+-/)) return ve("meta", "meta");
               } else
-                return /[,+>*\/]/.test(K)
+                return /[,+>*/]/.test(K)
                   ? ve(null, "select-op")
                   : K == "." && E.match(/^-?[_a-z][_a-z0-9-]*/i)
                     ? ve("qualifier", "qualifier")
-                    : /[:;{}\[\]\(\)]/.test(K)
+                    : /[:;{}[\]()]/.test(K)
                       ? ve(null, K)
                       : E.match(/^[\w-.]+(?=\()/)
                         ? (/^(url(-prefix)?|domain|regexp)$/i.test(E.current()) &&
                             (ee.tokenize = $e),
                           ve("variable callee", "variable"))
-                        : /[\w\\\-]/.test(K)
-                          ? (E.eatWhile(/[\w\\\-]/), ve("property", "word"))
+                        : /[\w\\-]/.test(K)
+                          ? (E.eatWhile(/[\w\\-]/), ve("property", "word"))
                           : ve(null, null);
             }
             function qe(E) {
@@ -8783,7 +8783,7 @@ function Xa() {
             function $e(E, ee) {
               return (
                 E.next(),
-                E.match(/^\s*[\"\')]/, !1) ? (ee.tokenize = null) : (ee.tokenize = qe(")")),
+                E.match(/^\s*["')]/, !1) ? (ee.tokenize = null) : (ee.tokenize = qe(")")),
                 ve(null, "(")
               );
             }
@@ -10411,7 +10411,7 @@ function Xa() {
                           !1,
                         )
                       ? !1
-                      : (J.eatWhile(/[\w\\\-]/),
+                      : (J.eatWhile(/[\w\\-]/),
                         J.match(/^\s*:/, !1)
                           ? ["variable-2", "variable-definition"]
                           : ["variable-2", "variable"]);
@@ -10574,10 +10574,10 @@ function Ya() {
                     : c.match("--")
                       ? C(ue("comment", "-->"))
                       : c.match("DOCTYPE", !0, !0)
-                        ? (c.eatWhile(/[\w\._\-]/), C(O(1)))
+                        ? (c.eatWhile(/[\w._-]/), C(O(1)))
                         : null
                   : c.eat("?")
-                    ? (c.eatWhile(/[\w\._\-]/), (T.tokenize = ue("meta", "?>")), "meta")
+                    ? (c.eatWhile(/[\w._-]/), (T.tokenize = ue("meta", "?>")), "meta")
                     : ((ne = c.eat("/") ? "closeTag" : "openTag"), (T.tokenize = A), "tag bracket");
               if (g == "&") {
                 var y;
@@ -10586,7 +10586,7 @@ function Ya() {
                     ? c.eat("x")
                       ? (y = c.eatWhile(/[a-fA-F\d]/) && c.eat(";"))
                       : (y = c.eatWhile(/[\d]/) && c.eat(";"))
-                    : (y = c.eatWhile(/[\w\.\-:]/) && c.eat(";")),
+                    : (y = c.eatWhile(/[\w.\-:]/) && c.eat(";")),
                   y ? "atom" : "error"
                 );
               } else return (c.eatWhile(/[^&<]/), null);
@@ -10604,9 +10604,9 @@ function Ya() {
                 var g = T.tokenize(c, T);
                 return g ? g + " tag error" : "tag error";
               } else
-                return /[\'\"]/.test(C)
+                return /['"]/.test(C)
                   ? ((T.tokenize = $(C)), (T.stringStartCol = c.column()), T.tokenize(c, T))
-                  : (c.match(/^[^\s\u00a0=<>\"\']*[^\s\u00a0=<>\"\'\/]/), "word");
+                  : (c.match(/^[^\s\u00a0=<>"']*[^\s\u00a0=<>"'/]/), "word");
             }
             function $(c) {
               var T = function (C, g) {
@@ -10768,7 +10768,7 @@ function Ya() {
                     ? c.tagStart + c.tagName.length + 2
                     : c.tagStart + Q * (k.multilineTagIndentFactor || 1);
                 if (k.alignCDATA && /<!\[CDATA\[/.test(T)) return 0;
-                var y = T && /^<(\/)?([\w_:\.-]*)/.exec(T);
+                var y = T && /^<(\/)?([\w_:.-]*)/.exec(T);
                 if (y && y[1])
                   for (; g; )
                     if (g.tagName == y[2]) {
@@ -10902,16 +10902,16 @@ function Qa() {
             function M(f, m) {
               var U = f.next();
               if (U == '"' || U == "'") return ((m.tokenize = N(U)), m.tokenize(f, m));
-              if (U == "." && f.match(/^\d[\d_]*(?:[eE][+\-]?[\d_]+)?/))
+              if (U == "." && f.match(/^\d[\d_]*(?:[eE][+-]?[\d_]+)?/))
                 return w("number", "number");
               if (U == "." && f.match("..")) return w("spread", "meta");
-              if (/[\[\]{}\(\),;\:\.]/.test(U)) return w(U);
+              if (/[[\]{}(),;:.]/.test(U)) return w(U);
               if (U == "=" && f.eat(">")) return w("=>", "operator");
               if (U == "0" && f.match(/^(?:x[\dA-Fa-f_]+|o[0-7_]+|b[01_]+)n?/))
                 return w("number", "number");
               if (/\d/.test(U))
                 return (
-                  f.match(/^[\d_]*(?:n|(?:\.[\d_]*)?(?:[eE][+\-]?[\d_]+)?)?/), w("number", "number")
+                  f.match(/^[\d_]*(?:n|(?:\.[\d_]*)?(?:[eE][+-]?[\d_]+)?)?/), w("number", "number")
                 );
               if (U == "/")
                 return f.eat("*")
@@ -10947,7 +10947,7 @@ function Qa() {
                     var B = S[re];
                     return w(B.type, B.style, re);
                   }
-                  if (re == "async" && f.match(/^(\s|\/\*([^*]|\*(?!\/))*?\*\/)*[\[\(\w]/, !1))
+                  if (re == "async" && f.match(/^(\s|\/\*([^*]|\*(?!\/))*?\*\/)*[[(\w]/, !1))
                     return w("async", "keyword", re);
                 }
                 return w("variable", "variable", re);
@@ -11008,7 +11008,7 @@ function Qa() {
                     }
                   } else if (wt >= 3 && wt < 6) ++B;
                   else if (ne.test(it)) ce = !0;
-                  else if (/["'\/`]/.test(it))
+                  else if (/["'/`]/.test(it))
                     for (; ; --We) {
                       if (We == 0) return;
                       var Wr = f.string.charAt(We - 1);
@@ -11275,7 +11275,7 @@ function Qa() {
                                   : c();
             }
             function dt(f) {
-              return f.match(/[;\}\)\],]/) ? G() : G(ve);
+              return f.match(/[;})\],]/) ? G() : G(ve);
             }
             function Pe(f, m) {
               return f == "," ? c(dt) : _e(f, m, !1);
@@ -11425,7 +11425,7 @@ function Qa() {
               if (f == "=>") return c(Re);
             }
             function Se(f) {
-              return f.match(/[\}\)\]]/) ? c() : f == "," || f == ";" ? c(Se) : G(Zt, Se);
+              return f.match(/[})\]]/) ? c() : f == "," || f == ";" ? c(Se) : G(Zt, Se);
             }
             function Zt(f, m) {
               if (f == "variable" || F.style == "keyword") return ((F.marked = "property"), c(Zt));
@@ -11433,7 +11433,7 @@ function Qa() {
               if (f == ":") return c(Re);
               if (f == "[") return c(Me("variable"), br, Me("]"), Zt);
               if (f == "(") return G(ur, Zt);
-              if (!f.match(/[;\}\)\],]/)) return c();
+              if (!f.match(/[;})\],]/)) return c();
             }
             function ht(f, m) {
               return f != "quasi" ? G() : m.slice(m.length - 2) != "${" ? c(ht) : c(Re, Ye);
@@ -11632,7 +11632,7 @@ function Qa() {
             function Et(f, m, U) {
               return (
                 (m.tokenize == M &&
-                  /^(?:operator|sof|keyword [bcd]|case|new|export|default|spread|[\[{}\(,;:]|=>)$/.test(
+                  /^(?:operator|sof|keyword [bcd]|case|new|export|default|spread|[[{}(,;:]|=>)$/.test(
                     m.lastType,
                   )) ||
                 (m.lastType == "quasi" && /\{\s*$/.test(f.string.slice(0, f.pos - (U || 0))))
@@ -11687,7 +11687,7 @@ function Qa() {
                   (U == "}" ||
                     ((B = f.cc[f.cc.length - 1]) &&
                       (B == Pe || B == _e) &&
-                      !/^[,\.=+\-*:?[\(]/.test(m)));
+                      !/^[,.=+\-*:?[(]/.test(m)));
                 )
                   re = re.prev;
                 oe && re.type == ")" && re.prev.type == "stat" && (re = re.prev);
@@ -11823,7 +11823,7 @@ function Vu() {
                   q;
                 if (
                   X &&
-                  !/[<>\s\/]/.test(M.current()) &&
+                  !/[<>\s/]/.test(M.current()) &&
                   (q = N.htmlState.tagName && N.htmlState.tagName.toLowerCase()) &&
                   A.hasOwnProperty(q)
                 )
@@ -12009,13 +12009,13 @@ function ef() {
           (b.defineMode("python", function (I, Y) {
             for (
               var ne = "error",
-                S = Y.delimiters || Y.singleDelimiters || /^[\(\)\[\]\{\}@,:`=;\.\\]/,
+                S = Y.delimiters || Y.singleDelimiters || /^[()[\]{}@,:`=;.\\]/,
                 R = [
                   Y.singleOperators,
                   Y.doubleOperators,
                   Y.doubleDelimiters,
                   Y.tripleDelimiters,
-                  Y.operators || /^([-+*/%\/&|^]=?|[<>=]+|\/\/=?|\*\*=?|!=|[~!@]|\.\.\.)/,
+                  Y.operators || /^([-+*/%/&|^]=?|[<>=]+|\/\/=?|\*\*=?|!=|[~!@]|\.\.\.)/,
                 ],
                 A = 0;
               A < R.length;
@@ -12087,10 +12087,10 @@ function ef() {
             function p(T, C, g) {
               if (T.eatSpace()) return null;
               if (!g && T.match(/^#.*/)) return "comment";
-              if (T.match(/^[0-9\.]/, !1)) {
+              if (T.match(/^[0-9.]/, !1)) {
                 var y = !1;
                 if (
-                  (T.match(/^[\d_]*\.\d+(e[\+\-]?\d+)?/i) && (y = !0),
+                  (T.match(/^[\d_]*\.\d+(e[+-]?\d+)?/i) && (y = !0),
                   T.match(/^[\d_]+\.\d*/) && (y = !0),
                   T.match(/^\.\d+/) && (y = !0),
                   y)
@@ -12101,7 +12101,7 @@ function ef() {
                   (T.match(/^0x[0-9a-f_]+/i) && (j = !0),
                   T.match(/^0b[01_]+/i) && (j = !0),
                   T.match(/^0o[0-7_]+/i) && (j = !0),
-                  T.match(/^[1-9][\d_]*(e[\+\-]?[\d_]+)?/) && (T.eat(/J/i), (j = !0)),
+                  T.match(/^[1-9][\d_]*(e[+-]?[\d_]+)?/) && (T.eat(/J/i), (j = !0)),
                   T.match(/^0(?![\dx])/i) && (j = !0),
                   j)
                 )
@@ -12149,7 +12149,7 @@ function ef() {
               }
               function de(v, d) {
                 for (; !v.eol(); )
-                  if ((v.eatWhile(/[^'"\{\}\\]/), v.eat("\\"))) {
+                  if ((v.eatWhile(/[^'"{}\\]/), v.eat("\\"))) {
                     if ((v.next(), g && v.eol())) return y;
                   } else {
                     if (v.match(T)) return ((d.tokenize = C), y);
@@ -12193,7 +12193,7 @@ function ef() {
               T.scopes.push({ offset: Q(T).offset + I.indentUnit, type: "py", align: null });
             }
             function V(T, C, g) {
-              var y = T.match(/^[\s\[\{\(]*(?:#|$)/, !1) ? null : T.column() + 1;
+              var y = T.match(/^[\s[{(]*(?:#|$)/, !1) ? null : T.column() + 1;
               C.scopes.push({ offset: C.indent + $, type: g, align: y });
             }
             function F(T, C) {
@@ -12258,7 +12258,7 @@ function ef() {
                     (g.type == "py" && !T.dedent && /^(else:|elif |except |finally:)/.test(C));
                 return g.align != null ? g.align - (y ? 1 : 0) : g.offset - (y ? $ : 0);
               },
-              electricInput: /^\s*([\}\]\)]|else:|elif |except |finally:)$/,
+              electricInput: /^\s*([}\])]|else:|elif |except |finally:)$/,
               closeBrackets: { triples: `'"` },
               lineComment: "#",
               fold: "indent",
@@ -12347,13 +12347,13 @@ function tf() {
               ve = y.indentStatements !== !1,
               Oe = y.indentSwitch !== !1,
               qe = y.namespaceSeparator,
-              $e = y.isPunctuationChar || /[\[\]{}\(\),;\:\.]/,
-              dt = y.numberStart || /[\d\.]/,
+              $e = y.isPunctuationChar || /[[\]{}(),;:.]/,
+              dt = y.numberStart || /[\d.]/,
               Pe =
                 y.number ||
                 /^(?:0x[a-f\d]+|0b[01]+|(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)(u|ll?|l|f)?/i,
-              _e = y.isOperatorChar || /[+\-*&%=<>!?|\/]/,
-              Ue = y.isIdentifierChar || /[\w\$_\xa1-\uffff]/,
+              _e = y.isOperatorChar || /[+\-*&%=<>!?|/]/,
+              Ue = y.isIdentifierChar || /[\w$_\xa1-\uffff]/,
               et = y.isReservedIdentifier || !1,
               we,
               Ie;
@@ -12374,7 +12374,7 @@ function tf() {
                 if (me.eat("/")) return (me.skipToEnd(), "comment");
               }
               if (_e.test(be)) {
-                for (; !me.match(/^\/[\/*]/, !1) && me.eat(_e); );
+                for (; !me.match(/^\/[/*]/, !1) && me.eat(_e); );
                 return "operator";
               }
               if ((me.eatWhile(Ue), qe)) for (; me.match(qe); ) me.eatWhile(Ue);
@@ -12549,7 +12549,7 @@ function tf() {
               if (j == "\\" && g.match(/^.$/)) {
                 de = N;
                 break;
-              } else if (j == "/" && g.match(/^\/[\/\*]/, !1)) break;
+              } else if (j == "/" && g.match(/^\/[/*]/, !1)) break;
               g.next();
             }
             return ((y.tokenize = de), "meta");
@@ -12563,7 +12563,7 @@ function tf() {
               : g[1] == "_" || g[1] !== g[1].toLowerCase();
           }
           function q(g) {
-            return (g.eatWhile(/[\w\.']/), "number");
+            return (g.eatWhile(/[\w.']/), "number");
           }
           function p(g, y) {
             if ((g.backUp(1), g.match(/^(?:R|u8R|uR|UR|LR)/))) {
@@ -12627,7 +12627,7 @@ function tf() {
               typeFirstDefinitions: !0,
               atoms: k("true false NULL nullptr"),
               dontIndentStatements: /^template$/,
-              isIdentifierChar: /[\w\$_~\xa1-\uffff]/,
+              isIdentifierChar: /[\w$_~\xa1-\uffff]/,
               isReservedIdentifier: X,
               hooks: {
                 "#": N,
@@ -12675,7 +12675,7 @@ function tf() {
                 /^(?:0x[a-f\d_]+|0b[01_]+|(?:[\d_]+\.?\d*|\.\d+)(?:e[-+]?[\d_]+)?)(u|ll?|l|f)?/i,
               hooks: {
                 "@": function (g) {
-                  return g.match("interface", !1) ? !1 : (g.eatWhile(/[\w\$_]/), "meta");
+                  return g.match("interface", !1) ? !1 : (g.eatWhile(/[\w$_]/), "meta");
                 },
                 '"': function (g, y) {
                   return g.match(/""$/) ? ((y.tokenize = F), y.tokenize(g, y)) : !1;
@@ -12699,7 +12699,7 @@ function tf() {
               atoms: k("true false null"),
               hooks: {
                 "@": function (g, y) {
-                  return g.eat('"') ? ((y.tokenize = J), J(g, y)) : (g.eatWhile(/[\w\$_]/), "meta");
+                  return g.eat('"') ? ((y.tokenize = J), J(g, y)) : (g.eatWhile(/[\w$_]/), "meta");
                 },
               },
             }));
@@ -12742,10 +12742,10 @@ function tf() {
             atoms: k("true false null"),
             indentStatements: !1,
             indentSwitch: !1,
-            isOperatorChar: /[+\-*&%=<>!?|\/#:@]/,
+            isOperatorChar: /[+\-*&%=<>!?|/#:@]/,
             hooks: {
               "@": function (g) {
-                return (g.eatWhile(/[\w\$_]/), "meta");
+                return (g.eatWhile(/[\w$_]/), "meta");
               },
               '"': function (g, y) {
                 return g.match('""') ? ((y.tokenize = F), y.tokenize(g, y)) : !1;
@@ -12753,7 +12753,7 @@ function tf() {
               "'": function (g) {
                 return g.match(/^(\\[^'\s]+|[^\\'])'/)
                   ? "string-2"
-                  : (g.eatWhile(/[\w\$_\xa1-\uffff]/), "atom");
+                  : (g.eatWhile(/[\w$_\xa1-\uffff]/), "atom");
               },
               "=": function (g, y) {
                 var j = y.context;
@@ -12804,7 +12804,7 @@ function tf() {
             atoms: k("true false null this"),
             hooks: {
               "@": function (g) {
-                return (g.eatWhile(/[\w\$_]/), "meta");
+                return (g.eatWhile(/[\w$_]/), "meta");
               },
               "*": function (g, y) {
                 return y.prevToken == "." ? "variable" : "operator";
@@ -12967,8 +12967,8 @@ function tf() {
             builtin: k(
               "abstract actual aliased annotation by default deprecated doc final formal late license native optional sealed see serializable shared suppressWarnings tagged throws variable",
             ),
-            isPunctuationChar: /[\[\]{}\(\),;\:\.`]/,
-            isOperatorChar: /[+\-*&%=<>!?|^~:\/]/,
+            isPunctuationChar: /[[\]{}(),;:.`]/,
+            isOperatorChar: /[+\-*&%=<>!?|^~:/]/,
             numberStart: /[\d#$]/,
             number:
               /^(?:#[\da-fA-F_]+|\$[01_]+|[\d_]+[kMGTPmunpf]?|[\d_]+\.[\d_]+(?:[eE][-+]?\d+|[kMGTPmunpf]|)|)/i,
@@ -12979,7 +12979,7 @@ function tf() {
             styleDefs: !1,
             hooks: {
               "@": function (g) {
-                return (g.eatWhile(/[\w\$_]/), "meta");
+                return (g.eatWhile(/[\w$_]/), "meta");
               },
               '"': function (g, y) {
                 return ((y.tokenize = C(g.match('""') ? "triple" : "single")), y.tokenize(g, y));
@@ -12988,7 +12988,7 @@ function tf() {
                 return !T || !g.match("`") ? !1 : ((y.tokenize = T), (T = null), y.tokenize(g, y));
               },
               "'": function (g) {
-                return (g.eatWhile(/[\w\$_\xa1-\uffff]/), "atom");
+                return (g.eatWhile(/[\w$_\xa1-\uffff]/), "atom");
               },
               token: function (g, y, j) {
                 if ((j == "variable" || j == "type") && y.prevToken == ".") return "variable-2";
@@ -13580,12 +13580,12 @@ function nf() {
                 ne = /^(?:[*\-+]|^[0-9]+([.)]))\s+/,
                 S = /^\[(x| )\](?=\s)/i,
                 R = _.allowAtxHeaderWithoutSpace ? /^(#+)/ : /^(#+)(?: |$)/,
-                A = /^ {0,3}(?:\={1,}|-{2,})\s*$/,
-                $ = /^[^#!\[\]*_\\<>` "'(~:]+/,
-                ue = /^(~~~+|```+)[ \t]*([\w\/+#-]*)[^\n`]*$/,
+                A = /^ {0,3}(?:={1,}|-{2,})\s*$/,
+                $ = /^[^#![\]*_\\<>` "'(~:]+/,
+                ue = /^(~~~+|```+)[ \t]*([\w/+#-]*)[^\n`]*$/,
                 O = /^\s*\[[^\]]+?\]:.*$/,
                 w =
-                  /[!"#$%&'()*+,\-.\/:;<=>?@\[\\\]^_`{|}~\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u0AF0\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166D\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E42\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65]|\uD800[\uDD00-\uDD02\uDF9F\uDFD0]|\uD801\uDD6F|\uD802[\uDC57\uDD1F\uDD3F\uDE50-\uDE58\uDE7F\uDEF0-\uDEF6\uDF39-\uDF3F\uDF99-\uDF9C]|\uD804[\uDC47-\uDC4D\uDCBB\uDCBC\uDCBE-\uDCC1\uDD40-\uDD43\uDD74\uDD75\uDDC5-\uDDC9\uDDCD\uDDDB\uDDDD-\uDDDF\uDE38-\uDE3D\uDEA9]|\uD805[\uDCC6\uDDC1-\uDDD7\uDE41-\uDE43\uDF3C-\uDF3E]|\uD809[\uDC70-\uDC74]|\uD81A[\uDE6E\uDE6F\uDEF5\uDF37-\uDF3B\uDF44]|\uD82F\uDC9F|\uD836[\uDE87-\uDE8B]/,
+                  /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u0AF0\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166D\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E42\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65]|\uD800[\uDD00-\uDD02\uDF9F\uDFD0]|\uD801\uDD6F|\uD802[\uDC57\uDD1F\uDD3F\uDE50-\uDE58\uDE7F\uDEF0-\uDEF6\uDF39-\uDF3F\uDF99-\uDF9C]|\uD804[\uDC47-\uDC4D\uDCBB\uDCBC\uDCBE-\uDCC1\uDD40-\uDD43\uDD74\uDD75\uDDC5-\uDDC9\uDDCD\uDDDB\uDDDD-\uDDDF\uDE38-\uDE3D\uDEA9]|\uD805[\uDCC6\uDDC1-\uDDD7\uDE41-\uDE43\uDF3C-\uDF3E]|\uD809[\uDC70-\uDC74]|\uD81A[\uDE6E\uDE6F\uDEF5\uDF37-\uDF3B\uDF44]|\uD82F\uDC9F|\uD836[\uDE87-\uDE8B]/,
                 M = "    ";
               function N(v, d, fe) {
                 return ((d.f = d.inline = fe), fe(v, d));
@@ -13829,7 +13829,7 @@ function nf() {
                   d.linkTitle = !1;
                   var xe = le;
                   (le === "(" && (xe = ")"),
-                    (xe = (xe + "").replace(/([.?*+^\[\]\\(){}|-])/g, "\\$1")));
+                    (xe = (xe + "").replace(/([.?*+^[\]\\(){}|-])/g, "\\$1")));
                   var Me = "^\\s*(?:[^" + xe + "\\\\]+|\\\\\\\\|\\\\.)" + xe;
                   if (v.match(new RegExp(Me), !0)) return k.linkHref;
                 }
@@ -13896,7 +13896,7 @@ function nf() {
                   _.xml &&
                   le === "<" &&
                   v.match(
-                    /^(!--|\?|!\[CDATA\[|[a-z][a-z0-9-]*(?:\s+[a-z_:.\-]+(?:\s*=\s*[^>]+)?)*\s*(?:>|$))/i,
+                    /^(!--|\?|!\[CDATA\[|[a-z][a-z0-9-]*(?:\s+[a-z_:.-]+(?:\s*=\s*[^>]+)?)*\s*(?:>|$))/i,
                     !1,
                   )
                 ) {
@@ -13961,7 +13961,7 @@ function nf() {
                 if (
                   _.emoji &&
                   le === ":" &&
-                  v.match(/^(?:[a-z_\d+][a-z_\d+-]*|\-[a-z_\d+][a-z_\d+-]*):/)
+                  v.match(/^(?:[a-z_\d+][a-z_\d+-]*|-[a-z_\d+][a-z_\d+-]*):/)
                 ) {
                   ((d.emoji = !0), _.highlightFormatting && (d.formatting = "emoji"));
                   var ee = P(d);
@@ -13995,8 +13995,8 @@ function nf() {
                   : "error";
               }
               var T = {
-                ")": /^(?:[^\\\(\)]|\\.|\((?:[^\\\(\)]|\\.)*\))*?(?=\))/,
-                "]": /^(?:[^\\\[\]]|\\.|\[(?:[^\\\[\]]|\\.)*\])*?(?=\])/,
+                ")": /^(?:[^\\()]|\\.|\((?:[^\\()]|\\.)*\))*?(?=\))/,
+                "]": /^(?:[^\\[\]]|\\.|\[(?:[^\\[\]]|\\.)*\])*?(?=\])/,
               };
               function C(v) {
                 return function (d, fe) {
@@ -15225,7 +15225,7 @@ function uf() {
             return (
               typeof p == "string"
                 ? (p = new RegExp(
-                    p.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&"),
+                    p.replace(/[-[\]/{}()*+?.\\^$|]/g, "\\$&"),
                     W ? "gi" : "g",
                   ))
                 : p.global || (p = new RegExp(p.source, p.ignoreCase ? "gi" : "g")),
@@ -15582,13 +15582,13 @@ function ff() {
             pe(oe, _(oe), oe.phrase("Jump to line:"), Q.line + 1 + ":" + Q.ch, function (k) {
               if (k) {
                 var I;
-                if ((I = /^\s*([\+\-]?\d+)\s*\:\s*(\d+)\s*$/.exec(k)))
+                if ((I = /^\s*([+-]?\d+)\s*:\s*(\d+)\s*$/.exec(k)))
                   oe.setCursor(te(oe, I[1]), Number(I[2]));
-                else if ((I = /^\s*([\+\-]?\d+(\.\d+)?)\%\s*/.exec(k))) {
+                else if ((I = /^\s*([+-]?\d+(\.\d+)?)%\s*/.exec(k))) {
                   var Y = Math.round((oe.lineCount() * Number(I[1])) / 100);
                   (/^[-+]/.test(I[1]) && (Y = Q.line + Y + 1), oe.setCursor(Y - 1, Q.ch));
                 } else
-                  (I = /^\s*\:?\s*([\+\-]?\d+)\s*/.exec(k)) && oe.setCursor(te(oe, I[1]), Q.ch);
+                  (I = /^\s*:?\s*([+-]?\d+)\s*/.exec(k)) && oe.setCursor(te(oe, I[1]), Q.ch);
               }
             });
           }),

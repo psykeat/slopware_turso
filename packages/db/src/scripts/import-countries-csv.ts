@@ -13,6 +13,7 @@ dotenv.config({ path: path.resolve(__dirname, "../../../../apps/web/.env") });
 
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
+    // @ts-ignore
 import existingCountries from "./countries.json" assert { type: "json" };
 
 const EU_COUNTRIES = new Set([

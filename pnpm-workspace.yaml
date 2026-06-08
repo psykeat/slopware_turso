@@ -4,6 +4,7 @@ packages:
   - tooling/*
 allowBuilds:
   "@google/genai": true
+  '@openrouter/sdk': true
   esbuild: true
   msw: false
   protobufjs: true
@@ -105,8 +106,8 @@ catalog:
   prosemirror-state: ^1.4.4
   prosemirror-view: ^1.41.8
   prosemirror-model: ^1.25.7
-  "@tiptap/extension-text-align": ^3.24.0
-  "@tiptap/extension-font-family": ^3.24.0
+  "@tiptap/extension-text-align": ^2.23.0
+  "@tiptap/extension-font-family": ^2.23.0
 catalogMode: prefer
 
 overrides:

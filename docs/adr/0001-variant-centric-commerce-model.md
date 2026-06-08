@@ -1,0 +1,3 @@
+# Variant-Centric Commerce Model
+
+We are intentionally moving the commerce model away from article-centric operational truth. `article` remains the parent/catalog container, but `article_variant` becomes the sellable unit for pricing, `inventory_item` becomes the stock booking anchor, `inventory_level.quantity` becomes the operational stock projection, and `document_line` must reference the variant for catalog lines. We chose this because the legacy article-based model could not represent variant-specific price, stock, and document behavior without ambiguity; the tradeoff is a harder migration and temporary legacy compatibility work, but it preserves a coherent end state for sync, pricing, and inventory.

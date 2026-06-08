@@ -49,19 +49,7 @@ const COMPANY_SCOPED_SETTINGS = new Set([
   "tenantLlmConfig",
 ]);
 
-const COMPANY_FIELD_OVERRIDES: Partial<FieldDef>[] = [
-  {
-    key: "copyLongTextsOnlyOnChange",
-    sectionLabel: "Long Texts",
-    sectionLabelDe: "Langtexte",
-  },
-  { key: "printAddressLongText", sectionLabel: "Print", sectionLabelDe: "Druck" },
-  { key: "printPreText", sectionLabel: "Print", sectionLabelDe: "Druck" },
-  { key: "printPostText", sectionLabel: "Print", sectionLabelDe: "Druck" },
-  { key: "printPositionTexts", sectionLabel: "Print", sectionLabelDe: "Druck" },
-  { key: "showArticleImageInEntry", sectionLabel: "Media", sectionLabelDe: "Medien" },
-  { key: "showArticleImageOnDocuments", sectionLabel: "Media", sectionLabelDe: "Medien" },
-];
+const COMPANY_FIELD_OVERRIDES: Partial<FieldDef>[] = [];
 
 function resolveSettingsLabel(label: SettingsRegistryEntry["label"], language: string) {
   if (typeof label === "string") return label;
@@ -467,11 +455,7 @@ function SettingsView() {
           { value: "production", label: "Production (P)" },
         ],
       },
-      {
-        key: "printPositionTexts",
-        sectionLabel: "Print",
-        sectionLabelDe: "Druck",
-      },
+      { key: "printPositionTexts" },
     ];
   }, [selectedKey]);
 

@@ -1,6 +1,5 @@
 import { Markdown } from "@react-email/components";
 import { EditorContent } from "@tiptap/react";
-import type { useAgentChat } from "agents/ai-react";
 import type { Message as AiMessage } from "ai";
 import { format } from "date-fns-tz";
 import { useQueryState } from "nuqs";
@@ -12,7 +11,7 @@ import { useThread } from "@/hooks/use-threads";
 import { cn, getEmailLogo } from "@/lib/utils";
 import { VoiceProvider } from "@/providers/voice-provider";
 
-import { Tools } from "../../types/tools";
+import { Tools } from "../types/tools";
 import { CurvedArrow } from "../icons/icons";
 import { MailLabels } from "../mail/mail-list";
 import { useAIFullScreen, useAISidebar } from "../ui/ai-sidebar";
@@ -203,7 +202,7 @@ export function AIChat({
   error,
   handleSubmit,
   status,
-}: ReturnType<typeof useAgentChat>): React.ReactElement {
+}: AIChatProps): React.ReactElement {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const { chatMessages } = useBilling();
@@ -227,7 +226,7 @@ export function AIChat({
   const editor = useComposeEditor({
     placeholder: "Ask Zero to do anything...",
     onLengthChange: () => setInput(editor.getText()),
-    onKeydown(event) {
+    onKeydown(event: any) {
       if (event.key === "0" && event.metaKey) {
         return toggleOpen();
       }
@@ -291,8 +290,8 @@ export function AIChat({
             </div>
           ) : (
             messages.map((message, index) => {
-              const textParts = message.parts.filter((part) => part.type === "text");
-              const toolParts = message.parts.filter((part) => part.type === "tool-invocation");
+              const textParts = message.parts.filter((part: any) => part.type === "text");
+              const toolParts = message.parts.filter((part: any) => part.type === "tool-invocation");
 
               return (
                 <div
@@ -301,7 +300,7 @@ export function AIChat({
                   data-message-role={message.role}
                 >
                   {toolParts.map(
-                    (part, index) =>
+                    (part: any, index: number) =>
                       part.toolInvocation?.result && (
                         <ToolResponse
                           key={`${part.toolInvocation.toolName}-${index}`}
@@ -321,7 +320,7 @@ export function AIChat({
                       )}
                     >
                       {textParts.map(
-                        (part) =>
+                        (part: any) =>
                           part.text && (
                             <Markdown
                               markdownCustomStyles={{

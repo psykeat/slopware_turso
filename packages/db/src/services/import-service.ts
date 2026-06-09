@@ -11,6 +11,7 @@ import {
   tenantConnector,
   connectorDefinition,
   article,
+  articleVariant,
   address,
   unit,
 } from "../schema/app.schema";
@@ -31,6 +32,16 @@ function toStrOrNull(v: unknown): string | null {
   return toStr(v);
 }
 
+function toBoolOrNull(v: unknown): boolean | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "boolean") return v;
+  const normalized = toStrOrNull(v)?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return Boolean(normalized);
+}
+
 async function resolveUnitIdByCode(tenantId: string, code: unknown) {
   const unitCode = toStrOrNull(code)?.trim();
   if (!unitCode) return null;
@@ -42,6 +53,78 @@ async function resolveUnitIdByCode(tenantId: string, code: unknown) {
     .limit(1);
 
   return row?.unitId ?? null;
+}
+
+async function resolveArticleIdByNo(tenantId: string, articleNo: unknown) {
+  const articleCode = toStrOrNull(articleNo)?.trim();
+  if (!articleCode) return null;
+
+  const [row] = await db
+    .select({ articleId: article.articleId })
+    .from(article)
+    .where(and(eq(article.tenantId, tenantId), eq(article.articleNo, articleCode)))
+    .limit(1);
+
+  return row?.articleId ?? null;
+}
+
+async function resolveVariantIdentity(
+  tenantId: string,
+  payload: Record<string, unknown>,
+): Promise<{ variantId: string; articleId: string; sku: string } | null> {
+  const directVariantId = toStrOrNull(payload.variantId)?.trim();
+  if (directVariantId) {
+    const [row] = await db
+      .select({
+        variantId: articleVariant.variantId,
+        articleId: articleVariant.articleId,
+        sku: articleVariant.sku,
+      })
+      .from(articleVariant)
+      .where(
+        and(eq(articleVariant.tenantId, tenantId), eq(articleVariant.variantId, directVariantId)),
+      )
+      .limit(1);
+
+    if (row) return row;
+  }
+
+  const sku = toStrOrNull(payload.sku)?.trim();
+  if (sku) {
+    const [row] = await db
+      .select({
+        variantId: articleVariant.variantId,
+        articleId: articleVariant.articleId,
+        sku: articleVariant.sku,
+      })
+      .from(articleVariant)
+      .where(and(eq(articleVariant.tenantId, tenantId), eq(articleVariant.sku, sku)))
+      .limit(1);
+
+    if (row) return row;
+  }
+
+  const articleId = toStrOrNull(payload.articleId)?.trim();
+  const optionValueHash = toStrOrNull(payload.optionValueHash)?.trim();
+  if (!articleId || !optionValueHash) return null;
+
+  const [row] = await db
+    .select({
+      variantId: articleVariant.variantId,
+      articleId: articleVariant.articleId,
+      sku: articleVariant.sku,
+    })
+    .from(articleVariant)
+    .where(
+      and(
+        eq(articleVariant.tenantId, tenantId),
+        eq(articleVariant.articleId, articleId),
+        eq(articleVariant.optionValueHash, optionValueHash),
+      ),
+    )
+    .limit(1);
+
+  return row ?? null;
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -561,6 +644,67 @@ export class ImportService {
                 ...(payload.baseUnit !== undefined && { baseUnitId }),
                 ...(payload.salesUnit !== undefined && { salesUnitId }),
                 ...(payload.purchaseUnit !== undefined && { purchaseUnitId }),
+                updatedAt: new Date(),
+              },
+            });
+        } else if (
+          row.targetEntity === "articleVariant" ||
+          row.targetEntity === "article_variant"
+        ) {
+          const resolvedArticleId =
+            (await resolveArticleIdByNo(this.tenantId, payload.articleNo)) ??
+            toStrOrNull(payload.articleId)?.trim() ??
+            null;
+          if (!resolvedArticleId) {
+            throw new Error("articleVariant rows require articleId or articleNo");
+          }
+
+          const optionValueHash = toStrOrNull(payload.optionValueHash)?.trim();
+          if (!optionValueHash) {
+            throw new Error("articleVariant rows require optionValueHash");
+          }
+
+          const existingVariant = await resolveVariantIdentity(this.tenantId, {
+            ...payload,
+            articleId: resolvedArticleId,
+          });
+          const variantId = existingVariant?.variantId ?? toStrOrNull(payload.variantId)?.trim();
+          const payloadSku = toStrOrNull(payload.sku)?.trim();
+          const sku = payloadSku || existingVariant?.sku || null;
+          if (!sku) {
+            throw new Error("articleVariant rows require sku");
+          }
+
+          const values = {
+            tenantId: this.tenantId,
+            ...(variantId ? { variantId } : {}),
+            articleId: resolvedArticleId,
+            sku,
+            ean: toStrOrNull(payload.ean),
+            optionValueHash,
+            price: toStrOrNull(payload.price),
+            weight: toStrOrNull(payload.weight),
+            isActive:
+              payload.isActive === undefined ? true : (toBoolOrNull(payload.isActive) ?? true),
+          };
+
+          const conflictTarget = variantId
+            ? [articleVariant.variantId]
+            : [articleVariant.tenantId, articleVariant.articleId, articleVariant.optionValueHash];
+
+          await db
+            .insert(articleVariant)
+            .values(values)
+            .onConflictDoUpdate({
+              target: conflictTarget as any,
+              set: {
+                articleId: resolvedArticleId,
+                sku: values.sku,
+                ...(payload.ean !== undefined && { ean: values.ean }),
+                optionValueHash,
+                ...(payload.price !== undefined && { price: values.price }),
+                ...(payload.weight !== undefined && { weight: values.weight }),
+                ...(payload.isActive !== undefined && { isActive: values.isActive }),
                 updatedAt: new Date(),
               },
             });

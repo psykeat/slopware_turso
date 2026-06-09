@@ -55,6 +55,10 @@ const EMPTY_ROW = (): MappingRow => ({
   defaultValue: "",
 });
 
+function normalizeTargetEntity(value: string) {
+  return value === "articleVariant" ? "article_variant" : value;
+}
+
 // ── Import Profiles View ───────────────────────────────────────────────────
 function ImportProfilesView() {
   const { setSubCrumb } = useActionBar();
@@ -130,7 +134,7 @@ function ImportProfilesView() {
     setIsCreating(false);
     setFormLabel(p.label);
     setFormSlug(p.slug);
-    setFormTargetEntity(p.targetEntity);
+    setFormTargetEntity(normalizeTargetEntity(p.targetEntity));
     setFormCommandKey(p.targetCommandKey);
     setFormRequiresApproval(p.requiresApproval);
     setFormArchived(p.archived);
@@ -373,6 +377,7 @@ function ImportProfilesView() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="article">Article</SelectItem>
+                      <SelectItem value="article_variant">Article Variant</SelectItem>
                       <SelectItem value="address">Address</SelectItem>
                     </SelectContent>
                   </Select>

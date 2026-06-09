@@ -244,9 +244,72 @@ function parseQty(value: string | number | null | undefined): number {
   return Number(value ?? 0);
 }
 
+type VariantTruth = {
+  articleId: string;
+  variantId: string;
+};
+
+async function resolveVariantTruth(
+  tx: any,
+  tenantId: string,
+  variantId: string,
+): Promise<VariantTruth> {
+  const rows = (await tx.execute(sql`
+    select article_id as "articleId", variant_id as "variantId"
+    from article_variant
+    where tenant_id = ${tenantId} and variant_id = ${variantId}
+    limit 1
+  `)) as Array<{ articleId: string; variantId: string }>;
+  const [row] = rows;
+
+  if (!row) {
+    throw new Error(`Variant ${variantId} not found`);
+  }
+
+  return {
+    articleId: row.articleId,
+    variantId: row.variantId,
+  };
+}
+
+async function resolveDocumentLineTruth(
+  tx: any,
+  tenantId: string,
+  line: {
+    documentLineId?: string | null;
+    lineNo: number;
+    articleId?: string | null;
+    variantId?: string | null;
+    lineType?: string | null;
+  },
+  options?: { requireVariantForArticle?: boolean },
+): Promise<{ articleId: string | null; variantId: string | null }> {
+  const lineType = line.lineType ?? "article";
+  const requireVariantForArticle = options?.requireVariantForArticle ?? true;
+
+  if (lineType === "article" && !line.variantId && requireVariantForArticle) {
+    const lineLabel = line.documentLineId ?? `line ${line.lineNo}`;
+    throw new Error(`${lineLabel} requires variantId`);
+  }
+
+  if (!line.variantId) {
+    return {
+      articleId: line.articleId ?? null,
+      variantId: null,
+    };
+  }
+
+  const truth = await resolveVariantTruth(tx, tenantId, line.variantId);
+  return {
+    ...truth,
+    articleId: truth.articleId,
+  };
+}
+
 type DraftDocumentLineInput = {
   documentLineId?: string | null;
   lineNo: number;
+  articleId?: string | null;
   variantId?: string | null;
   articleTextSnapshot?: string | null;
   langText?: string | null;
@@ -682,27 +745,24 @@ async function loadTrackingRowsByLineIds(
 ): Promise<Map<string, TrackingRowLike[]>> {
   if (documentLineIds.length === 0) return new Map();
 
-  const rows = await tx
-    .select({
-      trackingId: documentLineTracking.trackingId,
-      documentLineId: documentLineTracking.documentLineId,
-      serialNumberId: documentLineTracking.serialNumberId,
-      serialNo: documentLineTracking.serialNo,
-      batchNo: documentLineTracking.batchNo,
-      qty: documentLineTracking.qty,
-    })
-    .from(documentLineTracking)
-    .where(
-      and(
-        eq(documentLineTracking.tenantId, tenantId),
-        inArray(documentLineTracking.documentLineId, documentLineIds),
-      ),
-    )
-    .orderBy(
-      asc(documentLineTracking.documentLineId),
-      asc(documentLineTracking.createdAt),
-      asc(documentLineTracking.trackingId),
-    );
+  const rows: TrackingRowLike[] = [];
+  for (const documentLineId of documentLineIds) {
+    const lineRows = (await tx.execute(
+      sql.raw(`
+        select
+          tracking_id as "trackingId",
+          document_line_id as "documentLineId",
+          serial_number_id as "serialNumberId",
+          serial_no as "serialNo",
+          batch_no as "batchNo",
+          qty as "qty"
+        from document_line_tracking
+        where tenant_id = '${tenantId}' and document_line_id = '${documentLineId}'
+        order by created_at, tracking_id
+      `),
+    )) as TrackingRowLike[];
+    rows.push(...lineRows);
+  }
 
   const byLine = new Map<string, TrackingRowLike[]>();
   for (const row of rows) {
@@ -719,17 +779,30 @@ async function loadActiveDocumentLines(
   tenantId: string,
   documentId: string,
 ): Promise<any[]> {
-  return await tx
-    .select()
-    .from(documentLine)
-    .where(
-      and(
-        eq(documentLine.documentId, documentId),
-        eq(documentLine.tenantId, tenantId),
-        isNull(documentLine.archivedAt),
-      ),
-    )
-    .orderBy(asc(documentLine.lineNo));
+  return (await tx.execute(sql`
+    select
+      document_line_id as "documentLineId",
+      line_no as "lineNo",
+      variant_id as "variantId",
+      line_type as "lineType",
+      warehouse_id as "warehouseId",
+      quantity as "quantity",
+      net_price as "netPrice",
+      line_total_net as "lineTotalNet",
+      tax_code_id as "taxCodeId",
+      cost_center_id as "costCenterId",
+      bom_group_id as "bomGroupId",
+      article_text_snapshot as "articleTextSnapshot",
+      lang_text as "langText",
+      lang_text_source_entity as "langTextSourceEntity",
+      lang_text_source_id as "langTextSourceId",
+      lang_text_source_field as "langTextSourceField",
+      lang_text_linked_at as "langTextLinkedAt",
+      lang_text_overridden_at as "langTextOverriddenAt"
+    from document_line
+    where tenant_id = ${tenantId} and document_id = ${documentId} and archived_at is null
+    order by line_no
+  `)) as any[];
 }
 
 async function recalculateDocumentTotals(
@@ -948,23 +1021,25 @@ async function postFinancialJournalEntries(
 
   const docGroup = await getDocumentGroupAccountFallback(tx, tenantId, doc.documentGroupId);
   const variantIds = [
-        ...new Set(lines.map((line) => line.variantId).filter((id): id is string => !!id)),
-      ];
-  const articleGroupRows = variantIds.length
-    ? await tx
-        .select({
-          articleId: article.articleId,
-          articleGroupId: article.articleGroupId,
-        })
-        .from(article)
-        .where(and(eq(article.tenantId, tenantId), inArray(article.articleId as any, variantIds as any)))
-    : [];
-  const articleGroupById = new Map<string, string | null>(
-    (articleGroupRows as Array<{ articleId: string; articleGroupId: string | null }>).map((row) => [
-      row.articleId,
-      row.articleGroupId ?? null,
-    ]),
-  );
+    ...new Set(lines.map((line) => line.variantId).filter((id): id is string => !!id)),
+  ];
+  const variantTruthById = new Map<string, string>();
+  for (const variantId of variantIds) {
+    const truth = await resolveVariantTruth(tx, tenantId, variantId);
+    variantTruthById.set(variantId, truth.articleId);
+  }
+
+  const articleIds = [...new Set(variantTruthById.values())];
+  const articleGroupById = new Map<string, string | null>();
+  for (const articleId of articleIds) {
+    const rows = (await tx.execute(sql`
+      select article_group_id as "articleGroupId"
+      from article
+      where tenant_id = ${tenantId} and article_id = ${articleId}
+      limit 1
+    `)) as Array<{ articleGroupId: string | null }>;
+    articleGroupById.set(articleId, rows[0]?.articleGroupId ?? null);
+  }
   const accountCache = new Map<string, string | null>();
   const counterGlAccountId = await resolveJournalGlAccount(
     tx,
@@ -989,7 +1064,9 @@ async function postFinancialJournalEntries(
     if (!amount) continue;
 
     const absAmount = Math.abs(amount);
-    const articleGroupId = line.variantId ? (articleGroupById.get(line.variantId) ?? null) : null;
+    const articleGroupId = line.variantId
+      ? (articleGroupById.get(variantTruthById.get(line.variantId) ?? "") ?? null)
+      : null;
     const cacheKey = `${journalContexts.lineContext}|${articleGroupId ?? ""}|${line.taxCodeId ?? ""}|${movementType}`;
     let lineGlAccountId = accountCache.get(cacheKey) ?? null;
     if (!accountCache.has(cacheKey)) {
@@ -1065,6 +1142,13 @@ async function postProductionDocumentLine(
   txId: string,
   trackingRows: TrackingRowLike[],
 ) {
+  const resolvedArticleId =
+    line.articleId ??
+    (line.variantId ? (await resolveVariantTruth(tx, tenantId, line.variantId)).articleId : null);
+  if (!resolvedArticleId) return;
+
+  const resolvedLine = { ...line, articleId: resolvedArticleId };
+
   const warehouseId = line.warehouseId ?? doc.warehouseId;
   if (!warehouseId) return;
 
@@ -1078,8 +1162,8 @@ async function postProductionDocumentLine(
       tenantId,
       companyId: doc.companyId,
       warehouseId,
-      articleId: line.variantId as any,
-          onHandQty: String(signedQty),
+      articleId: resolvedArticleId,
+      onHandQty: String(signedQty),
       reservedQty: "0",
       availableQty: String(signedQty),
     })
@@ -1097,7 +1181,8 @@ async function postProductionDocumentLine(
       tenantId,
       companyId: doc.companyId,
       warehouseId,
-      variantId: line.variantId || null,
+      articleId: resolvedArticleId,
+      variantId: line.variantId ?? null,
       movementType,
       qtyDelta: String(signedQty),
       movementDate: now,
@@ -1113,7 +1198,7 @@ async function postProductionDocumentLine(
       tx,
       tenantId,
       movement.inventoryMovementId,
-      line,
+      resolvedLine,
       movementType,
       trackingRows,
     );
@@ -1130,6 +1215,11 @@ async function postTransferDocumentLine(
   txId: string,
   trackingRows: TrackingRowLike[],
 ) {
+  const resolvedArticleId =
+    line.articleId ??
+    (line.variantId ? (await resolveVariantTruth(tx, tenantId, line.variantId)).articleId : null);
+  if (!resolvedArticleId) return;
+
   const sourceWh = doc.warehouseId;
   const targetWh = doc.targetWarehouseId;
   if (!sourceWh || !targetWh) return;
@@ -1142,8 +1232,8 @@ async function postTransferDocumentLine(
       tenantId,
       companyId: doc.companyId,
       warehouseId: sourceWh,
-      articleId: line.variantId as any,
-          onHandQty: String(-qty),
+      articleId: resolvedArticleId,
+      onHandQty: String(-qty),
       reservedQty: "0",
       availableQty: String(-qty),
     })
@@ -1161,8 +1251,8 @@ async function postTransferDocumentLine(
       tenantId,
       companyId: doc.companyId,
       warehouseId: targetWh,
-      articleId: line.variantId as any,
-          onHandQty: String(qty),
+      articleId: resolvedArticleId,
+      onHandQty: String(qty),
       reservedQty: "0",
       availableQty: String(qty),
     })
@@ -1174,10 +1264,11 @@ async function postTransferDocumentLine(
       },
     });
 
-  await tx.insert(inventoryMovement).values({ inventoryItemId: "00000000-0000-0000-0000-000000000000" as any,
+  await tx.insert(inventoryMovement).values({
     tenantId,
     companyId: doc.companyId,
     warehouseId: sourceWh,
+    articleId: resolvedArticleId,
     variantId: line.variantId || null,
     movementType,
     qtyDelta: String(-qty),
@@ -1194,6 +1285,7 @@ async function postTransferDocumentLine(
       tenantId,
       companyId: doc.companyId,
       warehouseId: targetWh,
+      articleId: resolvedArticleId,
       variantId: line.variantId || null,
       movementType,
       qtyDelta: String(qty),
@@ -1214,7 +1306,7 @@ async function postTransferDocumentLine(
         eq(inventoryMovement.companyId, doc.companyId),
         eq(inventoryMovement.transactionId, txId),
         eq(inventoryMovement.warehouseId, sourceWh),
-        eq(inventoryMovement.variantId, line.variantId as any),
+        eq(inventoryMovement.variantId, line.variantId),
       ),
     )
     .orderBy(asc(inventoryMovement.createdAt))
@@ -1237,7 +1329,7 @@ async function postTransferDocumentLine(
       .insert(serialNumber)
       .values({
         tenantId,
-        variantId: line.variantId || null,
+        articleId: resolvedArticleId,
         serialNo: tracking.serialNo,
         status: "in_stock",
       })
@@ -1253,7 +1345,7 @@ async function postTransferDocumentLine(
         .where(
           and(
             eq(serialNumber.tenantId, tenantId),
-            eq(serialNumber.articleId as any, line.variantId as any),
+            eq(serialNumber.articleId, resolvedArticleId),
             eq(serialNumber.serialNo, tracking.serialNo),
           ),
         )
@@ -1291,6 +1383,11 @@ async function postStandardDocumentLine(
   txId: string,
   trackingRows: TrackingRowLike[],
 ) {
+  const resolvedArticleId =
+    line.articleId ??
+    (line.variantId ? (await resolveVariantTruth(tx, tenantId, line.variantId)).articleId : null);
+  if (!resolvedArticleId) return;
+
   const warehouseId = line.warehouseId ?? doc.warehouseId;
   if (!warehouseId) return;
 
@@ -1306,7 +1403,7 @@ async function postStandardDocumentLine(
         and(
           eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
-          eq(inventoryBalance.articleId as any, line.variantId as any),
+          eq(inventoryBalance.articleId, resolvedArticleId),
         ),
       )
       .limit(1);
@@ -1332,7 +1429,7 @@ async function postStandardDocumentLine(
       tenantId,
       companyId: doc.companyId,
       warehouseId,
-      variantId: line.variantId || null,
+      articleId: resolvedArticleId,
       ...inventorySeedValues,
     })
     .onConflictDoUpdate({
@@ -1346,6 +1443,7 @@ async function postStandardDocumentLine(
       tenantId,
       companyId: doc.companyId,
       warehouseId,
+      articleId: resolvedArticleId,
       variantId: line.variantId || null,
       movementType,
       qtyDelta: resolveInventoryMovementQtyDelta(movementType, qty, stocktakeOnHandBefore),
@@ -1357,13 +1455,12 @@ async function postStandardDocumentLine(
       referenceText: doc.documentNo,
     })
     .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
-
   if (movement?.inventoryMovementId) {
     await applyTrackingForMovementFromRows(
       tx,
       tenantId,
       movement.inventoryMovementId,
-      line,
+      { ...line, articleId: resolvedArticleId } as DocumentPostingLineWithArticle,
       movementType,
       trackingRows,
     );
@@ -1380,7 +1477,7 @@ async function postStandardDocumentLine(
         and(
           eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
-          eq(inventoryBalance.articleId as any, line.variantId as any),
+          eq(inventoryBalance.articleId, resolvedArticleId),
         ),
       )
       .limit(1);
@@ -1401,7 +1498,7 @@ async function postStandardDocumentLine(
         and(
           eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
-          eq(inventoryBalance.articleId as any, line.variantId as any),
+          eq(inventoryBalance.articleId, resolvedArticleId),
         ),
       );
 
@@ -1413,6 +1510,7 @@ async function postStandardDocumentLine(
       sourceDocumentId: doc.documentId,
       sourceDocumentLineId: line.documentLineId,
       supplierId: doc.customerId,
+      articleId: resolvedArticleId,
       variantId: line.variantId || null,
       eventType: "purchase",
       quantityDelta: String(lineQty),
@@ -1434,7 +1532,7 @@ async function postStandardDocumentLine(
         and(
           eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
-          eq(inventoryBalance.articleId as any, line.variantId as any),
+          eq(inventoryBalance.articleId, resolvedArticleId),
         ),
       )
       .limit(1);
@@ -1450,6 +1548,7 @@ async function postStandardDocumentLine(
       sourceDocumentId: doc.documentId,
       sourceDocumentLineId: line.documentLineId,
       supplierId: doc.customerId,
+      articleId: resolvedArticleId,
       variantId: line.variantId || null,
       eventType: "correction",
       quantityDelta: String(-lineQty),
@@ -1473,7 +1572,7 @@ async function postStandardDocumentLine(
           and(
             eq(inventoryBalance.tenantId, tenantId),
             eq(inventoryBalance.warehouseId, warehouseId),
-            eq(inventoryBalance.articleId as any, line.variantId as any),
+            eq(inventoryBalance.articleId, resolvedArticleId),
           ),
         )
         .limit(1);
@@ -1489,6 +1588,7 @@ async function postStandardDocumentLine(
       sourceDocumentId: doc.documentId,
       sourceDocumentLineId: line.documentLineId,
       customerId: doc.customerId,
+      articleId: resolvedArticleId,
       variantId: line.variantId || null,
       eventType: movementType === "R" ? "invoice" : "delivery",
       quantityDelta: String(-qty),
@@ -1514,7 +1614,6 @@ async function postDocumentLine(
   if (!line.variantId) return;
   if (line.lineType === "sales_bom_header") return;
   if (movementType === "N" || movementType === "p") return;
-
   if (movementType === "q") {
     await postProductionDocumentLine(
       tx,
@@ -1615,9 +1714,11 @@ export class DocumentService {
         warehouseId: data.warehouseId ?? doc.warehouseId ?? null,
         costCenterId: data.costCenterId ?? null,
         movementType: data.movementType ?? doc.documentType,
-        lineType: data.variantId 
-          ? (data.lineType ?? "article") 
-          : (data.lineType === "article" || !data.lineType ? "text" : data.lineType),
+        lineType: data.variantId
+          ? (data.lineType ?? "article")
+          : data.lineType === "article" || !data.lineType
+            ? "text"
+            : data.lineType,
         bomGroupId: data.bomGroupId ?? null,
         transactionId: crypto.randomUUID(),
       };
@@ -1741,12 +1842,57 @@ export class DocumentService {
     tenantId: string,
   ): Promise<{ success: boolean; document: unknown }> {
     const result = await db.transaction(async (tx) => {
-      const [doc] = await tx
-        .select()
-        .from(document)
-        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
-        .limit(1)
-        .for("update");
+      const docRows = (await tx.execute(sql`
+        select
+          document_id as "documentId",
+          company_id as "companyId",
+          document_type as "documentType",
+          document_no as "documentNo",
+          status,
+          warehouse_id as "warehouseId",
+          target_warehouse_id as "targetWarehouseId",
+          customer_id as "customerId",
+          posting_date as "postingDate",
+          document_date as "documentDate",
+          document_group_id as "documentGroupId",
+          billing_address as "billingAddress",
+          delivery_address as "deliveryAddress",
+          delivery_address_id as "deliveryAddressId",
+          custom_attributes as "customAttributes",
+          note_text as "noteText",
+          note_text_source_entity as "noteTextSourceEntity",
+          note_text_source_id as "noteTextSourceId",
+          note_text_source_field as "noteTextSourceField",
+          note_text_linked_at as "noteTextLinkedAt",
+          note_text_overridden_at as "noteTextOverriddenAt",
+          pre_text as "preText",
+          pre_text_source_entity as "preTextSourceEntity",
+          pre_text_source_id as "preTextSourceId",
+          pre_text_source_field as "preTextSourceField",
+          pre_text_linked_at as "preTextLinkedAt",
+          pre_text_overridden_at as "preTextOverriddenAt",
+          post_text as "postText",
+          post_text_source_entity as "postTextSourceEntity",
+          post_text_source_id as "postTextSourceId",
+          post_text_source_field as "postTextSourceField",
+          post_text_linked_at as "postTextLinkedAt",
+          post_text_overridden_at as "postTextOverriddenAt",
+          storno_text as "stornoText",
+          storno_text_source_entity as "stornoTextSourceEntity",
+          storno_text_source_id as "stornoTextSourceId",
+          storno_text_source_field as "stornoTextSourceField",
+          storno_text_linked_at as "stornoTextLinkedAt",
+          storno_text_overridden_at as "stornoTextOverriddenAt",
+          payment_term_id as "paymentTermId",
+          shipping_method_id as "shippingMethodId",
+          document_type_id as "documentTypeId",
+          transaction_id as "transactionId"
+        from document
+        where document_id = ${documentId} and tenant_id = ${tenantId}
+        limit 1
+        for update
+      `)) as Array<DocumentPostingDoc & { status: string }>;
+      const [doc] = docRows;
 
       if (!doc) throw new Error("Document not found");
       if (doc.status !== "draft") throw new Error("Document must be in draft status to post");
@@ -1758,41 +1904,52 @@ export class DocumentService {
       )) as DocumentPostingLine[];
       const lineIds = lines.map((line) => line.documentLineId);
       const trackingByLine = await loadTrackingRowsByLineIds(tx, tenantId, lineIds);
-      const variantIds = [
-        ...new Set(lines.map((line) => line.variantId).filter((id): id is string => !!id)),
-      ];
-      const articleRows = variantIds.length
-        ? await tx
-            .select({
-              articleId: article.articleId,
-              trackingMode: article.trackingMode,
-            })
-            .from(article)
-            .where(and(eq(article.tenantId, tenantId), inArray(article.articleId as any, variantIds as any)))
-        : [];
-      const articleTrackingModeById = new Map(
-        articleRows.map((row) => [row.articleId, row.trackingMode ?? null]),
+      const postingLines = await Promise.all(
+        lines.map(async (line) => {
+          if (line.lineType === "article" && !line.variantId) {
+            throw new Error(`Line ${line.documentLineId} requires variantId before posting`);
+          }
+
+          const resolvedTruth = line.variantId
+            ? await resolveVariantTruth(tx, tenantId, line.variantId)
+            : null;
+
+          return {
+            ...line,
+            articleId: resolvedTruth?.articleId ?? null,
+            variantId: line.variantId ?? null,
+          } as DocumentPostingLineWithArticle;
+        }),
       );
+
+      const articleIds = [
+        ...new Set(postingLines.map((line) => line.articleId).filter((id): id is string => !!id)),
+      ];
+      const articleTrackingModeById = new Map<string, string | null>();
+      for (const articleId of articleIds) {
+        const rows = (await tx.execute(sql`
+          select tracking_mode as "trackingMode"
+          from article
+          where tenant_id = ${tenantId} and article_id = ${articleId}
+          limit 1
+        `)) as Array<{ trackingMode: string | null }>;
+        articleTrackingModeById.set(articleId, rows[0]?.trackingMode ?? null);
+      }
       const [docGroup] = doc.documentGroupId
-        ? await tx
-            .select({
-              requireSerialTracking: documentGroup.requireSerialTracking,
-              requireBatchTracking: documentGroup.requireBatchTracking,
-            })
-            .from(documentGroup)
-            .where(
-              and(
-                eq(documentGroup.documentGroupId, doc.documentGroupId),
-                eq(documentGroup.tenantId, tenantId),
-              ),
-            )
-            .limit(1)
+        ? ((await tx.execute(sql`
+          select
+            require_serial_tracking as "requireSerialTracking",
+            require_batch_tracking as "requireBatchTracking"
+          from document_group
+          where tenant_id = ${tenantId} and document_group_id = ${doc.documentGroupId}
+          limit 1
+        `)) as Array<{ requireSerialTracking: boolean; requireBatchTracking: boolean }>)
         : [null];
 
       if (docGroup?.requireSerialTracking || docGroup?.requireBatchTracking) {
-        for (const line of lines) {
-          if (!line.variantId || line.lineType === "comment") continue;
-          const trackingMode = articleTrackingModeById.get(line.variantId) ?? null;
+        for (const line of postingLines) {
+          if (!line.articleId || line.lineType === "comment") continue;
+          const trackingMode = articleTrackingModeById.get(line.articleId) ?? null;
           if (!trackingMode) continue;
 
           const trackingRows = trackingByLine.get(line.documentLineId) ?? [];
@@ -1821,13 +1978,13 @@ export class DocumentService {
       const now = new Date();
       const txId = crypto.randomUUID();
 
-      for (const line of lines) {
+      for (const line of postingLines) {
         const trackingRows = trackingByLine.get(line.documentLineId) ?? [];
         await postDocumentLine(
           tx,
           tenantId,
           doc as DocumentPostingDoc,
-          line as DocumentPostingLine,
+          line,
           movementType,
           now,
           txId,
@@ -1840,7 +1997,7 @@ export class DocumentService {
         tenantId,
         doc as DocumentPostingDoc,
         movementType,
-        lines as DocumentPostingLine[],
+        postingLines,
       );
 
       await tx
@@ -1853,7 +2010,15 @@ export class DocumentService {
         })
         .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)));
 
-      const [updated] = await tx
+      const updatedDoc = {
+        ...doc,
+        status: "posted",
+        postedAt: now,
+        postedBy: userId,
+        updatedAt: now,
+      };
+
+      await tx
         .update(document)
         .set({
           status: "posted",
@@ -1877,10 +2042,8 @@ export class DocumentService {
           stornoTextSourceField: null,
           stornoTextLinkedAt: null,
         })
-        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
-        .returning();
-
-      return { success: true, document: updated };
+        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+      return { success: true, document: updatedDoc };
     });
 
     void refreshStatisticsMVs(tenantId).catch((error) => {
@@ -2681,11 +2844,14 @@ export class DocumentService {
     documentDate: string,
     tenantId: string,
   ): Promise<{ unitPrice: string; taxCodeId: string | null }> {
-    const [art] = await db
-      .select()
-      .from(article)
-      .where(and(eq(article.articleId as any, variantId as any), eq(article.tenantId, tenantId)))
-      .limit(1);
+    const { articleId } = await resolveVariantTruth(db, tenantId, variantId);
+    const rows = (await db.execute(sql`
+      select tax_class_id as "taxClassId"
+      from article
+      where tenant_id = ${tenantId} and article_id = ${articleId}
+      limit 1
+    `)) as Array<{ taxClassId: string | null }>;
+    const art = rows[0] ?? null;
 
     if (!art) throw new Error("Article not found");
 
@@ -2703,7 +2869,7 @@ export class DocumentService {
           .where(
             and(
               eq(priceListItem.tenantId, tenantId),
-              eq(priceListItem.variantId as any, variantId as any),
+              eq(priceListItem.variantId, variantId),
               inArray(priceListItem.priceListId, priceListIds),
             ),
           )
@@ -2745,6 +2911,7 @@ export class DocumentService {
 
       const warehouseId = line.warehouseId ?? doc.warehouseId;
       if (!warehouseId || !line.variantId) return { success: true };
+      const { articleId } = await resolveVariantTruth(tx, tenantId, line.variantId);
 
       const movementType = (line.movementType ?? doc.documentType) as string;
       const now = new Date();
@@ -2758,7 +2925,7 @@ export class DocumentService {
           tenantId,
           companyId: doc.companyId,
           warehouseId,
-          articleId: line.variantId as any,
+          articleId,
           onHandQty: String(effectiveQty),
           reservedQty: "0",
           availableQty: String(effectiveQty),
@@ -2775,7 +2942,7 @@ export class DocumentService {
           },
         });
 
-      await tx.insert(inventoryMovement).values({ inventoryItemId: "00000000-0000-0000-0000-000000000000" as any,
+      await tx.insert(inventoryMovement).values({
         tenantId,
         companyId: doc.companyId,
         warehouseId,
@@ -2951,9 +3118,11 @@ export class DocumentService {
             warehouseId: line.warehouseId ?? null,
             costCenterId: line.costCenterId ?? null,
             movementType: line.movementType ?? docRecord.documentType,
-            lineType: line.variantId 
-              ? (line.lineType ?? "article") 
-              : (line.lineType === "article" || !line.lineType ? "text" : line.lineType),
+            lineType: line.variantId
+              ? (line.lineType ?? "article")
+              : line.lineType === "article" || !line.lineType
+                ? "text"
+                : line.lineType,
             bomGroupId: line.bomGroupId ?? null,
           };
 
@@ -3196,13 +3365,22 @@ export class DocumentService {
 
       if (!newDoc) throw new Error("Document creation failed");
 
-      const insertValues = providedLines
-        .filter((line) => !line.archived)
-        .map((line) => ({
+      const insertValues: any[] = [];
+      for (const line of providedLines.filter((line) => !line.archived)) {
+        const resolvedTruth = await resolveDocumentLineTruth(tx, tenantId, {
+          documentLineId: line.documentLineId ?? null,
+          lineNo: Number(line.lineNo),
+          articleId: line.articleId ?? null,
+          variantId: line.variantId ?? null,
+          lineType: line.lineType ?? "article",
+        });
+
+        insertValues.push({
           tenantId,
           documentId: newDoc.documentId,
           lineNo: Number(line.lineNo),
-          variantId: line.variantId || null,
+          articleId: resolvedTruth.articleId,
+          variantId: resolvedTruth.variantId,
           articleTextSnapshot: line.articleTextSnapshot ?? null,
           langText: line.langText ?? null,
           langTextSourceEntity: line.langTextSourceEntity ?? null,
@@ -3221,12 +3399,11 @@ export class DocumentService {
           warehouseId: line.warehouseId ?? resolvedWarehouseId,
           costCenterId: line.costCenterId ?? null,
           movementType: line.movementType ?? group.documentType,
-          lineType: line.variantId 
-            ? (line.lineType ?? "article") 
-            : (line.lineType === "article" || !line.lineType ? "text" : line.lineType),
+          lineType: line.lineType ?? "article",
           bomGroupId: line.bomGroupId ?? null,
           transactionId: newDoc.transactionId,
-        }));
+        });
+      }
 
       if (insertValues.length > 0) {
         await tx.insert(documentLine).values(insertValues);
@@ -3661,6 +3838,7 @@ export class DocumentService {
           movement.absoluteQty != null ? parseQty(movement.absoluteQty) : Math.abs(qtyDelta);
         const warehouseId = movement.warehouseId;
         if (!warehouseId || !movement.variantId) continue;
+        const { articleId } = await resolveVariantTruth(tx, tenantId, movement.variantId);
 
         const applyBalance = async (set: Record<string, unknown>) => {
           await tx
@@ -3670,7 +3848,7 @@ export class DocumentService {
               and(
                 eq(inventoryBalance.tenantId, tenantId),
                 eq(inventoryBalance.warehouseId, warehouseId),
-                eq(inventoryBalance.articleId as any, movement.variantId as any),
+                eq(inventoryBalance.articleId, articleId),
               ),
             );
         };
@@ -3779,10 +3957,12 @@ export class DocumentService {
             );
         }
 
-        await tx.insert(inventoryMovement).values({ inventoryItemId: "00000000-0000-0000-0000-000000000000" as any,
+        const movementArticleId = articleId;
+        await tx.insert(inventoryMovement).values({
           tenantId,
           companyId: doc.companyId,
           warehouseId,
+          articleId: movementArticleId,
           variantId: movement.variantId,
           movementType: movement.movementType,
           qtyDelta: String(-qtyDelta),

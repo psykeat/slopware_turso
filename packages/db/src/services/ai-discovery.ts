@@ -32,6 +32,9 @@ export interface SemanticField {
   isRequired: boolean;
   isWritable: boolean;
   lookupTable?: string;
+  lookupDisplayColumn?: string;
+  lookupCodeColumn?: string;
+  lookupValueColumn?: string;
   defaultValue?: string;
 }
 
@@ -409,12 +412,13 @@ export class AIDiscoveryService {
     ]);
 
     // Query DB Schema Annotations & Tenant Fields
-    const [dbAnnotations, dbTenantFields] = await Promise.all([
+    const [dbAnnotations, dbTenantFields, registries] = await Promise.all([
       db.select().from(schemaAnnotations).where(eq(schemaAnnotations.tableName, entityName)),
       db
         .select()
         .from(tenantFields)
         .where(and(eq(tenantFields.entityName, entityName), eq(tenantFields.tenantId, tenantId))),
+      db.select().from(helperTableRegistry),
     ]);
 
     const annotationsMap = new Map<string, (typeof dbAnnotations)[0]>();
@@ -454,9 +458,20 @@ export class AIDiscoveryService {
       else if (colType === "PgTimestamp" || colType === "PgDate") dataType = "timestamp";
 
       const lookupTable = tf?.lookupTable || inferLookupTableName(entityName, colKey, schema);
+      const lookupRegistry = lookupTable
+        ? registries.find((r) => r.tableName === lookupTable)
+        : undefined;
       if (lookupTable && (schema as any)[lookupTable]) {
         dataType = "lookup";
       }
+
+      const lookupDisplayColumn =
+        lookupRegistry?.displayColumn ??
+        (lookupTable === "articleVariant" ? "lookupLabel" : undefined);
+      const lookupCodeColumn =
+        lookupRegistry?.codeColumn ?? (lookupTable === "articleVariant" ? "sku" : undefined);
+      const lookupValueColumn =
+        lookupRegistry?.valueColumn ?? (lookupTable === "articleVariant" ? "variantId" : undefined);
 
       const businessName = tf?.label
         ? (tf.label as any).de || (tf.label as any).en
@@ -466,14 +481,22 @@ export class AIDiscoveryService {
         ? (tf.helpText as any).de || (tf.helpText as any).en
         : ann?.description || `Technical column ${colKey}`;
 
+      const lookupDescription =
+        lookupTable === "articleVariant"
+          ? `${description} Variant lookups should surface SKU and option summaries instead of UUIDs.`
+          : description;
+
       semanticFields.push({
         fieldName: colKey,
         businessName,
-        description,
+        description: lookupDescription,
         dataType,
         isRequired: !!isRequired,
         isWritable,
         lookupTable,
+        lookupDisplayColumn,
+        lookupCodeColumn,
+        lookupValueColumn,
         defaultValue: (col as any).default !== undefined ? String((col as any).default) : undefined,
       });
     }

@@ -253,7 +253,7 @@ function getFieldType(columnType: string | undefined) {
           : "text";
 }
 
-function resolveLookupMetadata(f: Record<string, any>, registries: any[]) {
+export function resolveLookupMetadata(f: Record<string, any>, registries: any[]) {
   const registry = registries.find((r) => r.tableName === f.lookupTable);
   const lookupSchemaTable = f.lookupTable ? (schema as any)[f.lookupTable] : undefined;
   const lookupColumns = lookupSchemaTable ? getColumns(lookupSchemaTable) : undefined;
@@ -276,10 +276,13 @@ function resolveLookupMetadata(f: Record<string, any>, registries: any[]) {
         ? "iso2Code"
         : tableColumns.includes("iso3Code")
           ? "iso3Code"
-          : undefined);
+          : f.lookupTable === "articleVariant"
+            ? "sku"
+            : undefined);
 
   const inferredDisplayColumn =
     registry?.displayColumn ??
+    (f.lookupTable === "articleVariant" ? "lookupLabel" : undefined) ??
     (tableColumns.includes("name")
       ? "name"
       : tableColumns.includes("code")
@@ -291,7 +294,8 @@ function resolveLookupMetadata(f: Record<string, any>, registries: any[]) {
     inferredCodeColumn,
     inferredDisplayColumn,
     inferredValueColumn: registry?.valueColumn ?? inferredPkColumn ?? inferredCodeColumn,
-    lookupSortColumn: registry?.sortColumn ?? inferredDisplayColumn,
+    lookupSortColumn:
+      registry?.sortColumn ?? (f.lookupTable === "articleVariant" ? "sku" : inferredDisplayColumn),
     lookupIsI18n: registry?.displayIsI18n,
   };
 }

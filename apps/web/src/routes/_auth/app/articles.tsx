@@ -293,14 +293,27 @@ function ArticleVariantsAndOptionsTab({
   }, [bulkPriceMode, bulkPriceValue, bulkVariantRows, patchEntity, refreshVariants]);
 
   const handleVariantSaved = useCallback(
-    (record: unknown) => {
+    async (record: unknown) => {
+      const savedVariantId = (record as any)?.variantId ?? (record as any)?.id ?? variantEditId;
+      const nextSku = typeof (record as any)?.sku === "string" ? (record as any).sku : null;
+      const previousSku = variantEditId ? (variantById.get(variantEditId)?.sku ?? null) : null;
+
       setShowVariantEdit(false);
       queryClient.invalidateQueries({ queryKey: ["data", "articleVariant", articleId] });
-      variantGridRef.current?.restoreFocus(
-        (record as any)?.variantId ?? (record as any)?.id ?? variantEditId ?? null,
-      );
+
+      if (savedVariantId && nextSku && nextSku !== previousSku) {
+        try {
+          await patchVariantInventorySku(savedVariantId, nextSku);
+        } catch (err) {
+          toast.error(
+            err instanceof Error && err.message ? err.message : "Failed to sync inventory SKU",
+          );
+        }
+      }
+
+      variantGridRef.current?.restoreFocus(savedVariantId ?? null);
     },
-    [articleId, queryClient, variantEditId],
+    [articleId, patchVariantInventorySku, queryClient, variantById, variantEditId],
   );
 
   const variantColumns = useMemo<ColumnDef<any>[]>(

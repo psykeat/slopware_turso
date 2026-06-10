@@ -26,9 +26,9 @@ export const Route = createFileRoute("/api/stats/articles")({
         )) as any[];
 
         const [lowStock] = (await db.execute(
-          sql`SELECT COUNT(DISTINCT article_id) AS cnt
+          sql`SELECT COUNT(DISTINCT inventory_item_id) AS cnt
               FROM inventory_balance
-              WHERE tenant_id = ${tenantId}::uuid AND on_hand_qty <= 0`,
+              WHERE tenant_id = ${tenantId}::uuid AND on_hand_qty <= 0 AND inventory_item_id IS NOT NULL`,
         )) as any[];
 
         const [noPrice] = (await db.execute(

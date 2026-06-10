@@ -1430,9 +1430,8 @@ export const inventoryBalance = pgTable(
       .notNull()
       .references(() => warehouse.warehouseId),
     inventoryItemId: uuid("inventory_item_id").references(() => inventoryItem.itemId),
-    // Compatibility baggage for article-first posting paths. Canonical variant-aware reads
-    // should anchor on inventoryItemId, but service-level upserts still target articleId.
-    articleId: uuid("article_id").notNull(),
+    // articleId is kept nullable for backfill compatibility; canonical reads anchor on inventoryItemId.
+    articleId: uuid("article_id").references(() => article.articleId),
     onHandQty: numeric("on_hand_qty").notNull().default("0"),
     reservedQty: numeric("reserved_qty").notNull().default("0"),
     asOfAt: timestamp("as_of_at", { withTimezone: true }),
@@ -1443,10 +1442,10 @@ export const inventoryBalance = pgTable(
     gldCost: numeric("gld_cost"),
   },
   (table) => [
-    unique("inventory_balance_tenant_id_warehouse_id_article_id_unique").on(
+    unique("inventory_balance_tenant_id_warehouse_id_item_unique").on(
       table.tenantId,
       table.warehouseId,
-      table.articleId,
+      table.inventoryItemId,
     ),
     index("idx_inv_balance_lookup").on(table.tenantId, table.warehouseId, table.inventoryItemId),
     index("idx_inv_balance_article").on(table.tenantId, table.warehouseId, table.articleId),

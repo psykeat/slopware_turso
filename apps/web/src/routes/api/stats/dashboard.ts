@@ -45,7 +45,7 @@ export const Route = createFileRoute("/api/stats/dashboard")({
           );
 
         const inventoryResult = await db.execute(
-          sql`SELECT COALESCE(SUM(on_hand_qty * COALESCE(gld_purchase, 0)), 0) AS inventory_value FROM inventory_balance WHERE tenant_id = ${tenantId}::uuid`,
+          sql`SELECT COALESCE(SUM(on_hand_qty * COALESCE(gld_purchase, 0)), 0) AS inventory_value FROM inventory_balance WHERE tenant_id = ${tenantId}::uuid AND inventory_item_id IS NOT NULL`,
         );
         const inventoryRow = inventoryResult[0] as any;
 

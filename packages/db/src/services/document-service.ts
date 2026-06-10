@@ -12,6 +12,7 @@ import {
   documentLineTracking,
   inventoryBalance,
   inventoryMovement,
+  inventoryItem,
   factSalesEvent,
   factPurchaseEvent,
   article,
@@ -273,6 +274,56 @@ async function resolveVariantTruth(
     variantId: row.variantId,
     sku: row.sku,
   };
+}
+
+async function ensureVariantInventoryItemId(
+  tx: any,
+  tenantId: string,
+  variantId: string,
+): Promise<string> {
+  const [row] = await tx
+    .select({ itemId: inventoryItem.itemId })
+    .from(inventoryItem)
+    .where(
+      and(
+        eq(inventoryItem.tenantId, tenantId),
+        eq(inventoryItem.variantId, variantId),
+      ),
+    )
+    .limit(1);
+
+  if (row?.itemId) {
+    return row.itemId;
+  }
+
+  const truth = await resolveVariantTruth(tx, tenantId, variantId);
+
+  await tx
+    .insert(inventoryItem)
+    .values({
+      tenantId,
+      variantId,
+      sku: truth.sku,
+      tracked: true,
+    })
+    .onConflictDoNothing();
+
+  const [created] = await tx
+    .select({ itemId: inventoryItem.itemId })
+    .from(inventoryItem)
+    .where(
+      and(
+        eq(inventoryItem.tenantId, tenantId),
+        eq(inventoryItem.variantId, variantId),
+      ),
+    )
+    .limit(1);
+
+  if (!created?.itemId) {
+    throw new Error(`Inventory item not found for variant ${variantId}`);
+  }
+
+  return created.itemId;
 }
 
 async function resolveDocumentLineTruth(
@@ -1227,12 +1278,13 @@ async function postProductionDocumentLine(
       companyId: doc.companyId,
       warehouseId,
       articleId: resolvedArticleId,
+      inventoryItemId,
       onHandQty: String(signedQty),
       reservedQty: "0",
       availableQty: String(signedQty),
     })
     .onConflictDoUpdate({
-      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
+      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
       set: {
         onHandQty: sql`${inventoryBalance.onHandQty} + ${signedQty}`,
         availableQty: sql`${inventoryBalance.onHandQty} + ${signedQty} - ${inventoryBalance.reservedQty}`,
@@ -1327,12 +1379,13 @@ async function postTransferDocumentLine(
       companyId: doc.companyId,
       warehouseId: sourceWh,
       articleId: resolvedArticleId,
+      inventoryItemId,
       onHandQty: String(-qty),
       reservedQty: "0",
       availableQty: String(-qty),
     })
     .onConflictDoUpdate({
-      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
+      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
       set: {
         onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
         availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
@@ -1346,12 +1399,13 @@ async function postTransferDocumentLine(
       companyId: doc.companyId,
       warehouseId: targetWh,
       articleId: resolvedArticleId,
+      inventoryItemId,
       onHandQty: String(qty),
       reservedQty: "0",
       availableQty: String(qty),
     })
     .onConflictDoUpdate({
-      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
+      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
       set: {
         onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
         availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
@@ -1511,6 +1565,11 @@ async function postStandardDocumentLine(
   if (!warehouseId) return;
 
   const qty = Number(line.quantity);
+
+  const inventoryItemId = line.variantId
+    ? await ensureVariantInventoryItemId(tx, tenantId, line.variantId)
+    : "00000000-0000-0000-0000-000000000000";
+
   let stocktakeOnHandBefore = 0;
   if (movementType === "V") {
     const [balanceBefore] = await tx
@@ -1522,7 +1581,7 @@ async function postStandardDocumentLine(
         and(
           eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
-          eq(inventoryBalance.articleId, resolvedArticleId),
+          eq(inventoryBalance.inventoryItemId, inventoryItemId),
         ),
       )
       .limit(1);
@@ -1549,10 +1608,11 @@ async function postStandardDocumentLine(
       companyId: doc.companyId,
       warehouseId,
       articleId: resolvedArticleId,
+      inventoryItemId,
       ...inventorySeedValues,
     })
     .onConflictDoUpdate({
-      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.articleId],
+      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
       set: balanceUpdate,
     });
 
@@ -1627,7 +1687,7 @@ async function postStandardDocumentLine(
         and(
           eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
-          eq(inventoryBalance.articleId, resolvedArticleId),
+          eq(inventoryBalance.inventoryItemId, inventoryItemId),
         ),
       )
       .limit(1);
@@ -1648,7 +1708,7 @@ async function postStandardDocumentLine(
         and(
           eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
-          eq(inventoryBalance.articleId, resolvedArticleId),
+          eq(inventoryBalance.inventoryItemId, inventoryItemId),
         ),
       );
 
@@ -1682,7 +1742,7 @@ async function postStandardDocumentLine(
         and(
           eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
-          eq(inventoryBalance.articleId, resolvedArticleId),
+          eq(inventoryBalance.inventoryItemId, inventoryItemId),
         ),
       )
       .limit(1);
@@ -1722,7 +1782,7 @@ async function postStandardDocumentLine(
           and(
             eq(inventoryBalance.tenantId, tenantId),
             eq(inventoryBalance.warehouseId, warehouseId),
-            eq(inventoryBalance.articleId, resolvedArticleId),
+            eq(inventoryBalance.inventoryItemId, inventoryItemId),
           ),
         )
         .limit(1);
@@ -3062,6 +3122,7 @@ export class DocumentService {
       const warehouseId = line.warehouseId ?? doc.warehouseId;
       if (!warehouseId || !line.variantId) return { success: true };
       const { articleId } = await resolveVariantTruth(tx, tenantId, line.variantId);
+      const inventoryItemId = await ensureVariantInventoryItemId(tx, tenantId, line.variantId);
 
       const movementType = (line.movementType ?? doc.documentType) as string;
       const now = new Date();
@@ -3076,6 +3137,7 @@ export class DocumentService {
           companyId: doc.companyId,
           warehouseId,
           articleId,
+          inventoryItemId,
           onHandQty: String(effectiveQty),
           reservedQty: "0",
           availableQty: String(effectiveQty),
@@ -3084,7 +3146,7 @@ export class DocumentService {
           target: [
             inventoryBalance.tenantId,
             inventoryBalance.warehouseId,
-            inventoryBalance.articleId,
+            inventoryBalance.inventoryItemId,
           ],
           set: {
             onHandQty: sql`${inventoryBalance.onHandQty} + ${effectiveQty}`,
@@ -3992,6 +4054,7 @@ export class DocumentService {
         const warehouseId = movement.warehouseId;
         if (!warehouseId || !movement.variantId) continue;
         const { articleId } = await resolveVariantTruth(tx, tenantId, movement.variantId);
+        void articleId; // kept for potential future use; balance is now anchored on inventoryItemId
 
         const applyBalance = async (set: Record<string, unknown>) => {
           await tx
@@ -4001,7 +4064,7 @@ export class DocumentService {
               and(
                 eq(inventoryBalance.tenantId, tenantId),
                 eq(inventoryBalance.warehouseId, warehouseId),
-                eq(inventoryBalance.articleId, articleId),
+                eq(inventoryBalance.inventoryItemId, movement.inventoryItemId),
               ),
             );
         };

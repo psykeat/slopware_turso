@@ -181,12 +181,14 @@ test("postDocument resolves article truth from variantId, not the stored article
   const movementRows = (await db.execute(sql`
     select
       variant_id as "variantId",
+      inventory_item_id as "inventoryItemId",
       source_document_line_id as "sourceDocumentLineId"
     from inventory_movement
     where source_document_line_id = ${lineRow.documentLineId}
     limit 1
   `)) as Array<{
     variantId: string | null;
+    inventoryItemId: string | null;
     sourceDocumentLineId: string | null;
   }>;
   const [movement] = movementRows;
@@ -204,9 +206,25 @@ test("postDocument resolves article truth from variantId, not the stored article
   }>;
   const [balance] = balanceRows;
 
+  const inventoryItemRows = (await db.execute(sql`
+    select
+      item_id as "itemId",
+      variant_id as "variantId"
+    from inventory_item
+    where tenant_id = ${fixture.tenantId} and variant_id = ${fixture.variantId}
+    limit 1
+  `)) as Array<{
+    itemId: string | null;
+    variantId: string | null;
+  }>;
+  const [inventoryItemRow] = inventoryItemRows;
+
   assert.equal(movement?.sourceDocumentLineId, lineRow.documentLineId);
   assert.equal(movement?.variantId, fixture.variantId);
+  assert.ok(movement?.inventoryItemId);
   assert.equal(balance?.articleId, fixture.catalogArticleId);
+  assert.equal(inventoryItemRow?.variantId, fixture.variantId);
+  assert.ok(inventoryItemRow?.itemId);
 });
 
 after(async () => {

@@ -24,6 +24,7 @@ import {
   journalLine,
   accountDeterminationRule,
   unit,
+  inventoryItem,
 } from "../schema/app.schema";
 import { resolveFiscalPeriodId } from "./fiscal-period-generator";
 import { refreshStatisticsMVs } from "./statistics";
@@ -247,6 +248,7 @@ function parseQty(value: string | number | null | undefined): number {
 type VariantTruth = {
   articleId: string;
   variantId: string;
+  sku: string;
 };
 
 async function resolveVariantTruth(
@@ -255,11 +257,11 @@ async function resolveVariantTruth(
   variantId: string,
 ): Promise<VariantTruth> {
   const rows = (await tx.execute(sql`
-    select article_id as "articleId", variant_id as "variantId"
+    select article_id as "articleId", variant_id as "variantId", sku
     from article_variant
     where tenant_id = ${tenantId} and variant_id = ${variantId}
     limit 1
-  `)) as Array<{ articleId: string; variantId: string }>;
+  `)) as Array<{ articleId: string; variantId: string; sku: string }>;
   const [row] = rows;
 
   if (!row) {
@@ -269,6 +271,7 @@ async function resolveVariantTruth(
   return {
     articleId: row.articleId,
     variantId: row.variantId,
+    sku: row.sku,
   };
 }
 
@@ -851,24 +854,71 @@ async function persistDocumentTotals(
   return totals;
 }
 
-async function applyTrackingForMovementFromRows(
+async function ensureVariantInventoryItemId(
+  tx: any,
+  tenantId: string,
+  variantId: string,
+): Promise<string> {
+  const [row] = await tx
+    .select({ itemId: inventoryItem.itemId })
+    .from(inventoryItem)
+    .where(
+      and(
+        eq(inventoryItem.tenantId, tenantId),
+        eq(inventoryItem.variantId, variantId),
+      ),
+    )
+    .limit(1);
+
+  if (row?.itemId) {
+    return row.itemId;
+  }
+
+  const truth = await resolveVariantTruth(tx, tenantId, variantId);
+
+  await tx
+    .insert(inventoryItem)
+    .values({
+      tenantId,
+      variantId,
+      sku: truth.sku,
+      tracked: true,
+    })
+    .onConflictDoNothing();
+
+  const [created] = await tx
+    .select({ itemId: inventoryItem.itemId })
+    .from(inventoryItem)
+    .where(
+      and(
+        eq(inventoryItem.tenantId, tenantId),
+        eq(inventoryItem.variantId, variantId),
+      ),
+    )
+    .limit(1);
+
+  if (!created?.itemId) {
+    throw new Error(`Inventory item not found for variant ${variantId}`);
+  }
+
+  return created.itemId;
+}
+
+async function applyTrackingForSingleRow(
   tx: any,
   tenantId: string,
   movementId: string,
-  line: Pick<DocumentPostingLineWithArticle, "documentLineId" | "variantId" | "lineType">,
+  line: Pick<DocumentPostingLineWithArticle, "documentLineId" | "variantId" | "lineType" | "articleId">,
   docMovementType: string,
-  trackingRows: Array<{
+  tracking: {
     trackingId: string;
     documentLineId: string;
     serialNumberId: string | null;
     serialNo: string | null;
     batchNo: string | null;
     qty: string;
-  }>,
+  },
 ) {
-  if (trackingRows.length === 0) return;
-
-  const tracking = trackingRows[0];
   if (tracking.batchNo) {
     await tx
       .update(inventoryMovement)
@@ -884,18 +934,27 @@ async function applyTrackingForMovementFromRows(
       .insert(serialNumber)
       .values({
         tenantId,
-        variantId: line.variantId!,
+        articleId: line.articleId!,
         serialNo: tracking.serialNo,
         status: lifecycle.status,
         createdMovementId: lifecycle.movementLink === "createdMovementId" ? movementId : null,
         consumedMovementId: lifecycle.movementLink === "consumedMovementId" ? movementId : null,
       })
+      .onConflictDoUpdate({
+        target: [serialNumber.tenantId, serialNumber.articleId, serialNumber.serialNo],
+        set: {
+          status: lifecycle.status,
+          createdMovementId: lifecycle.movementLink === "createdMovementId" ? movementId : undefined,
+          consumedMovementId: lifecycle.movementLink === "consumedMovementId" ? movementId : undefined,
+        },
+      })
       .returning({ serialNumberId: serialNumber.serialNumberId });
 
-    if (createdSerial?.serialNumberId) {
+    const sId = createdSerial?.serialNumberId;
+    if (sId) {
       await tx
         .update(inventoryMovement)
-        .set({ serialNumberId: createdSerial.serialNumberId })
+        .set({ serialNumberId: sId })
         .where(eq(inventoryMovement.inventoryMovementId, movementId));
     }
     return;
@@ -928,6 +987,7 @@ async function applyTrackingForMovementFromRows(
       .where(eq(inventoryMovement.inventoryMovementId, movementId));
   }
 }
+
 
 async function getDocumentGroupAccountFallback(
   tx: any,
@@ -1147,6 +1207,10 @@ async function postProductionDocumentLine(
     (line.variantId ? (await resolveVariantTruth(tx, tenantId, line.variantId)).articleId : null);
   if (!resolvedArticleId) return;
 
+  const inventoryItemId = line.variantId
+    ? await ensureVariantInventoryItemId(tx, tenantId, line.variantId)
+    : "00000000-0000-0000-0000-000000000000";
+
   const resolvedLine = { ...line, articleId: resolvedArticleId };
 
   const warehouseId = line.warehouseId ?? doc.warehouseId;
@@ -1175,33 +1239,59 @@ async function postProductionDocumentLine(
       },
     });
 
-  const [movement] = await tx
-    .insert(inventoryMovement)
-    .values({
-      tenantId,
-      companyId: doc.companyId,
-      warehouseId,
-      articleId: resolvedArticleId,
-      variantId: line.variantId ?? null,
-      movementType,
-      qtyDelta: String(signedQty),
-      movementDate: now,
-      sourceDocumentId: doc.documentId,
-      sourceDocumentLineId: line.documentLineId,
-      transactionId: txId,
-      referenceText: doc.documentNo,
-    })
-    .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
+  const trackingRowsToProcess = trackingRows.filter((r) => r.serialNo || r.serialNumberId || r.batchNo);
 
-  if (movement?.inventoryMovementId) {
-    await applyTrackingForMovementFromRows(
-      tx,
-      tenantId,
-      movement.inventoryMovementId,
-      resolvedLine,
-      movementType,
-      trackingRows,
-    );
+  if (trackingRowsToProcess.length > 0) {
+    for (const tracking of trackingRowsToProcess) {
+      const trackingQty = Number(tracking.qty ?? 1);
+      const signedTrackingQty = isComponent ? -trackingQty : trackingQty;
+
+      const [movement] = await tx
+        .insert(inventoryMovement)
+        .values({
+          tenantId,
+          companyId: doc.companyId,
+          warehouseId,
+          inventoryItemId,
+          variantId: line.variantId ?? null,
+          movementType,
+          qtyDelta: String(signedTrackingQty),
+          movementDate: now,
+          sourceDocumentId: doc.documentId,
+          sourceDocumentLineId: line.documentLineId,
+          transactionId: txId,
+          referenceText: doc.documentNo,
+        })
+        .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
+
+      if (movement?.inventoryMovementId) {
+        await applyTrackingForSingleRow(
+          tx,
+          tenantId,
+          movement.inventoryMovementId,
+          resolvedLine,
+          movementType,
+          tracking,
+        );
+      }
+    }
+  } else {
+    await tx
+      .insert(inventoryMovement)
+      .values({
+        tenantId,
+        companyId: doc.companyId,
+        warehouseId,
+        inventoryItemId,
+        variantId: line.variantId ?? null,
+        movementType,
+        qtyDelta: String(signedQty),
+        movementDate: now,
+        sourceDocumentId: doc.documentId,
+        sourceDocumentLineId: line.documentLineId,
+        transactionId: txId,
+        referenceText: doc.documentNo,
+      });
   }
 }
 
@@ -1219,6 +1309,10 @@ async function postTransferDocumentLine(
     line.articleId ??
     (line.variantId ? (await resolveVariantTruth(tx, tenantId, line.variantId)).articleId : null);
   if (!resolvedArticleId) return;
+
+  const inventoryItemId = line.variantId
+    ? await ensureVariantInventoryItemId(tx, tenantId, line.variantId)
+    : "00000000-0000-0000-0000-000000000000";
 
   const sourceWh = doc.warehouseId;
   const targetWh = doc.targetWarehouseId;
@@ -1264,28 +1358,128 @@ async function postTransferDocumentLine(
       },
     });
 
-  await tx.insert(inventoryMovement).values({
-    tenantId,
-    companyId: doc.companyId,
-    warehouseId: sourceWh,
-    articleId: resolvedArticleId,
-    variantId: line.variantId || null,
-    movementType,
-    qtyDelta: String(-qty),
-    movementDate: now,
-    sourceDocumentId: doc.documentId,
-    sourceDocumentLineId: line.documentLineId,
-    transactionId: txId,
-    referenceText: doc.documentNo,
-  });
+  const resolvedTrackingRows =
+    trackingRows.length > 0
+      ? trackingRows
+      : await loadLineTrackingRows(tx, tenantId, line.documentLineId);
+  const trackingRowsToProcess = resolvedTrackingRows.filter(
+    (r) => r.serialNo || r.serialNumberId || r.batchNo
+  );
 
-  const [targetMovement] = await tx
-    .insert(inventoryMovement)
-    .values({
+  if (trackingRowsToProcess.length > 0) {
+    for (const tracking of trackingRowsToProcess) {
+      const trackingQty = Number(tracking.qty ?? 1);
+
+      const [sourceMovement] = await tx
+        .insert(inventoryMovement)
+        .values({
+          tenantId,
+          companyId: doc.companyId,
+          warehouseId: sourceWh,
+          inventoryItemId,
+          variantId: line.variantId || null,
+          movementType,
+          qtyDelta: String(-trackingQty),
+          movementDate: now,
+          sourceDocumentId: doc.documentId,
+          sourceDocumentLineId: line.documentLineId,
+          transactionId: txId,
+          referenceText: doc.documentNo,
+        })
+        .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
+
+      const [targetMovement] = await tx
+        .insert(inventoryMovement)
+        .values({
+          tenantId,
+          companyId: doc.companyId,
+          warehouseId: targetWh,
+          inventoryItemId,
+          variantId: line.variantId || null,
+          movementType,
+          qtyDelta: String(trackingQty),
+          movementDate: now,
+          sourceDocumentId: doc.documentId,
+          sourceDocumentLineId: line.documentLineId,
+          transactionId: txId,
+          referenceText: doc.documentNo,
+        })
+        .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
+
+      const serialUpdate: Record<string, unknown> = {};
+      if (tracking.batchNo) {
+        serialUpdate.batchNo = tracking.batchNo;
+      } else if (tracking.serialNumberId) {
+        serialUpdate.serialNumberId = tracking.serialNumberId;
+      } else if (tracking.serialNo) {
+        const [createdSerial] = await tx
+          .insert(serialNumber)
+          .values({
+            tenantId,
+            articleId: resolvedArticleId,
+            serialNo: tracking.serialNo,
+            status: "in_stock",
+          })
+          .onConflictDoNothing()
+          .returning({ serialNumberId: serialNumber.serialNumberId });
+
+        if (createdSerial?.serialNumberId) {
+          serialUpdate.serialNumberId = createdSerial.serialNumberId;
+        } else {
+          const [existingSerial] = await tx
+            .select({ serialNumberId: serialNumber.serialNumberId })
+            .from(serialNumber)
+            .where(
+              and(
+                eq(serialNumber.tenantId, tenantId),
+                eq(serialNumber.articleId, resolvedArticleId),
+                eq(serialNumber.serialNo, tracking.serialNo),
+              ),
+            )
+            .limit(1);
+
+          if (existingSerial?.serialNumberId) {
+            serialUpdate.serialNumberId = existingSerial.serialNumberId;
+          }
+        }
+      }
+
+      if (Object.keys(serialUpdate).length > 0) {
+        if (sourceMovement?.inventoryMovementId) {
+          await tx
+            .update(inventoryMovement)
+            .set(serialUpdate)
+            .where(eq(inventoryMovement.inventoryMovementId, sourceMovement.inventoryMovementId));
+        }
+        if (targetMovement?.inventoryMovementId) {
+          await tx
+            .update(inventoryMovement)
+            .set(serialUpdate)
+            .where(eq(inventoryMovement.inventoryMovementId, targetMovement.inventoryMovementId));
+        }
+      }
+    }
+  } else {
+    await tx.insert(inventoryMovement).values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId: sourceWh,
+      inventoryItemId,
+      variantId: line.variantId || null,
+      movementType,
+      qtyDelta: String(-qty),
+      movementDate: now,
+      sourceDocumentId: doc.documentId,
+      sourceDocumentLineId: line.documentLineId,
+      transactionId: txId,
+      referenceText: doc.documentNo,
+    });
+
+    await tx.insert(inventoryMovement).values({
       tenantId,
       companyId: doc.companyId,
       warehouseId: targetWh,
-      articleId: resolvedArticleId,
+      inventoryItemId,
       variantId: line.variantId || null,
       movementType,
       qtyDelta: String(qty),
@@ -1294,82 +1488,7 @@ async function postTransferDocumentLine(
       sourceDocumentLineId: line.documentLineId,
       transactionId: txId,
       referenceText: doc.documentNo,
-    })
-    .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
-
-  const [sourceMovement] = await tx
-    .select({ inventoryMovementId: inventoryMovement.inventoryMovementId })
-    .from(inventoryMovement)
-    .where(
-      and(
-        eq(inventoryMovement.tenantId, tenantId),
-        eq(inventoryMovement.companyId, doc.companyId),
-        eq(inventoryMovement.transactionId, txId),
-        eq(inventoryMovement.warehouseId, sourceWh),
-        eq(inventoryMovement.variantId, line.variantId),
-      ),
-    )
-    .orderBy(asc(inventoryMovement.createdAt))
-    .limit(1);
-
-  const resolvedTrackingRows =
-    trackingRows.length > 0
-      ? trackingRows
-      : await loadLineTrackingRows(tx, tenantId, line.documentLineId);
-  if (resolvedTrackingRows.length === 0) return;
-
-  const tracking = resolvedTrackingRows[0];
-  const serialUpdate: Record<string, unknown> = {};
-  if (tracking.batchNo) {
-    serialUpdate.batchNo = tracking.batchNo;
-  } else if (tracking.serialNumberId) {
-    serialUpdate.serialNumberId = tracking.serialNumberId;
-  } else if (tracking.serialNo) {
-    const [createdSerial] = await tx
-      .insert(serialNumber)
-      .values({
-        tenantId,
-        articleId: resolvedArticleId,
-        serialNo: tracking.serialNo,
-        status: "in_stock",
-      })
-      .onConflictDoNothing()
-      .returning({ serialNumberId: serialNumber.serialNumberId });
-
-    if (createdSerial?.serialNumberId) {
-      serialUpdate.serialNumberId = createdSerial.serialNumberId;
-    } else {
-      const [existingSerial] = await tx
-        .select({ serialNumberId: serialNumber.serialNumberId })
-        .from(serialNumber)
-        .where(
-          and(
-            eq(serialNumber.tenantId, tenantId),
-            eq(serialNumber.articleId, resolvedArticleId),
-            eq(serialNumber.serialNo, tracking.serialNo),
-          ),
-        )
-        .limit(1);
-
-      if (existingSerial?.serialNumberId) {
-        serialUpdate.serialNumberId = existingSerial.serialNumberId;
-      }
-    }
-  }
-
-  if (Object.keys(serialUpdate).length > 0) {
-    if (sourceMovement?.inventoryMovementId) {
-      await tx
-        .update(inventoryMovement)
-        .set(serialUpdate)
-        .where(eq(inventoryMovement.inventoryMovementId, sourceMovement.inventoryMovementId));
-    }
-    if (targetMovement?.inventoryMovementId) {
-      await tx
-        .update(inventoryMovement)
-        .set(serialUpdate)
-        .where(eq(inventoryMovement.inventoryMovementId, targetMovement.inventoryMovementId));
-    }
+    });
   }
 }
 
@@ -1437,33 +1556,64 @@ async function postStandardDocumentLine(
       set: balanceUpdate,
     });
 
-  const [movement] = await tx
-    .insert(inventoryMovement)
-    .values({
-      tenantId,
-      companyId: doc.companyId,
-      warehouseId,
-      articleId: resolvedArticleId,
-      variantId: line.variantId || null,
-      movementType,
-      qtyDelta: resolveInventoryMovementQtyDelta(movementType, qty, stocktakeOnHandBefore),
-      absoluteQty: movementType === "V" ? String(qty) : null,
-      movementDate: now,
-      sourceDocumentId: doc.documentId,
-      sourceDocumentLineId: line.documentLineId,
-      transactionId: txId,
-      referenceText: doc.documentNo,
-    })
-    .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
-  if (movement?.inventoryMovementId) {
-    await applyTrackingForMovementFromRows(
-      tx,
-      tenantId,
-      movement.inventoryMovementId,
-      { ...line, articleId: resolvedArticleId } as DocumentPostingLineWithArticle,
-      movementType,
-      trackingRows,
-    );
+  const inventoryItemId = line.variantId
+    ? await ensureVariantInventoryItemId(tx, tenantId, line.variantId)
+    : "00000000-0000-0000-0000-000000000000";
+
+  const trackingRowsToProcess = trackingRows.filter((r) => r.serialNo || r.serialNumberId || r.batchNo);
+
+  if (trackingRowsToProcess.length > 0) {
+    for (const tracking of trackingRowsToProcess) {
+      const trackingQty = Number(tracking.qty ?? 1);
+
+      const [movement] = await tx
+        .insert(inventoryMovement)
+        .values({
+          tenantId,
+          companyId: doc.companyId,
+          warehouseId,
+          inventoryItemId,
+          variantId: line.variantId || null,
+          movementType,
+          qtyDelta: resolveInventoryMovementQtyDelta(movementType, trackingQty, 0),
+          absoluteQty: null,
+          movementDate: now,
+          sourceDocumentId: doc.documentId,
+          sourceDocumentLineId: line.documentLineId,
+          transactionId: txId,
+          referenceText: doc.documentNo,
+        })
+        .returning({ inventoryMovementId: inventoryMovement.inventoryMovementId });
+
+      if (movement?.inventoryMovementId) {
+        await applyTrackingForSingleRow(
+          tx,
+          tenantId,
+          movement.inventoryMovementId,
+          { ...line, articleId: resolvedArticleId } as DocumentPostingLineWithArticle,
+          movementType,
+          tracking,
+        );
+      }
+    }
+  } else {
+    await tx
+      .insert(inventoryMovement)
+      .values({
+        tenantId,
+        companyId: doc.companyId,
+        warehouseId,
+        inventoryItemId,
+        variantId: line.variantId || null,
+        movementType,
+        qtyDelta: resolveInventoryMovementQtyDelta(movementType, qty, stocktakeOnHandBefore),
+        absoluteQty: movementType === "V" ? String(qty) : null,
+        movementDate: now,
+        sourceDocumentId: doc.documentId,
+        sourceDocumentLineId: line.documentLineId,
+        transactionId: txId,
+        referenceText: doc.documentNo,
+      });
   }
 
   if (movementType === "r") {
@@ -2942,10 +3092,13 @@ export class DocumentService {
           },
         });
 
+      const inventoryItemId = await ensureVariantInventoryItemId(tx, tenantId, line.variantId);
+
       await tx.insert(inventoryMovement).values({
         tenantId,
         companyId: doc.companyId,
         warehouseId,
+        inventoryItemId,
         variantId: line.variantId || null,
         movementType,
         qtyDelta: String(effectiveQty),
@@ -3957,12 +4110,12 @@ export class DocumentService {
             );
         }
 
-        const movementArticleId = articleId;
+        const inventoryItemId = await ensureVariantInventoryItemId(tx, tenantId, movement.variantId);
         await tx.insert(inventoryMovement).values({
           tenantId,
           companyId: doc.companyId,
           warehouseId,
-          articleId: movementArticleId,
+          inventoryItemId,
           variantId: movement.variantId,
           movementType: movement.movementType,
           qtyDelta: String(-qtyDelta),

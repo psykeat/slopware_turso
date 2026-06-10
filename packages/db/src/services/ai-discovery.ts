@@ -100,12 +100,28 @@ const SEMANTIC_RELATIONSHIPS: SemanticRelationship[] = [
     relationType: "MANY_TO_ONE",
     businessDescription: "Klassifiziert den Artikel in eine hierarchische Warengruppe.",
   },
+  {
+    fromEntity: "inventoryItem",
+    fromField: "variantId",
+    toEntity: "articleVariant",
+    relationType: "MANY_TO_ONE",
+    businessDescription: "Verknüpft den Lagerartikel mit der kaufbaren Variante.",
+  },
+  {
+    fromEntity: "inventoryLevel",
+    fromField: "itemId",
+    toEntity: "inventoryItem",
+    relationType: "MANY_TO_ONE",
+    businessDescription: "Verknüpft die Lagerposition mit dem operativen Lagerartikel.",
+  },
 ];
 
 function inferLookupTableName(entityName: string, colName: string, schemaRef: typeof schema) {
   if (colName === "variantId") return "articleVariant";
   if (colName === "optionId") return "articleOption";
   if (colName === "valueId") return "articleOptionValue";
+  if (entityName === "inventoryLevel" && colName === "itemId") return "inventoryItem";
+  if (entityName === "inventoryLevel" && colName === "locationId") return "warehouse";
 
   if (colName.endsWith("Id")) {
     const potentialEntity = colName.slice(0, -2);
@@ -118,22 +134,28 @@ function inferLookupTableName(entityName: string, colName: string, schemaRef: ty
 }
 
 // Fallback seed commands when the database entity_commands table is empty
-const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
+const BOOTSTRAPPED_COMMANDS: Array<Omit<SemanticCommand, "entityName"> & { entityName: string }> = [
   {
+    entityName: "articleVariant",
     commandKey: "generateVariants",
     label: "Varianten erzeugen",
     description:
-      "Erzeugt fehlende article_variant- und inventory_item-Datensätze aus den definierten Artikeloptionen.",
+      "Erzeugt fehlende articleVariant- und inventoryItem-Datensätze aus den definierten Artikeloptionen.",
     writesTables: ["article", "article_variant", "article_variant_option_value", "inventory_item"],
     inputSchema: {
       type: "object",
       required: ["articleId"],
       properties: {
-        articleId: { type: "string", format: "uuid" },
+        articleId: {
+          type: "string",
+          format: "uuid",
+          description: "Artikelstamm, aus dem die operative Varianten- und Lagerstruktur erzeugt wird.",
+        },
       },
     },
   },
   {
+    entityName: "articleVariant",
     commandKey: "archiveVariants",
     label: "Varianten archivieren",
     description:
@@ -143,15 +165,24 @@ const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
       type: "object",
       required: ["articleId"],
       properties: {
-        articleId: { type: "string", format: "uuid" },
+        articleId: {
+          type: "string",
+          format: "uuid",
+          description: "Artikelstamm, dessen Varianten archiviert werden sollen.",
+        },
         variantIds: {
           type: "array",
-          items: { type: "string", format: "uuid" },
+          items: {
+            type: "string",
+            format: "uuid",
+            description: "articleVariant-IDs, die archiviert werden sollen.",
+          },
         },
       },
     },
   },
   {
+    entityName: "document",
     commandKey: "create-document-draft-from-ai-plan",
     label: "Belegentwurf aus KI-Plan erstellen",
     description:
@@ -161,7 +192,11 @@ const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
       type: "object",
       required: ["customerId", "docType", "lines"],
       properties: {
-        customerId: { type: "string", format: "uuid" },
+        customerId: {
+          type: "string",
+          format: "uuid",
+          description: "Geschäftspartner, dem der Belegentwurf zugeordnet wird.",
+        },
         docType: { type: "string", enum: ["Offer", "Order", "DeliveryNote", "Invoice"] },
         lines: {
           type: "array",
@@ -169,9 +204,20 @@ const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
             type: "object",
             required: ["articleId", "quantity"],
             properties: {
-              articleId: { type: "string", format: "uuid" },
-              quantity: { type: "number" },
-              priceOverride: { type: "number" },
+              articleId: {
+                type: "string",
+                format: "uuid",
+                description:
+                  "Artikelstamm, aus dem die operative Variante im Belegpfad aufgeloest wird.",
+              },
+              quantity: {
+                type: "number",
+                description: "Menge der Belegposition.",
+              },
+              priceOverride: {
+                type: "number",
+                description: "Optionaler Netto-Preis fuer die Position.",
+              },
             },
           },
         },
@@ -179,6 +225,7 @@ const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
     },
   },
   {
+    entityName: "address",
     commandKey: "create-address-from-ai-plan",
     label: "Adresse aus KI-Plan anlegen",
     description: "Legt einen neuen Kunden- oder Lieferantenkontakt an.",
@@ -187,19 +234,20 @@ const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
       type: "object",
       required: ["name", "isCustomer"],
       properties: {
-        name: { type: "string" },
-        isCustomer: { type: "boolean" },
-        isSupplier: { type: "boolean" },
-        email: { type: "string", format: "email" },
-        phone: { type: "string" },
-        street: { type: "string" },
-        city: { type: "string" },
-        postalCode: { type: "string" },
-        countryCode: { type: "string", maxLength: 2 },
+        name: { type: "string", description: "Anzeige- und Suchname des Kontakts." },
+        isCustomer: { type: "boolean", description: "Kennzeichnet den Kontakt als Kunde." },
+        isSupplier: { type: "boolean", description: "Kennzeichnet den Kontakt als Lieferant." },
+        email: { type: "string", format: "email", description: "Primäre E-Mail-Adresse." },
+        phone: { type: "string", description: "Telefonnummer des Kontakts." },
+        street: { type: "string", description: "Strasse und Hausnummer." },
+        city: { type: "string", description: "Ort." },
+        postalCode: { type: "string", description: "Postleitzahl." },
+        countryCode: { type: "string", maxLength: 2, description: "ISO-3166-1 Alpha-2." },
       },
     },
   },
   {
+    entityName: "emailThread",
     commandKey: "apply-ai-mail-classification",
     label: "E-Mail-Klassifizierung anwenden",
     description: "Verknüpft die E-Mail mit einem Geschäftspartner und optional einem Beleg.",
@@ -208,13 +256,26 @@ const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
       type: "object",
       required: ["emailThreadId"],
       properties: {
-        emailThreadId: { type: "string", format: "uuid" },
-        relatedAddressId: { type: "string", format: "uuid" },
-        relatedDocumentId: { type: "string", format: "uuid" },
+        emailThreadId: {
+          type: "string",
+          format: "uuid",
+          description: "Zu klassifizierender E-Mail-Thread.",
+        },
+        relatedAddressId: {
+          type: "string",
+          format: "uuid",
+          description: "Optional verknuepfte Adresse.",
+        },
+        relatedDocumentId: {
+          type: "string",
+          format: "uuid",
+          description: "Optional verknuepfter Beleg.",
+        },
       },
     },
   },
   {
+    entityName: "document",
     commandKey: "convert-document-from-ai-plan",
     label: "Beleg wandeln aus KI-Plan",
     description:
@@ -224,13 +285,22 @@ const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
       type: "object",
       required: ["sourceDocumentId"],
       properties: {
-        sourceDocumentId: { type: "string", format: "uuid" },
+        sourceDocumentId: {
+          type: "string",
+          format: "uuid",
+          description: "Quellbeleg, der in einen anderen Belegtyp ueberfuehrt werden soll.",
+        },
         targetDocType: { type: "string", enum: ["Order", "DeliveryNote", "Invoice"] },
-        targetGroupId: { type: "string", format: "uuid" },
+        targetGroupId: {
+          type: "string",
+          format: "uuid",
+          description: "Optionale Zielgruppe fuer die Wandlung.",
+        },
       },
     },
   },
   {
+    entityName: "emailThread",
     commandKey: "prepare-document-email",
     label: "Dokumenten-E-Mail vorbereiten",
     description:
@@ -240,11 +310,19 @@ const BOOTSTRAPPED_COMMANDS: Omit<SemanticCommand, "entityName">[] = [
       type: "object",
       required: ["documentId", "emailIdentityId"],
       properties: {
-        documentId: { type: "string", format: "uuid" },
-        emailIdentityId: { type: "string", format: "uuid" },
-        subject: { type: "string" },
-        bodyText: { type: "string" },
-        bodyHtml: { type: "string" },
+        documentId: {
+          type: "string",
+          format: "uuid",
+          description: "Beleg, aus dem die E-Mail vorbereitet wird.",
+        },
+        emailIdentityId: {
+          type: "string",
+          format: "uuid",
+          description: "Absender-Identitaet fuer den Entwurf.",
+        },
+        subject: { type: "string", description: "Optionaler Betreff." },
+        bodyText: { type: "string", description: "Optionaler Klartext-Inhalt." },
+        bodyHtml: { type: "string", description: "Optionaler HTML-Inhalt." },
       },
     },
   },
@@ -337,6 +415,14 @@ export class AIDiscoveryService {
         module: "Articles",
         description:
           "Lagerführende Einheit einer Variante als operativer Anker für Bestände und Bewegungen.",
+        scopes: ["erp_documents", "sales", "purchase", "logistics"],
+      },
+      {
+        entityName: "inventoryLevel",
+        businessName: "Lagerbestand",
+        module: "Logistics",
+        description:
+          "Bestandsmenge pro Lagerort für einen operativen Lagerartikel.",
         scopes: ["erp_documents", "sales", "purchase", "logistics"],
       },
       {
@@ -467,11 +553,21 @@ export class AIDiscoveryService {
 
       const lookupDisplayColumn =
         lookupRegistry?.displayColumn ??
-        (lookupTable === "articleVariant" ? "lookupLabel" : undefined);
+        (lookupTable === "articleVariant"
+          ? "lookupLabel"
+          : lookupTable === "inventoryItem"
+            ? "sku"
+            : undefined);
       const lookupCodeColumn =
-        lookupRegistry?.codeColumn ?? (lookupTable === "articleVariant" ? "sku" : undefined);
+        lookupRegistry?.codeColumn ??
+        (lookupTable === "articleVariant" || lookupTable === "inventoryItem" ? "sku" : undefined);
       const lookupValueColumn =
-        lookupRegistry?.valueColumn ?? (lookupTable === "articleVariant" ? "variantId" : undefined);
+        lookupRegistry?.valueColumn ??
+        (lookupTable === "articleVariant"
+          ? "variantId"
+          : lookupTable === "inventoryItem"
+            ? "itemId"
+            : undefined);
 
       const businessName = tf?.label
         ? (tf.label as any).de || (tf.label as any).en
@@ -484,7 +580,9 @@ export class AIDiscoveryService {
       const lookupDescription =
         lookupTable === "articleVariant"
           ? `${description} Variant lookups should surface SKU and option summaries instead of UUIDs.`
-          : description;
+          : lookupTable === "inventoryItem"
+            ? `${description} Inventory item lookups should surface SKU and stock availability instead of UUIDs.`
+            : description;
 
       semanticFields.push({
         fieldName: colKey,
@@ -540,7 +638,6 @@ export class AIDiscoveryService {
       if (!commands.some((c) => c.commandKey === bCmd.commandKey)) {
         commands.push({
           ...bCmd,
-          entityName: bCmd.writesTables[0] || "unknown",
         });
       }
     }

@@ -31,7 +31,7 @@ export interface DesignerPatchResult {
   surface: DesignerSurfaceKind;
   patch: DesignerPatch;
   scope: MetadataScope;
-  status: "saved" | "applied" | "reconciled" | "needs_review";
+  status: "committed" | "needs_review";
   conflictState: DesignerConflictState;
   reconciliationRequired: boolean;
   versionInfo: DesignerVersionInfo;
@@ -700,7 +700,7 @@ export class MetadataWriter {
     tx: any,
     entityName: string,
     patch: DesignerPatch,
-    status: string,
+    status: DesignerPatchResult["status"],
   ) {
     await this.logHistory(tx, {
       entityName,
@@ -1181,59 +1181,7 @@ export class MetadataWriter {
     };
   }
 
-  async saveDesignerPatch(entityName: string, surface: DesignerSurfaceKind, patch: DesignerPatch) {
-    const normalizedPatch = normalizeDesignerPatch(entityName, surface, patch);
-    const resolver = this.getResolver();
-    const currentContract = await resolver.getDesignerSurface(entityName, surface);
-    const suggestedRemaps = this.suggestRemaps(currentContract, normalizedPatch);
-    const status =
-      suggestedRemaps.length > 0 || currentContract.reconciliationRequired
-        ? "needs_review"
-        : "saved";
-
-    return await db.transaction(async (tx) => {
-      await this.appendDesignerPatchHistory(tx, entityName, normalizedPatch, status);
-      return await this.buildPatchResult(
-        entityName,
-        surface,
-        normalizedPatch,
-        status,
-        [],
-        [],
-        suggestedRemaps,
-        currentContract,
-      );
-    });
-  }
-
-  async applyDesignerPatch(entityName: string, surface: DesignerSurfaceKind, patch: DesignerPatch) {
-    const normalizedPatch = normalizeDesignerPatch(entityName, surface, patch);
-    const currentContract = await this.getResolver().getDesignerSurface(entityName, surface);
-    const suggestedRemaps = this.suggestRemaps(currentContract, normalizedPatch);
-
-    return await db.transaction(async (tx) => {
-      await this.appendDesignerPatchHistory(tx, entityName, normalizedPatch, "applied");
-      const execution = await this.executePatch(tx, entityName, surface, normalizedPatch);
-      const updatedContract = await this.getResolver().getDesignerSurface(entityName, surface);
-      const status =
-        suggestedRemaps.length > 0 || updatedContract.reconciliationRequired
-          ? "needs_review"
-          : "applied";
-
-      return await this.buildPatchResult(
-        entityName,
-        surface,
-        normalizedPatch,
-        status,
-        execution.appliedOps,
-        execution.skippedOps,
-        suggestedRemaps,
-        updatedContract,
-      );
-    });
-  }
-
-  async reconcileDesignerPatch(
+  async commitDesignerPatch(
     entityName: string,
     surface: DesignerSurfaceKind,
     patch: DesignerPatch,
@@ -1241,19 +1189,28 @@ export class MetadataWriter {
     const normalizedPatch = normalizeDesignerPatch(entityName, surface, patch);
     const currentContract = await this.getResolver().getDesignerSurface(entityName, surface);
     const suggestedRemaps = this.suggestRemaps(currentContract, normalizedPatch);
-    const status = suggestedRemaps.length > 0 ? "needs_review" : "reconciled";
 
     return await db.transaction(async (tx) => {
-      await this.appendDesignerPatchHistory(tx, entityName, normalizedPatch, status);
+      const initialStatus = suggestedRemaps.length > 0 || currentContract.reconciliationRequired
+        ? "needs_review"
+        : "committed";
+      await this.appendDesignerPatchHistory(tx, entityName, normalizedPatch, initialStatus);
+      const execution = await this.executePatch(tx, entityName, surface, normalizedPatch);
+      const updatedContract = await this.getResolver().getDesignerSurface(entityName, surface);
+      const finalStatus =
+        suggestedRemaps.length > 0 || updatedContract.reconciliationRequired
+          ? "needs_review"
+          : "committed";
+
       return await this.buildPatchResult(
         entityName,
         surface,
         normalizedPatch,
-        status,
-        [],
-        [],
+        finalStatus,
+        execution.appliedOps,
+        execution.skippedOps,
         suggestedRemaps,
-        currentContract,
+        updatedContract,
       );
     });
   }

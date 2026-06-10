@@ -1,7 +1,11 @@
 import { auth } from "@repo/auth/auth";
 import { db } from "@repo/db";
 import { metadataHistory } from "@repo/db/schema";
-import { MetadataResolver } from "@repo/db/services/metadata";
+import {
+  MetadataResolver,
+  type DesignerPatch,
+  type DesignerSurfaceKind,
+} from "@repo/db/services/metadata";
 import { MetadataWriter } from "@repo/db/services/metadata-writer";
 import { getTenantInfoById, getUserTenantRole } from "@repo/db/services/tenant";
 import { createFileRoute } from "@tanstack/react-router";
@@ -11,14 +15,11 @@ import { resolveTenantContext } from "#/lib/resolve-tenant";
 
 import { canWriteLayoutScope, resolveLayoutBody } from "./-layout-utils";
 
-type DesignerAction = "patch" | "apply" | "reconcile";
-
 type DesignerFallbackResponse = {
   status: "unsupported";
   source: "fallback";
   entityName: string;
   surface: string;
-  action?: DesignerAction;
   tenantId: string;
   organizationId: string | null;
   reason: string;
@@ -42,21 +43,23 @@ function getPathSegments(pathname: string) {
   return pathname.split("/").filter(Boolean);
 }
 
-function getEntityAndSurface(pathname: string) {
+function getEntityAndSurface(pathname: string): {
+  entityName: string;
+  surface: DesignerSurfaceKind;
+} | null {
   const segments = getPathSegments(pathname);
   if (segments[0] !== "api" || segments[1] !== "metadata" || segments[2] !== "designer") {
     return null;
   }
 
-  if (segments.length !== 5 && segments.length !== 6) return null;
+  if (segments.length !== 5) return null;
 
   const entityName = segments[3];
   const surface = segments[4];
-  const action = segments[5];
 
   if (!entityName || !surface) return null;
 
-  return { entityName, surface, action };
+  return { entityName, surface: surface as DesignerSurfaceKind };
 }
 
 function getEntityFromPath(pathname: string, section: "history") {
@@ -92,7 +95,6 @@ function designerFallback(params: {
   surface: string;
   tenantId: string;
   organizationId?: string;
-  action?: DesignerAction;
   request?: unknown;
 }): DesignerFallbackResponse {
   return {
@@ -100,7 +102,6 @@ function designerFallback(params: {
     source: "fallback",
     entityName: params.entityName,
     surface: params.surface,
-    action: params.action,
     tenantId: params.tenantId,
     organizationId: params.organizationId ?? null,
     reason: "Structured metadata designer API is not available in this build.",
@@ -188,7 +189,7 @@ export const Route = createFileRoute("/api/metadata/$")({
           }
 
           const designerTarget = getEntityAndSurface(pathname);
-          if (designerTarget && !designerTarget.action) {
+          if (designerTarget) {
             const structuredDesigner = await callOptionalMethod<unknown>(
               resolver,
               ["getDesignerSurface", "readDesignerSurface", "getDesignerMetadata"],
@@ -245,13 +246,13 @@ export const Route = createFileRoute("/api/metadata/$")({
           });
         }
       },
-      POST: async ({ request }) => handleUpdate({ request, method: "POST" }),
-      PATCH: async ({ request }) => handleUpdate({ request, method: "PATCH" }),
+      POST: async ({ request }) => handleUpdate({ request }),
+      PATCH: async ({ request }) => handleUpdate({ request }),
     },
   },
 });
 
-async function handleUpdate({ request, method }: { request: Request; method: "POST" | "PATCH" }) {
+async function handleUpdate({ request }: { request: Request }) {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session || !session.user) {
     return new Response("Unauthorized", { status: 401 });
@@ -276,19 +277,7 @@ async function handleUpdate({ request, method }: { request: Request; method: "PO
   const designerTarget = getEntityAndSurface(pathname);
 
   try {
-    if (
-      designerTarget?.action &&
-      designerTarget.action !== "apply" &&
-      designerTarget.action !== "reconcile"
-    ) {
-      return new Response("Not Found", { status: 404 });
-    }
-
-    if (designerTarget && !designerTarget.action) {
-      if (method !== "PATCH") {
-        return new Response("Not Found", { status: 404 });
-      }
-
+    if (designerTarget) {
       let body: unknown;
       try {
         body = await request.json();
@@ -296,23 +285,10 @@ async function handleUpdate({ request, method }: { request: Request; method: "PO
         return new Response("Invalid JSON body", { status: 400 });
       }
 
-      const structuredDesigner = await callOptionalMethod<unknown>(
-        writer,
-        [
-          "saveDesignerPatch",
-          "patchDesignerSurface",
-          "saveDesignerSurface",
-          "saveDesignerMetadata",
-        ],
+      const structuredDesigner = await writer.commitDesignerPatch(
         designerTarget.entityName,
         designerTarget.surface,
-        body,
-        {
-          tenantId: context.tenantId,
-          userId: session.user.id,
-          isSystemAdmin,
-          organizationId: context.organizationId ?? null,
-        },
+        body as DesignerPatch,
       );
       if (typeof structuredDesigner !== "undefined") {
         return jsonResponse(structuredDesigner);
@@ -324,53 +300,6 @@ async function handleUpdate({ request, method }: { request: Request; method: "PO
           surface: designerTarget.surface,
           tenantId: context.tenantId,
           organizationId: context.organizationId,
-          action: "patch",
-          request: body,
-        }),
-        { status: 501 },
-      );
-    }
-
-    if (designerTarget?.action === "apply" || designerTarget?.action === "reconcile") {
-      if (method !== "POST") {
-        return new Response("Not Found", { status: 404 });
-      }
-
-      let body: unknown = {};
-      try {
-        const raw = await request.text();
-        body = raw ? JSON.parse(raw) : {};
-      } catch {
-        return new Response("Invalid JSON body", { status: 400 });
-      }
-
-      const action: DesignerAction = designerTarget.action;
-      const structuredDesigner = await callOptionalMethod<unknown>(
-        writer,
-        action === "apply"
-          ? ["applyDesignerPatch", "applyDesignerSurface", "publishDesignerSurface"]
-          : ["reconcileDesignerPatch", "reconcileDesignerSurface", "repairDesignerSurface"],
-        designerTarget.entityName,
-        designerTarget.surface,
-        body,
-        {
-          tenantId: context.tenantId,
-          userId: session.user.id,
-          isSystemAdmin,
-          organizationId: context.organizationId ?? null,
-        },
-      );
-      if (typeof structuredDesigner !== "undefined") {
-        return jsonResponse(structuredDesigner);
-      }
-
-      return jsonResponse(
-        designerFallback({
-          entityName: designerTarget.entityName,
-          surface: designerTarget.surface,
-          tenantId: context.tenantId,
-          organizationId: context.organizationId,
-          action,
           request: body,
         }),
         { status: 501 },

@@ -11,6 +11,7 @@ import {
   articleVariant,
   articleVariantOptionValue,
   company,
+  inventoryBalance,
   inventoryItem,
   inventoryLevel,
   organization,
@@ -123,6 +124,17 @@ async function createVariantProjectionFixture(withOptionSummary = false) {
     itemId: inventoryRow.itemId,
     locationId: warehouseRow.warehouseId,
     quantity: "13",
+  });
+
+  await db.insert(inventoryBalance).values({
+    tenantId: tenantRow.tenantId,
+    warehouseId: warehouseRow.warehouseId,
+    inventoryItemId: inventoryRow.itemId,
+    articleId: catalogArticle.articleId,
+    onHandQty: "13",
+    reservedQty: "0",
+    availableQty: "13",
+    expectedPurchaseQty: "0",
   });
 
   return {

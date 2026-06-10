@@ -223,6 +223,14 @@ function resolveLookupTable(entityName: string, colName: string) {
     return "articleOptionValue";
   }
 
+  if (entityName === "inventoryLevel" && colName === "itemId") {
+    return "inventoryItem";
+  }
+
+  if (entityName === "inventoryLevel" && colName === "locationId") {
+    return "warehouse";
+  }
+
   if (entityName === "documentGroup" && colName === "nextGroupId") {
     return "documentGroup";
   }
@@ -258,6 +266,13 @@ export function resolveLookupMetadata(f: Record<string, any>, registries: any[])
   const lookupSchemaTable = f.lookupTable ? (schema as any)[f.lookupTable] : undefined;
   const lookupColumns = lookupSchemaTable ? getColumns(lookupSchemaTable) : undefined;
   const tableColumns = lookupColumns ? Object.keys(lookupColumns) : [];
+  const variantLookupTable = f.lookupTable === "articleVariant" || f.lookupTable === "inventoryItem";
+  const variantLookupDisplayColumn =
+    f.lookupTable === "articleVariant"
+      ? "lookupLabel"
+      : f.lookupTable === "inventoryItem"
+        ? "sku"
+        : undefined;
 
   const inferredPkColumn =
     registry?.pkColumn ??
@@ -276,13 +291,13 @@ export function resolveLookupMetadata(f: Record<string, any>, registries: any[])
         ? "iso2Code"
         : tableColumns.includes("iso3Code")
           ? "iso3Code"
-          : f.lookupTable === "articleVariant"
+          : variantLookupTable
             ? "sku"
             : undefined);
 
   const inferredDisplayColumn =
     registry?.displayColumn ??
-    (f.lookupTable === "articleVariant" ? "lookupLabel" : undefined) ??
+    variantLookupDisplayColumn ??
     (tableColumns.includes("name")
       ? "name"
       : tableColumns.includes("code")
@@ -295,7 +310,7 @@ export function resolveLookupMetadata(f: Record<string, any>, registries: any[])
     inferredDisplayColumn,
     inferredValueColumn: registry?.valueColumn ?? inferredPkColumn ?? inferredCodeColumn,
     lookupSortColumn:
-      registry?.sortColumn ?? (f.lookupTable === "articleVariant" ? "sku" : inferredDisplayColumn),
+      registry?.sortColumn ?? (variantLookupTable ? "sku" : inferredDisplayColumn),
     lookupIsI18n: registry?.displayIsI18n,
   };
 }

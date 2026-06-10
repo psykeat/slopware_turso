@@ -1430,6 +1430,8 @@ export const inventoryBalance = pgTable(
       .notNull()
       .references(() => warehouse.warehouseId),
     inventoryItemId: uuid("inventory_item_id").references(() => inventoryItem.itemId),
+    // Compatibility baggage for article-first posting paths. Canonical variant-aware reads
+    // should anchor on inventoryItemId, but service-level upserts still target articleId.
     articleId: uuid("article_id").notNull(),
     onHandQty: numeric("on_hand_qty").notNull().default("0"),
     reservedQty: numeric("reserved_qty").notNull().default("0"),
@@ -1708,6 +1710,7 @@ export const priceListItem = pgTable(
     articleId: uuid("article_id")
       .notNull()
       .references(() => article.articleId),
+    // Pricing is variant-specific; articleId is retained only for compatibility with older imports.
     variantId: uuid("variant_id")
       .notNull()
       .references(() => articleVariant.variantId),
@@ -1721,13 +1724,10 @@ export const priceListItem = pgTable(
       table.tenantId,
       table.priceListId,
       table.variantId,
-      table.variantId,
       table.validFrom,
     ),
-    index("idx_price_list_item_article").on(table.priceListId, table.variantId, table.validFrom),
-    index("idx_price_list_item_lookup").on(
+    index("idx_price_list_item_variant").on(
       table.priceListId,
-      table.variantId,
       table.variantId,
       table.validFrom,
     ),

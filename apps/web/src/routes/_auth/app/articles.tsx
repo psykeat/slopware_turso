@@ -107,7 +107,6 @@ function ArticleSalesBlock({
 }) {
   const { t } = useTranslation("ui");
   const queryClient = useQueryClient();
-  const [createDraft, setCreateDraft] = useState<SalesDraft>(draft);
 
   const { data: variantRows = EMPTY_ARRAY, isLoading: isVariantsLoading } = useQuery({
     queryKey: ["data", "articleVariant", articleId],
@@ -313,10 +312,9 @@ function ArticleSalesBlock({
               type="number"
               step="0.0001"
               className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              value={createDraft.price}
+              value={draft.price}
               onChange={(e) => {
-                const next = { ...createDraft, price: e.target.value };
-                setCreateDraft(next);
+                const next = { ...draft, price: e.target.value };
                 onDraftChange(next);
               }}
               placeholder="0.00"
@@ -328,10 +326,9 @@ function ArticleSalesBlock({
             <input
               type="text"
               className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              value={createDraft.ean}
+              value={draft.ean}
               onChange={(e) => {
-                const next = { ...createDraft, ean: e.target.value };
-                setCreateDraft(next);
+                const next = { ...draft, ean: e.target.value };
                 onDraftChange(next);
               }}
               placeholder="EAN"
@@ -344,10 +341,9 @@ function ArticleSalesBlock({
               type="number"
               step="0.0001"
               className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              value={createDraft.weight}
+              value={draft.weight}
               onChange={(e) => {
-                const next = { ...createDraft, weight: e.target.value };
-                setCreateDraft(next);
+                const next = { ...draft, weight: e.target.value };
                 onDraftChange(next);
               }}
               placeholder="0.0000"
@@ -358,10 +354,9 @@ function ArticleSalesBlock({
             <input
               type="checkbox"
               className="size-4 rounded border-hairline-input accent-[var(--primary)]"
-              checked={createDraft.isActive}
+              checked={draft.isActive}
               onChange={(e) => {
-                const next = { ...createDraft, isActive: e.target.checked };
-                setCreateDraft(next);
+                const next = { ...draft, isActive: e.target.checked };
                 onDraftChange(next);
               }}
             />
@@ -372,10 +367,9 @@ function ArticleSalesBlock({
             <span className="text-[12px] font-medium text-ink-secondary">Tracking</span>
             <select
               className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              value={createDraft.trackingMode}
+              value={draft.trackingMode}
               onChange={(e) => {
-                const next = { ...createDraft, trackingMode: e.target.value };
-                setCreateDraft(next);
+                const next = { ...draft, trackingMode: e.target.value };
                 onDraftChange(next);
               }}
             >

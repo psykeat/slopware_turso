@@ -1,9 +1,21 @@
-import { BoldIcon, ItalicIcon, UnderlineIcon } from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { BubbleMenu, EditorContent, useEditor } from "@tiptap/react";
+import { Color } from "@tiptap/extension-color";
+import TextStyle from "@tiptap/extension-text-style";
+import StarterKit from "@tiptap/starter-kit";
+import Underline from "@tiptap/extension-underline";
+import {
+  BoldIcon,
+  CheckIcon,
+  ItalicIcon,
+  LanguagesIcon,
+  ScissorsIcon,
+  SparklesIcon,
+  UnderlineIcon,
+} from "lucide-react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/utils";
-import { FloatingToolbar } from "./floating-toolbar";
 
 export interface LangTextField {
   key: string;
@@ -38,47 +50,17 @@ const COLORS = [
   { label: "Orange", value: "#c2410c" },
 ];
 
-function sanitizeHtml(html: string) {
-  if (typeof window === "undefined") return html;
-  const template = document.createElement("template");
-  template.innerHTML = html;
-
-  const allowed = new Set(["B", "STRONG", "I", "EM", "U", "SPAN", "BR", "P", "DIV", "FONT"]);
-  const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_ELEMENT);
-  const elements: Element[] = [];
-  while (walker.nextNode()) elements.push(walker.currentNode as Element);
-
-  for (const element of elements) {
-    if (!allowed.has(element.tagName)) {
-      element.replaceWith(document.createTextNode(element.textContent ?? ""));
-      continue;
-    }
-
-    for (const attr of [...element.attributes]) {
-      if (attr.name === "style") {
-        const style = attr.value.toLowerCase();
-        const keep =
-          /color\s*:/.test(style) ||
-          /font-weight\s*:/.test(style) ||
-          /text-decoration\s*:/.test(style);
-        if (!keep) element.removeAttribute("style");
-      } else if (element.tagName === "FONT" && attr.name === "color") {
-        // Keep color attribute on FONT elements
-      } else {
-        element.removeAttribute(attr.name);
-      }
-    }
-  }
-
-  return template.innerHTML;
-}
-
-function applyFormat(command: "bold" | "italic" | "underline" | "foreColor", value?: string) {
-  if (typeof document === "undefined") return;
-  // Intentional fallback: contentEditable formatting is still handled via execCommand here.
-  // eslint-disable-next-line typescript-eslint/no-deprecated
-  document.execCommand(command, false, value);
-}
+const TIPTAP_EXTENSIONS = [
+  StarterKit.configure({
+    codeBlock: false,
+    code: false,
+    horizontalRule: false,
+    blockquote: false,
+  }),
+  Underline,
+  TextStyle,
+  Color,
+];
 
 function buildDraftMap(items: LangTextField[]) {
   const drafts: Record<string, string> = {};
@@ -104,14 +86,9 @@ export function LangtextEditor({
   const initialKey = activeKey ?? items[0]?.key ?? "";
   const [internalKey, setInternalKey] = useState(initialKey);
   const [drafts, setDrafts] = useState<Record<string, string>>(() => buildDraftMap(items));
-  const editorRef = useRef<HTMLDivElement>(null);
   const appliedDraftsRef = useRef<Record<string, string>>(buildDraftMap(items));
   const syncKeyRef = useRef(syncKey);
-  const renderContextRef = useRef<{ syncKey: string | undefined; itemKey: string | null }>({
-    syncKey,
-    itemKey: null,
-  });
-  const commitHandler = onCommit ?? onChange;
+  const [bubbleLoading, setBubbleLoading] = useState(false);
 
   const selectedKeyCandidate = activeKey ?? internalKey;
   const resolvedSelectedKey = items.some((item) => item.key === selectedKeyCandidate)
@@ -121,6 +98,53 @@ export function LangtextEditor({
   const selectedItemKey = selectedItem?.key ?? null;
   const selectedHtml = drafts[selectedItem?.key ?? ""] ?? selectedItem?.value ?? "";
 
+  const commitHandler = onCommit ?? onChange;
+
+  // Keep a ref so editor callbacks always see the latest selectedItem
+  const selectedItemRef = useRef(selectedItem);
+  useLayoutEffect(() => {
+    selectedItemRef.current = selectedItem;
+  });
+
+  // Keep a ref to commitCurrent so the onBlur callback doesn't capture a stale closure
+  const commitCurrentRef = useRef<() => Promise<void>>(async () => {});
+
+  const editor = useEditor({
+    extensions: TIPTAP_EXTENSIONS,
+    content: selectedHtml || "",
+    editable: !readOnly,
+    onUpdate: ({ editor: ed }) => {
+      const html = ed.getHTML();
+      const key = selectedItemRef.current?.key ?? "";
+      if (!key) return;
+      setDrafts((prev) => ({ ...prev, [key]: html }));
+      if (onChange && selectedItemRef.current) {
+        void onChange(selectedItemRef.current.key, html);
+      }
+    },
+    onBlur: () => {
+      void commitCurrentRef.current?.();
+    },
+  });
+
+  const commitCurrent = async () => {
+    if (!selectedItemRef.current || !commitHandler || !editor) return;
+    const html = editor.getHTML();
+    const key = selectedItemRef.current.key;
+    setDrafts((prev) => ({ ...prev, [key]: html }));
+    appliedDraftsRef.current = { ...appliedDraftsRef.current, [key]: html };
+    try {
+      await commitHandler(key, html);
+    } catch (err) {
+      console.error("Langtext commit failed", err);
+    }
+  };
+
+  useEffect(() => {
+    commitCurrentRef.current = commitCurrent;
+  });
+
+  // Sync drafts when items / syncKey change
   useEffect(() => {
     const next = buildDraftMap(items);
 
@@ -154,58 +178,51 @@ export function LangtextEditor({
     });
   }, [items, syncKey]);
 
+  // Sync editor content when selected field or syncKey changes
   useEffect(() => {
-    if (!editorRef.current || !selectedItemKey) return;
-
-    const previousContext = renderContextRef.current;
-    const isContextSwitch =
-      previousContext.syncKey !== syncKey || previousContext.itemKey !== selectedItemKey;
-    if (!isContextSwitch && editorRef.current === document.activeElement) return;
-
+    if (!editor || !selectedItemKey) return;
     const nextHtml = selectedHtml ?? "";
-    if (sanitizeHtml(editorRef.current.innerHTML) === nextHtml) return;
-    editorRef.current.innerHTML = nextHtml;
-    renderContextRef.current = { syncKey, itemKey: selectedItemKey };
-  }, [selectedHtml, selectedItemKey, syncKey]);
+    if (editor.getHTML() === nextHtml) return;
+    editor.commands.setContent(nextHtml, false);
+  }, [editor, selectedHtml, selectedItemKey, syncKey]);
 
-  const commitCurrent = async () => {
-    if (!selectedItem || !commitHandler) return;
-    const html = sanitizeHtml(editorRef.current?.innerHTML ?? selectedHtml ?? "");
-    setDrafts((prev) => ({ ...prev, [selectedItem.key]: html }));
-    appliedDraftsRef.current = { ...appliedDraftsRef.current, [selectedItem.key]: html };
-    try {
-      await commitHandler(selectedItem.key, html);
-    } catch (err) {
-      console.error("Langtext commit failed", err);
-    }
-  };
+  // Keep editor editability in sync with readOnly prop
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!readOnly);
+  }, [editor, readOnly]);
 
   const selectField = (key: string) => {
     if (!activeKey) setInternalKey(key);
     onActiveKeyChange?.(key);
   };
 
-  const handleApplyReplacement = (replacementText: string) => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) return;
+  const handleBubbleAction = async (action: "improve" | "shorten" | "formal" | "translate") => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to, " ");
+    if (!selectedText.trim()) return;
 
+    setBubbleLoading(true);
     try {
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      const textNode = document.createTextNode(replacementText);
-      range.insertNode(textNode);
-
-      if (editorRef.current) {
-        const html = sanitizeHtml(editorRef.current.innerHTML);
-        setDrafts((prev) => ({ ...prev, [selectedItem?.key ?? ""]: html }));
-        if (onChange && selectedItem) {
-          void onChange(selectedItem.key, html);
-        }
-      }
+      const res = await fetch("/api/ai/inline-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: selectedText, action }),
+      });
+      if (!res.ok) throw new Error("Fehler beim Bearbeiten");
+      const data = (await res.json()) as { result: string };
+      editor.chain().focus().deleteRange({ from, to }).insertContentAt(from, data.result).run();
     } catch (err) {
-      console.error("Failed to apply inline replacement:", err);
+      console.error(err);
+    } finally {
+      setBubbleLoading(false);
     }
   };
+
+  const isBold = editor?.isActive("bold") ?? false;
+  const isItalic = editor?.isActive("italic") ?? false;
+  const isUnderline = editor?.isActive("underline") ?? false;
 
   return (
     <div
@@ -215,16 +232,29 @@ export function LangtextEditor({
       )}
     >
       <style>{`
-        .langtext-contenteditable b, 
-        .langtext-contenteditable strong { 
-          font-weight: bold !important; 
+        .langtext-tiptap b,
+        .langtext-tiptap strong {
+          font-weight: bold !important;
         }
+        .langtext-tiptap .tiptap {
+          height: 100%;
+          min-height: 10rem;
+          overflow-y: auto;
+          padding: 0.75rem;
+          font-size: 13px;
+          line-height: 1.5rem;
+          color: var(--ink);
+          outline: none;
+        }
+        .langtext-tiptap .tiptap p { margin: 0; }
+        .langtext-tiptap .tiptap p + p { margin-top: 0.25rem; }
       `}</style>
+
+      {/* Language / field tabs */}
       <div className="flex shrink-0 flex-col gap-2 border-b border-hairline bg-canvas-soft px-3 py-2">
         <div className="text-[11px] font-semibold tracking-[0.16em] text-ink-mute uppercase">
           {title ?? t("langtextEditor.title", { defaultValue: "Langtexte" })}
         </div>
-
         <div className="flex flex-wrap justify-start gap-1">
           {items.map((item) => {
             const isActive = item.key === resolvedSelectedKey;
@@ -248,13 +278,17 @@ export function LangtextEditor({
         </div>
       </div>
 
+      {/* Formatting toolbar */}
       <div className="flex shrink-0 flex-wrap items-center justify-start gap-1 border-b border-hairline bg-canvas px-3 py-2">
         <button
           type="button"
           disabled={readOnly}
-          className="inline-flex size-8 items-center justify-center rounded border border-hairline-input text-ink transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
+          className={cn(
+            "inline-flex size-8 items-center justify-center rounded border border-hairline-input text-ink transition-colors hover:border-primary hover:text-primary disabled:opacity-40",
+            isBold && "border-primary bg-canvas-soft text-primary",
+          )}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => applyFormat("bold")}
+          onClick={() => editor?.chain().focus().toggleBold().run()}
           aria-label="Bold"
         >
           <BoldIcon size={14} />
@@ -262,9 +296,12 @@ export function LangtextEditor({
         <button
           type="button"
           disabled={readOnly}
-          className="inline-flex size-8 items-center justify-center rounded border border-hairline-input text-ink transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
+          className={cn(
+            "inline-flex size-8 items-center justify-center rounded border border-hairline-input text-ink transition-colors hover:border-primary hover:text-primary disabled:opacity-40",
+            isItalic && "border-primary bg-canvas-soft text-primary",
+          )}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => applyFormat("italic")}
+          onClick={() => editor?.chain().focus().toggleItalic().run()}
           aria-label="Italic"
         >
           <ItalicIcon size={14} />
@@ -272,9 +309,12 @@ export function LangtextEditor({
         <button
           type="button"
           disabled={readOnly}
-          className="inline-flex size-8 items-center justify-center rounded border border-hairline-input text-ink transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
+          className={cn(
+            "inline-flex size-8 items-center justify-center rounded border border-hairline-input text-ink transition-colors hover:border-primary hover:text-primary disabled:opacity-40",
+            isUnderline && "border-primary bg-canvas-soft text-primary",
+          )}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => applyFormat("underline")}
+          onClick={() => editor?.chain().focus().toggleUnderline().run()}
           aria-label="Underline"
         >
           <UnderlineIcon size={14} />
@@ -284,8 +324,13 @@ export function LangtextEditor({
           disabled={readOnly}
           className="h-8 cursor-pointer rounded border border-hairline-input bg-canvas px-2 text-[11px] text-ink transition-colors outline-none hover:border-primary"
           onChange={(e) => {
-            if (e.target.value !== "placeholder") {
-              applyFormat("foreColor", e.target.value || "inherit");
+            const val = e.target.value;
+            if (val !== "placeholder") {
+              if (val === "") {
+                editor?.chain().focus().unsetColor().run();
+              } else {
+                editor?.chain().focus().setColor(val).run();
+              }
               e.target.value = "placeholder";
             }
           }}
@@ -302,47 +347,77 @@ export function LangtextEditor({
         </select>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <div
-          ref={editorRef}
-          role="textbox"
-          aria-multiline="true"
-          contentEditable={!readOnly}
-          suppressContentEditableWarning
-          className={cn(
-            "langtext-contenteditable h-full min-h-40 overflow-y-auto px-3 py-3 text-[13px] leading-6 text-ink outline-none",
-            readOnly ? "cursor-default bg-canvas-soft/30" : "bg-canvas",
-            selectedHtml ? "" : "text-ink-mute",
-          )}
-          onInput={(event) => {
-            const html = sanitizeHtml((event.currentTarget as HTMLDivElement).innerHTML);
-            setDrafts((prev) => ({ ...prev, [selectedItem?.key ?? ""]: html }));
-            if (html !== (event.currentTarget as HTMLDivElement).innerHTML) {
-              (event.currentTarget as HTMLDivElement).innerHTML = html;
-            }
-            if (onChange && selectedItem) {
-              void onChange(selectedItem.key, html);
-            }
-          }}
-          onBlur={() => {
-            void commitCurrent();
-          }}
+      {/* Editor area */}
+      <div className="langtext-tiptap relative min-h-0 flex-1 overflow-hidden">
+        <EditorContent
+          editor={editor}
+          className={cn("h-full", readOnly ? "cursor-default opacity-70" : "")}
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
               event.preventDefault();
-              void commitCurrent();
+              void commitCurrentRef.current?.();
             }
           }}
         />
-        {!selectedHtml ? (
-          <div className="pointer-events-none -mt-[calc(100%-2.25rem)] px-3 py-3 text-[13px] leading-6 text-ink-mute">
+        {!selectedHtml && !editor?.getText() ? (
+          <div className="pointer-events-none absolute left-3 top-3 text-[13px] leading-6 text-ink-mute">
             {placeholder}
           </div>
         ) : null}
       </div>
-      {!readOnly && (
-        <FloatingToolbar editorRef={editorRef} onApplyAction={handleApplyReplacement} />
-      )}
+
+      {/* BubbleMenu for AI actions */}
+      {!readOnly && editor ? (
+        <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
+          <div className="flex items-center gap-1 rounded-md border border-hairline bg-canvas p-1 shadow-md">
+            {bubbleLoading ? (
+              <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] text-ink-mute">
+                <span className="size-3 animate-spin rounded-full border border-primary border-t-transparent" />
+                <span>KI arbeitet...</span>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleBubbleAction("improve")}
+                  title="Stil verbessern"
+                  className="flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-canvas-soft hover:text-primary"
+                >
+                  <SparklesIcon size={12} className="text-primary" />
+                  <span>Verbessern</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleBubbleAction("shorten")}
+                  title="Text kürzen"
+                  className="flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-canvas-soft hover:text-primary"
+                >
+                  <ScissorsIcon size={12} />
+                  <span>Kürzen</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleBubbleAction("formal")}
+                  title="Formeller formulieren"
+                  className="flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-canvas-soft hover:text-primary"
+                >
+                  <CheckIcon size={12} />
+                  <span>Formell</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleBubbleAction("translate")}
+                  title="Übersetzen (DE <-> EN)"
+                  className="flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-canvas-soft hover:text-primary"
+                >
+                  <LanguagesIcon size={12} />
+                  <span>Übersetzen</span>
+                </button>
+              </>
+            )}
+          </div>
+        </BubbleMenu>
+      ) : null}
     </div>
   );
 }

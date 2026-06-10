@@ -945,13 +945,49 @@ function EmailWorkspace() {
     queryClient.invalidateQueries({ queryKey: ["email"] });
   }, [selectedThreadId, queryClient]);
 
-  const openMailAiAssistant = useCallback(() => {
-    openAiOverlay();
-  }, [openAiOverlay]);
+  const openMailAiAssistant = useCallback(
+    (event?: Event) => {
+      const detail = (event as CustomEvent<{ compose?: boolean }>)?.detail;
+      // When triggered from the compose dialog (or while composer is open), open
+      // the compose-draft panel with the current composer state as context.
+      if (detail?.compose || composerOpen) {
+        const toAddresses = composer.to
+          ? composer.to.split(",").map((s) => s.trim()).filter(Boolean)
+          : [];
+        openAiOverlay({
+          taskScope: "mail-compose-draft",
+          composeDraftContext: {
+            to: toAddresses,
+            subject: composer.subject,
+            context: composer.bodyText ? composer.bodyText.slice(0, 500) : undefined,
+          },
+        });
+      } else {
+        openAiOverlay();
+      }
+    },
+    [openAiOverlay, composer, composerOpen],
+  );
 
   const openEmailDraftFromAi = useCallback(
     async (event: Event) => {
-      const draftId = (event as CustomEvent<{ draftId?: string }>).detail?.draftId;
+      const detail = (event as CustomEvent<{ draftId?: string; body?: string; subject?: string }>)
+        .detail;
+
+      // Direct body injection from MailComposeDraftPanel
+      if (detail?.body) {
+        const injectedBody = detail.body;
+        setComposer((prev) => ({
+          ...prev,
+          bodyText: injectedBody,
+          bodyHtml: injectedBody,
+          ...(detail.subject ? { subject: detail.subject } : {}),
+        }));
+        setComposerOpen(true);
+        return;
+      }
+
+      const draftId = detail?.draftId;
       if (!draftId) return;
 
       const res = await fetch(`/api/email/drafts/${draftId}`);
@@ -969,10 +1005,11 @@ function EmailWorkspace() {
   );
 
   useEffect(() => {
-    window.addEventListener("slopware:open-ai", openMailAiAssistant);
+    const handleOpenAi = (event: Event) => openMailAiAssistant(event);
+    window.addEventListener("slopware:open-ai", handleOpenAi);
     window.addEventListener("slopware:open-email-draft", openEmailDraftFromAi);
     return () => {
-      window.removeEventListener("slopware:open-ai", openMailAiAssistant);
+      window.removeEventListener("slopware:open-ai", handleOpenAi);
       window.removeEventListener("slopware:open-email-draft", openEmailDraftFromAi);
     };
   }, [openEmailDraftFromAi, openMailAiAssistant]);

@@ -5,8 +5,8 @@ function Avatar({ className, ...props }: React.ComponentProps<"div">) {
   return <div data-slot="avatar" className={cn("inline-flex overflow-hidden rounded-full", className)} {...props} />;
 }
 
-function AvatarImage({ className, ...props }: React.ComponentProps<"img">) {
-  return <img data-slot="avatar-image" className={cn("h-full w-full object-cover", className)} {...props} />;
+function AvatarImage({ className, alt = "", ...props }: React.ComponentProps<"img">) {
+  return <img data-slot="avatar-image" alt={alt} className={cn("h-full w-full object-cover", className)} {...props} />;
 }
 
 function AvatarFallback({ className, ...props }: React.ComponentProps<"div">) {

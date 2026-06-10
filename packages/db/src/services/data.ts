@@ -27,6 +27,7 @@ import {
   inventoryBalance,
   inventoryItem,
 } from "../schema/app.schema";
+import { ensureDefaultVariantForArticleRow } from "./default-variant-backfill";
 import * as schema from "../schema";
 
 export class DataService {
@@ -430,6 +431,23 @@ export class DataService {
         : lifecycleValues;
 
     const encryptedValues = await this.encryptLlmSecretFieldsIfNeeded(entityName, values);
+
+    if (entityName === "article") {
+      const inserted = await db.transaction(async (tx) => {
+        const createdRows = await tx.insert(table).values(encryptedValues).returning();
+        const [createdArticle] = createdRows;
+        if (createdArticle) {
+          await ensureDefaultVariantForArticleRow(tx, {
+            tenantId: createdArticle.tenantId,
+            articleId: createdArticle.articleId,
+            articleNo: createdArticle.articleNo,
+          });
+        }
+        return createdRows;
+      });
+      await this.decryptLlmApiKeyListIfNeeded(entityName, inserted);
+      return inserted;
+    }
 
     const inserted = await db.insert(table).values(encryptedValues).returning();
     await this.decryptLlmApiKeyListIfNeeded(entityName, inserted);

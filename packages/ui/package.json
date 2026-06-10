@@ -34,6 +34,7 @@
     "@tiptap/core": "catalog:",
     "@tiptap/extension-color": "catalog:",
     "@tiptap/extension-font-family": "catalog:",
+    "@tiptap/extension-underline": "catalog:",
     "@tiptap/extension-text-align": "catalog:",
     "@tiptap/extension-text-style": "catalog:",
     "@tiptap/pm": "catalog:",

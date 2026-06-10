@@ -108,6 +108,7 @@ catalog:
   prosemirror-model: ^1.25.7
   "@tiptap/extension-text-align": ^2.23.0
   "@tiptap/extension-font-family": ^2.23.0
+  "@tiptap/extension-underline": ^2.23.0
 catalogMode: prefer
 
 overrides:

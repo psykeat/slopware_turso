@@ -127,6 +127,7 @@ export default defineConfig({
       "scripts/",
       ".gemini/prototype/",
       ".gemini/skills/",
+      ".claude/",
     ],
   },
 });

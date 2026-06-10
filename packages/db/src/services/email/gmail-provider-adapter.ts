@@ -508,9 +508,10 @@ export class GmailProviderAdapter implements EmailProviderAdapter {
   async renewWatch(
     credentialsEncrypted: string,
     _callbackUrl: string,
-  ): Promise<{ expiresAt: Date }> {
+  ): Promise<{ expiresAt: Date; subscriptionId?: string | null; channelToken?: string | null }> {
     const topicName = process.env.GMAIL_PUBSUB_TOPIC;
     if (!topicName) throw new ProviderConfigurationError(this.provider, "watch renewal topic");
+    const webhookToken = process.env.GMAIL_WEBHOOK_TOKEN ?? process.env.EMAIL_WEBHOOK_TOKEN ?? null;
     const result = await this.request<{ expiration?: string }>(credentialsEncrypted, "/watch", {
       method: "POST",
       body: JSON.stringify({ topicName, labelIds: ["INBOX"], labelFilterBehavior: "include" }),
@@ -519,6 +520,8 @@ export class GmailProviderAdapter implements EmailProviderAdapter {
       expiresAt: result.expiration
         ? new Date(Number(result.expiration))
         : new Date(Date.now() + 6 * 86400_000),
+      subscriptionId: null,
+      channelToken: webhookToken,
     };
   }
 

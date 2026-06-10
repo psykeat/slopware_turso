@@ -55,3 +55,12 @@ aiCapabilityRegistry.register({
   icon: "Sparkles",
   renderReview: (props) => <MailOrderReview {...props} />,
 });
+
+// mail-compose-draft is handled directly by MailComposeDraftPanel in AiOverlayHost
+// (no SSE pipeline, no renderReview needed). Registered for discoverability only.
+aiCapabilityRegistry.register({
+  taskScope: "mail-compose-draft",
+  label: { en: "Compose mail draft", de: "Mail verfassen" },
+  icon: "MailPlus",
+  renderReview: () => null,
+});

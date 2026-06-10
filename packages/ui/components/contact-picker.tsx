@@ -95,7 +95,6 @@ export function ContactPicker({
         className,
       )}
       role="group"
-      tabIndex={0}
       onClick={() => inputRef.current?.focus()}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {

@@ -389,13 +389,13 @@ export class GraphProviderAdapter implements EmailProviderAdapter {
   async renewWatch(
     credentialsEncrypted: string,
     callbackUrl: string,
-  ): Promise<{ expiresAt: Date }> {
+  ): Promise<{ expiresAt: Date; subscriptionId?: string | null; channelToken?: string | null }> {
     const clientState =
       process.env.MICROSOFT_WEBHOOK_CLIENT_STATE ?? process.env.EMAIL_WEBHOOK_TOKEN;
     if (!clientState)
       throw new ProviderConfigurationError(this.provider, "subscription client state");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    await this.request(credentialsEncrypted, "/subscriptions", {
+    const result = await this.request<{ id?: string }>(credentialsEncrypted, "/subscriptions", {
       method: "POST",
       body: JSON.stringify({
         changeType: "created,updated,deleted",
@@ -405,7 +405,7 @@ export class GraphProviderAdapter implements EmailProviderAdapter {
         clientState,
       }),
     });
-    return { expiresAt };
+    return { expiresAt, subscriptionId: result.id ?? null, channelToken: clientState };
   }
 
   async createDraft(

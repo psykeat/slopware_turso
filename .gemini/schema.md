@@ -1,7 +1,7 @@
 # Slopware — Live Schema Index
 
-> Generated: 2026-06-07 20:43:10 UTC
-> Tables: 102
+> Generated: 2026-06-10 17:42:30 UTC
+> Tables: 114
 
 Here is the index of all database tables. Click on a table name to view its detailed columns, types, and business annotations.
 
@@ -31,9 +31,16 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [ai_turn](file:///home/ubuntu/slopware/.agents/schema/ai_turn.md) (_turn_id_)
 - [article](file:///home/ubuntu/slopware/.agents/schema/article.md) (_article_id_)
 - [article_bom](file:///home/ubuntu/slopware/.agents/schema/article_bom.md) (_bom_id_)
+- [article_category](file:///home/ubuntu/slopware/.agents/schema/article_category.md) (_article_category_id_)
 - [article_group](file:///home/ubuntu/slopware/.agents/schema/article_group.md) (_article_group_id_)
 - [article_image](file:///home/ubuntu/slopware/.agents/schema/article_image.md) (_article_image_id_)
+- [article_media](file:///home/ubuntu/slopware/.agents/schema/article_media.md) (_article_media_id_)
+- [article_option](file:///home/ubuntu/slopware/.agents/schema/article_option.md) (_option_id_)
+- [article_option_value](file:///home/ubuntu/slopware/.agents/schema/article_option_value.md) (_value_id_)
+- [article_variant](file:///home/ubuntu/slopware/.agents/schema/article_variant.md) (_variant_id_)
+- [article_variant_option_value](file:///home/ubuntu/slopware/.agents/schema/article_variant_option_value.md)
 - [bank_account](file:///home/ubuntu/slopware/.agents/schema/bank_account.md) (_bank_account_id_)
+- [category](file:///home/ubuntu/slopware/.agents/schema/category.md) (_category_id_)
 - [company](file:///home/ubuntu/slopware/.agents/schema/company.md) (_company_id_)
 - [connector_definition](file:///home/ubuntu/slopware/.agents/schema/connector_definition.md) (_connector_id_)
 - [cost_center](file:///home/ubuntu/slopware/.agents/schema/cost_center.md) (_cost_center_id_)
@@ -64,6 +71,7 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [email_template_render_log](file:///home/ubuntu/slopware/.agents/schema/email_template_render_log.md) (_email_template_render_log_id_)
 - [email_thread](file:///home/ubuntu/slopware/.agents/schema/email_thread.md) (_email_thread_id_)
 - [entity_commands](file:///home/ubuntu/slopware/.agents/schema/entity_commands.md) (_command_id_)
+- [external_sync_mapping](file:///home/ubuntu/slopware/.agents/schema/external_sync_mapping.md) (_mapping_id_)
 - [fact_purchase_event](file:///home/ubuntu/slopware/.agents/schema/fact_purchase_event.md) (_fact_purchase_event_id_)
 - [fact_sales_event](file:///home/ubuntu/slopware/.agents/schema/fact_sales_event.md) (_fact_sales_event_id_)
 - [fiscal_period](file:///home/ubuntu/slopware/.agents/schema/fiscal_period.md) (_fiscal_period_id_)
@@ -76,9 +84,12 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [incoterm](file:///home/ubuntu/slopware/.agents/schema/incoterm.md) (_incoterm_id_)
 - [industry](file:///home/ubuntu/slopware/.agents/schema/industry.md) (_industry_id_)
 - [inventory_balance](file:///home/ubuntu/slopware/.agents/schema/inventory_balance.md) (_inventory_balance_id_)
+- [inventory_item](file:///home/ubuntu/slopware/.agents/schema/inventory_item.md) (_item_id_)
+- [inventory_level](file:///home/ubuntu/slopware/.agents/schema/inventory_level.md) (_level_id_)
 - [inventory_movement](file:///home/ubuntu/slopware/.agents/schema/inventory_movement.md) (_inventory_movement_id_)
 - [journal_entry](file:///home/ubuntu/slopware/.agents/schema/journal_entry.md) (_journal_entry_id_)
 - [journal_line](file:///home/ubuntu/slopware/.agents/schema/journal_line.md) (_journal_line_id_)
+- [media_asset](file:///home/ubuntu/slopware/.agents/schema/media_asset.md) (_media_asset_id_)
 - [metadata_history](file:///home/ubuntu/slopware/.agents/schema/metadata_history.md) (_history_id_)
 - [modules](file:///home/ubuntu/slopware/.agents/schema/modules.md) (_module_id_)
 - [number_sequence](file:///home/ubuntu/slopware/.agents/schema/number_sequence.md) (_number_sequence_id_)
@@ -88,6 +99,7 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [price_list](file:///home/ubuntu/slopware/.agents/schema/price_list.md) (_price_list_id_)
 - [price_list_item](file:///home/ubuntu/slopware/.agents/schema/price_list_item.md) (_price_list_item_id_)
 - [production_order](file:///home/ubuntu/slopware/.agents/schema/production_order.md) (_production_order_id_)
+- [sales_channel](file:///home/ubuntu/slopware/.agents/schema/sales_channel.md) (_sales_channel_id_)
 - [schema_annotations](file:///home/ubuntu/slopware/.agents/schema/schema_annotations.md) (_id_)
 - [serial_number](file:///home/ubuntu/slopware/.agents/schema/serial_number.md) (_serial_number_id_)
 - [session](file:///home/ubuntu/slopware/.agents/schema/session.md) (_id_)

@@ -1,27 +1,80 @@
-import { randomUUID } from "node:crypto";
+import { and, eq, lt, sql } from "drizzle-orm";
 
-import { inMemoryRunStore, createWorkflow, runWorkflow } from "@tanstack/workflow-core";
-
-import { EmailSyncService } from "./sync-service";
+import { db } from "../../index";
+import { emailJob } from "../../schema/app.schema";
 import type { EmailJobType } from "./types";
 
-export const emailRunStore = inMemoryRunStore();
+const TIER_PRIORITY: Record<string, number> = { hot: 1, warm: 2, cold: 3, dormant: 3 };
 
-export const emailWorkflow = createWorkflow({
-  id: "emailWorkflow",
-}).handler(async (ctx) => {
-  console.log("[Workflow Debug] Starting emailWorkflow", ctx.input);
+export function activityTierPriority(tier: string): number {
+  return TIER_PRIORITY[tier] ?? 2;
+}
+
+async function runJobInBackground(
+  tenantId: string,
+  jobId: string,
+  jobType: string,
+  emailAccountId: string | null | undefined,
+  payload: Record<string, unknown>,
+) {
+  // Late import to avoid circular dependency at module init time
+  const { EmailSyncService } = await import("./sync-service");
+  const syncService = new EmailSyncService(tenantId, "system");
+  const now = new Date();
+
+  // Atomically claim: only proceed if we win the status='queued' race
+  const [claimed] = await db
+    .update(emailJob)
+    .set({ status: "processing", lockedAt: now, lockedBy: "inline-worker", updatedAt: now })
+    .where(and(eq(emailJob.emailJobId, jobId), eq(emailJob.status, "queued")))
+    .returning({ emailJobId: emailJob.emailJobId });
+
+  if (!claimed) return; // another worker already claimed it
+
   try {
-    const { tenantId, userId, jobType, emailAccountId, payload } = ctx.input as any;
-    const syncService = new EmailSyncService(tenantId, userId);
-    await syncService.executeJob(jobType, emailAccountId, payload);
-    console.log("[Workflow Debug] Finished emailWorkflow successfully");
-    return { status: "done" };
-  } catch (error) {
-    console.error("[Workflow Debug] emailWorkflow failed", error);
-    throw error;
+    await syncService.executeJob(jobType, emailAccountId ?? "", payload);
+
+    // Guard by lockedBy so a reclaimed job isn't stomped if we ran long
+    await db
+      .update(emailJob)
+      .set({ status: "done", lockedAt: null, lockedBy: null, updatedAt: new Date() })
+      .where(
+        and(eq(emailJob.emailJobId, jobId), eq(emailJob.lockedBy, "inline-worker")),
+      );
+  } catch (err) {
+    console.error("[EmailJobService] background job failed", err);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+
+    const [current] = await db
+      .select({ attempts: emailJob.attempts, maxAttempts: emailJob.maxAttempts })
+      .from(emailJob)
+      .where(
+        and(eq(emailJob.emailJobId, jobId), eq(emailJob.lockedBy, "inline-worker")),
+      )
+      .limit(1);
+
+    if (current) {
+      const attempts = current.attempts + 1;
+      const exhausted = attempts >= current.maxAttempts;
+      const backoffMinutes = Math.pow(2, attempts);
+      const runAfter = new Date(Date.now() + backoffMinutes * 60 * 1000);
+      await db
+        .update(emailJob)
+        .set({
+          status: exhausted ? "failed" : "queued",
+          attempts,
+          runAfter: exhausted ? new Date() : runAfter,
+          lockedAt: null,
+          lockedBy: null,
+          lastError: errorMessage,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(eq(emailJob.emailJobId, jobId), eq(emailJob.lockedBy, "inline-worker")),
+        );
+    }
   }
-});
+}
 
 export class EmailJobService {
   constructor(private tenantId: string) {}
@@ -32,79 +85,165 @@ export class EmailJobService {
     idempotencyKey: string;
     payload?: Record<string, unknown>;
     runAfter?: Date;
+    priority?: number;
   }) {
-    const runId = randomUUID();
+    const runAfter = input.runAfter ?? new Date();
+    const [row] = await db
+      .insert(emailJob)
+      .values({
+        tenantId: this.tenantId,
+        emailAccountId: input.emailAccountId ?? null,
+        jobType: input.jobType,
+        idempotencyKey: input.idempotencyKey,
+        payload: input.payload ?? {},
+        status: "queued",
+        priority: input.priority ?? 2,
+        attempts: 0,
+        maxAttempts: 5,
+        runAfter,
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing()
+      .returning();
 
-    // Background execution
-    (async () => {
-      try {
-        for await (const _event of runWorkflow({
-          workflow: emailWorkflow,
-          runStore: emailRunStore,
-          runId,
-          input: {
-            tenantId: this.tenantId,
-            userId: "system",
-            jobType: input.jobType,
-            emailAccountId: input.emailAccountId,
-            payload: input.payload,
-          },
-        })) {
-          // ignore
-        }
-      } catch (err) {
-        console.error("Workflow failed", err);
-      }
-    })();
+    if (!row) {
+      const [existing] = await db
+        .select()
+        .from(emailJob)
+        .where(
+          and(
+            eq(emailJob.tenantId, this.tenantId),
+            eq(emailJob.idempotencyKey, input.idempotencyKey),
+          ),
+        )
+        .limit(1);
+      return existing ?? null;
+    }
 
-    return {
-      emailJobId: runId,
-      status: "queued",
-      attempts: 0,
-      maxAttempts: 3,
-      lockedAt: null,
-      lockedBy: null,
-      retryable: true,
-      attemptsRemaining: 3,
-      isLocked: false,
-    };
+    // For immediate jobs, fire off background execution so they run without waiting for a worker poll
+    if (runAfter <= new Date()) {
+      void runJobInBackground(
+        this.tenantId,
+        row.emailJobId,
+        input.jobType,
+        input.emailAccountId,
+        input.payload ?? {},
+      );
+    }
+
+    return row;
   }
 
   async list() {
-    return [];
+    return db
+      .select()
+      .from(emailJob)
+      .where(eq(emailJob.tenantId, this.tenantId))
+      .orderBy(emailJob.createdAt)
+      .limit(100);
   }
 
   async get(jobId: string) {
-    const state = await emailRunStore.getRunState(jobId);
-    if (!state) return null;
-    return {
-      emailJobId: state.runId,
-      jobType: (state.input as any).jobType,
-      status: state.status === "finished" ? "done" : state.status,
-      attempts: 1,
-      maxAttempts: 3,
-      lockedAt: null,
-      lockedBy: null,
-      retryable: false,
-      attemptsRemaining: 0,
-      isLocked: false,
-      lastError: state.error ? state.error.message : null,
-    };
+    const [row] = await db
+      .select()
+      .from(emailJob)
+      .where(and(eq(emailJob.tenantId, this.tenantId), eq(emailJob.emailJobId, jobId)))
+      .limit(1);
+    return row ?? null;
   }
 
-  async claimNext(_workerId: string) {
-    return null;
+  async claimNext(workerId: string) {
+    const now = new Date();
+    const staleThreshold = new Date(now.getTime() - 10 * 60 * 1000);
+
+    // Canonical Postgres queue pattern: UPDATE WHERE pk = (subquery FOR UPDATE SKIP LOCKED)
+    // No redundant outer conditions — the subquery handles all filtering atomically
+    const [claimed] = await db
+      .update(emailJob)
+      .set({ status: "processing", lockedAt: now, lockedBy: workerId, updatedAt: now })
+      .where(
+        sql`email_job_id = (
+          SELECT email_job_id FROM email_job
+          WHERE tenant_id = ${this.tenantId}
+            AND (status = 'queued' OR (status = 'processing' AND locked_at < ${staleThreshold.toISOString()}))
+            AND run_after <= ${now.toISOString()}
+          ORDER BY priority ASC, run_after ASC, created_at ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED
+        )`,
+      )
+      .returning();
+    return claimed ?? null;
   }
 
-  async claim(_jobId: string, _workerId: string) {
-    return null;
+  static async reaperRun(staleMinutes = 10): Promise<number> {
+    const staleThreshold = new Date(Date.now() - staleMinutes * 60 * 1000);
+    const errorMsg = `reaped after ${staleMinutes}min lock timeout`;
+    // No attempts < maxAttempts guard: exhausted stuck jobs must also be resolved (to 'failed')
+    const rows = await db
+      .update(emailJob)
+      .set({
+        status: sql`CASE WHEN ${emailJob.attempts} + 1 >= ${emailJob.maxAttempts} THEN 'failed' ELSE 'queued' END`,
+        lockedAt: null,
+        lockedBy: null,
+        attempts: sql`${emailJob.attempts} + 1`,
+        lastError: errorMsg,
+        runAfter: sql`CASE WHEN ${emailJob.attempts} + 1 >= ${emailJob.maxAttempts} THEN ${emailJob.runAfter} ELSE now() + INTERVAL '1 minute' END`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(emailJob.status, "processing"),
+          lt(emailJob.lockedAt, staleThreshold),
+        ),
+      )
+      .returning({ emailJobId: emailJob.emailJobId });
+    return rows.length;
   }
 
-  async complete(jobId: string, _workerId?: string) {
-    return { emailJobId: jobId, status: "done" };
+  async complete(jobId: string, workerId?: string) {
+    const now = new Date();
+    const conditions = [eq(emailJob.emailJobId, jobId)];
+    if (workerId) conditions.push(eq(emailJob.lockedBy, workerId));
+
+    const [row] = await db
+      .update(emailJob)
+      .set({ status: "done", lockedAt: null, lockedBy: null, updatedAt: now })
+      .where(and(...conditions))
+      .returning();
+    return row ?? null;
   }
 
-  async fail(jobId: string, _error: unknown, _retryAfter?: Date, _workerId?: string) {
-    return { emailJobId: jobId, status: "failed" };
+  async fail(jobId: string, error: unknown, _workerId?: string) {
+    const now = new Date();
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    const [current] = await db
+      .select({ attempts: emailJob.attempts, maxAttempts: emailJob.maxAttempts })
+      .from(emailJob)
+      .where(eq(emailJob.emailJobId, jobId))
+      .limit(1);
+
+    if (!current) return null;
+
+    const attempts = current.attempts + 1;
+    const exhausted = attempts >= current.maxAttempts;
+    const backoffMinutes = Math.pow(2, attempts);
+    const runAfter = new Date(now.getTime() + backoffMinutes * 60 * 1000);
+
+    const [row] = await db
+      .update(emailJob)
+      .set({
+        status: exhausted ? "failed" : "queued",
+        attempts,
+        runAfter: exhausted ? now : runAfter,
+        lockedAt: null,
+        lockedBy: null,
+        lastError: errorMessage,
+        updatedAt: now,
+      })
+      .where(eq(emailJob.emailJobId, jobId))
+      .returning();
+    return row ?? null;
   }
 }

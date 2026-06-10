@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 
 import { cn } from "../lib/utils";
-import { Button } from "./button";
 import Editor from "./editor";
 
 export interface RichTextEditorProps {
@@ -18,14 +17,14 @@ export function RichTextEditor({
   onChange,
   className,
   mode = "html",
-  onChangeMode,
+  _onChangeMode,
   onAttachmentsChange,
 }: RichTextEditorProps) {
   // Convert standard HTML string to Novel/Tiptap format or pass directly
   // Tiptap can usually parse HTML strings directly as initialContent
   const [isClient, setIsClient] = React.useState(false);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     setIsClient(true);
   }, []);
 

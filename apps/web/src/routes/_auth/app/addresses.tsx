@@ -34,22 +34,22 @@ const ADDRESS_TEXT_FIELD_OVERRIDES = [
 
 const ADDRESS_FIELD_OVERRIDES_ALL = ADDRESS_TEXT_FIELD_OVERRIDES;
 
-const ADDRESS_LANGTEXT_FIELDS = [
-  { field: "notiztext", label: "Notiztext" },
-  { field: "warntext", label: "Warntext" },
-  { field: "langtext", label: "Langtext" },
-];
-
 function ContactNotizEditor({
   contactLabel,
   contactId,
   initialValue,
+  title,
+  emptyLabel,
+  placeholder,
   onChange,
   disabled,
 }: {
   contactLabel: string;
   contactId: string | null;
   initialValue: string;
+  title: string;
+  emptyLabel: string;
+  placeholder: string;
   onChange: (notiztext: string) => void;
   disabled: boolean;
 }) {
@@ -75,16 +75,16 @@ function ContactNotizEditor({
     <div className="flex min-h-[18rem] min-w-0 flex-col overflow-hidden rounded-xl border border-hairline bg-canvas shadow-sm">
       <div className="border-b border-hairline px-4 py-3">
         <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-          Notiztext
+          {title}
         </div>
         <div className="mt-0.5 truncate text-[12px] text-ink-secondary">
-          {contactLabel || "Kontakt auswählen"}
+          {contactLabel || emptyLabel}
         </div>
       </div>
       <textarea
         value={contactId ? draft : ""}
         onChange={(e) => setDraft(e.target.value)}
-        placeholder="Kontakt auswählen"
+        placeholder={placeholder}
         disabled={disabled}
         className="min-h-0 flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[13px] leading-5 text-ink outline-none placeholder:text-ink-mute disabled:cursor-not-allowed disabled:text-ink-mute"
       />
@@ -102,8 +102,10 @@ function AddressContactsSection({
   title: string;
 }) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation("ui");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const contactsQueryKey = ["data", "addressContact", addressId] as const;
+  const fallbackContactLabel = t("addressView.contacts.contactFallback");
 
   const getContactId = useCallback(
     (row: Record<string, any> | null) => row?.contactId || row?.addressContactId || row?.id || null,
@@ -113,8 +115,8 @@ function AddressContactsSection({
   const getContactLabel = useCallback((contact: any) => {
     const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
     const tail = contact.roleFunction ? ` · ${contact.roleFunction}` : "";
-    return `${name || contact.email || contact.phoneMobile || "Kontakt"}${tail}`;
-  }, []);
+    return `${name || contact.email || contact.phoneMobile || fallbackContactLabel}${tail}`;
+  }, [fallbackContactLabel]);
 
   const selectedContact = useMemo(() => {
     if (!selectedContactId) return null;
@@ -197,30 +199,40 @@ function AddressContactsSection({
   return (
     <div className="flex flex-col gap-2">
       <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">{title}</div>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_clamp(18rem,22vw,24rem)]">
-        <div className="min-w-0">
-          <InlineEditGrid
-            key={`${addressId}-contacts`}
-            entityName="addressContact"
-            parentKey={{ addressId }}
-            keyColumn="contactId"
-            className="h-full"
-            onRowSelect={handleContactRowSelect}
-            columns={[
-              { key: "firstName", header: "First Name", type: "text" },
-              { key: "lastName", header: "Last Name", type: "text", required: true },
-              { key: "email", header: "Email", type: "text" },
-              { key: "phoneMobile", header: "Mobile", type: "text" },
-              { key: "roleFunction", header: "Role", type: "text" },
-              { key: "isPrimary", header: "Primary", type: "boolean", width: "60px" },
-            ]}
-          />
-        </div>
+      <div className="flex flex-col gap-4">
+        <InlineEditGrid
+          key={`${addressId}-contacts`}
+          entityName="addressContact"
+          parentKey={{ addressId }}
+          keyColumn="contactId"
+          className="min-w-0"
+          onRowSelect={handleContactRowSelect}
+          labels={{
+            add: t("addressView.contacts.add"),
+            edit: t("addressView.contacts.edit"),
+            save: t("addressView.contacts.save"),
+            cancel: t("addressView.contacts.cancel"),
+            delete: t("addressView.contacts.delete"),
+            empty: t("addressView.contacts.empty"),
+            records: (count) => t("addressView.contacts.records", { count }),
+          }}
+          columns={[
+            { key: "firstName", header: t("addressView.contacts.firstName"), type: "text" },
+            { key: "lastName", header: t("addressView.contacts.lastName"), type: "text", required: true },
+            { key: "email", header: t("addressView.contacts.email"), type: "text" },
+            { key: "phoneMobile", header: t("addressView.contacts.phoneMobile"), type: "text" },
+            { key: "roleFunction", header: t("addressView.contacts.roleFunction"), type: "text" },
+            { key: "isPrimary", header: t("addressView.contacts.primary"), type: "boolean", width: "60px" },
+          ]}
+        />
         <ContactNotizEditor
           key={selectedContactId ?? "empty"}
           contactLabel={selectedContact ? getContactLabel(selectedContact) : ""}
           contactId={selectedContactId}
           initialValue={selectedContactNotiztext}
+          title={t("addressView.contacts.noteTitle")}
+          emptyLabel={t("addressView.contacts.selectContact")}
+          placeholder={t("addressView.contacts.notePlaceholder")}
           onChange={handleContactNoteChange}
           disabled={!selectedContact}
         />
@@ -235,6 +247,14 @@ function AddressesModule() {
   const { setSubCrumb } = useActionBar();
   const { t } = useTranslation("ui");
   const queryClient = useQueryClient();
+  const addressLangtextFields = useMemo(
+    () => [
+      { field: "notiztext", label: t("addressView.langtexts.note") },
+      { field: "warntext", label: t("addressView.langtexts.warning") },
+      { field: "langtext", label: t("addressView.langtexts.body") },
+    ],
+    [t],
+  );
   const addressGridRef = useRef<DataGridHandle>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -506,7 +526,7 @@ function AddressesModule() {
               entityName="address"
               recordId={activeAddressId}
               title={t("addressView.tabs.langtexts")}
-              fields={ADDRESS_LANGTEXT_FIELDS}
+              fields={addressLangtextFields}
               className="h-full"
             />
           </div>
@@ -525,23 +545,23 @@ function AddressesModule() {
             title={t("addressView.tables.contacts")}
             toolbar={false}
             columns={[
-              { key: "firstName", header: "First" },
-              { key: "lastName", header: "Last" },
+              { key: "firstName", header: t("addressView.tables.firstName") },
+              { key: "lastName", header: t("addressView.tables.lastName") },
               {
                 key: "notiztext",
-                header: "Note Text",
+                header: t("addressView.contacts.noteText"),
                 render: (row: any) => (
                   <span className="block max-w-[240px] truncate text-ink-secondary">
                     {row.notiztext ?? "—"}
                   </span>
                 ),
               },
-              { key: "email", header: "Email" },
-              { key: "phoneMobile", header: "Mobile" },
-              { key: "roleFunction", header: "Role" },
+              { key: "email", header: t("addressView.contacts.email") },
+              { key: "phoneMobile", header: t("addressView.contacts.phoneMobile") },
+              { key: "roleFunction", header: t("addressView.contacts.roleFunction") },
             ]}
-            emptyTitle="No contacts yet."
-            emptySubtitle="Open the address edit mask (F2) to add contacts."
+            emptyTitle={t("addressView.contacts.emptyTitle")}
+            emptySubtitle={t("addressView.contacts.emptySubtitle")}
             className="h-full rounded-none border-none"
           />
         ),
@@ -559,14 +579,14 @@ function AddressesModule() {
             title={t("addressView.tables.deliveryAddresses")}
             toolbar={false}
             columns={[
-              { key: "name", header: "Name" },
-              { key: "addressLine1", header: "Street" },
-              { key: "postalCode", header: "ZIP" },
-              { key: "city", header: "City" },
-              { key: "countryCode", header: "Country" },
+              { key: "name", header: t("addressView.tables.name") },
+              { key: "addressLine1", header: t("addressView.tables.street") },
+              { key: "postalCode", header: t("addressView.tables.zip") },
+              { key: "city", header: t("addressView.tables.city") },
+              { key: "countryCode", header: t("addressView.tables.country") },
             ]}
-            emptyTitle="No delivery addresses yet."
-            emptySubtitle="Open the address edit mask (F2) to add delivery addresses."
+            emptyTitle={t("addressView.deliveryAddresses.emptyTitle")}
+            emptySubtitle={t("addressView.deliveryAddresses.emptySubtitle")}
             className="h-full rounded-none border-none"
           />
         ),
@@ -591,7 +611,7 @@ function AddressesModule() {
               },
               {
                 key: "documentDate",
-                header: "Date",
+                header: t("addressView.tables.date"),
                 isNumeric: true,
                 render: (r: any) => (
                   <span className="tabular-nums">{formatDate(r.documentDate)}</span>
@@ -600,7 +620,7 @@ function AddressesModule() {
               { key: "documentType", header: t("addressView.tables.type") },
               {
                 key: "totalGross",
-                header: "Total",
+                header: t("addressView.tables.total"),
                 isNumeric: true,
                 render: (r: any) => (
                   <span className="tabular-nums">{formatMoney(r.totalGross ?? 0)}</span>
@@ -608,12 +628,12 @@ function AddressesModule() {
               },
               {
                 key: "status",
-                header: "Status",
+                header: t("addressView.tables.status"),
                 render: (r: any) => <StatusDot status={r.status ?? "draft"} />,
               },
             ]}
-            emptyTitle="No related documents."
-            emptySubtitle="Documents linked to this address appear here."
+            emptyTitle={t("addressView.relatedDocuments.emptyTitle")}
+            emptySubtitle={t("addressView.relatedDocuments.emptySubtitle")}
             className="h-full rounded-none border-none"
           />
         ),
@@ -687,7 +707,7 @@ function AddressesModule() {
             columns={[
               {
                 key: "documentDate",
-                header: "Datum",
+                header: t("addressView.tables.date"),
                 isNumeric: false,
                 render: (r: any) => (
                   <span className="tabular-nums">{formatDate(r.documentDate)}</span>
@@ -701,7 +721,7 @@ function AddressesModule() {
               { key: "documentType", header: t("addressView.tables.type") },
               {
                 key: "totalGross",
-                header: "Betrag",
+                header: t("addressView.tables.total"),
                 isNumeric: true,
                 render: (r: any) => (
                   <span className="tabular-nums">{formatMoney(r.totalGross ?? 0)}</span>
@@ -709,18 +729,18 @@ function AddressesModule() {
               },
               {
                 key: "status",
-                header: "Status",
+                header: t("addressView.tables.status"),
                 render: (r: any) => <StatusDot status={r.status ?? "draft"} />,
               },
             ]}
-            emptyTitle="Keine offenen Posten."
-            emptySubtitle="Unbezahlte Rechnungen erscheinen hier."
+            emptyTitle={t("addressView.openItems.emptyTitle")}
+            emptySubtitle={t("addressView.openItems.emptySubtitle")}
             className="h-full rounded-none border-none"
           />
         ),
       },
     ],
-    [selectedAddress, activeAddressId, contacts, deliveryAddresses, addressStats, t],
+    [selectedAddress, activeAddressId, contacts, deliveryAddresses, addressStats, t, addressLangtextFields],
   );
 
   const selectCategoryNode = useCallback(
@@ -860,7 +880,7 @@ function AddressesModule() {
             selectable
             bulkActions={[
               {
-                label: "Delete",
+                label: t("actions.delete"),
                 variant: "destructive" as const,
                 onClick: async (keys: string[]) => {
                   try {
@@ -884,10 +904,10 @@ function AddressesModule() {
               },
             ]}
             onRowOpen={() => setShowEdit(true)}
-            emptyTitle="No addresses yet."
-            emptySubtitle="Create the first address in this category."
+            emptyTitle={t("addressView.addressList.emptyTitle")}
+            emptySubtitle={t("addressView.addressList.emptySubtitle")}
             emptyAction={{
-              label: `${t("actions.new")} Address`,
+              label: `${t("actions.new")} ${t("nav.addresses")}`,
               kbd: "F3",
               onClick: () => setShowCreate(true),
             }}
@@ -904,7 +924,7 @@ function AddressesModule() {
             entityName="address"
             mode="create"
             layout="single"
-            title="New Address"
+            title={t("addressView.dialog.newAddress")}
             onCancel={() => setShowCreate(false)}
             onSaved={handleCreateSaved}
             className="rounded-none border-none shadow-none"
@@ -978,7 +998,7 @@ function AddressesModule() {
                     entityName="address"
                     recordId={activeAddressId}
                     title={t("langtextEditor.title", { defaultValue: "Langtexte" })}
-                    fields={ADDRESS_LANGTEXT_FIELDS}
+                    fields={addressLangtextFields}
                     className="min-h-[220px]"
                     controlledValues={{
                       notiztext: record.notiztext as string,
@@ -992,11 +1012,11 @@ function AddressesModule() {
                   key={record.addressId as string}
                   addressId={record.addressId as string}
                   contacts={contacts}
-                  title="Ansprechpartner"
+                  title={t("addressView.contacts.title")}
                 />
                 <div>
                   <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    Delivery Addresses
+                    {t("addressView.sections.deliveryAddresses")}
                   </div>
                   <InlineEditGrid
                     key={`${record.addressId as string}-delivery-addresses`}
@@ -1004,26 +1024,31 @@ function AddressesModule() {
                     parentKey={{ addressId: record.addressId as string }}
                     keyColumn="deliveryAddressId"
                     columns={[
-                      { key: "name", header: "Name", type: "text" },
-                      { key: "addressLine1", header: "Street", type: "text", required: true },
+                      { key: "name", header: t("addressView.tables.name"), type: "text" },
+                      {
+                        key: "addressLine1",
+                        header: t("addressView.tables.street"),
+                        type: "text",
+                        required: true,
+                      },
                       {
                         key: "postalCode",
-                        header: "ZIP",
+                        header: t("addressView.tables.zip"),
                         type: "text",
                         required: true,
                         width: "80px",
                       },
-                      { key: "city", header: "City", type: "text", required: true },
+                      { key: "city", header: t("addressView.tables.city"), type: "text", required: true },
                       {
                         key: "countryCode",
-                        header: "Country",
+                        header: t("addressView.tables.country"),
                         type: "text",
                         required: true,
                         width: "70px",
                       },
                       {
                         key: "defaultForShipping",
-                        header: "Default",
+                        header: t("addressView.tables.default"),
                         type: "boolean",
                         width: "60px",
                       },
@@ -1032,7 +1057,7 @@ function AddressesModule() {
                 </div>
                 <div>
                   <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    Bank Accounts
+                    {t("addressView.sections.bankAccounts")}
                   </div>
                   <InlineEditGrid
                     key={`${record.addressId as string}-bank-accounts`}
@@ -1040,10 +1065,10 @@ function AddressesModule() {
                     parentKey={{ addressId: record.addressId as string }}
                     keyColumn="bankAccountId"
                     columns={[
-                      { key: "iban", header: "IBAN", type: "text", required: true },
-                      { key: "bic", header: "BIC", type: "text" },
-                      { key: "bankName", header: "Bank", type: "text" },
-                      { key: "isDefault", header: "Default", type: "boolean", width: "60px" },
+                      { key: "iban", header: t("addressView.tables.iban"), type: "text", required: true },
+                      { key: "bic", header: t("addressView.tables.bic"), type: "text" },
+                      { key: "bankName", header: t("addressView.tables.bank"), type: "text" },
+                      { key: "isDefault", header: t("addressView.tables.default"), type: "boolean", width: "60px" },
                     ]}
                   />
                 </div>

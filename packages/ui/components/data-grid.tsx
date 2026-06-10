@@ -26,6 +26,7 @@ import React, {
   forwardRef,
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useMemo,
   useCallback,
@@ -205,22 +206,6 @@ function orderColumns<T>(columns: ColumnDef<T>[], order: string[]) {
   return [...ordered, ...remaining];
 }
 
-function reorderColumnKeys(
-  order: string[],
-  draggedKey: string,
-  targetKey: string,
-  position: "before" | "after",
-) {
-  if (draggedKey === targetKey) return order;
-
-  const next = order.filter((key) => key !== draggedKey);
-  const targetIndex = next.indexOf(targetKey);
-  if (targetIndex < 0) return order;
-
-  const insertAt = position === "before" ? targetIndex : targetIndex + 1;
-  next.splice(insertAt, 0, draggedKey);
-  return next;
-}
 
 function isSameColumnOrder(left: string[] | null, right: string[] | null) {
   if (left === right) return true;
@@ -2242,7 +2227,7 @@ function DebouncedFilterInput({
 }) {
   const [localValue, setLocalValue] = useState(value);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setLocalValue(value);
   }, [value]);
 

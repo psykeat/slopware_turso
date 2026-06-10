@@ -593,25 +593,31 @@ async function fetchArticleVariants(articleId: string): Promise<ArticleVariantRo
 
 // ─── DocLookupField ───────────────────────────────────────────────────────────
 
-function DocLookupField({
-  label,
-  focusField,
-  value,
-  onChange,
-  items,
-  placeholder = "—",
-  tabIndex,
-  onTabForward,
-}: {
-  label: string;
-  focusField: string;
-  value: string | null;
-  onChange: (id: string | null) => void;
-  items: Array<{ id: string; label: string }>;
-  placeholder?: string;
-  tabIndex?: number;
-  onTabForward?: () => void;
-}) {
+const DocLookupField = React.forwardRef<
+  HTMLInputElement,
+  {
+    label: string;
+    focusField: string;
+    value: string | null;
+    onChange: (id: string | null) => void;
+    items: Array<{ id: string; label: string }>;
+    placeholder?: string;
+    tabIndex?: number;
+    onTabForward?: () => void;
+  }
+>(function DocLookupField(
+  {
+    label,
+    focusField,
+    value,
+    onChange,
+    items,
+    placeholder = "—",
+    tabIndex,
+    onTabForward,
+  },
+  ref,
+) {
   const { setFocus } = useFocus();
   const source = useMemo(
     () =>
@@ -630,6 +636,7 @@ function DocLookupField({
 
   return (
     <LookupField
+      ref={ref}
       value={value}
       source={source}
       tabIndex={tabIndex}
@@ -643,7 +650,7 @@ function DocLookupField({
       onChange={(next) => onChange(next)}
     />
   );
-}
+});
 
 // ─── ArticleSearchCell ────────────────────────────────────────────────────────
 
@@ -930,6 +937,7 @@ const DocumentLinesEditor = forwardRef<
     staleTime: 5 * 60 * 1000,
   });
   const linesRef = useRef<LineRow[]>([]);
+  const isSelectingRef = useRef(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVals, setEditVals] = useState<Partial<LineRow>>({});
   const [editingArticleMeta, setEditingArticleMeta] = useState<ArticleMetaRow | null>(null);
@@ -1704,80 +1712,85 @@ const DocumentLinesEditor = forwardRef<
   }
 
   async function handleArticleSelect(article: ArticleResult, rowIndex: number) {
-    void queryClient.prefetchQuery({
-      queryKey: ["data", "articleVariant", article.articleId],
-      queryFn: async () => fetchArticleVariants(article.articleId),
-    });
-    // Fetch pricing
-    let price = 0;
-    let taxCodeId: string | null = null;
+    isSelectingRef.current = true;
     try {
-      const params = new URLSearchParams({ articleId: article.articleId });
-      if (customerId) params.set("customerId", customerId);
-      if (documentDate) params.set("documentDate", documentDate);
-      const res = await fetch(`/api/articles/${article.articleId}/pricing?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        price = Number(data.unitPrice ?? 0);
-        taxCodeId = data.taxCodeId ?? null;
+      void queryClient.prefetchQuery({
+        queryKey: ["data", "articleVariant", article.articleId],
+        queryFn: async () => fetchArticleVariants(article.articleId),
+      });
+      // Fetch pricing
+      let price = 0;
+      let taxCodeId: string | null = null;
+      try {
+        const params = new URLSearchParams({ articleId: article.articleId });
+        if (customerId) params.set("customerId", customerId);
+        if (documentDate) params.set("documentDate", documentDate);
+        const res = await fetch(`/api/articles/${article.articleId}/pricing?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          price = Number(data.unitPrice ?? 0);
+          taxCodeId = data.taxCodeId ?? null;
+        }
+      } catch {
+        /* pricing optional */
       }
-    } catch {
-      /* pricing optional */
-    }
 
-    const articleMeta = article.articleId
-      ? (articleMetaById.get(article.articleId) ?? {
-          articleId: article.articleId,
-          articleNo: article.articleNo,
-          name: article.name,
-          bomType: article.bomType ?? null,
-          trackingMode: article.trackingMode ?? null,
-        })
-      : null;
-    const resolvedLineType = resolveBomHeaderLineType(articleMeta, documentType);
-    setEditingArticleMeta(articleMeta);
+      const articleMeta = article.articleId
+        ? (articleMetaById.get(article.articleId) ?? {
+            articleId: article.articleId,
+            articleNo: article.articleNo,
+            name: article.name,
+            bomType: article.bomType ?? null,
+            trackingMode: article.trackingMode ?? null,
+          })
+        : null;
+      const resolvedLineType = resolveBomHeaderLineType(articleMeta, documentType);
+      setEditingArticleMeta(articleMeta);
 
-    setEditVals((prev) => ({
-      ...prev,
-      articleId: article.articleId,
-      variantId: null,
-      articleNo: article.articleNo,
-      articleTextSnapshot: article.name,
-      unit: article.baseUnit ?? null,
-      netPrice: price,
-      taxCodeId,
-      lineType: resolvedLineType,
-      bomGroupId: shouldExpandBom(articleMeta, documentType)
-        ? (prev.bomGroupId ?? prev.documentLineId ?? prev._id ?? null)
-        : null,
-      ...(articleMeta?.langtext
-        ? {
-            langText: articleMeta.langtext,
-            langTextSourceEntity: "article",
-            langTextSourceId: articleMeta.articleId,
-            langTextSourceField: "langtext",
-            langTextLinkedAt: nowIso(),
-            langTextOverriddenAt: null,
-          }
-        : {}),
-    }));
+      setEditVals((prev) => ({
+        ...prev,
+        articleId: article.articleId,
+        variantId: null,
+        articleNo: article.articleNo,
+        articleTextSnapshot: article.name,
+        unit: article.baseUnit ?? null,
+        netPrice: price,
+        taxCodeId,
+        lineType: resolvedLineType,
+        bomGroupId: shouldExpandBom(articleMeta, documentType)
+          ? (prev.bomGroupId ?? prev.documentLineId ?? prev._id ?? null)
+          : null,
+        ...(articleMeta?.langtext
+          ? {
+              langText: articleMeta.langtext,
+              langTextSourceEntity: "article",
+              langTextSourceId: articleMeta.articleId,
+              langTextSourceField: "langtext",
+              langTextLinkedAt: nowIso(),
+              langTextOverriddenAt: null,
+            }
+          : {}),
+      }));
 
-    if (shouldExpandBom(articleMeta, documentType)) {
-      void fetchBomComponents(article.articleId);
-    }
-
-    pushGridFocus(resolvedLineType === "article" ? "variantId" : "qty", rowIndex);
-
-    // Advance focus to the next required field for the resolved line type.
-    setTimeout(() => {
-      if (resolvedLineType === "article") {
-        variantInputRef.current?.focus();
-        variantInputRef.current?.select();
-        return;
+      if (shouldExpandBom(articleMeta, documentType)) {
+        void fetchBomComponents(article.articleId);
       }
-      qtyRef.current?.focus();
-      qtyRef.current?.select();
-    }, 30);
+
+      pushGridFocus(resolvedLineType === "article" ? "variantId" : "qty", rowIndex);
+
+      // Advance focus to the next required field for the resolved line type.
+      setTimeout(() => {
+        if (resolvedLineType === "article") {
+          variantInputRef.current?.focus();
+          variantInputRef.current?.select();
+          return;
+        }
+        qtyRef.current?.focus();
+        qtyRef.current?.select();
+      }, 30);
+    } finally {
+      isSelectingRef.current = false;
+    }
   }
 
   function handleVariantSelect(variant: ArticleVariantRow | null, rowIndex: number) {
@@ -1943,9 +1956,11 @@ const DocumentLinesEditor = forwardRef<
                   }}
                   onBlurCapture={(e) => {
                     if (!isEditing || isBomComponent) return;
-                    const nextTarget = e.relatedTarget as Node | null;
+                    const nextTarget = e.relatedTarget as HTMLElement | null;
                     if (nextTarget && e.currentTarget.contains(nextTarget)) return;
+                    if (nextTarget && (nextTarget.closest?.(".z-\\[70\\]") || nextTarget.closest?.("[class*=\"z-[70]\"]"))) return;
                     window.setTimeout(() => {
+                      if (isSelectingRef.current) return;
                       void commitEdit();
                     }, 0);
                   }}
@@ -3145,6 +3160,22 @@ export function DocumentEditor({
       })),
     [currencies],
   );
+  const headerTabOrder = {
+    documentType: 1,
+    documentGroup: 2,
+    billingAddress: 3,
+    deliveryAddress: 4,
+    warehouse: 5,
+    paymentTerm: 6,
+    shippingMethod: 7,
+    date: 8,
+    currency: 9,
+  } as const;
+  const warehouseFieldRef = useRef<HTMLInputElement>(null);
+  const paymentTermFieldRef = useRef<HTMLInputElement>(null);
+  const shippingFieldRef = useRef<HTMLInputElement>(null);
+  const dateFieldRef = useRef<HTMLInputElement>(null);
+  const currencyFieldRef = useRef<HTMLInputElement>(null);
   if (!isNew && isDocLoading) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-canvas">
@@ -3185,7 +3216,7 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.documentType")}
                   focusField="documentType"
-                  tabIndex={-1}
+                  tabIndex={headerTabOrder.documentType}
                   value={header.documentType ?? null}
                   onChange={(id) =>
                     patchHeader({ documentType: id ?? undefined, documentGroupId: undefined })
@@ -3199,7 +3230,7 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.documentGroup")}
                   focusField="documentGroupId"
-                  tabIndex={-1}
+                  tabIndex={headerTabOrder.documentGroup}
                   value={header.documentGroupId ?? null}
                   onChange={(id) => {
                     const grp = (docGroupsForType as any[]).find(
@@ -3246,7 +3277,7 @@ export function DocumentEditor({
                   <AddressPickerField
                     id="billing-address-picker"
                     label={t("document.fields.billingAddress")}
-                    tabIndex={-1}
+                    tabIndex={headerTabOrder.billingAddress}
                     value={header.customerId ?? null}
                     addressData={header.billingAddress ?? null}
                     locked={isPosted}
@@ -3307,7 +3338,7 @@ export function DocumentEditor({
                   {/* Col 2: Delivery address */}
                   <DeliveryAddressPickerField
                     label={t("document.fields.deliveryAddress")}
-                    tabIndex={-1}
+                    tabIndex={headerTabOrder.deliveryAddress}
                     value={header.deliveryAddressId ?? null}
                     addressId={header.customerId ?? null}
                     addressData={header.deliveryAddress ?? null}
@@ -3325,29 +3356,35 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.warehouse")}
                   focusField="warehouseId"
-                  tabIndex={-1}
+                  tabIndex={headerTabOrder.warehouse}
+                  ref={warehouseFieldRef}
                   value={header.warehouseId ?? null}
                   onChange={(id) => patchHeader({ warehouseId: id })}
                   items={warehouseItems}
                   placeholder="—"
+                  onTabForward={() => paymentTermFieldRef.current?.focus()}
                 />
                 <DocLookupField
                   label={t("document.fields.paymentTerm")}
                   focusField="paymentTermId"
-                  tabIndex={-1}
+                  tabIndex={headerTabOrder.paymentTerm}
+                  ref={paymentTermFieldRef}
                   value={header.paymentTermId ?? null}
                   onChange={(id) => patchHeader({ paymentTermId: id })}
                   items={paymentTermItems}
                   placeholder="—"
+                  onTabForward={() => shippingFieldRef.current?.focus()}
                 />
                 <DocLookupField
                   label={t("document.fields.shippingMethod")}
                   focusField="shippingMethodId"
-                  tabIndex={-1}
+                  tabIndex={headerTabOrder.shippingMethod}
+                  ref={shippingFieldRef}
                   value={header.shippingMethodId ?? null}
                   onChange={(id) => patchHeader({ shippingMethodId: id })}
                   items={shippingItems}
                   placeholder="—"
+                  onTabForward={() => dateFieldRef.current?.focus()}
                 />
               </div>
 
@@ -3358,10 +3395,17 @@ export function DocumentEditor({
                     {t("document.fields.date")}
                   </label>
                   <input
-                    tabIndex={-1}
+                    ref={dateFieldRef}
+                    tabIndex={headerTabOrder.date}
                     type="date"
                     className={cn(inputBase, "h-8")}
                     value={header.documentDate ?? ""}
+                    onKeyDown={(e) => {
+                      if (e.key === "Tab" && !e.shiftKey) {
+                        e.preventDefault();
+                        currencyFieldRef.current?.focus();
+                      }
+                    }}
                     onFocus={() =>
                       setFocus({
                         workspace: "documents",
@@ -3379,7 +3423,8 @@ export function DocumentEditor({
                 <DocLookupField
                   label={t("document.fields.currency")}
                   focusField="currencyId"
-                  tabIndex={-1}
+                  tabIndex={headerTabOrder.currency}
+                  ref={currencyFieldRef}
                   value={header.currencyId ?? null}
                   onChange={(id) => patchHeader({ currencyId: id })}
                   items={currencyItems}
@@ -3637,8 +3682,43 @@ export function DocumentEditor({
                 </>
               )}
 
-              {/* ── BELEG-LANGTEXTE ── */}
+              {/* ── POSITIONS-LANGTEXT ── */}
+              {activeLine?.articleId && (
+                <div className="rounded border border-hairline bg-canvas p-3">
+                  <div className="mb-2 text-[12px] font-semibold text-ink">
+                    {t("document.media.positionImage", { defaultValue: "Positionsbild" })}
+                  </div>
+                  {activeArticleMeta?.primaryImageId ? (
+                    <div className="flex items-center justify-center rounded-lg border border-hairline bg-canvas-soft p-4 transition-all hover:bg-canvas-soft/80">
+                      <img
+                        src={`/api/storage/article-images/${activeArticleMeta.primaryImageId}?v=${encodeURIComponent(activeArticleMeta.primaryImageId)}`}
+                        alt={activeLine.articleTextSnapshot ?? "Positionsbild"}
+                        className="max-h-[160px] rounded-md border border-hairline object-contain shadow-sm"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-hairline bg-canvas-soft/30 text-[11px] text-ink-mute">
+                      {t("document.media.noImage", { defaultValue: "Kein Bild hinterlegt" })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="rounded border border-hairline bg-canvas p-2">
+                <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                  <div className="text-[11px] text-ink-mute">
+                    {t("document.langtexts.savedPerDocument", {
+                      defaultValue: "Die Auswahl wird pro Beleg gespeichert.",
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-2 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-primary hover:text-primary"
+                    onClick={() => setPrintDialogOpen(true)}
+                  >
+                    {t("document.actions.printOptions", { defaultValue: "Druckoptionen" })}
+                  </button>
+                </div>
                 <LangtextEditor
                   title={t("document.langtexts.title", { defaultValue: "Langtexte" })}
                   entries={[
@@ -3702,49 +3782,6 @@ export function DocumentEditor({
                   }}
                   className="h-[420px]"
                 />
-                <div className="mt-2 flex items-center justify-between gap-2 px-1">
-                  <div className="text-[11px] text-ink-mute">
-                    {t("document.langtexts.savedPerDocument", {
-                      defaultValue: "Die Auswahl wird pro Beleg gespeichert.",
-                    })}
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex h-8 items-center gap-2 rounded-full border border-hairline px-3 text-[12px] text-ink-secondary transition-colors hover:border-primary hover:text-primary"
-                    onClick={() => setPrintDialogOpen(true)}
-                  >
-                    {t("document.actions.printOptions", { defaultValue: "Druckoptionen" })}
-                  </button>
-                </div>
-              </div>
-
-              {/* ── POSITIONS-LANGTEXT ── */}
-              <div className="rounded border border-hairline bg-canvas p-2">
-                <LangtextEditor
-                  title={t("document.langtexts.lineTitle", {
-                    defaultValue: "Positionslangtext",
-                  })}
-                  entries={[
-                    {
-                      key: "langText",
-                      label: t("document.langtexts.line", {
-                        defaultValue: "Langtext",
-                      }),
-                      value: activeLine?.langText ?? "",
-                      sourceLabel: resolveTextSourceLabel(
-                        activeLine?.langTextSourceEntity ?? null,
-                        activeLine?.langTextSourceField ?? null,
-                      ),
-                      linked: !!activeLine?.langTextSourceEntity || !!activeLine?.langTextSourceId,
-                      overridden: !!activeLine?.langTextOverriddenAt,
-                    },
-                  ]}
-                  onChange={(_, html) => {
-                    linesEditorRef.current?.setActiveLineLangText(html);
-                  }}
-                  className="h-[320px]"
-                  syncKey={activeLine?.documentLineId ?? activeLine?._id ?? "document-line:none"}
-                />
                 <div className="mt-2 px-1 text-[11px] text-ink-mute">
                   {activeLine
                     ? `${String(activeLine.lineNo).padStart(3, "0")} · ${
@@ -3755,28 +3792,6 @@ export function DocumentEditor({
                       })}
                 </div>
               </div>
-
-              {/* ── POSITIONSBILD PREVIEW ── */}
-              {activeLine?.articleId && (
-                <div className="rounded border border-hairline bg-canvas p-3">
-                  <div className="mb-2 text-[12px] font-semibold text-ink">
-                    {t("document.media.positionImage", { defaultValue: "Positionsbild" })}
-                  </div>
-                  {activeArticleMeta?.primaryImageId ? (
-                    <div className="flex items-center justify-center rounded-lg border border-hairline bg-canvas-soft p-4 transition-all hover:bg-canvas-soft/80">
-                      <img
-                        src={`/api/storage/article-images/${activeArticleMeta.primaryImageId}?v=${encodeURIComponent(activeArticleMeta.primaryImageId)}`}
-                        alt={activeLine.articleTextSnapshot ?? "Positionsbild"}
-                        className="max-h-[160px] rounded-md border border-hairline object-contain shadow-sm"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-hairline bg-canvas-soft/30 text-[11px] text-ink-mute">
-                      {t("document.media.noImage", { defaultValue: "Kein Bild hinterlegt" })}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </aside>

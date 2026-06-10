@@ -40,7 +40,7 @@ function DialogContent({
   variant = "default",
   showOverlay = true,
   ...props
-}: any & {
+}: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
   variant?: "default" | "form";
   showOverlay?: boolean;

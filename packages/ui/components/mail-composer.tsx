@@ -1,6 +1,6 @@
 "use client";
 
-import { SendIcon, PaperclipIcon, ChevronDownIcon, XIcon } from "lucide-react";
+import { PaperclipIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import React, { useState } from "react";
 
 import { cn } from "../lib/utils";

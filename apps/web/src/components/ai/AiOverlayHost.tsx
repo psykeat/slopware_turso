@@ -15,6 +15,8 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { MailComposeDraftPanel } from "./MailComposeDraftPanel";
+
 import { aiCapabilityRegistry } from "#/lib/ai/ai-capability-registry";
 
 import { AiAssistantState, AiErrorClass } from "./ai-types";
@@ -122,10 +124,10 @@ export function AiOverlayHost() {
     };
   }, [isOpen, closeAiOverlay, registerCommand, setFocus]);
 
-  // Hook trigger on open
+  // Hook trigger on open — skip context resolution for compose-draft scope
   useEffect(() => {
     let active = true;
-    if (isOpen) {
+    if (isOpen && !options?.composeDraftContext) {
       const run = async () => {
         if (active) {
           await resolveFocusContext(focusState, options);
@@ -192,8 +194,18 @@ export function AiOverlayHost() {
         </SheetHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* Compose-draft scope — direct panel, no SSE pipeline */}
+          {options?.composeDraftContext && (
+            <MailComposeDraftPanel
+              to={options.composeDraftContext.to}
+              subject={options.composeDraftContext.subject}
+              context={options.composeDraftContext.context}
+              onClose={closeAiOverlay}
+            />
+          )}
+
           {/* Resolving context */}
-          {state.status === "resolving-context" && (
+          {!options?.composeDraftContext && state.status === "resolving-context" && (
             <div className="flex h-64 flex-col items-center justify-center gap-3">
               <RefreshCcwIcon className="size-6 animate-spin text-primary" />
               <span className="text-[13px] text-ink-mute">Fokuskontext wird geprüft...</span>

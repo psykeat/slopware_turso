@@ -14,10 +14,18 @@ import {
 } from "../../schema/app.schema";
 import { EmailAccountService } from "./account-service";
 import { createEmailProviderAdapter } from "./adapters";
-import { EmailJobService } from "./job-service";
+import { EmailJobService, activityTierPriority } from "./job-service";
 import { type EmailProviderAdapter, ProviderReauthRequiredError } from "./provider-adapter";
 import { EmailSendService } from "./send-service";
+import { EmailSubscriptionService } from "./subscription-service";
 import type { EmailJobType, ProviderLabel, ProviderThread, SyncPage } from "./types";
+
+const TIER_INTERVALS_MINUTES: Record<string, number> = {
+  hot: 5,
+  warm: 30,
+  cold: 360,
+  dormant: 1440,
+};
 
 function asDate(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -67,6 +75,16 @@ export class EmailSyncService {
   ) {
     this.accountService = new EmailAccountService(tenantId, userId);
     this.jobService = new EmailJobService(tenantId);
+  }
+
+  async markUserActivity(accountId: string) {
+    const now = new Date();
+    await db
+      .update(emailAccount)
+      .set({ activityTier: "hot", lastUserActivityAt: now, updatedAt: now })
+      .where(
+        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
+      );
   }
 
   async queueAccountJob(
@@ -368,8 +386,26 @@ export class EmailSyncService {
       return "Unknown";
     };
 
+    // Build Maps once — O(n) instead of O(threads × messages/labels) filter-in-map
+    const messagesByThread = new Map<string, typeof messages>();
+    for (const msg of messages) {
+      const bucket = messagesByThread.get(msg.emailThreadId) ?? [];
+      bucket.push(msg);
+      messagesByThread.set(msg.emailThreadId, bucket);
+    }
+
+    const labelsByThread = new Map<string, Map<string, (typeof threadLabels)[number]>>();
+    for (const lbl of threadLabels) {
+      let byId = labelsByThread.get(lbl.emailThreadId);
+      if (!byId) {
+        byId = new Map();
+        labelsByThread.set(lbl.emailThreadId, byId);
+      }
+      if (!byId.has(lbl.emailLabelId)) byId.set(lbl.emailLabelId, lbl);
+    }
+
     return threads.map((t) => {
-      const threadMessages = messages.filter((m) => m.emailThreadId === t.emailThreadId);
+      const threadMessages = messagesByThread.get(t.emailThreadId) ?? [];
       const senders: string[] = [];
       let hasAttachments = false;
 
@@ -385,20 +421,15 @@ export class EmailSyncService {
 
       const senderDisplay = senders.join(", ") || "Unknown";
 
-      const labels = threadLabels
-        .filter((l) => l.emailThreadId === t.emailThreadId)
-        .reduce((acc, curr) => {
-          if (!acc.some((x) => x.emailLabelId === curr.emailLabelId)) {
-            acc.push({
-              emailLabelId: curr.emailLabelId,
-              providerLabelId: curr.providerLabelId,
-              name: curr.name,
-              color: curr.color,
-              kind: curr.kind,
-            });
-          }
-          return acc;
-        }, [] as any[]);
+      const labels = Array.from(labelsByThread.get(t.emailThreadId)?.values() ?? []).map(
+        (lbl) => ({
+          emailLabelId: lbl.emailLabelId,
+          providerLabelId: lbl.providerLabelId,
+          name: lbl.name,
+          color: lbl.color,
+          kind: lbl.kind,
+        }),
+      );
 
       return {
         ...t,
@@ -940,11 +971,15 @@ export class EmailSyncService {
               idempotencyKey: `incremental_sync:${account.emailAccountId}:mailbox:${page.nextCursor}`,
               payload: { scope: "mailbox", cursor: page.nextCursor },
             });
+          } else {
+            await this.scheduleNextIncrementalSync(account.emailAccountId);
           }
         }
       } else if (jobType === "watch_renewal") {
         const callbackUrl =
           typeof (payload as any).callbackUrl === "string" ? (payload as any).callbackUrl : "";
+        const channelToken =
+          typeof (payload as any).channelToken === "string" ? (payload as any).channelToken : null;
         const result = await adapter.renewWatch(account.credentialsEncrypted, callbackUrl);
         await this.persistUpdatedCredentials(account.emailAccountId, adapter);
         await db
@@ -956,6 +991,14 @@ export class EmailSyncService {
               eq(emailAccount.emailAccountId, account.emailAccountId),
             ),
           );
+        const subscriptionService = new EmailSubscriptionService(this.tenantId);
+        await subscriptionService.registerSubscription({
+          emailAccountId: account.emailAccountId,
+          resource: "mail",
+          providerSubscriptionId: result.subscriptionId ?? null,
+          channelToken: channelToken ?? result.channelToken ?? null,
+          expiresAt: result.expiresAt ?? null,
+        });
       } else if (jobType === "send") {
         const outboxId =
           typeof (payload as any).outboxId === "string" ? (payload as any).outboxId : null;
@@ -1011,14 +1054,55 @@ export class EmailSyncService {
     }
   }
 
-  async runJob(jobId: string) {
-    while (true) {
+  async runJob(jobId: string, timeoutMs = 300_000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
       const state = await this.jobService.get(jobId);
       if (!state) return null;
-      if (state.status === "done" || state.status === "failed") break;
-      await new Promise((r) => setTimeout(r, 100));
+      if (state.status === "done" || state.status === "failed") {
+        return { ok: state.status === "done", recoveryRequired: false, job: state };
+      }
+      await new Promise((r) => setTimeout(r, 200));
     }
-    return { ok: true, recoveryRequired: false, job: { emailJobId: jobId, status: "done" } };
+    return { ok: false, recoveryRequired: false, job: null, timedOut: true };
+  }
+
+  private async scheduleNextIncrementalSync(accountId: string) {
+    const [row] = await db
+      .select({ activityTier: emailAccount.activityTier, syncPriority: emailAccount.syncPriority })
+      .from(emailAccount)
+      .where(
+        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
+      )
+      .limit(1);
+
+    const rawTier = row?.activityTier ?? "cold";
+    const syncPriority = row?.syncPriority ?? "normal";
+
+    // syncPriority floors/ceilings: high accounts never go below warm; low accounts cap at cold
+    const effectiveTier =
+      syncPriority === "high"
+        ? rawTier === "dormant" || rawTier === "cold"
+          ? "warm"
+          : rawTier
+        : syncPriority === "low"
+          ? rawTier === "hot"
+            ? "warm"
+            : rawTier
+          : rawTier;
+
+    const intervalMinutes = TIER_INTERVALS_MINUTES[effectiveTier] ?? 360;
+    const runAfter = new Date(Date.now() + intervalMinutes * 60 * 1000);
+    const priority = activityTierPriority(effectiveTier);
+
+    await this.jobService.enqueue({
+      jobType: "incremental_sync",
+      emailAccountId: accountId,
+      idempotencyKey: `incremental_sync:${accountId}:mailbox:next:${runAfter.toISOString()}`,
+      payload: { scope: "mailbox" },
+      runAfter,
+      priority,
+    });
   }
 
   private async mergeSyncPage(accountId: string, page: SyncPage, scope: string) {

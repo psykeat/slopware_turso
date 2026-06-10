@@ -1178,6 +1178,77 @@ export const Route = createFileRoute("/api/ai/$")({
             });
           }
 
+          // POST /api/ai/compose-draft
+          if (path === "/api/ai/compose-draft") {
+            const body = (await request.json()) as {
+              to: string[];
+              subject: string;
+              context?: string;
+              instruction?: string;
+              language?: string;
+            };
+
+            if (!body.subject || !Array.isArray(body.to)) {
+              return new Response(JSON.stringify({ error: "to and subject are required" }), {
+                status: 400,
+                headers: { "content-type": "application/json" },
+              });
+            }
+
+            const { resolveLlmRuntimeConfig } = await import("@repo/db/services/ai-orchestrator");
+            const llm = await resolveLlmRuntimeConfig(tenantId, userId);
+
+            const contextPart = body.context
+              ? `\nAls Antwort auf:\n${body.context.slice(0, 500)}`
+              : "";
+            const instructionPart = body.instruction ? `\nAnweisung: ${body.instruction}` : "";
+
+            const prompt = [
+              `Erstelle einen Mail-Entwurf.`,
+              `Empfänger: ${body.to.join(", ")}`,
+              `Betreff: ${body.subject}`,
+              contextPart,
+              instructionPart,
+            ]
+              .filter(Boolean)
+              .join("\n");
+
+            const { createConfiguredProvider } = await import("@repo/agent");
+            const provider = createConfiguredProvider({
+              provider: llm.providerName,
+              model: llm.modelName,
+              apiKey: llm.apiKey || undefined,
+              endpointUrl: llm.gatewayUrl || undefined,
+              vertexCredentials: llm.vertexCredentials || undefined,
+              vertexProject: llm.vertexProject || undefined,
+              vertexLocation: llm.vertexLocation || undefined,
+            });
+
+            const response = await provider.chat({
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "Du bist ein Assistent der professionelle Geschäftsmails auf Deutsch verfasst. Schreibe nur den Mail-Body (kein Betreff, keine Grußformel sofern nicht im Kontext vorgegeben). Nutze eine professionelle aber freundliche Sprache. Gib nur den reinen Text zurück, kein Markdown.",
+                },
+                { role: "user", content: prompt },
+              ],
+            });
+
+            const responseText =
+              typeof response === "string"
+                ? response
+                : response && typeof response === "object" && "content" in response
+                  // eslint-disable-next-line
+                  ? String((response as { content: unknown }).content ?? "")
+                  // eslint-disable-next-line
+                  : String(response ?? "");
+
+            return new Response(JSON.stringify({ body: responseText.trim() }), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+
           // POST /api/ai/memories/:memoryId/confirm
           if (path.startsWith("/api/ai/memories/") && path.endsWith("/confirm")) {
             const parts = path.split("/");

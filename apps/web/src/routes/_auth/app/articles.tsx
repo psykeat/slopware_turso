@@ -1,6 +1,4 @@
 import { ArticleImageStrip } from "@repo/ui/components/article-image-strip";
-import { BatchInventoryTable } from "@repo/ui/components/batch-inventory-table";
-import { BomEditor } from "@repo/ui/components/bom-editor";
 import { ContextTabs } from "@repo/ui/components/context-tabs";
 import { DataGrid, type DataGridHandle, type ColumnDef } from "@repo/ui/components/data-grid";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
@@ -10,7 +8,6 @@ import { InspectorPanel } from "@repo/ui/components/inspector-panel";
 import { InventoryBalanceTable } from "@repo/ui/components/inventory-balance-table";
 import { LangTextRecordPanel } from "@repo/ui/components/langtext-record-panel";
 import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
-import { SerialInventoryTable } from "@repo/ui/components/serial-inventory-table";
 import { StockLedgerTable } from "@repo/ui/components/stock-ledger-table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/components/tabs";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
@@ -26,12 +23,15 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
+import { resolveArticleVariantMode } from "@repo/db/services/article-variant-mode";
 
 export const Route = createFileRoute("/_auth/app/articles")({
   component: ArticlesModule,
 });
 
 const EMPTY_ARRAY: any[] = [];
+const DEFAULT_VARIANT_OPTION_VALUE_HASH =
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 const ARTICLE_FIELD_OVERRIDES = [
   {
@@ -78,6 +78,325 @@ const ARTICLE_VARIANT_FIELD_OVERRIDES = [
   { key: "updatedAt", visible: false },
 ];
 
+type SalesDraft = {
+  price: string;
+  ean: string;
+  weight: string;
+  isActive: boolean;
+  trackingMode: string;
+};
+
+const EMPTY_SALES_DRAFT: SalesDraft = {
+  price: "",
+  ean: "",
+  weight: "",
+  isActive: true,
+  trackingMode: "",
+};
+
+function ArticleSalesBlock({
+  articleId,
+  articleRecord,
+  draft,
+  onDraftChange,
+}: {
+  articleId: string | null;
+  articleRecord?: { trackingMode?: string | null } | null;
+  draft: SalesDraft;
+  onDraftChange: (draft: SalesDraft) => void;
+}) {
+  const { t } = useTranslation("ui");
+  const queryClient = useQueryClient();
+  const [createDraft, setCreateDraft] = useState<SalesDraft>(draft);
+
+  const { data: variantRows = EMPTY_ARRAY, isLoading: isVariantsLoading } = useQuery({
+    queryKey: ["data", "articleVariant", articleId],
+    queryFn: async () => {
+      if (!articleId) return [];
+      const res = await fetch(`/api/data/articleVariant?articleId=${articleId}`);
+      if (!res.ok) throw new Error("Failed to fetch article variants");
+      return res.json() as Promise<any[]>;
+    },
+    enabled: !!articleId,
+    placeholderData: keepPreviousData,
+  });
+
+  const defaultVariant = useMemo(() => {
+    if (!articleId) return null;
+    return (
+      variantRows.find((row: any) => row.optionValueHash === DEFAULT_VARIANT_OPTION_VALUE_HASH) ??
+      variantRows[0] ??
+      null
+    );
+  }, [articleId, variantRows]);
+  const defaultVariantId = defaultVariant?.variantId ?? null;
+
+  const patchJson = useCallback(async (url: string, body: Record<string, unknown>) => {
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error((await res.text()) || `Request failed with status ${res.status}`);
+    }
+    return res.json();
+  }, []);
+
+  const persistField = useCallback(
+    async (field: keyof SalesDraft, value: string | boolean) => {
+      if (!articleId) return;
+      if (field === "trackingMode") {
+        await patchJson(`/api/data/article/${articleId}`, {
+          trackingMode: value || null,
+        });
+        await queryClient.invalidateQueries({ queryKey: ["data", "article", articleId] });
+        return;
+      }
+
+      if (!defaultVariantId) return;
+      const payload =
+        field === "isActive"
+          ? { isActive: Boolean(value) }
+          : { [field]: value || null };
+      await patchJson(`/api/data/articleVariant/${defaultVariantId}`, payload);
+      await queryClient.invalidateQueries({ queryKey: ["data", "articleVariant", articleId] });
+    },
+    [articleId, defaultVariantId, patchJson, queryClient],
+  );
+
+  const resolveVariantModeLabel = useMemo(
+    () =>
+      resolveArticleVariantMode({
+        optionCount: 0,
+        variantCount: articleId ? variantRows.length : 1,
+      }),
+    [articleId, variantRows.length],
+  );
+
+  if (articleId && isVariantsLoading) {
+    return (
+      <section className="rounded-md border border-hairline bg-canvas shadow-sm">
+        <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
+          <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+            {t("article.sales", { defaultValue: "Sales" })}
+          </div>
+          <div className="mt-0.5 text-[12px] text-ink-secondary">
+            {t("common.loading", { defaultValue: "Loading..." })}
+          </div>
+        </div>
+        <div className="px-3 py-4 text-[13px] text-ink-mute">
+          {t("common.loading", { defaultValue: "Loading..." })}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-md border border-hairline bg-canvas shadow-sm">
+      <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
+        <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+          {t("article.sales", { defaultValue: "Sales" })}
+        </div>
+        <div className="mt-0.5 text-[12px] text-ink-secondary">
+          {resolveVariantModeLabel === "simple"
+            ? t("article.salesSimple", {
+                defaultValue: "Default values are written to the single sellable variant.",
+              })
+            : t("article.salesVariants", {
+                defaultValue: "Sales data is written to the default variant row.",
+              })}
+        </div>
+      </div>
+
+      {articleId ? (
+        <div className="grid gap-3 p-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5 sm:col-span-2">
+            <span className="text-[12px] font-medium text-ink-secondary">Price</span>
+            <input
+              type="number"
+              step="0.0001"
+              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+              defaultValue={defaultVariant?.price ?? ""}
+              onBlur={(e) =>
+                void persistField("price", e.currentTarget.value).catch((err) =>
+                  toast.error(
+                    err instanceof Error && err.message ? err.message : "Failed to save price",
+                  ),
+                )
+              }
+              placeholder="0.00"
+              disabled={isVariantsLoading || !defaultVariantId}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-ink-secondary">EAN</span>
+            <input
+              type="text"
+              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+              defaultValue={defaultVariant?.ean ?? ""}
+              onBlur={(e) =>
+                void persistField("ean", e.currentTarget.value).catch((err) =>
+                  toast.error(
+                    err instanceof Error && err.message ? err.message : "Failed to save EAN",
+                  ),
+                )
+              }
+              placeholder="EAN"
+              disabled={isVariantsLoading || !defaultVariantId}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-ink-secondary">Weight</span>
+            <input
+              type="number"
+              step="0.0001"
+              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+              defaultValue={defaultVariant?.weight ?? ""}
+              onBlur={(e) =>
+                void persistField("weight", e.currentTarget.value).catch((err) =>
+                  toast.error(
+                    err instanceof Error && err.message ? err.message : "Failed to save weight",
+                  ),
+                )
+              }
+              placeholder="0.0000"
+              disabled={isVariantsLoading || !defaultVariantId}
+            />
+          </label>
+
+          <label className="flex items-center gap-2 sm:col-span-2">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-hairline-input accent-[var(--primary)]"
+              defaultChecked={defaultVariant?.isActive ?? true}
+              onChange={(e) => {
+                void persistField("isActive", e.target.checked).catch((err) =>
+                  toast.error(
+                    err instanceof Error && err.message
+                      ? err.message
+                      : "Failed to save bookable status",
+                  ),
+                );
+              }}
+              disabled={isVariantsLoading || !defaultVariantId}
+            />
+            <span className="text-[13px] text-ink">Bookable</span>
+          </label>
+
+          <label className="flex flex-col gap-1.5 sm:col-span-2">
+            <span className="text-[12px] font-medium text-ink-secondary">Tracking</span>
+            <select
+              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+              defaultValue={articleRecord?.trackingMode ?? ""}
+              onChange={(e) => {
+                void persistField("trackingMode", e.target.value).catch((err) =>
+                  toast.error(
+                    err instanceof Error && err.message ? err.message : "Failed to save tracking",
+                  ),
+                );
+              }}
+            >
+              <option value="">None</option>
+              <option value="serial">Serial</option>
+              <option value="batch">Batch</option>
+            </select>
+          </label>
+        </div>
+      ) : (
+        <div className="grid gap-3 p-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5 sm:col-span-2">
+            <span className="text-[12px] font-medium text-ink-secondary">Price</span>
+            <input
+              type="number"
+              step="0.0001"
+              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+              value={createDraft.price}
+              onChange={(e) => {
+                const next = { ...createDraft, price: e.target.value };
+                setCreateDraft(next);
+                onDraftChange(next);
+              }}
+              placeholder="0.00"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-ink-secondary">EAN</span>
+            <input
+              type="text"
+              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+              value={createDraft.ean}
+              onChange={(e) => {
+                const next = { ...createDraft, ean: e.target.value };
+                setCreateDraft(next);
+                onDraftChange(next);
+              }}
+              placeholder="EAN"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-ink-secondary">Weight</span>
+            <input
+              type="number"
+              step="0.0001"
+              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+              value={createDraft.weight}
+              onChange={(e) => {
+                const next = { ...createDraft, weight: e.target.value };
+                setCreateDraft(next);
+                onDraftChange(next);
+              }}
+              placeholder="0.0000"
+            />
+          </label>
+
+          <label className="flex items-center gap-2 sm:col-span-2">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-hairline-input accent-[var(--primary)]"
+              checked={createDraft.isActive}
+              onChange={(e) => {
+                const next = { ...createDraft, isActive: e.target.checked };
+                setCreateDraft(next);
+                onDraftChange(next);
+              }}
+            />
+            <span className="text-[13px] text-ink">Bookable</span>
+          </label>
+
+          <label className="flex flex-col gap-1.5 sm:col-span-2">
+            <span className="text-[12px] font-medium text-ink-secondary">Tracking</span>
+            <select
+              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+              value={createDraft.trackingMode}
+              onChange={(e) => {
+                const next = { ...createDraft, trackingMode: e.target.value };
+                setCreateDraft(next);
+                onDraftChange(next);
+              }}
+            >
+              <option value="">None</option>
+              <option value="serial">Serial</option>
+              <option value="batch">Batch</option>
+            </select>
+          </label>
+
+          <p className="sm:col-span-2 text-[12px] text-ink-mute">
+            {t("article.salesCreateHint", {
+              defaultValue:
+                "These values are applied to the default variant after the article is saved.",
+            })}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ArticleVariantsAndOptionsTab({
   articleId,
   articleLabel,
@@ -120,6 +439,20 @@ function ArticleVariantsAndOptionsTab({
     enabled: !!articleId,
     placeholderData: keepPreviousData,
   });
+  const variantMode = resolveArticleVariantMode({
+    optionCount: optionRows.length,
+    variantCount: variantRows.length,
+  });
+  const orderedVariantRows = useMemo(
+    () =>
+      [...variantRows].sort((left: any, right: any) => {
+        const leftIsDefault = left.optionValueHash === DEFAULT_VARIANT_OPTION_VALUE_HASH;
+        const rightIsDefault = right.optionValueHash === DEFAULT_VARIANT_OPTION_VALUE_HASH;
+        if (leftIsDefault !== rightIsDefault) return leftIsDefault ? -1 : 1;
+        return String(left.sku ?? "").localeCompare(String(right.sku ?? ""));
+      }),
+    [variantRows],
+  );
   const resolvedSelectedOptionId =
     selectedOptionId && optionRows.some((row: any) => row.optionId === selectedOptionId)
       ? selectedOptionId
@@ -132,6 +465,7 @@ function ArticleVariantsAndOptionsTab({
   const optionsSubtitle = isOptionsLoading
     ? t("common.loading", { defaultValue: "Loading..." })
     : articleLabel || t("nav.articles", { defaultValue: "Articles" });
+  const [showVariantSetup, setShowVariantSetup] = useState(false);
 
   const openVariantEditor = useCallback((row: any) => {
     setVariantEditId(row.variantId);
@@ -381,115 +715,154 @@ function ArticleVariantsAndOptionsTab({
     );
   }
 
+  const showVariantEditor = variantMode === "variants" || showVariantSetup;
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto p-3">
-      <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
-          <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
-            <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-              {t("article.options", { defaultValue: "Article Options" })}
-            </div>
-            <div className="mt-0.5 text-[12px] text-ink-secondary">{optionsSubtitle}</div>
-          </div>
-          <div className="min-h-0 flex-1">
-            <InlineEditGrid
-              key={`${articleId}-options`}
-              entityName="articleOption"
-              parentKey={{ articleId }}
-              keyColumn="optionId"
-              className="h-full"
-              onRowSelect={(row) => setSelectedOptionId(row?.optionId ?? null)}
-              columns={[
-                { key: "name", header: "Name", type: "text", required: true },
-                { key: "sortOrder", header: "Sort", type: "number", width: "88px" },
-              ]}
-            />
-          </div>
-        </section>
+      {showVariantEditor ? (
+        <>
+          <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
+              <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
+                <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                  {t("article.options", { defaultValue: "Article Options" })}
+                </div>
+                <div className="mt-0.5 text-[12px] text-ink-secondary">{optionsSubtitle}</div>
+              </div>
+              <div className="min-h-0 flex-1">
+                <InlineEditGrid
+                  key={`${articleId}-options`}
+                  entityName="articleOption"
+                  parentKey={{ articleId }}
+                  keyColumn="optionId"
+                  className="h-full"
+                  onRowSelect={(row) => setSelectedOptionId(row?.optionId ?? null)}
+                  columns={[
+                    { key: "name", header: "Name", type: "text", required: true },
+                    { key: "sortOrder", header: "Sort", type: "number", width: "88px" },
+                  ]}
+                />
+              </div>
+            </section>
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
+              <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
+                <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                  {t("article.optionValues", { defaultValue: "Option Values" })}
+                </div>
+                <div className="mt-0.5 text-[12px] text-ink-secondary">
+                  {selectedOption
+                    ? selectedOption.name
+                    : t("article.optionValuesSelect", {
+                        defaultValue: "Select an option to edit values.",
+                      })}
+                </div>
+              </div>
+              <div className="min-h-0 flex-1">
+                {resolvedSelectedOptionId ? (
+                  <InlineEditGrid
+                    key={`${resolvedSelectedOptionId}-values`}
+                    entityName="articleOptionValue"
+                    parentKey={{ optionId: resolvedSelectedOptionId }}
+                    keyColumn="valueId"
+                    className="h-full"
+                    columns={[
+                      { key: "value", header: "Value", type: "text", required: true },
+                      { key: "sortOrder", header: "Sort", type: "number", width: "88px" },
+                    ]}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center px-6 py-8 text-[13px] text-ink-mute">
+                    {t("article.optionValuesSelect", {
+                      defaultValue: "Select an option to edit values.",
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
+            <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
+              <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                {t("article.variants", { defaultValue: "Variants" })}
+              </div>
+              <div className="mt-0.5 text-[12px] text-ink-secondary">
+                {articleLabel || t("nav.articles", { defaultValue: "Articles" })}
+              </div>
+            </div>
+            <div className="min-h-0 flex-1">
+              <DataGrid
+                ref={variantGridRef}
+                entityName="articleVariant"
+                panelId="article-variant-grid"
+                data={orderedVariantRows}
+                isLoading={isVariantsLoading}
+                keyExtractor={(row: any) => row.variantId}
+                title={t("article.variants", { defaultValue: "Variants" })}
+                columns={variantColumns}
+                toolbar={false}
+                onRowClick={openVariantEditor}
+                onRowOpen={openVariantEditor}
+                selectable
+                bulkActions={[
+                  {
+                    label: "Archive",
+                    variant: "destructive" as const,
+                    onClick: handleArchiveVariants,
+                  },
+                  {
+                    label: "Suggest SKU",
+                    onClick: handleSuggestSku,
+                  },
+                  {
+                    label: "Update prices",
+                    onClick: handleOpenBulkPriceUpdate,
+                  },
+                ]}
+                emptyTitle={t("empty.title")}
+                emptySubtitle={t("article.optionValuesSelect", {
+                  defaultValue: "Generate variants after defining options and values.",
+                })}
+                className="h-full rounded-none border-none"
+              />
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
           <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
             <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-              {t("article.optionValues", { defaultValue: "Option Values" })}
+              {t("article.variants", { defaultValue: "Variants" })}
             </div>
             <div className="mt-0.5 text-[12px] text-ink-secondary">
-              {selectedOption
-                ? selectedOption.name
-                : t("article.optionValuesSelect", {
-                    defaultValue: "Select an option to edit values.",
-                  })}
+              {t("article.variantsSimple", {
+                defaultValue: "Simple articles use a single default variant until you activate variants.",
+              })}
             </div>
           </div>
-          <div className="min-h-0 flex-1">
-            {resolvedSelectedOptionId ? (
-              <InlineEditGrid
-                key={`${resolvedSelectedOptionId}-values`}
-                entityName="articleOptionValue"
-                parentKey={{ optionId: resolvedSelectedOptionId }}
-                keyColumn="valueId"
-                className="h-full"
-                columns={[
-                  { key: "value", header: "Value", type: "text", required: true },
-                  { key: "sortOrder", header: "Sort", type: "number", width: "88px" },
-                ]}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center px-6 py-8 text-[13px] text-ink-mute">
-                {t("article.optionValuesSelect", {
-                  defaultValue: "Select an option to edit values.",
-                })}
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+            <div className="max-w-md rounded-lg border border-dashed border-hairline bg-canvas-soft p-6 text-center">
+              <div className="text-[15px] font-medium text-ink">
+                {t("article.activateVariants", { defaultValue: "Activate variants" })}
               </div>
-            )}
+              <p className="mt-2 text-[13px] leading-relaxed text-ink-secondary">
+                {t("article.activateVariantsBody", {
+                  defaultValue:
+                    "Add the first option to switch from the default sellable row to full variant management.",
+                })}
+              </p>
+              <button
+                type="button"
+                className="mt-4 h-8 rounded bg-primary px-4 text-[13px] text-white hover:opacity-90"
+                onClick={() => setShowVariantSetup(true)}
+              >
+                {t("article.activateVariants", { defaultValue: "Activate variants" })}
+              </button>
+            </div>
           </div>
         </section>
-      </div>
-
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
-        <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
-          <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-            {t("article.variants", { defaultValue: "Variants" })}
-          </div>
-          <div className="mt-0.5 text-[12px] text-ink-secondary">
-            {articleLabel || t("nav.articles", { defaultValue: "Articles" })}
-          </div>
-        </div>
-        <div className="min-h-0 flex-1">
-          <DataGrid
-            ref={variantGridRef}
-            entityName="articleVariant"
-            panelId="article-variant-grid"
-            data={variantRows}
-            isLoading={isVariantsLoading}
-            keyExtractor={(row: any) => row.variantId}
-            title={t("article.variants", { defaultValue: "Variants" })}
-            columns={variantColumns}
-            toolbar={false}
-            onRowClick={openVariantEditor}
-            onRowOpen={openVariantEditor}
-            selectable
-            bulkActions={[
-              {
-                label: "Archive",
-                variant: "destructive" as const,
-                onClick: handleArchiveVariants,
-              },
-              {
-                label: "Suggest SKU",
-                onClick: handleSuggestSku,
-              },
-              {
-                label: "Update prices",
-                onClick: handleOpenBulkPriceUpdate,
-              },
-            ]}
-            emptyTitle={t("empty.title")}
-            emptySubtitle={t("article.optionValuesSelect", {
-              defaultValue: "Generate variants after defining options and values.",
-            })}
-            className="h-full rounded-none border-none"
-          />
-        </div>
-      </section>
+      )}
 
       <Dialog open={showVariantEdit} onOpenChange={setShowVariantEdit}>
         <DialogContent className="sw-root max-w-2xl overflow-hidden p-0" variant="form">
@@ -619,6 +992,7 @@ function ArticlesModule() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [createSalesDraft, setCreateSalesDraft] = useState<SalesDraft>(EMPTY_SALES_DRAFT);
 
   const [activeArticleId, setActiveArticleId] = useState<string | null>(
     focusState.entity === "article" ? focusState.recordId : null,
@@ -755,6 +1129,10 @@ function ArticlesModule() {
     enabled: !!activeArticleId,
     placeholderData: keepPreviousData,
   });
+  const openCreateDialog = useCallback(() => {
+    setCreateSalesDraft(EMPTY_SALES_DRAFT);
+    setShowCreate(true);
+  }, []);
 
   // Register context commands
   useEffect(() => {
@@ -765,7 +1143,7 @@ function ArticlesModule() {
       label: { en: t("commands.newRecord"), de: "Neuer Datensatz" },
       shortcut: "F3",
       isEnabled: () => true,
-      handler: () => setShowCreate(true),
+      handler: () => openCreateDialog(),
     });
     const unregEdit = registerCommand({
       id: "edit-record",
@@ -815,7 +1193,7 @@ function ArticlesModule() {
       unregF4();
       unregDup();
     };
-  }, [registerCommand, t, queryClient]);
+  }, [openCreateDialog, registerCommand, t, queryClient]);
 
   const selectedArticle = useMemo(
     () => articles.find((a: any) => a.articleId === activeArticleId),
@@ -824,6 +1202,55 @@ function ArticlesModule() {
   const selectedArticleLabel =
     selectedArticle?.name ?? t("nav.articles", { defaultValue: "Articles" });
   const modalOpen = showCreate || showEdit || deleteConfirm;
+
+  const fetchJson = useCallback(async (url: string, init?: RequestInit) => {
+    const res = await fetch(url, init);
+    if (!res.ok) {
+      throw new Error((await res.text()) || `Request failed with status ${res.status}`);
+    }
+    if (res.status === 204) return null;
+    return await res.json();
+  }, []);
+
+  const patchEntity = useCallback(
+    async (entityName: string, id: string, body: Record<string, unknown>) => {
+      return await fetchJson(`/api/data/${entityName}/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    },
+    [fetchJson],
+  );
+
+  const applyCreateSalesDraft = useCallback(
+    async (articleId: string) => {
+      const variantRows = (await fetchJson(`/api/data/articleVariant?articleId=${articleId}`)) as any[];
+      const defaultVariant =
+        variantRows.find((row: any) => row.optionValueHash === DEFAULT_VARIANT_OPTION_VALUE_HASH) ??
+        variantRows[0] ??
+        null;
+
+      if (createSalesDraft.trackingMode) {
+        await patchEntity("article", articleId, {
+          trackingMode: createSalesDraft.trackingMode,
+        });
+      }
+
+      if (defaultVariant?.variantId) {
+        const variantPatch: Record<string, unknown> = {};
+        if (createSalesDraft.price) variantPatch.price = createSalesDraft.price;
+        if (createSalesDraft.ean) variantPatch.ean = createSalesDraft.ean;
+        if (createSalesDraft.weight) variantPatch.weight = createSalesDraft.weight;
+        if (!createSalesDraft.isActive) variantPatch.isActive = false;
+
+        if (Object.keys(variantPatch).length > 0) {
+          await patchEntity("articleVariant", defaultVariant.variantId, variantPatch);
+        }
+      }
+    },
+    [createSalesDraft.ean, createSalesDraft.isActive, createSalesDraft.price, createSalesDraft.trackingMode, createSalesDraft.weight, fetchJson, patchEntity],
+  );
 
   const selectTreeNode = useCallback(
     (id: string) => {
@@ -1275,9 +1702,26 @@ function ArticlesModule() {
     (record: any) => {
       setShowCreate(false);
       queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+      void (async () => {
+        if (record?.articleId) {
+          try {
+            await applyCreateSalesDraft(record.articleId);
+            await queryClient.invalidateQueries({
+              queryKey: ["data", "articleVariant", record.articleId],
+            });
+          } catch (err) {
+            toast.error(
+              err instanceof Error && err.message
+                ? err.message
+                : "Failed to apply sales values to the default variant",
+            );
+          }
+        }
+      })();
+      setCreateSalesDraft(EMPTY_SALES_DRAFT);
       restoreArticleGrid(record?.articleId ?? record?.id ?? null);
     },
-    [queryClient, restoreArticleGrid],
+    [applyCreateSalesDraft, queryClient, restoreArticleGrid],
   );
 
   const handleEditSaved = useCallback(
@@ -1357,7 +1801,7 @@ function ArticlesModule() {
             emptyAction={{
               label: `${t("actions.new")} Article`,
               kbd: "F3",
-              onClick: () => setShowCreate(true),
+              onClick: openCreateDialog,
             }}
             className="h-full rounded-none border-none"
           />
@@ -1413,6 +1857,13 @@ function ArticlesModule() {
             entityName="article"
             mode="create"
             title="New Article"
+            postFieldsSection={
+              <ArticleSalesBlock
+                articleId={null}
+                draft={createSalesDraft}
+                onDraftChange={setCreateSalesDraft}
+              />
+            }
             fieldOverrides={ARTICLE_EDIT_FIELD_OVERRIDES}
             onCancel={() => setShowCreate(false)}
             onFieldChange={handleCreateFieldChange}
@@ -1430,107 +1881,107 @@ function ArticlesModule() {
             mode="edit"
             layout="single"
             recordId={activeArticleId ?? undefined}
+            postFieldsSection={
+              <ArticleSalesBlock
+                articleId={activeArticleId}
+                articleRecord={selectedArticle}
+                draft={EMPTY_SALES_DRAFT}
+                onDraftChange={() => undefined}
+              />
+            }
             fieldOverrides={ARTICLE_EDIT_FIELD_OVERRIDES}
             onCancel={() => setShowEdit(false)}
             onSaved={handleEditSaved}
             embedded
             childLayout="side"
             childSection={(record, onChange) => (
-              <div className="flex flex-col gap-6">
-                <LangTextRecordPanel
-                  entityName="article"
-                  recordId={activeArticleId}
-                  title={t("langtextEditor.title", { defaultValue: "Langtexte" })}
-                  fields={ARTICLE_LANGTEXT_FIELDS}
-                  className="min-h-[220px]"
-                  controlledValues={{
-                    notiztext: record.notiztext as string,
-                    langtext: record.langtext as string,
-                    kurzbeschreibung: record.kurzbeschreibung as string,
-                    warntext: record.warntext as string,
-                  }}
-                  onControlledChange={(field, value) => onChange(field, value)}
-                />
-                <div>
-                  <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                    {t("article.movements", { defaultValue: "Lagerbewegungen" })}
-                  </div>
-                  <div className="overflow-hidden rounded-md border border-hairline bg-canvas">
-                    <Tabs defaultValue="bestand">
-                      <TabsList
-                        variant="line"
-                        className="h-8 w-full justify-start rounded-none border-b border-hairline px-2"
-                      >
-                        <TabsTrigger value="bestand" className="h-7 text-[12px]">
-                          Bestand
-                        </TabsTrigger>
-                        <TabsTrigger value="journal" className="h-7 text-[12px]">
-                          Journal
-                        </TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="bestand" className="p-0">
-                        <InventoryBalanceTable articleId={record.articleId as string} />
-                      </TabsContent>
-                      <TabsContent value="journal" className="p-0">
-                        <StockLedgerTable articleId={record.articleId as string} />
-                      </TabsContent>
-                    </Tabs>
-                  </div>
-                </div>
-
-                {activeArticleId ? (
-                  <ArticleImageStrip
-                    articleId={(record.articleId as string) ?? activeArticleId}
-                    primaryImageId={
-                      (record.primaryImageId as string | null) ??
-                      selectedArticle?.primaryImageId ??
-                      null
-                    }
-                    onRefreshArticle={() => {
-                      queryClient.invalidateQueries({ queryKey: ["data", "article"] });
-                    }}
-                  />
-                ) : (
-                  <div className="rounded-md border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
-                    {t("empty.title")}
-                  </div>
-                )}
-
-                {record.trackingMode === "serial" && (
-                  <div>
-                    <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                      Seriennummern Inventory
-                    </div>
-                    <div className="overflow-hidden rounded-md border border-hairline bg-canvas">
-                      <SerialInventoryTable articleId={record.articleId as string} />
-                    </div>
-                  </div>
-                )}
-
-                {record.trackingMode === "batch" && (
-                  <div>
-                    <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                      Batch Inventory
-                    </div>
-                    <div className="overflow-hidden rounded-md border border-hairline bg-canvas">
-                      <BatchInventoryTable articleId={record.articleId as string} />
-                    </div>
-                  </div>
-                )}
-
-                {(record.bomType === "sales" || record.bomType === "production") && (
-                  <div>
-                    <div className="mb-2 text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                      {record.bomType === "sales"
-                        ? "Handelsstücklisteneditor"
-                        : "Produktionsstücklisteneditor"}
-                    </div>
-                    <div className="min-h-[300px] overflow-visible rounded-md border border-hairline bg-canvas">
-                      <BomEditor articleId={record.articleId as string} />
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ContextTabs
+                defaultValue="langtexte"
+                tabs={[
+                  {
+                    id: "langtexte",
+                    label: t("langtextEditor.title", { defaultValue: "Langtexte" }),
+                    content: (
+                      <div className="h-full p-2">
+                        <LangTextRecordPanel
+                          entityName="article"
+                          recordId={activeArticleId}
+                          title={t("langtextEditor.title", { defaultValue: "Langtexte" })}
+                          fields={ARTICLE_LANGTEXT_FIELDS}
+                          className="h-full"
+                          controlledValues={{
+                            notiztext: record.notiztext as string,
+                            langtext: record.langtext as string,
+                            kurzbeschreibung: record.kurzbeschreibung as string,
+                            warntext: record.warntext as string,
+                          }}
+                          onControlledChange={(field, value) => onChange(field, value)}
+                        />
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "bestand",
+                    label: t("articleView.tabs.inventory"),
+                    content: (
+                      <div className="h-full overflow-hidden rounded-md border border-hairline bg-canvas">
+                        <Tabs defaultValue="bestand">
+                          <TabsList
+                            variant="line"
+                            className="h-8 w-full justify-start rounded-none border-b border-hairline px-2"
+                          >
+                            <TabsTrigger value="bestand" className="h-7 text-[12px]">
+                              Bestand
+                            </TabsTrigger>
+                            <TabsTrigger value="journal" className="h-7 text-[12px]">
+                              Journal
+                            </TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="bestand" className="p-0">
+                            <InventoryBalanceTable articleId={record.articleId as string} />
+                          </TabsContent>
+                          <TabsContent value="journal" className="p-0">
+                            <StockLedgerTable articleId={record.articleId as string} />
+                          </TabsContent>
+                        </Tabs>
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "bilder",
+                    label: t("article.images", { defaultValue: "Bilder" }),
+                    content: activeArticleId ? (
+                      <ArticleImageStrip
+                        articleId={(record.articleId as string) ?? activeArticleId}
+                        primaryImageId={
+                          (record.primaryImageId as string | null) ??
+                          selectedArticle?.primaryImageId ??
+                          null
+                        }
+                        onRefreshArticle={() => {
+                          queryClient.invalidateQueries({ queryKey: ["data", "article"] });
+                        }}
+                      />
+                    ) : (
+                      <div className="rounded-md border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-mute">
+                        {t("empty.title")}
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "varianten",
+                    label: t("article.variantsAndOptions", { defaultValue: "Varianten" }),
+                    content: (
+                      <ArticleVariantsAndOptionsTab
+                        key={activeArticleId ?? "none"}
+                        articleId={activeArticleId}
+                        articleLabel={selectedArticleLabel}
+                        articleNo={selectedArticle?.articleNo ?? null}
+                      />
+                    ),
+                  },
+                ]}
+              />
             )}
           />
         </DialogContent>

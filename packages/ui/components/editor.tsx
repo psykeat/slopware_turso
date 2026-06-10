@@ -19,7 +19,6 @@ import { Markdown } from "tiptap-markdown";
 import { cn } from "../lib/utils";
 import { AutoComplete } from "./editor-autocomplete";
 import EditorMenu from "./editor-menu";
-import { TextButtons } from "./editor.text-buttons";
 import { defaultExtensions } from "./extensions";
 import { suggestionItems } from "./slash-command";
 import { Toolbar } from "./toolbar";
@@ -178,6 +177,7 @@ export default function Editor({
   return (
     <div
       className={`relative flex min-h-0 w-full flex-1 flex-col ${className || ""}`}
+      role="presentation"
       onKeyDown={(e) => {
         if (readOnly) return;
         // Handle tab key

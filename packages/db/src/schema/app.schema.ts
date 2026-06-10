@@ -2296,6 +2296,7 @@ export const emailAccount = pgTable(
     watchExpiresAt: timestamp("watch_expires_at", { withTimezone: true }),
     activityTier: text("activity_tier").notNull().default("cold"),
     lastUserActivityAt: timestamp("last_user_activity_at", { withTimezone: true }),
+    syncPriority: text("sync_priority").notNull().default("normal"),
     archived: boolean("archived").notNull().default(false),
     grantedByUserId: text("granted_by_user_id").references(() => user.id),
     grantedScopes: jsonb("granted_scopes"),
@@ -2310,6 +2311,10 @@ export const emailAccount = pgTable(
     ),
     index("idx_email_account_tenant").on(table.tenantId),
     index("idx_email_account_status").on(table.tenantId, table.status),
+    // Covers the backstop sync query: WHERE archived=false AND activity_tier IN (...) AND last_sync_at < ...
+    index("idx_email_account_backstop")
+      .on(table.archived, table.activityTier, table.lastSyncAt)
+      .where(sql`archived = false`),
     check("chk_email_account_provider", sql`provider IN ('gmail', 'microsoft')`),
     check(
       "chk_email_account_status",
@@ -2322,6 +2327,10 @@ export const emailAccount = pgTable(
     check(
       "chk_email_account_activity_tier",
       sql`activity_tier IN ('hot', 'warm', 'cold', 'dormant')`,
+    ),
+    check(
+      "chk_email_account_sync_priority",
+      sql`sync_priority IN ('high', 'normal', 'low')`,
     ),
   ],
 );
@@ -2656,6 +2665,10 @@ export const emailJob = pgTable(
       table.createdAt,
     ),
     index("idx_email_job_account").on(table.tenantId, table.emailAccountId),
+    // Partial index for the reaper and stale-reclaim branch — only covers processing rows
+    index("idx_email_job_stale")
+      .on(table.lockedAt)
+      .where(sql`status = 'processing'`),
     unique("email_job_idempotency_unique").on(table.tenantId, table.idempotencyKey),
     check(
       "chk_email_job_type",
@@ -2696,6 +2709,10 @@ export const emailSubscription = pgTable(
     ),
     index("idx_email_subscription_expires").on(table.expiresAt),
     index("idx_email_subscription_account").on(table.tenantId, table.emailAccountId),
+    // Partial unique: channel_token is the sole auth boundary for webhook lookup — must be globally unique
+    uniqueIndex("idx_email_subscription_channel_token")
+      .on(table.channelToken)
+      .where(sql`channel_token IS NOT NULL`),
     check(
       "chk_email_subscription_resource",
       sql`resource IN ('mail', 'calendar', 'contacts')`,

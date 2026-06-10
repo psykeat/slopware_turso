@@ -33,10 +33,11 @@ const ThreadPreview = ({ threadId }: { threadId: string }) => {
   if (!getThread?.latest) return null;
 
   return (
-    <div
+    <button
+      type="button"
       onClick={handleClick}
       key={threadId}
-      className="hover:bg-offsetLight/30 dark:hover:bg-offsetDark/30 cursor-pointer rounded-lg"
+      className="hover:bg-offsetLight/30 dark:hover:bg-offsetDark/30 w-full cursor-pointer rounded-lg text-left"
     >
       <div className="flex cursor-pointer items-center justify-between p-2">
         <div className="flex w-full items-center gap-3">
@@ -67,7 +68,7 @@ const ThreadPreview = ({ threadId }: { threadId: string }) => {
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 };
 
@@ -139,7 +140,7 @@ export interface AIChatProps {
   input: string;
   setInput: (input: string) => void;
   error?: Error;
-  handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  handleSubmit: (e: React.SyntheticEvent<HTMLFormElement>) => void;
   status: string;
   stop: () => void;
   className?: string;
@@ -232,12 +233,12 @@ export function AIChat({
       }
 
       if (event.key === "Enter" && !event.metaKey && !event.shiftKey) {
-        onSubmit(event as unknown as React.FormEvent<HTMLFormElement>);
+        onSubmit(event as unknown as React.SyntheticEvent<HTMLFormElement>);
       }
     },
   });
 
-  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     handleSubmit(e);
     editor.commands.clearContent(true);
@@ -263,7 +264,8 @@ export function AIChat({
       <div className="no-scrollbar flex-1 overflow-y-auto" ref={messagesContainerRef}>
         <div className="min-h-full px-2 py-4">
           {chatMessages && !chatMessages.enabled ? (
-            <div
+            <button
+              type="button"
               onClick={() => setPricingDialog("true")}
               className="absolute inset-0 flex flex-col items-center justify-center"
             >
@@ -271,7 +273,7 @@ export function AIChat({
                 Upgrade to Zero Pro for unlimited AI chat
               </TextShimmer>
               <Button className="mt-2 h-8 w-52">Start 7 day free trial</Button>
-            </div>
+            </button>
           ) : !messages.length ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <div className="relative mb-4 h-[44px] w-[44px]">
@@ -383,6 +385,10 @@ export function AIChat({
                     onClick={() => {
                       editor.commands.focus();
                     }}
+                    onKeyDown={() => {
+                      editor.commands.focus();
+                    }}
+                    role="presentation"
                     className={cn("max-h-[100px] w-full")}
                   >
                     <EditorContent editor={editor} className="h-full w-full" />

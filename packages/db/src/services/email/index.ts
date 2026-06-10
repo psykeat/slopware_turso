@@ -10,3 +10,4 @@ export * from "./send-service";
 export * from "./template-service";
 export * from "./document-service";
 export * from "./job-service";
+export * from "./subscription-service";

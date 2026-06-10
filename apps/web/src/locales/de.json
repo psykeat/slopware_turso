@@ -417,10 +417,74 @@
       "openItems": "Offene Posten",
       "no": "Nr.",
       "company": "Firma",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "name": "Name",
+      "street": "Straße",
+      "zip": "PLZ",
       "city": "Ort",
       "country": "Land",
       "type": "Typ",
-      "segment": "Segment"
+      "segment": "Segment",
+      "date": "Datum",
+      "total": "Betrag",
+      "status": "Status",
+      "default": "Standard",
+      "iban": "IBAN",
+      "bic": "BIC",
+      "bank": "Bank"
+    },
+    "contacts": {
+      "title": "Ansprechpartner",
+      "noteText": "Notiztext",
+      "noteTitle": "Ansprechpartner-Notiz",
+      "selectContact": "Ansprechpartner auswählen",
+      "contactFallback": "Kontakt",
+      "notePlaceholder": "Ansprechpartner auswählen, um die Notiz zu bearbeiten",
+      "empty": "Keine Ansprechpartner vorhanden.",
+      "emptyTitle": "Keine Ansprechpartner vorhanden.",
+      "emptySubtitle": "Öffnen Sie die Adressmaske (F2), um Ansprechpartner anzulegen.",
+      "records_one": "{{count}} Ansprechpartner",
+      "records_other": "{{count}} Ansprechpartner",
+      "add": "Hinzufügen",
+      "edit": "Bearbeiten",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "delete": "Löschen",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "email": "E-Mail",
+      "phoneMobile": "Mobil",
+      "roleFunction": "Rolle",
+      "primary": "Primär"
+    },
+    "langtexts": {
+      "note": "Notiztext",
+      "warning": "Warntext",
+      "body": "Langtext"
+    },
+    "sections": {
+      "deliveryAddresses": "Lieferadressen",
+      "bankAccounts": "Bankkonten"
+    },
+    "dialog": {
+      "newAddress": "Neue Adresse"
+    },
+    "deliveryAddresses": {
+      "emptyTitle": "Keine Lieferadressen vorhanden.",
+      "emptySubtitle": "Öffnen Sie die Adressmaske (F2), um Lieferadressen anzulegen."
+    },
+    "relatedDocuments": {
+      "emptyTitle": "Keine verknüpften Belege.",
+      "emptySubtitle": "Hier erscheinen Belege, die mit dieser Adresse verknüpft sind."
+    },
+    "openItems": {
+      "emptyTitle": "Keine offenen Posten.",
+      "emptySubtitle": "Hier erscheinen unbezahlte Rechnungen."
+    },
+    "addressList": {
+      "emptyTitle": "Noch keine Adressen vorhanden.",
+      "emptySubtitle": "Legen Sie die erste Adresse in dieser Kategorie an."
     }
   },
   "articleView": {

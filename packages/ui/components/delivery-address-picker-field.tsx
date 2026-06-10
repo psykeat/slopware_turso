@@ -355,10 +355,10 @@ export function DeliveryAddressPickerField({
             className={cn(
               "min-h-[56px] w-full rounded border px-3 py-2 text-left text-[12px] transition-colors",
               locked
-                ? "cursor-not-allowed border-hairline bg-canvas-soft opacity-70"
-                : "cursor-pointer border-hairline bg-canvas-soft hover:border-hairline-input",
+              ? "cursor-not-allowed border-hairline bg-canvas-soft opacity-70"
+              : "cursor-pointer border-hairline bg-canvas-soft hover:border-hairline-input",
             )}
-            tabIndex={locked ? -1 : 0}
+            tabIndex={-1}
             onClick={() => {
               if (locked) return;
               setLocalSnap(resolvedSnap);

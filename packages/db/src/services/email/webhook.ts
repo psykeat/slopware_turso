@@ -5,6 +5,8 @@ import { emailAccount } from "../../schema/app.schema";
 import { EmailJobService } from "./job-service";
 import type { EmailProvider } from "./types";
 
+const WEBHOOK_PRIORITY = 1; // webhooks are hot signals
+
 export class EmailWebhookValidationError extends Error {
   constructor(
     message: string,
@@ -121,10 +123,22 @@ export async function queueWebhookIncrementalSync(
     .limit(1);
   if (!account) throw new EmailWebhookLookupError("Email account not found");
 
+  const now = new Date();
+  await db
+    .update(emailAccount)
+    .set({ activityTier: "hot", lastUserActivityAt: now, updatedAt: now })
+    .where(
+      and(eq(emailAccount.tenantId, account.tenantId), eq(emailAccount.emailAccountId, account.emailAccountId)),
+    );
+
+  // Bucket into 30-second windows to deduplicate bursts of webhook signals
+  // for the same account (e.g. Graph sends one notification per message change).
+  const bucket = Math.floor(Date.now() / 30_000);
   return await new EmailJobService(account.tenantId).enqueue({
     jobType: "incremental_sync",
     emailAccountId: account.emailAccountId,
-    idempotencyKey: `webhook:${provider}:${account.emailAccountId}:${Date.now()}`,
-    payload: { provider, signal: body },
+    idempotencyKey: `webhook:${provider}:${account.emailAccountId}:${bucket}`,
+    payload: { provider },
+    priority: WEBHOOK_PRIORITY,
   });
 }

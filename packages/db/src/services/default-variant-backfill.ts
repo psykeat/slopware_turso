@@ -62,7 +62,10 @@ async function ensureInventoryItem(
   return await findInventoryItemByVariantId(tx, tenantId, variantId);
 }
 
-async function ensureDefaultVariantForArticle(tx: BackfillTx, candidate: CandidateArticle) {
+export async function ensureDefaultVariantForArticle(
+  tx: BackfillTx,
+  candidate: CandidateArticle,
+) {
   const [existingVariant] = await tx
     .select({
       variantId: articleVariant.variantId,
@@ -138,6 +141,13 @@ async function ensureDefaultVariantForArticle(tx: BackfillTx, candidate: Candida
     createdVariant,
     createdInventoryItem: !existingInventoryItem && Boolean(inventoryItemRow),
   };
+}
+
+export async function ensureDefaultVariantForArticleRow(
+  tx: BackfillTx,
+  articleRow: CandidateArticle,
+) {
+  return await ensureDefaultVariantForArticle(tx, articleRow);
 }
 
 export async function backfillDefaultArticleVariants(

@@ -1,7 +1,14 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 
+export interface ComposeDraftContext {
+  to: string[];
+  subject: string;
+  context?: string;
+}
+
 interface AiOverlayOptions {
   taskScope?: string;
+  composeDraftContext?: ComposeDraftContext;
 }
 
 interface AiOverlayContextValue {

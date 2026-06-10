@@ -20,6 +20,22 @@ _Avoid_: Product, SKU, item unless the context specifically means that
 The sellable SKU-level form of an article, used when price, stock, and document lines need variant-level truth.
 _Avoid_: Variant, SKU, child article unless the article context is explicit
 
+**Default variant**:
+The single sellable article variant that exists when an article has no explicit variant axes.
+_Avoid_: Fallback row, placeholder variant unless the sellable meaning is intended
+
+**Bookable article**:
+An article that can be used in price, stock, and document flows and therefore has at least one article variant.
+_Avoid_: Sellable article, purchasable article unless the booking context is intended
+
+**Sales block**:
+The compact article-stamp section where customer-facing commercial defaults such as price, weight, EAN, and stock tracking are edited.
+_Avoid_: Variant drawer, pricing tab, inventory form unless the normal article-entry context is intended
+
+**Variant mode**:
+The explicit article state in which variant axes and multiple sellable variants are shown and maintained.
+_Avoid_: Advanced mode, technical mode unless the variant-management meaning is intended
+
 **Document**:
 A transactional business record that is browsed in TriView and edited in DocumentEditor.
 _Avoid_: Order, invoice, voucher unless a document type is being named specifically

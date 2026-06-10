@@ -121,7 +121,7 @@ export interface DesignerConflictRecord {
 export interface DesignerHistoryEntry {
   id: string;
   at: string;
-  action: "init" | "select" | "set" | "move" | "save" | "apply" | "reset" | "reconcile";
+  action: "init" | "select" | "set" | "move";
   surface: DesignerSurface;
   nodeKey?: string | null;
   summary: string;
@@ -157,7 +157,6 @@ interface DesignerContextValue {
   designerDelta: DesignerDelta;
   delta: DesignerDelta;
   updateDelta: (update: Partial<DesignerDelta>) => void;
-  resetDelta: () => void;
   updateField: (key: string, patch: Partial<FieldDesignConfig>) => void;
   updateFrameLabel: (key: string, label: string) => void;
   moveFrame: (key: string, targetKey: string) => void;
@@ -188,9 +187,6 @@ interface DesignerContextValue {
     entityName?: string | null,
   ) => void;
   setDesignerSurface: (surface: DesignerSurface, entityName?: string | null) => void;
-  saveDesign: () => Promise<boolean>;
-  applyDesign: () => Promise<boolean>;
-  reconcileDesign: () => Promise<void>;
 }
 
 const defaultVersionInfo: DesignerVersionInfo = {
@@ -241,30 +237,6 @@ function nextHistoryId() {
 
 function nextRevision() {
   return createClientRevision();
-}
-
-function extractClientRevision(payload: unknown) {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const record = payload as {
-    clientRevision?: unknown;
-    revision?: unknown;
-    versionInfo?: { clientRevision?: unknown };
-    updatedContract?: { versionInfo?: { clientRevision?: unknown } };
-  };
-
-  if (typeof record.clientRevision === "string") return record.clientRevision;
-  if (typeof record.revision === "string") return record.revision;
-  if (typeof record.versionInfo?.clientRevision === "string") {
-    return record.versionInfo.clientRevision;
-  }
-  if (typeof record.updatedContract?.versionInfo?.clientRevision === "string") {
-    return record.updatedContract.versionInfo.clientRevision;
-  }
-
-  return null;
 }
 
 function nextDraftId(kind: DesignerNodeKind) {
@@ -803,29 +775,6 @@ function insertNodeInBucket(
   });
 }
 
-function resetBucket(bucket: DesignerSurfaceState) {
-  const nextBucket: DesignerSurfaceState = {
-    ...bucket,
-    nodes: bucket.baselineNodes.map((node) => ({ ...node })),
-    selectedNodeIds: bucket.baselineNodes.length > 0 ? [bucket.baselineNodes[0].id] : [],
-    draftPatchOps: [],
-    conflicts: [],
-    versionInfo: {
-      ...bucket.versionInfo,
-      conflictState: "clean",
-      reconciliationRequired: false,
-      clientRevision: nextRevision(),
-    },
-  };
-  return appendHistory(nextBucket, {
-    action: "reset",
-    surface: bucket.surface,
-    summary: "Reset local designer draft",
-    patchOps: [],
-    revision: nextBucket.versionInfo.clientRevision,
-  });
-}
-
 function selectNodesInBucket(
   bucket: DesignerSurfaceState,
   nodeIds: string[],
@@ -845,28 +794,6 @@ function selectNodesInBucket(
       patchOps: [],
     },
   );
-}
-
-function persistBucketAction(
-  bucket: DesignerSurfaceState,
-  action: "save" | "apply" | "reconcile",
-  summary: string,
-  mutate: (bucket: DesignerSurfaceState) => DesignerSurfaceState,
-) {
-  const nextBucket = mutate({
-    ...bucket,
-    versionInfo: {
-      ...bucket.versionInfo,
-      clientRevision: nextRevision(),
-    },
-  });
-  return appendHistory(nextBucket, {
-    action,
-    surface: bucket.surface,
-    summary,
-    patchOps: nextBucket.draftPatchOps,
-    revision: nextBucket.versionInfo.clientRevision,
-  });
 }
 
 function buildLegacyDelta(runtime: DesignerRuntimeState): DesignerDelta {
@@ -947,12 +874,8 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const persistSurface = useCallback(
-    async (
-      surface: DesignerSurface,
-      action: "patch" | "apply" = "apply",
-      state: DesignerRuntimeState = runtimeState,
-    ) => {
+  const commitSurfaceDraft = useCallback(
+    async (surface: DesignerSurface, state: DesignerRuntimeState = runtimeState) => {
       const bucket = state.surfaces[surface];
       if (!bucket || bucket.draftPatchOps.length === 0) return true;
 
@@ -961,13 +884,8 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         throw new Error(`Missing entity for designer surface ${surface}`);
       }
 
-      const url = action === "patch"
-        ? `/api/metadata/designer/${entityName}/${surface}`
-        : `/api/metadata/designer/${entityName}/${surface}/${action}`;
-      const method = action === "patch" ? "PATCH" : "POST";
-
-      const response = await fetch(url, {
-        method,
+      const response = await fetch(`/api/metadata/designer/${entityName}/${surface}`, {
+        method: "POST",
         headers: {
           "content-type": "application/json",
         },
@@ -981,28 +899,17 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to ${action} designer surface (${response.status})`);
+        throw new Error(`Failed to commit designer surface (${response.status})`);
       }
 
-      let responseBody: unknown = null;
-      const contentType = response.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) {
-        try {
-          responseBody = await response.json();
-        } catch {
-          responseBody = null;
-        }
-      }
-
-      const clientRevision = extractClientRevision(responseBody) ?? createClientRevision();
+      const clientRevision = createClientRevision();
 
       updateRuntime((prev) => {
         const currentBucket = ensureSurfaceBucket(prev, surface, entityName);
         const committedNodes = cloneDesignerNodes(currentBucket.nodes);
         const nextBucket: DesignerSurfaceState = {
           ...currentBucket,
-          baselineNodes:
-            action === "apply" ? cloneDesignerNodes(committedNodes) : currentBucket.baselineNodes,
+          baselineNodes: cloneDesignerNodes(committedNodes),
           nodes: committedNodes,
           draftPatchOps: [],
           versionInfo: {
@@ -1019,83 +926,8 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
 
       return true;
     },
-    [focusState.area, focusState.entity, runtimeState, updateRuntime],
+    [focusState.entity, runtimeState, updateRuntime],
   );
-
-  const persistActiveSurface = useCallback(
-    async (action: "patch" | "apply" = "apply") => {
-      const surface = runtimeState.activeSurface ?? inferSurfaceFromFocus(focusState.area);
-      if (!surface) return false;
-      return persistSurface(surface, action);
-    },
-    [focusState.area, persistSurface, runtimeState.activeSurface],
-  );
-
-  const saveDesign = useCallback(async () => {
-    try {
-      const saved = await persistActiveSurface("patch");
-      toast.success("Designer draft saved");
-      return saved;
-    } catch (error) {
-      console.error("Failed to save designer surface:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to save designer surface");
-      return false;
-    }
-  }, [persistActiveSurface]);
-
-  const applyDesign = useCallback(async () => {
-    try {
-      const applied = await persistActiveSurface("apply");
-      toast.success("Designer applied");
-      return applied;
-    } catch (error) {
-      console.error("Failed to apply designer surface:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to apply designer surface");
-      return false;
-    }
-  }, [persistActiveSurface]);
-
-  const reconcileDesign = useCallback(async () => {
-    updateRuntime((prev) => {
-      const surface = prev.activeSurface ?? inferSurfaceFromFocus(focusState.area);
-      const bucket = ensureSurfaceBucket(prev, surface, focusState.entity);
-      const nextBucket = persistBucketAction(
-        bucket,
-        "reconcile",
-        `Reconciled ${surface}`,
-        (current) => ({
-          ...current,
-          conflicts: current.conflicts.map((conflict) => ({ ...conflict, state: "clean" })),
-          versionInfo: {
-            ...current.versionInfo,
-            conflictState: current.conflicts.length > 0 ? "needs_review" : "clean",
-            reconciliationRequired: false,
-          },
-        }),
-      );
-      return {
-        ...prev,
-        activeSurface: surface,
-        surfaces: { ...prev.surfaces, [surface]: nextBucket },
-      };
-    });
-  }, [focusState.area, focusState.entity, updateRuntime]);
-
-  const resetDelta = useCallback(() => {
-    updateRuntime((prev) => {
-      const nextSurfaces: Partial<Record<DesignerSurface, DesignerSurfaceState>> = {};
-      (Object.entries(prev.surfaces) as [DesignerSurface, DesignerSurfaceState][]).forEach(
-        ([surface, bucket]) => {
-          nextSurfaces[surface] = resetBucket(bucket);
-        },
-      );
-      return {
-        ...prev,
-        surfaces: nextSurfaces,
-      };
-    });
-    setInteractionState({ ...defaultDelta });
-  }, [updateRuntime]);
 
   const closeDesignMode = useCallback(async () => {
     if (!isDesignMode || closeInProgressRef.current) return false;
@@ -1128,7 +960,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
         }
 
         for (const [surface] of dirtySurfaces) {
-          await persistSurface(surface, "apply", runtimeState);
+          await commitSurfaceDraft(surface, runtimeState);
         }
 
         toast.success("Designer-Änderungen beim Verlassen übernommen");
@@ -1137,8 +969,8 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       setIsDesignMode(false);
       return true;
     } catch (error) {
-      console.error("Failed to apply design on exit:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to apply design changes");
+      console.error("Failed to commit design on exit:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to commit design changes");
       return false;
     } finally {
       closeInProgressRef.current = false;
@@ -1150,7 +982,7 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     focusState.recordId,
     focusState.row,
     isDesignMode,
-    persistSurface,
+    commitSurfaceDraft,
     runtimeState,
     setFocus,
   ]);
@@ -1783,7 +1615,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       designerDelta,
       delta: designerDelta,
       updateDelta,
-      resetDelta,
       updateField,
       updateFrameLabel,
       moveFrame,
@@ -1798,14 +1629,9 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       initFields,
       selectDesignerNodes,
       setDesignerSurface,
-      saveDesign,
-      applyDesign,
-      reconcileDesign,
     }),
     [
       activeSurfaceState,
-      saveDesign,
-      applyDesign,
       closeDesignMode,
       designerDelta,
       initFields,
@@ -1819,8 +1645,6 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       addFrameDraft,
       removeFieldDraft,
       removeFrameDraft,
-      reconcileDesign,
-      resetDelta,
       runtimeState,
       selectDesignerNodes,
       selectedNodes,

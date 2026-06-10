@@ -1,0 +1,2 @@
+ALTER TABLE "email_account" ADD COLUMN "sync_priority" text DEFAULT 'normal' NOT NULL;--> statement-breakpoint
+ALTER TABLE "email_account" ADD CONSTRAINT "chk_email_account_sync_priority" CHECK (sync_priority IN ('high', 'normal', 'low'));

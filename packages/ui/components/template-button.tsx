@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Editor } from "@tiptap/react";
 import { TRPCClientError } from "@trpc/client";
 import { FileText, Save, Trash2 } from "lucide-react";
-import React, { useState, useMemo, useDeferredValue, useCallback } from "react";
+import React, { useState, useMemo, useDeferredValue, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
 
 import { useTemplates } from "@/hooks/use-templates";
@@ -59,13 +59,25 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
   const queryClient = useQueryClient();
   const { data } = useTemplates();
 
-  const templates = (data?.templates ?? []) as EmailTemplate[];
+  const templates = useMemo(() => (data?.templates ?? []) as EmailTemplate[], [data?.templates]);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [subMenuOpen, setSubMenuOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [search, setSearch] = useState("");
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (subMenuOpen) searchInputRef.current?.focus();
+  }, [subMenuOpen]);
+
+  useEffect(() => {
+    if (saveDialogOpen) nameInputRef.current?.focus();
+  }, [saveDialogOpen]);
 
   const deferredSearch = useDeferredValue(search);
 
@@ -214,18 +226,18 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
             <Save className="mr-2 h-3.5 w-3.5" /> Save current as template
           </DropdownMenuItem>
           {templates.length > 0 ? (
-            <DropdownMenuSub>
+            <DropdownMenuSub onOpenChange={setSubMenuOpen}>
               <DropdownMenuSubTrigger>
                 <FileText className="mr-2 h-3.5 w-3.5" /> Use template
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="z-99999 w-60">
                 <div className="sticky top-0 border-b border-border bg-background p-2">
                   <Input
+                    ref={searchInputRef}
                     placeholder="Search..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="h-8 text-sm"
-                    autoFocus
                   />
                 </div>
                 <div className="max-h-30 overflow-y-auto">
@@ -263,10 +275,10 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
           </DialogHeader>
           <div className="space-y-2 py-4">
             <Input
+              ref={nameInputRef}
               placeholder="Template name"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
-              autoFocus
             />
           </div>
           <DialogFooter className="flex justify-end gap-2">

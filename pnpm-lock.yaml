@@ -135,6 +135,9 @@ catalogs:
     '@tiptap/extension-text-style':
       specifier: ^2.23.0
       version: 2.27.2
+    '@tiptap/extension-underline':
+      specifier: ^2.23.0
+      version: 2.27.2
     '@tiptap/pm':
       specifier: ^2.23.0
       version: 2.27.2
@@ -574,6 +577,9 @@ importers:
         specifier: 'catalog:'
         version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))
       '@tiptap/extension-text-style':
+        specifier: 'catalog:'
+        version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))
+      '@tiptap/extension-underline':
         specifier: 'catalog:'
         version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))
       '@tiptap/pm':

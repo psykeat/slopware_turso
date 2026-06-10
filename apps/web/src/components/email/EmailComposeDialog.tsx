@@ -1,6 +1,7 @@
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { EmailComposer } from "@repo/ui/components/email-composer";
 import { XIcon } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 export type EmailComposeMode = "plain" | "html";
@@ -59,13 +60,67 @@ export function EmailComposeDialog({
   title = "Compose email",
   identities,
   value,
-  mode,
+  _mode,
   attachments,
   notice,
   busy,
   onClose,
   onSubmit,
 }: EmailComposeDialogProps) {
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+
+  const uploadPendingFiles = async (): Promise<EmailComposeAttachment[]> => {
+    if (pendingFiles.length === 0) return [];
+    setUploadingAttachments(true);
+    const uploaded: EmailComposeAttachment[] = [];
+    try {
+      for (const file of pendingFiles) {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/api/email/attachments/upload", {
+          method: "POST",
+          body: form,
+        });
+        if (!res.ok) throw new Error(`Upload fehlgeschlagen: ${file.name}`);
+        const data = (await res.json()) as {
+          fileName: string;
+          contentType: string;
+          sizeBytes: number;
+          storageKey: string;
+        };
+        uploaded.push({
+          fileName: data.fileName,
+          contentType: data.contentType,
+          sizeBytes: data.sizeBytes,
+          storageKey: data.storageKey,
+        });
+      }
+    } finally {
+      setUploadingAttachments(false);
+    }
+    return uploaded;
+  };
+
+  const buildAttachments = async (): Promise<EmailComposeAttachment[]> => {
+    const uploaded = await uploadPendingFiles();
+    return [...(attachments || []), ...uploaded];
+  };
+
+  const handleAttachmentsChange = (files: File[]) => {
+    setPendingFiles((prev) => [...prev, ...files]);
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="flex h-[80vh] max-h-[800px] w-[90vw] max-w-4xl flex-col gap-0 overflow-hidden p-0">
@@ -104,6 +159,14 @@ export function EmailComposeDialog({
               primary: id.emailIdentityId === value.identityId,
             }))}
             onSend={async (data) => {
+              let allAttachments: EmailComposeAttachment[];
+              try {
+                allAttachments = await buildAttachments();
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : "Upload fehlgeschlagen";
+                toast.error(msg);
+                return;
+              }
               await onSubmit("send", {
                 identityId: data.fromEmail || value.identityId,
                 to: data.to,
@@ -113,10 +176,18 @@ export function EmailComposeDialog({
                 bodyText: data.message,
                 bodyHtml: data.message,
                 mode: "html",
-                attachments: attachments || [],
+                attachments: allAttachments,
               });
             }}
             onSaveDraft={async (data) => {
+              let allAttachments: EmailComposeAttachment[];
+              try {
+                allAttachments = await buildAttachments();
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : "Upload fehlgeschlagen";
+                toast.error(msg);
+                return;
+              }
               await onSubmit("save-draft", {
                 identityId: data.fromEmail || value.identityId,
                 to: data.to,
@@ -126,10 +197,18 @@ export function EmailComposeDialog({
                 bodyText: data.message,
                 bodyHtml: data.message,
                 mode: "html",
-                attachments: attachments || [],
+                attachments: allAttachments,
               });
             }}
             onScheduleSend={async (data, date) => {
+              let allAttachments: EmailComposeAttachment[];
+              try {
+                allAttachments = await buildAttachments();
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : "Upload fehlgeschlagen";
+                toast.error(msg);
+                return;
+              }
               await onSubmit("queue", {
                 identityId: data.fromEmail || value.identityId,
                 to: data.to,
@@ -139,7 +218,7 @@ export function EmailComposeDialog({
                 bodyText: data.message,
                 bodyHtml: data.message,
                 mode: "html",
-                attachments: attachments || [],
+                attachments: allAttachments,
                 // @ts-expect-error backend expects this for queueing
                 scheduleAt: date.toISOString(),
               });
@@ -148,15 +227,36 @@ export function EmailComposeDialog({
               window.dispatchEvent(new CustomEvent("slopware:open-ai"));
               return "";
             }}
-            onAttachmentsChange={async (newAttachments) => {
-               // We will need a storage upload endpoint to handle new Files before appending to attachments.
-               // Currently, the dialog holds server-side attachments via the `attachments` prop.
-               toast.info("Neue Anhänge hochladen wird noch vom Backend vorbereitet.");
-            }}
-            attachments={attachments}
-            isLoading={busy}
+            onAttachmentsChange={handleAttachmentsChange}
+            attachments={[
+              ...(attachments || []),
+              ...pendingFiles.map((f) => ({ fileName: f.name, sizeBytes: f.size })),
+            ]}
+            isLoading={busy || uploadingAttachments}
           />
         </div>
+
+        {pendingFiles.length > 0 && (
+          <div className="border-t border-border px-3 py-2 flex flex-wrap gap-2">
+            {pendingFiles.map((file, index) => (
+              <div
+                key={`${file.name}-${index}`}
+                className="flex items-center gap-1.5 rounded bg-muted px-2 py-1 text-xs text-muted-foreground"
+              >
+                <span className="max-w-[160px] truncate text-foreground">{file.name}</span>
+                <span>{formatBytes(file.size)}</span>
+                <button
+                  type="button"
+                  onClick={() => removePendingFile(index)}
+                  className="ml-0.5 grid size-4 place-items-center rounded-sm hover:bg-muted-foreground/20 hover:text-foreground"
+                  title={`Remove ${file.name}`}
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

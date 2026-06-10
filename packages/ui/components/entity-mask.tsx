@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { cn } from "../lib/utils";
 import { useDesigner, type FieldDesignConfig } from "../platform/designer-context";
 import { useFocus } from "../platform/focus-manager";
-import { InlineDesigner } from "./inline-designer";
 import { LookupField, buildLookupConfigFromField, createRemoteLookupSource } from "./lookup-field";
 import { Skeleton } from "./skeleton";
 
@@ -71,6 +70,10 @@ export interface EntityMaskProps {
     record: Record<string, unknown>,
     onChange: (key: string, value: any) => void,
   ) => React.ReactNode;
+  /** Optional block rendered above the form fields in the primary column */
+  preFieldsSection?: React.ReactNode;
+  /** Optional block rendered below the form fields in the primary column */
+  postFieldsSection?: React.ReactNode;
   /** "side" splits the mask into a left fields panel and right child-section panel */
   childLayout?: "below" | "side";
 }
@@ -291,12 +294,15 @@ export function EntityMask({
   embedded = false,
   inline = false,
   childSection,
+  preFieldsSection,
+  postFieldsSection,
   childLayout = "below",
 }: EntityMaskProps) {
   const { t, i18n } = useTranslation("ui");
   const queryClient = useQueryClient();
   const formRef = useRef<HTMLDivElement>(null);
   const fieldRefs = useRef(new Map<string, HTMLDivElement | null>());
+  const frameRefs = useRef(new Map<string, HTMLElement | null>());
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const didAutoFocusRef = useRef(false);
   const {
@@ -314,10 +320,12 @@ export function EntityMask({
     moveFieldToFrame,
     removeFieldDraft,
     removeFrameDraft,
+    selectedNodes,
     selectDesignerNodes,
     updateDelta,
+    closeDesignMode,
   } = useDesigner();
-  const { state: focusState, setFocus, resetFocus } = useFocus();
+  const { setFocus, resetFocus } = useFocus();
 
   const [metaFields, setMetaFields] = useState<FieldDef[]>([]);
   const [loading, setLoading] = useState(!propFields && !!entityName);
@@ -370,12 +378,10 @@ export function EntityMask({
       return result;
     },
   });
-  const [editorFieldKey, setEditorFieldKey] = useState<string | null>(null);
-  const [editorMode, setEditorMode] = useState<"compact" | "expanded">("compact");
   const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties | null>(null);
 
   // Reset form and fetch data when record changes
-  useEffect(() => {
+  useLayoutEffect(() => {
     let active = true;
     const initial = mode === "create" ? (initialValues ?? {}) : {};
     if (mode === "create") {
@@ -410,7 +416,7 @@ export function EntityMask({
     return () => {
       active = false;
     };
-  }, [recordId, entityName, mode, apiBase, initialValues]);
+  }, [recordId, entityName, mode, apiBase, initialValues, form]);
 
   // Load metadata when no fields prop provided
   useEffect(() => {
@@ -683,23 +689,30 @@ export function EntityMask({
     [designerFieldConfigs, isDesignMode],
   );
 
-  const selectedDesignerKey = focusState.field ?? null;
-  const selectedFieldKey =
-    selectedDesignerKey && fieldByKey.has(selectedDesignerKey) ? selectedDesignerKey : null;
+  const selectedDesignerNode = selectedNodes[0] ?? null;
+  const selectedDesignerField =
+    selectedDesignerNode &&
+    (selectedDesignerNode.kind === "field-ref" || selectedDesignerNode.kind === "jsonb-field")
+      ? (fieldByKey.get(selectedDesignerNode.id) ?? null)
+      : null;
+  const selectedDesignerFrame =
+    selectedDesignerNode?.kind === "group-frame"
+      ? (frameNodes.find((frame) => frame.id === selectedDesignerNode.id) ?? null)
+      : null;
 
-  const selectDesignerField = useCallback(
-    (fieldKey: string) => {
+  const selectDesignerNode = useCallback(
+    (nodeId: string) => {
       if (!isDesignMode) return;
+      selectDesignerNodes("triview-detail", [nodeId], entityName);
       setFocus({
         area: "designer",
         entity: entityName,
         recordId: recordId ?? null,
         mode: mode ?? (recordId ? "edit" : null),
-        field: fieldKey,
+        field: fieldByKey.has(nodeId) ? nodeId : null,
       });
-      selectDesignerNodes("triview-detail", [fieldKey], entityName);
     },
-    [entityName, isDesignMode, mode, recordId, selectDesignerNodes, setFocus],
+    [entityName, fieldByKey, isDesignMode, mode, recordId, selectDesignerNodes, setFocus],
   );
 
   useEffect(() => {
@@ -715,19 +728,6 @@ export function EntityMask({
       resetFocus();
     };
   }, [entityName, isDesignMode, mode, recordId, setFocus, resetFocus]);
-
-  // Sync editorFieldKey state on render instead of effect to avoid setState-in-effect warning
-  const lastSelectedFieldKeyRef = useRef(selectedFieldKey);
-  if (lastSelectedFieldKeyRef.current !== selectedFieldKey) {
-    lastSelectedFieldKeyRef.current = selectedFieldKey;
-    if (!selectedFieldKey) {
-      if (editorFieldKey !== null) setEditorFieldKey(null);
-      if (editorMode !== "compact") setEditorMode("compact");
-    } else if (editorFieldKey !== selectedFieldKey) {
-      setEditorFieldKey(selectedFieldKey);
-      if (editorMode !== "compact") setEditorMode("compact");
-    }
-  }
 
   useEffect(() => {
     didAutoFocusRef.current = false;
@@ -758,6 +758,12 @@ export function EntityMask({
   // F10 / Escape keyboard handlers
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (isDesignMode && (e.key === "F10" || e.key === "Escape")) {
+        e.preventDefault();
+        e.stopPropagation();
+        void closeDesignMode();
+        return;
+      }
       if (e.key === "F10") {
         e.preventDefault();
         e.stopPropagation();
@@ -771,7 +777,7 @@ export function EntityMask({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [form, onCancel]);
+  }, [closeDesignMode, form, isDesignMode, onCancel]);
 
   const fieldLabel = (field: FieldDef) =>
     i18n.language === "de" && field.labelDe ? field.labelDe : field.label;
@@ -783,34 +789,28 @@ export function EntityMask({
   const hasChildContent = !!childSection && !loading && Object.keys(initialData).length > 0; // We show it if we loaded data
   const fieldGridClass = _layout === "single" ? "grid-cols-1" : "grid-cols-2";
 
-  const selectedDesignerFieldKey = selectedFieldKey;
-
   useLayoutEffect(() => {
-    if (!editorFieldKey || !isDesignMode) {
-      if (overlayStyle !== null) {
-        requestAnimationFrame(() => {
-          setOverlayStyle(null);
-        });
-      }
+    const anchorKey = selectedDesignerNode?.id ?? null;
+    if (!anchorKey || !isDesignMode) {
+      requestAnimationFrame(() => {
+        setOverlayStyle(null);
+      });
       return;
     }
     const sync = () => {
-      const anchor = fieldRefs.current.get(editorFieldKey);
+      const anchor =
+        selectedDesignerNode?.kind === "group-frame"
+          ? frameRefs.current.get(anchorKey)
+          : fieldRefs.current.get(anchorKey);
       if (!anchor) return;
       const rect = anchor.getBoundingClientRect();
-      const width = Math.min(window.innerWidth - 24, editorMode === "expanded" ? 420 : 360);
-      const estimatedHeight = editorMode === "expanded" ? 320 : 220;
+      const width = Math.min(window.innerWidth - 24, selectedDesignerNode?.kind === "group-frame" ? 340 : 400);
+      const estimatedHeight = selectedDesignerNode?.kind === "group-frame" ? 240 : 360;
       let top = rect.bottom + 10;
       if (top + estimatedHeight > window.innerHeight - 12) {
         top = Math.max(12, rect.top - estimatedHeight - 10);
       }
       let left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
-
-      // Collision guard against the right-docked InlineDesigner panel (width ~420px + margins)
-      const collisionBoundary = window.innerWidth - 452;
-      if (left > collisionBoundary - width) {
-        left = Math.max(12, Math.min(left, collisionBoundary - width));
-      }
 
       setOverlayStyle({ position: "fixed", top, left, width, zIndex: 70 });
     };
@@ -821,47 +821,38 @@ export function EntityMask({
       window.removeEventListener("scroll", sync, true);
       window.removeEventListener("resize", sync);
     };
-  }, [editorFieldKey, editorMode, isDesignMode, selectedFieldKey, fields.length]); // Removed form.state.values and overlayStyle to prevent infinite loops
+  }, [isDesignMode, selectedDesignerNode?.id, selectedDesignerNode?.kind]);
 
   useEffect(() => {
-    if (!editorFieldKey) return;
+    if (!selectedDesignerNode) return;
     const handler = (event: MouseEvent) => {
       const target = event.target as Node;
       if (overlayRef.current?.contains(target)) return;
-      const anchor = fieldRefs.current.get(editorFieldKey);
+      const anchor =
+        selectedDesignerNode.kind === "group-frame"
+          ? frameRefs.current.get(selectedDesignerNode.id)
+          : fieldRefs.current.get(selectedDesignerNode.id);
       if (anchor?.contains(target)) return;
-      setEditorFieldKey(null);
-      setEditorMode("compact");
+      selectDesignerNodes("triview-detail", [], entityName);
+      setFocus({
+        area: "designer",
+        entity: entityName,
+        recordId: recordId ?? null,
+        mode: mode ?? (recordId ? "edit" : null),
+        field: null,
+      });
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [editorFieldKey]);
-
-  useEffect(() => {
-    if (!editorFieldKey) return;
-    const handler = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      setEditorFieldKey(null);
-      setEditorMode("compact");
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [editorFieldKey]);
+  }, [entityName, mode, recordId, selectDesignerNodes, selectedDesignerNode, setFocus]);
 
   const setFieldRef = useCallback((key: string, node: HTMLDivElement | null) => {
     fieldRefs.current.set(key, node);
   }, []);
 
-  const openFieldEditor = useCallback(
-    (fieldKey: string, mode: "compact" | "expanded" = "compact") => {
-      selectDesignerField(fieldKey);
-      setEditorFieldKey(fieldKey);
-      setEditorMode(mode);
-    },
-    [selectDesignerField],
-  );
+  const setFrameRef = useCallback((key: string, node: HTMLElement | null) => {
+    frameRefs.current.set(key, node);
+  }, []);
 
   const cycleLabelTone = (current: FieldDesignConfig["labelTone"] | undefined) => {
     const order: FieldDesignConfig["labelTone"][] = ["default", "muted", "accent", "danger"];
@@ -961,6 +952,7 @@ export function EntityMask({
       moveField,
       moveFieldToEnd,
       moveFieldToFrame,
+      visibleFieldInLiveView,
     ],
   );
 
@@ -1015,7 +1007,7 @@ export function EntityMask({
   }
 
   const renderFieldCard = (field: FieldDef) => {
-    const isSelected = selectedDesignerFieldKey === field.key;
+    const isSelected = selectedDesignerField?.key === field.key;
     const designerConfig = designerFieldConfigs.get(field.key);
     const visibilityChecked = designerConfig?.visible ?? field.visible !== false;
     const hiddenClass = isDesignMode && !visibilityChecked ? "opacity-55" : "";
@@ -1106,19 +1098,15 @@ export function EntityMask({
               }
               onDragLeave={isDesignMode ? handleDragLeave(field.key) : undefined}
               onDrop={isDesignMode ? handleFieldDrop(field.key) : undefined}
-              onClick={isDesignMode ? () => openFieldEditor(field.key, "compact") : undefined}
-              onDoubleClick={
-                isDesignMode ? () => openFieldEditor(field.key, "expanded") : undefined
-              }
-              onFocusCapture={
-                isDesignMode ? () => openFieldEditor(field.key, "compact") : undefined
-              }
+              onClick={isDesignMode ? () => selectDesignerNode(field.key) : undefined}
+              onDoubleClick={isDesignMode ? () => selectDesignerNode(field.key) : undefined}
+              onFocusCapture={isDesignMode ? () => selectDesignerNode(field.key) : undefined}
               onKeyDown={
                 isDesignMode
                   ? (e) => {
                       if (e.key !== "Enter" && e.key !== " ") return;
                       e.preventDefault();
-                      openFieldEditor(field.key, "expanded");
+                      selectDesignerNode(field.key);
                     }
                   : undefined
               }
@@ -1180,9 +1168,7 @@ export function EntityMask({
                   <button
                     type="button"
                     tabIndex={-1}
-                    onClick={
-                      isDesignMode ? () => openFieldEditor(field.key, "expanded") : undefined
-                    }
+                    onClick={isDesignMode ? () => selectDesignerNode(field.key) : undefined}
                     className={cn("truncate text-left", getFieldLabelClasses(field))}
                   >
                     {fieldLabel(field)}
@@ -1268,6 +1254,7 @@ export function EntityMask({
           return (
             <fieldset
               key={group.frameId}
+              ref={(node) => setFrameRef(group.frameId, node)}
               onDragOver={
                 isDesignMode
                   ? (event) => {
@@ -1298,6 +1285,7 @@ export function EntityMask({
         return (
           <section
             key={group.frameId}
+            ref={(node) => setFrameRef(group.frameId, node)}
             onDragOver={
               isDesignMode
                 ? (event) => {
@@ -1337,16 +1325,18 @@ export function EntityMask({
     </div>
   );
 
-  const editorField = editorFieldKey ? (fieldByKey.get(editorFieldKey) ?? null) : null;
-  const editorConfig = editorFieldKey ? (designerFieldConfigs.get(editorFieldKey) ?? null) : null;
+  const editorField = selectedDesignerField;
+  const editorFieldKey = editorField?.key ?? null;
+  const editorMode = "compact" as const;
+  const editorConfig = editorField ? (designerFieldConfigs.get(editorField.key) ?? null) : null;
   const editorValuePath = editorField?.jsonPath ?? editorField?.key ?? editorFieldKey;
   const editorIsJsonb = !!editorField?.jsonPath && editorField.jsonPath !== editorField.key;
-  const editorFrameId = editorFieldKey
-    ? (delta.fieldConfigs.find((config) => config.key === editorFieldKey)?.frameKey ??
-      fieldFrameByKey.get(editorFieldKey) ??
+  const editorFrameId = editorField
+    ? (delta.fieldConfigs.find((config) => config.key === editorField.key)?.frameKey ??
+      fieldFrameByKey.get(editorField.key) ??
       frameNodes[0]?.id ??
       "frame:main")
-    : (frameNodes[0]?.id ?? "frame:main");
+    : (selectedDesignerFrame?.id ?? frameNodes[0]?.id ?? "frame:main");
   const editorFrameLabel =
     frameNodes.find((frame) => frame.id === editorFrameId)?.label ||
     (editorFrameId === "frame:main" || editorFrameId === "default"
@@ -1391,12 +1381,9 @@ export function EntityMask({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setEditorFieldKey(null);
-                  setEditorMode("compact");
-                }}
+                onClick={() => void closeDesignMode()}
                 className="grid size-7 shrink-0 place-items-center rounded-full border border-hairline transition-colors hover:border-hairline-input hover:text-ink"
-                title="Close field editor"
+                title="Close designer"
               >
                 <PlusIcon className="size-3.5 rotate-45" />
               </button>
@@ -1682,6 +1669,96 @@ export function EntityMask({
         )
       : null;
 
+  const frameOverlay =
+    isDesignMode && selectedDesignerFrame && overlayStyle && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={overlayRef}
+            className="pointer-events-auto rounded-2xl border border-hairline bg-canvas shadow-[0_24px_48px_rgba(13,37,61,0.18)]"
+            style={overlayStyle}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-hairline bg-canvas-soft px-3 py-2.5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="truncate text-[13px] font-semibold text-ink">
+                    {selectedDesignerFrame.label}
+                  </div>
+                  <span className="text-ink-muted rounded-full border border-hairline bg-canvas px-1.5 py-0.5 font-mono text-[9px]">
+                    {selectedDesignerFrame.id}
+                  </span>
+                </div>
+                <div className="text-ink-muted mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+                  <span className="rounded-full border border-hairline bg-canvas px-1.5 py-0.5">
+                    frame
+                  </span>
+                  <span className="rounded-full border border-hairline bg-canvas px-1.5 py-0.5">
+                    {groupedFields.find((group) => group.frameId === selectedDesignerFrame.id)
+                      ?.fields.length ?? 0} field(s)
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void closeDesignMode()}
+                className="grid size-7 shrink-0 place-items-center rounded-full border border-hairline transition-colors hover:border-hairline-input hover:text-ink"
+                title="Close designer"
+              >
+                <PlusIcon className="size-3.5 rotate-45" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-ink-muted text-[10px] font-semibold tracking-wide uppercase">
+                  Frame name
+                </span>
+                <input
+                  type="text"
+                  value={selectedDesignerFrame.label}
+                  onChange={(e) => updateFrameLabel(selectedDesignerFrame.id, e.target.value)}
+                  className="h-7 rounded-md border border-hairline bg-canvas px-2 text-[12px] text-ink outline-none"
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => addFieldDraft("New field", selectedDesignerFrame.id)}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-dashed border-hairline px-2 text-[11px] transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  + Field
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addFrameDraft()}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-dashed border-hairline px-2 text-[11px] transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  + Frame
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => removeFrameDraft(selectedDesignerFrame.id)}
+                  className="inline-flex h-7 items-center justify-center rounded-full border border-hairline px-2 text-[11px] text-destructive transition-colors hover:border-destructive/35 hover:bg-destructive/5"
+                >
+                  Remove frame
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectDesignerNode(selectedDesignerFrame.id)}
+                  className="text-ink-muted inline-flex h-7 items-center justify-center rounded-full border border-hairline px-2 text-[11px] transition-colors hover:border-primary/35 hover:text-primary"
+                >
+                  Keep selected
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   const childSectionNode = hasChildContent ? (
     <form.Subscribe selector={(state) => state.values}>
       {(values) => (
@@ -1729,8 +1806,11 @@ export function EntityMask({
       <div ref={formRef} className={cn("p-4", className)}>
         {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
         <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
+        {preFieldsSection}
         {fieldsGrid}
+        {postFieldsSection}
         {editorOverlay}
+        {frameOverlay}
         {childSectionNode}
         {footer}
       </div>
@@ -1748,8 +1828,11 @@ export function EntityMask({
                 <span className="text-[12px] text-destructive/80">{globalError}</span>
               </div>
             )}
+            {preFieldsSection}
             {fieldsGrid}
+            {postFieldsSection}
             {editorOverlay}
+            {frameOverlay}
           </div>
           <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
             <form.Subscribe selector={(state) => state.values}>
@@ -1769,8 +1852,11 @@ export function EntityMask({
       <div ref={formRef} className={cn("overflow-auto p-4", className)}>
         {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
         <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
+        {preFieldsSection}
         {fieldsGrid}
+        {postFieldsSection}
         {editorOverlay}
+        {frameOverlay}
         {childSectionNode}
         {footer}
       </div>
@@ -1780,8 +1866,11 @@ export function EntityMask({
       <div ref={formRef} className={cn("mx-auto my-8 max-w-2xl", shellClassName, className)}>
         {title && <h2 className="mb-1 text-[18px] font-light text-ink">{title}</h2>}
         <p className="mb-6 text-[13px] text-ink-mute">{t("form.requiredHint")}</p>
+        {preFieldsSection}
         {fieldsGrid}
+        {postFieldsSection}
         {editorOverlay}
+        {frameOverlay}
         {childSectionNode}
         {footer}
       </div>
@@ -1791,7 +1880,6 @@ export function EntityMask({
   return (
     <>
       {renderedContent}
-      {isDesignMode && <InlineDesigner />}
     </>
   );
 }

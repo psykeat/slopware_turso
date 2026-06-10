@@ -41,7 +41,10 @@ export interface EmailProviderAdapter {
     credentialsEncrypted: string,
     cursor?: string | null,
   ): Promise<IncrementalSyncResult>;
-  renewWatch(credentialsEncrypted: string, callbackUrl: string): Promise<{ expiresAt: Date }>;
+  renewWatch(
+    credentialsEncrypted: string,
+    callbackUrl: string,
+  ): Promise<{ expiresAt: Date; subscriptionId?: string | null; channelToken?: string | null }>;
   createDraft(credentialsEncrypted: string, draft: EmailDraftInput): Promise<ProviderDraftResult>;
   sendDraft(credentialsEncrypted: string, providerDraftId: string): Promise<ProviderSendResult>;
   sendMessage(credentialsEncrypted: string, draft: EmailDraftInput): Promise<ProviderSendResult>;

@@ -20,6 +20,15 @@ export interface InlineEditGridProps {
   columns: InlineColumnDef[];
   className?: string;
   onRowSelect?: (row: Record<string, any> | null) => void;
+  labels?: Partial<{
+    add: string;
+    edit: string;
+    save: string;
+    cancel: string;
+    delete: string;
+    empty: string;
+    records: (count: number) => string;
+  }>;
 }
 
 const NEW_ROW_ID = "__new__";
@@ -31,6 +40,7 @@ export function InlineEditGrid({
   columns,
   className,
   onRowSelect,
+  labels,
 }: InlineEditGridProps) {
   const queryClient = useQueryClient();
   const parentKeySignature = JSON.stringify(parentKey);
@@ -121,20 +131,28 @@ export function InlineEditGrid({
   }, [editingId]);
 
   const allRows = editingId === NEW_ROW_ID ? [...rows, { [keyColumn]: NEW_ROW_ID }] : rows;
+  const addLabel = labels?.add ?? "Add";
+  const editLabel = labels?.edit ?? "Edit";
+  const saveLabel = labels?.save ?? "Save";
+  const cancelLabel = labels?.cancel ?? "Cancel";
+  const deleteLabel = labels?.delete ?? "Delete";
+  const emptyLabel = labels?.empty ?? "No records yet.";
+  const recordCountLabel =
+    rows.length > 0
+      ? labels?.records?.(rows.length) ?? `${rows.length} record${rows.length !== 1 ? "s" : ""}`
+      : "";
 
   return (
     <div className={cn("flex h-full flex-col", className)}>
       <div className="flex shrink-0 items-center justify-between border-b border-hairline px-3 py-1.5">
-        <span className="text-[11px] font-medium text-ink-mute">
-          {rows.length > 0 ? `${rows.length} record${rows.length !== 1 ? "s" : ""}` : ""}
-        </span>
+        <span className="text-[11px] font-medium text-ink-mute">{recordCountLabel}</span>
         <button
           onClick={startNew}
           disabled={editingId !== null}
           className="hover:bg-surface-hover flex h-6 items-center gap-1 rounded px-2 text-[12px] text-ink-secondary transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
         >
           <PlusIcon className="size-3" />
-          Add
+          {addLabel}
         </button>
       </div>
 
@@ -161,7 +179,7 @@ export function InlineEditGrid({
                   colSpan={columns.length + 1}
                   className="py-10 text-center text-[13px] text-ink-mute"
                 >
-                  No records yet.
+                  {emptyLabel}
                 </td>
               </tr>
             )}
@@ -227,7 +245,7 @@ export function InlineEditGrid({
                           }}
                           disabled={saveMutation.isPending}
                           className="flex size-6 items-center justify-center rounded text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
-                          title="Save"
+                          title={saveLabel}
                         >
                           <CheckIcon className="size-3.5" />
                         </button>
@@ -237,7 +255,7 @@ export function InlineEditGrid({
                             cancelEdit();
                           }}
                           className="hover:bg-surface-hover flex size-6 items-center justify-center rounded text-ink-mute transition-colors hover:text-ink"
-                          title="Cancel"
+                          title={cancelLabel}
                         >
                           <XIcon className="size-3.5" />
                         </button>
@@ -250,7 +268,7 @@ export function InlineEditGrid({
                             startEdit(row);
                           }}
                           className="hover:bg-surface-hover flex size-6 items-center justify-center rounded text-ink-mute transition-colors hover:text-ink"
-                          title="Edit"
+                          title={editLabel}
                         >
                           <PencilIcon className="size-3" />
                         </button>
@@ -261,7 +279,7 @@ export function InlineEditGrid({
                           }}
                           disabled={deleteMutation.isPending}
                           className="flex size-6 items-center justify-center rounded text-ink-mute transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                          title="Delete"
+                          title={deleteLabel}
                         >
                           <Trash2Icon className="size-3" />
                         </button>

@@ -14,7 +14,7 @@ export default function EditorMenu({ children, open, onOpenChange }: EditorMenuP
   useEffect(() => {
     if (!editor) return;
     if (!open) removeAIHighlight(editor);
-  }, [open]);
+  }, [open, editor]);
 
   return (
     <EditorBubble

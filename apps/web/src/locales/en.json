@@ -417,10 +417,74 @@
       "openItems": "Open items",
       "no": "No.",
       "company": "Company",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "name": "Name",
+      "street": "Street",
+      "zip": "ZIP",
       "city": "City",
       "country": "Country",
       "type": "Type",
-      "segment": "Segment"
+      "segment": "Segment",
+      "date": "Date",
+      "total": "Total",
+      "status": "Status",
+      "default": "Default",
+      "iban": "IBAN",
+      "bic": "BIC",
+      "bank": "Bank"
+    },
+    "contacts": {
+      "title": "Contacts",
+      "noteText": "Note text",
+      "noteTitle": "Contact note",
+      "selectContact": "Select a contact",
+      "contactFallback": "Contact",
+      "notePlaceholder": "Select a contact to edit the note",
+      "empty": "No contacts yet.",
+      "emptyTitle": "No contacts yet.",
+      "emptySubtitle": "Open the address edit mask (F2) to add contacts.",
+      "records_one": "{{count}} contact",
+      "records_other": "{{count}} contacts",
+      "add": "Add",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "Email",
+      "phoneMobile": "Mobile",
+      "roleFunction": "Role",
+      "primary": "Primary"
+    },
+    "langtexts": {
+      "note": "Note text",
+      "warning": "Warning text",
+      "body": "Lang text"
+    },
+    "sections": {
+      "deliveryAddresses": "Delivery addresses",
+      "bankAccounts": "Bank accounts"
+    },
+    "dialog": {
+      "newAddress": "New address"
+    },
+    "deliveryAddresses": {
+      "emptyTitle": "No delivery addresses yet.",
+      "emptySubtitle": "Open the address edit mask (F2) to add delivery addresses."
+    },
+    "relatedDocuments": {
+      "emptyTitle": "No related documents.",
+      "emptySubtitle": "Documents linked to this address appear here."
+    },
+    "openItems": {
+      "emptyTitle": "No open items.",
+      "emptySubtitle": "Unpaid invoices appear here."
+    },
+    "addressList": {
+      "emptyTitle": "No addresses yet.",
+      "emptySubtitle": "Create the first address in this category."
     }
   },
   "articleView": {

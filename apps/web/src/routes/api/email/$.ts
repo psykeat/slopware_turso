@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { auth } from "@repo/auth/auth";
 import { EmailAccountService } from "@repo/db/services/email/account-service";
 import { EmailDocumentService } from "@repo/db/services/email/document-service";
+import { EmailJobService } from "@repo/db/services/email/job-service";
 import { EmailSendService } from "@repo/db/services/email/send-service";
+import { EmailSubscriptionService } from "@repo/db/services/email/subscription-service";
 import { EmailSyncService } from "@repo/db/services/email/sync-service";
 import { EmailTemplateService } from "@repo/db/services/email/template-service";
 import type { EmailDraftInput, EmailJobType, EmailProvider } from "@repo/db/services/email/types";
@@ -85,6 +87,7 @@ async function withEmailContext(
   const url = new URL(request.url);
   const publicSegments = url.pathname.split("/").filter(Boolean).slice(2);
   if (publicSegments[0] === "webhooks") return await handleWebhook(request, publicSegments);
+  if (publicSegments[0] === "maintenance") return await handleMaintenance(request);
 
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) return new Response("Unauthorized", { status: 401 });
@@ -130,6 +133,69 @@ async function handleWebhook(request: Request, segments: string[]) {
     }
     throw error;
   }
+}
+
+const BACKSTOP_TIER_INTERVALS: Record<string, number> = {
+  warm: 30,
+  cold: 360,
+  dormant: 1440,
+};
+
+async function handleMaintenance(request: Request) {
+  if (request.method !== "POST") return jsonError(405, "Method Not Allowed");
+
+  const configuredToken = process.env.EMAIL_MAINTENANCE_TOKEN;
+  if (!configuredToken) return jsonError(501, "Maintenance token is not configured");
+
+  const providedToken = request.headers.get("x-maintenance-token");
+  if (!providedToken) return jsonError(401, "Missing x-maintenance-token header");
+
+  const left = Buffer.from(providedToken);
+  const right = Buffer.from(configuredToken);
+  if (left.length !== right.length || !timingSafeEqual(left, right)) {
+    return jsonError(401, "Invalid maintenance token");
+  }
+
+  // 1. Reap stuck jobs (processing for > 10 min)
+  const reaped = await EmailJobService.reaperRun(10);
+
+  // 2. Subscription renewals using provider-specific lead times
+  const renewalsDue = await EmailSubscriptionService.getSubscriptionsDueForRenewal();
+  const renewalJobs: unknown[] = [];
+  for (const sub of renewalsDue) {
+    const job = await new EmailJobService(sub.tenantId).enqueue({
+      jobType: "watch_renewal",
+      emailAccountId: sub.emailAccountId,
+      idempotencyKey: `watch_renewal:${sub.emailAccountId}:${sub.resource}:maintenance`,
+      payload: { resource: sub.resource, subscriptionId: sub.providerSubscriptionId },
+      priority: 2,
+    });
+    if (job) renewalJobs.push(job);
+  }
+
+  // 3. Backstop syncs for warm/cold/dormant accounts (and high-priority hot accounts)
+  const backstopAccounts =
+    await EmailSubscriptionService.getAccountsDueForBackstopSync(BACKSTOP_TIER_INTERVALS);
+  const backstopJobs: unknown[] = [];
+  for (const account of backstopAccounts) {
+    const priority =
+      account.syncPriority === "high" ? 1 : account.activityTier === "warm" ? 2 : 3;
+    const job = await new EmailJobService(account.tenantId).enqueue({
+      jobType: "incremental_sync",
+      emailAccountId: account.emailAccountId,
+      idempotencyKey: `backstop:${account.emailAccountId}:mailbox:maintenance`,
+      payload: { scope: "mailbox", reason: "maintenance_backstop" },
+      priority,
+    });
+    if (job) backstopJobs.push(job);
+  }
+
+  return json({
+    ok: true,
+    reaped,
+    renewalJobsQueued: renewalJobs.length,
+    backstopJobsQueued: backstopJobs.length,
+  });
 }
 
 async function readBody(

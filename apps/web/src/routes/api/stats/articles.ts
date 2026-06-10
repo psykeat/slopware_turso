@@ -37,8 +37,10 @@ export const Route = createFileRoute("/api/stats/articles")({
               WHERE a.tenant_id = ${tenantId}::uuid
                 AND a.archived_at IS NULL
                 AND NOT EXISTS (
-                  SELECT 1 FROM price_list_item pli
-                  WHERE pli.tenant_id = ${tenantId}::uuid AND pli.article_id = a.article_id
+                  SELECT 1
+                  FROM price_list_item pli
+                  JOIN article_variant av ON pli.variant_id = av.variant_id
+                  WHERE pli.tenant_id = ${tenantId}::uuid AND av.article_id = a.article_id
                 )`,
         )) as any[];
 

@@ -22,6 +22,10 @@ import {
 } from "../schema/app.schema";
 import * as schema from "../schema/index";
 import { AIDiscoveryService } from "./ai-discovery";
+import {
+  archiveArticleVariantsInTransaction,
+  generateArticleVariantsInTransaction,
+} from "./article-variant-generator";
 
 // Encryption secret helper matching slopware configuration
 const ENCRYPTION_KEY_HEX = process.env.ENCRYPTION_SECRET ?? "";
@@ -941,6 +945,26 @@ ${JSON.stringify(commands, null, 2)}
               }
 
               stepResults.set(stepIndex, payload.emailThreadId);
+            } else if (step.commandKey === "generateVariants") {
+              if (!payload.articleId) {
+                throw new Error("generateVariants requires articleId");
+              }
+              await generateArticleVariantsInTransaction(tx, params.tenantId, payload.articleId);
+              stepResults.set(stepIndex, payload.articleId);
+            } else if (step.commandKey === "archiveVariants") {
+              if (!payload.articleId) {
+                throw new Error("archiveVariants requires articleId");
+              }
+              const variantIds: string[] | undefined = Array.isArray(payload.variantIds)
+                ? payload.variantIds
+                : undefined;
+              await archiveArticleVariantsInTransaction(
+                tx,
+                params.tenantId,
+                payload.articleId,
+                variantIds,
+              );
+              stepResults.set(stepIndex, payload.articleId);
             } else {
               // Standard domain commands that might fall outside simple synchronous writes
               // (e.g. calling an external service) are scheduled for asynchronous job execution

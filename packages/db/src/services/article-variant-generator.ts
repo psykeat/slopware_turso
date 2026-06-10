@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "../index";
 import {
@@ -287,5 +287,58 @@ export async function generateArticleVariants(
 ): Promise<GenerateArticleVariantsResult> {
   return await db.transaction(async (tx) =>
     generateArticleVariantsInTransaction(tx, tenantId, articleId),
+  );
+}
+
+export type ArchiveArticleVariantsResult = {
+  archivedVariants: number;
+};
+
+export async function archiveArticleVariantsInTransaction(
+  tx: VariantTx,
+  tenantId: string,
+  articleId: string,
+  variantIds?: string[],
+): Promise<ArchiveArticleVariantsResult> {
+  const baseCondition = and(
+    eq(articleVariant.tenantId, tenantId),
+    eq(articleVariant.articleId, articleId),
+  );
+
+  const whereCondition =
+    variantIds && variantIds.length > 0
+      ? and(baseCondition, inArray(articleVariant.variantId, variantIds))
+      : baseCondition;
+
+  const updatedVariants = await tx
+    .update(articleVariant)
+    .set({ isActive: false })
+    .where(whereCondition)
+    .returning({ variantId: articleVariant.variantId });
+
+  const updatedVariantIds = updatedVariants.map((v) => v.variantId);
+
+  if (updatedVariantIds.length > 0) {
+    await tx
+      .update(inventoryItem)
+      .set({ tracked: false })
+      .where(
+        and(
+          eq(inventoryItem.tenantId, tenantId),
+          inArray(inventoryItem.variantId, updatedVariantIds),
+        ),
+      );
+  }
+
+  return { archivedVariants: updatedVariants.length };
+}
+
+export async function archiveArticleVariants(
+  tenantId: string,
+  articleId: string,
+  variantIds?: string[],
+): Promise<ArchiveArticleVariantsResult> {
+  return await db.transaction(async (tx) =>
+    archiveArticleVariantsInTransaction(tx, tenantId, articleId, variantIds),
   );
 }

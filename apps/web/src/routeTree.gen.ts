@@ -79,6 +79,7 @@ import { Route as ApiArticlesArticleIdImagesRouteImport } from './routes/api/art
 import { Route as ApiArticlesArticleIdGenerateVariantsRouteImport } from './routes/api/articles/$articleId/generate-variants'
 import { Route as ApiArticlesArticleIdBomRouteImport } from './routes/api/articles/$articleId/bom'
 import { Route as ApiArticlesArticleIdBatchesRouteImport } from './routes/api/articles/$articleId/batches'
+import { Route as ApiArticlesArticleIdArchiveVariantsRouteImport } from './routes/api/articles/$articleId/archive-variants'
 import { Route as ApiAdminLlmConfigTestRouteImport } from './routes/api/admin/llm-config.test'
 import { Route as ApiAdminDocumentGroupsIdRouteImport } from './routes/api/admin/document-groups/$id'
 import { Route as ApiAdminDataSplatRouteImport } from './routes/api/admin/data/$'
@@ -470,6 +471,12 @@ const ApiArticlesArticleIdBatchesRoute =
     path: '/api/articles/$articleId/batches',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiArticlesArticleIdArchiveVariantsRoute =
+  ApiArticlesArticleIdArchiveVariantsRouteImport.update({
+    id: '/api/articles/$articleId/archive-variants',
+    path: '/api/articles/$articleId/archive-variants',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAdminLlmConfigTestRoute = ApiAdminLlmConfigTestRouteImport.update({
   id: '/test',
   path: '/test',
@@ -632,6 +639,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
+  '/api/articles/$articleId/archive-variants': typeof ApiArticlesArticleIdArchiveVariantsRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
   '/api/articles/$articleId/generate-variants': typeof ApiArticlesArticleIdGenerateVariantsRoute
@@ -719,6 +727,7 @@ export interface FileRoutesByTo {
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
+  '/api/articles/$articleId/archive-variants': typeof ApiArticlesArticleIdArchiveVariantsRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
   '/api/articles/$articleId/generate-variants': typeof ApiArticlesArticleIdGenerateVariantsRoute
@@ -811,6 +820,7 @@ export interface FileRoutesById {
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
+  '/api/articles/$articleId/archive-variants': typeof ApiArticlesArticleIdArchiveVariantsRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
   '/api/articles/$articleId/generate-variants': typeof ApiArticlesArticleIdGenerateVariantsRoute
@@ -902,6 +912,7 @@ export interface FileRouteTypes {
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
+    | '/api/articles/$articleId/archive-variants'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
     | '/api/articles/$articleId/generate-variants'
@@ -989,6 +1000,7 @@ export interface FileRouteTypes {
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
+    | '/api/articles/$articleId/archive-variants'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
     | '/api/articles/$articleId/generate-variants'
@@ -1080,6 +1092,7 @@ export interface FileRouteTypes {
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
+    | '/api/articles/$articleId/archive-variants'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
     | '/api/articles/$articleId/generate-variants'
@@ -1154,6 +1167,7 @@ export interface RootRouteChildren {
   ApiStatsDashboardRoute: typeof ApiStatsDashboardRoute
   ApiAdminDataSplatRoute: typeof ApiAdminDataSplatRoute
   ApiAdminDocumentGroupsIdRoute: typeof ApiAdminDocumentGroupsIdRoute
+  ApiArticlesArticleIdArchiveVariantsRoute: typeof ApiArticlesArticleIdArchiveVariantsRoute
   ApiArticlesArticleIdBatchesRoute: typeof ApiArticlesArticleIdBatchesRoute
   ApiArticlesArticleIdBomRoute: typeof ApiArticlesArticleIdBomRouteWithChildren
   ApiArticlesArticleIdGenerateVariantsRoute: typeof ApiArticlesArticleIdGenerateVariantsRoute
@@ -1671,6 +1685,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiArticlesArticleIdBatchesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/articles/$articleId/archive-variants': {
+      id: '/api/articles/$articleId/archive-variants'
+      path: '/api/articles/$articleId/archive-variants'
+      fullPath: '/api/articles/$articleId/archive-variants'
+      preLoaderRoute: typeof ApiArticlesArticleIdArchiveVariantsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/llm-config/test': {
       id: '/api/admin/llm-config/test'
       path: '/test'
@@ -2057,6 +2078,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiStatsDashboardRoute: ApiStatsDashboardRoute,
   ApiAdminDataSplatRoute: ApiAdminDataSplatRoute,
   ApiAdminDocumentGroupsIdRoute: ApiAdminDocumentGroupsIdRoute,
+  ApiArticlesArticleIdArchiveVariantsRoute:
+    ApiArticlesArticleIdArchiveVariantsRoute,
   ApiArticlesArticleIdBatchesRoute: ApiArticlesArticleIdBatchesRoute,
   ApiArticlesArticleIdBomRoute: ApiArticlesArticleIdBomRouteWithChildren,
   ApiArticlesArticleIdGenerateVariantsRoute:

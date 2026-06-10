@@ -25,7 +25,6 @@ import {
   journalLine,
   accountDeterminationRule,
   unit,
-  inventoryItem,
 } from "../schema/app.schema";
 import { resolveFiscalPeriodId } from "./fiscal-period-generator";
 import { refreshStatisticsMVs } from "./statistics";
@@ -905,56 +904,6 @@ async function persistDocumentTotals(
   return totals;
 }
 
-async function ensureVariantInventoryItemId(
-  tx: any,
-  tenantId: string,
-  variantId: string,
-): Promise<string> {
-  const [row] = await tx
-    .select({ itemId: inventoryItem.itemId })
-    .from(inventoryItem)
-    .where(
-      and(
-        eq(inventoryItem.tenantId, tenantId),
-        eq(inventoryItem.variantId, variantId),
-      ),
-    )
-    .limit(1);
-
-  if (row?.itemId) {
-    return row.itemId;
-  }
-
-  const truth = await resolveVariantTruth(tx, tenantId, variantId);
-
-  await tx
-    .insert(inventoryItem)
-    .values({
-      tenantId,
-      variantId,
-      sku: truth.sku,
-      tracked: true,
-    })
-    .onConflictDoNothing();
-
-  const [created] = await tx
-    .select({ itemId: inventoryItem.itemId })
-    .from(inventoryItem)
-    .where(
-      and(
-        eq(inventoryItem.tenantId, tenantId),
-        eq(inventoryItem.variantId, variantId),
-      ),
-    )
-    .limit(1);
-
-  if (!created?.itemId) {
-    throw new Error(`Inventory item not found for variant ${variantId}`);
-  }
-
-  return created.itemId;
-}
-
 async function applyTrackingForSingleRow(
   tx: any,
   tenantId: string,
@@ -1615,10 +1564,6 @@ async function postStandardDocumentLine(
       target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
       set: balanceUpdate,
     });
-
-  const inventoryItemId = line.variantId
-    ? await ensureVariantInventoryItemId(tx, tenantId, line.variantId)
-    : "00000000-0000-0000-0000-000000000000";
 
   const trackingRowsToProcess = trackingRows.filter((r) => r.serialNo || r.serialNumberId || r.batchNo);
 
@@ -3153,8 +3098,6 @@ export class DocumentService {
             availableQty: sql`${inventoryBalance.onHandQty} + ${effectiveQty} - ${inventoryBalance.reservedQty}`,
           },
         });
-
-      const inventoryItemId = await ensureVariantInventoryItemId(tx, tenantId, line.variantId);
 
       await tx.insert(inventoryMovement).values({
         tenantId,

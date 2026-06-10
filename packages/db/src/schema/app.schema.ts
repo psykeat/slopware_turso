@@ -1707,7 +1707,6 @@ export const priceListItem = pgTable(
       .notNull()
       .references(() => priceList.priceListId),
     articleId: uuid("article_id")
-      .notNull()
       .references(() => article.articleId),
     // Pricing is variant-specific; articleId is retained only for compatibility with older imports.
     variantId: uuid("variant_id")
@@ -2295,6 +2294,8 @@ export const emailAccount = pgTable(
     lastSyncStatus: text("last_sync_status").notNull().default("idle"),
     lastSyncError: text("last_sync_error"),
     watchExpiresAt: timestamp("watch_expires_at", { withTimezone: true }),
+    activityTier: text("activity_tier").notNull().default("cold"),
+    lastUserActivityAt: timestamp("last_user_activity_at", { withTimezone: true }),
     archived: boolean("archived").notNull().default(false),
     grantedByUserId: text("granted_by_user_id").references(() => user.id),
     grantedScopes: jsonb("granted_scopes"),
@@ -2317,6 +2318,10 @@ export const emailAccount = pgTable(
     check(
       "chk_email_account_sync_status",
       sql`last_sync_status IN ('idle', 'queued', 'syncing', 'ok', 'error', 'recovery_required')`,
+    ),
+    check(
+      "chk_email_account_activity_tier",
+      sql`activity_tier IN ('hot', 'warm', 'cold', 'dormant')`,
     ),
   ],
 );
@@ -2612,6 +2617,92 @@ export const emailSyncState = pgTable(
     check(
       "chk_email_sync_state_status",
       sql`status IN ('idle', 'queued', 'syncing', 'ok', 'error', 'recovery_required')`,
+    ),
+  ],
+);
+
+export const emailJob = pgTable(
+  "email_job",
+  {
+    emailJobId: uuid("email_job_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id").references(() => emailAccount.emailAccountId),
+    jobType: text("job_type").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    status: text("status").notNull().default("queued"),
+    priority: integer("priority").notNull().default(2),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(5),
+    runAfter: timestamp("run_after", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_email_job_queue_claim").on(
+      table.tenantId,
+      table.status,
+      table.priority,
+      table.runAfter,
+      table.createdAt,
+    ),
+    index("idx_email_job_account").on(table.tenantId, table.emailAccountId),
+    unique("email_job_idempotency_unique").on(table.tenantId, table.idempotencyKey),
+    check(
+      "chk_email_job_type",
+      sql`job_type IN ('initial_sync', 'incremental_sync', 'watch_renewal', 'reconcile', 'send', 'fetch_attachment', 'sync_contacts')`,
+    ),
+    check("chk_email_job_status", sql`status IN ('queued', 'processing', 'done', 'failed')`),
+    check("chk_email_job_priority", sql`priority BETWEEN 1 AND 3`),
+  ],
+);
+
+export const emailSubscription = pgTable(
+  "email_subscription",
+  {
+    emailSubscriptionId: uuid("email_subscription_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    emailAccountId: uuid("email_account_id")
+      .notNull()
+      .references(() => emailAccount.emailAccountId),
+    resource: text("resource").notNull().default("mail"),
+    providerSubscriptionId: text("provider_subscription_id"),
+    channelToken: text("channel_token"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    renewedAt: timestamp("renewed_at", { withTimezone: true }),
+    status: text("status").notNull().default("active"),
+    renewalAttempts: integer("renewal_attempts").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("email_subscription_account_resource_unique").on(
+      table.tenantId,
+      table.emailAccountId,
+      table.resource,
+    ),
+    index("idx_email_subscription_expires").on(table.expiresAt),
+    index("idx_email_subscription_account").on(table.tenantId, table.emailAccountId),
+    check(
+      "chk_email_subscription_resource",
+      sql`resource IN ('mail', 'calendar', 'contacts')`,
+    ),
+    check(
+      "chk_email_subscription_status",
+      sql`status IN ('active', 'expired', 'renewal_pending', 'failed')`,
     ),
   ],
 );

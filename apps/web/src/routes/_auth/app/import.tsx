@@ -27,6 +27,8 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
+import { capability } from "#/server-fns/capabilities";
+
 export const Route = createFileRoute("/_auth/app/import")({
   component: ImportModule,
 });
@@ -170,14 +172,13 @@ function UploadModal({
   const mutation = useMutation({
     mutationFn: async () => {
       if (!file || !profileId || !connectorId) throw new Error("Please fill in all fields.");
-      const form = new FormData();
-      form.append("file", file);
-      form.append("profileId", profileId);
-      form.append("tenantConnectorId", connectorId);
-      form.append("delimiter", delimiter);
-      const res = await fetch("/api/import/upload", { method: "POST", body: form });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<{ batchId: string; rowCount: number; status: string }>;
+      const csvText = await file.text();
+      return capability("import.importBatch.upload")({
+        csvText,
+        profileId,
+        tenantConnectorId: connectorId,
+        delimiter,
+      });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["import", "batches"] });
@@ -324,11 +325,8 @@ function BatchDetailPanel({ batchId, profiles }: { batchId: string; profiles: Im
 
   const { data, isLoading } = useQuery<BatchDetail>({
     queryKey: ["import", "batch", batchId],
-    queryFn: async () => {
-      const res = await fetch(`/api/import/batches/${batchId}`);
-      if (!res.ok) throw new Error("Failed to fetch batch");
-      return res.json();
-    },
+    queryFn: async () =>
+      (await capability("import.importBatch.get")({ batchId })) as unknown as BatchDetail,
   });
 
   const profile = data ? profiles.find((p) => p.profileId === data.batch.profileId) : null;
@@ -336,8 +334,7 @@ function BatchDetailPanel({ batchId, profiles }: { batchId: string; profiles: Im
   const handleApprove = async () => {
     setIsBusy(true);
     try {
-      const res = await fetch(`/api/import/batches/${batchId}/approve`, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
+      await capability("import.importBatch.approve")({ batchId });
       queryClient.invalidateQueries({ queryKey: ["import", "batch", batchId] });
       queryClient.invalidateQueries({ queryKey: ["import", "batches"] });
       toast.success("Batch approved");
@@ -351,9 +348,7 @@ function BatchDetailPanel({ batchId, profiles }: { batchId: string; profiles: Im
   const handlePost = async () => {
     setIsBusy(true);
     try {
-      const res = await fetch(`/api/import/batches/${batchId}/post`, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
-      const result = (await res.json()) as { posted: number; failed: number };
+      const result = await capability("import.importBatch.post")({ batchId });
       queryClient.invalidateQueries({ queryKey: ["import", "batch", batchId] });
       queryClient.invalidateQueries({ queryKey: ["import", "batches"] });
       toast.success(
@@ -507,27 +502,27 @@ function ImportModule() {
   const { data: profiles = [] } = useQuery<ImportProfile[]>({
     queryKey: ["import", "profiles"],
     queryFn: async () => {
-      const res = await fetch("/api/import/profiles");
-      return res.ok ? res.json() : [];
+      const { items } = await capability("import.importProfile.list")({});
+      return items as unknown as ImportProfile[];
     },
   });
 
   const { data: connectors = [] } = useQuery<ImportConnector[]>({
     queryKey: ["import", "connectors"],
     queryFn: async () => {
-      const res = await fetch("/api/import/connectors");
-      return res.ok ? res.json() : [];
+      const { items } = await capability("import.tenantConnector.list")({});
+      return items as unknown as ImportConnector[];
     },
   });
 
   const { data: batches = [], isLoading } = useQuery<ImportBatch[]>({
     queryKey: ["import", "batches", filterProfileId, filterStatus],
     queryFn: async () => {
-      const p = new URLSearchParams();
-      if (filterProfileId !== "all") p.set("profileId", filterProfileId);
-      if (filterStatus !== "all") p.set("status", filterStatus);
-      const res = await fetch(`/api/import/batches?${p}`);
-      return res.ok ? res.json() : [];
+      const { items } = await capability("import.importBatch.list")({
+        ...(filterProfileId !== "all" ? { profileId: filterProfileId } : {}),
+        ...(filterStatus !== "all" ? { status: filterStatus } : {}),
+      });
+      return items as unknown as ImportBatch[];
     },
   });
 

@@ -15,6 +15,8 @@ import { PlusIcon, Trash2Icon, SaveIcon, ZapIcon } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
+import { capability } from "#/server-fns/capabilities";
+
 export const Route = createFileRoute("/_auth/app/settings/import-profiles")({
   component: ImportProfilesPage,
 });
@@ -86,16 +88,16 @@ function ImportProfilesView() {
   const { data: profiles = [], isLoading: isProfilesLoading } = useQuery<ImportProfile[]>({
     queryKey: ["import", "profiles"],
     queryFn: async () => {
-      const res = await fetch("/api/import/profiles");
-      return res.ok ? res.json() : [];
+      const { items } = await capability("import.importProfile.list")({});
+      return items as unknown as ImportProfile[];
     },
   });
 
   const { data: connectors = [] } = useQuery<ImportConnector[]>({
     queryKey: ["import", "connectors"],
     queryFn: async () => {
-      const res = await fetch("/api/import/connectors");
-      return res.ok ? res.json() : [];
+      const { items } = await capability("import.tenantConnector.list")({});
+      return items as unknown as ImportConnector[];
     },
   });
 
@@ -103,10 +105,12 @@ function ImportProfilesView() {
   const { data: serverMappings } = useQuery({
     queryKey: ["import", "mappings", selectedProfileId, selectedConnectorId],
     queryFn: async () => {
-      const res = await fetch(
-        `/api/import/profiles/${selectedProfileId}/mappings?connectorId=${selectedConnectorId}`,
-      );
-      return res.ok ? (res.json() as Promise<MappingRow[]>) : [];
+      if (!selectedProfileId || !selectedConnectorId) return [];
+      const { items } = await capability("import.importProfile.mappings")({
+        profileId: selectedProfileId,
+        tenantConnectorId: selectedConnectorId,
+      });
+      return items as unknown as MappingRow[];
     },
     enabled: !!selectedProfileId && !!selectedConnectorId,
   });
@@ -161,21 +165,14 @@ function ImportProfilesView() {
 
   // ── Mutations ──────────────────────────────────────────────────────────
   const createMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/import/profiles", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          slug: formSlug,
-          label: formLabel,
-          targetEntity: formTargetEntity,
-          targetCommandKey: formCommandKey,
-          requiresApproval: formRequiresApproval,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<ImportProfile>;
-    },
+    mutationFn: async () =>
+      (await capability("import.importProfile.create")({
+        slug: formSlug,
+        label: formLabel,
+        targetEntity: formTargetEntity,
+        targetCommandKey: formCommandKey,
+        requiresApproval: formRequiresApproval,
+      })) as unknown as ImportProfile,
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ["import", "profiles"] });
       loadProfile(created);
@@ -186,19 +183,17 @@ function ImportProfilesView() {
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/import/profiles/${selectedProfileId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      if (!selectedProfileId) throw new Error("No profile selected");
+      return (await capability("import.importProfile.update")({
+        profileId: selectedProfileId,
+        patch: {
           label: formLabel,
           targetEntity: formTargetEntity,
           targetCommandKey: formCommandKey,
           requiresApproval: formRequiresApproval,
           archived: formArchived,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<ImportProfile>;
+        },
+      })) as unknown as ImportProfile;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["import", "profiles"] });
@@ -209,16 +204,12 @@ function ImportProfilesView() {
 
   const saveMappingsMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/import/profiles/${selectedProfileId}/mappings`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          connectorId: selectedConnectorId,
-          rows: mappingRows.map(({ _localId: _l, ...rest }) => rest),
-        }),
+      if (!selectedProfileId) throw new Error("No profile selected");
+      return capability("import.importProfile.saveMappings")({
+        profileId: selectedProfileId,
+        tenantConnectorId: selectedConnectorId,
+        rows: mappingRows.map(({ _localId: _l, ...rest }) => rest),
       });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -231,13 +222,11 @@ function ImportProfilesView() {
 
   const activateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/import/profiles/${selectedProfileId}/activate`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ connectorId: selectedConnectorId }),
+      if (!selectedProfileId) throw new Error("No profile selected");
+      return capability("import.importProfile.activateMapping")({
+        profileId: selectedProfileId,
+        tenantConnectorId: selectedConnectorId,
       });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<{ versionId: string; versionNo: number }>;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["import", "profiles"] });

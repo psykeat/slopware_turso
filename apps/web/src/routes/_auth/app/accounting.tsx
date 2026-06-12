@@ -16,6 +16,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
+import { capability, CapabilityClientError } from "#/server-fns/capabilities";
+
 export const Route = createFileRoute("/_auth/app/accounting")({
   component: AccountingModule,
 });
@@ -74,9 +76,12 @@ function AccountingModule() {
   const { data: batches = [], isLoading } = useQuery<ExportBatch[]>({
     queryKey: ["accounting", "batches"],
     queryFn: async () => {
-      const res = await fetch("/api/accounting/batches");
-      if (!res.ok) return [];
-      return res.json();
+      try {
+        const items = await capability("accounting.accountingExportBatch.list")({});
+        return items as unknown as ExportBatch[];
+      } catch {
+        return [];
+      }
     },
   });
 
@@ -106,13 +111,10 @@ function AccountingModule() {
     setIsBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/accounting/batches", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ companyId: newCompanyId, fiscalPeriodId: newPeriodId }),
+      const data = await capability("accounting.accountingExportBatch.createBatch")({
+        companyId: newCompanyId,
+        fiscalPeriodId: newPeriodId,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Fehler beim Erstellen");
       await queryClient.invalidateQueries({ queryKey: ["accounting", "batches"] });
       setSelectedBatchId(data.batchId);
       setCreateDialog(false);
@@ -130,11 +132,9 @@ function AccountingModule() {
     setIsBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/accounting/batches/${selectedBatchId}/build`, {
-        method: "POST",
+      await capability("accounting.accountingExportBatch.buildRows")({
+        batchId: selectedBatchId,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Fehler beim Aufbauen");
       await queryClient.invalidateQueries({ queryKey: ["accounting", "batches"] });
     } catch (e: unknown) {
       setError((e as Error).message);
@@ -148,11 +148,9 @@ function AccountingModule() {
     setIsBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/accounting/batches/${selectedBatchId}/export`, {
-        method: "POST",
+      await capability("accounting.accountingExportBatch.markExported")({
+        batchId: selectedBatchId,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Fehler beim Exportieren");
       await queryClient.invalidateQueries({ queryKey: ["accounting", "batches"] });
     } catch (e: unknown) {
       setError((e as Error).message);
@@ -166,11 +164,9 @@ function AccountingModule() {
     setIsBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/accounting/batches/${selectedBatchId}/rebuild`, {
-        method: "POST",
+      await capability("accounting.accountingExportBatch.rebuild")({
+        batchId: selectedBatchId,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Fehler beim Neuaufbauen");
       await queryClient.invalidateQueries({ queryKey: ["accounting", "batches"] });
     } catch (e: unknown) {
       setError((e as Error).message);
@@ -179,9 +175,24 @@ function AccountingModule() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!selectedBatchId) return;
-    window.open(`/api/accounting/batches/${selectedBatchId}/csv`, "_blank");
+    try {
+      const csv = await capability("accounting.accountingExportBatch.csv")({
+        batchId: selectedBatchId,
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `accounting-export-${selectedBatchId}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setError(e instanceof CapabilityClientError ? e.message : "Fehler beim CSV-Export");
+    }
   };
 
   useEffect(() => {

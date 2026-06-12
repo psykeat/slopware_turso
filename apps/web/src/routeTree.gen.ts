@@ -29,10 +29,6 @@ import { Route as ApiSetupYearEndRouteImport } from './routes/api/setup/year-end
 import { Route as ApiSetupInitializeRouteImport } from './routes/api/setup/initialize'
 import { Route as ApiMetadataSplatRouteImport } from './routes/api/metadata/$'
 import { Route as ApiMeCompanyRouteImport } from './routes/api/me/company'
-import { Route as ApiImportUploadRouteImport } from './routes/api/import/upload'
-import { Route as ApiImportProfilesRouteImport } from './routes/api/import/profiles'
-import { Route as ApiImportConnectorsRouteImport } from './routes/api/import/connectors'
-import { Route as ApiImportBatchesRouteImport } from './routes/api/import/batches'
 import { Route as ApiFeedbackSubmitRouteImport } from './routes/api/feedback/submit'
 import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
 import { Route as ApiDeliveryAddressesSearchRouteImport } from './routes/api/delivery-addresses/search'
@@ -45,7 +41,6 @@ import { Route as ApiAiSplatRouteImport } from './routes/api/ai/$'
 import { Route as ApiAdminLlmConfigRouteImport } from './routes/api/admin/llm-config'
 import { Route as ApiAdminCyclesRouteImport } from './routes/api/admin/cycles'
 import { Route as ApiAddressesSearchRouteImport } from './routes/api/addresses/search'
-import { Route as ApiAccountingBatchesRouteImport } from './routes/api/accounting/batches'
 import { Route as AuthAppImportRouteImport } from './routes/_auth/app/import'
 import { Route as AuthAppEmailTemplatesRouteImport } from './routes/_auth/app/email-templates'
 import { Route as AuthAppEmailRouteImport } from './routes/_auth/app/email'
@@ -61,8 +56,6 @@ import { Route as ApiStoragePreviewSplatRouteImport } from './routes/api/storage
 import { Route as ApiStorageArticleImagesImageIdRouteImport } from './routes/api/storage/article-images/$imageId'
 import { Route as ApiStatsArticleArticleIdRouteImport } from './routes/api/stats/article/$articleId'
 import { Route as ApiStatsAddressAddressIdRouteImport } from './routes/api/stats/address/$addressId'
-import { Route as ApiImportProfilesProfileIdRouteImport } from './routes/api/import/profiles/$profileId'
-import { Route as ApiImportBatchesBatchIdRouteImport } from './routes/api/import/batches/$batchId'
 import { Route as ApiDocumentsDocumentIdPrintRouteImport } from './routes/api/documents/$documentId/print'
 import { Route as ApiDataTenantLlmConfigTestRouteImport } from './routes/api/data/tenantLlmConfig.test'
 import { Route as ApiCapabilitiesKeyExecuteRouteImport } from './routes/api/capabilities/$key/execute'
@@ -78,20 +71,11 @@ import { Route as ApiArticlesArticleIdApplyVariantTemplateRouteImport } from './
 import { Route as ApiAdminLlmConfigTestRouteImport } from './routes/api/admin/llm-config.test'
 import { Route as ApiAdminDocumentGroupsIdRouteImport } from './routes/api/admin/document-groups/$id'
 import { Route as ApiAdminDataSplatRouteImport } from './routes/api/admin/data/$'
-import { Route as ApiAccountingBatchesBatchIdRouteImport } from './routes/api/accounting/batches/$batchId'
 import { Route as AuthAppSettingsVariantTemplatesRouteImport } from './routes/_auth/app/settings/variant-templates'
 import { Route as AuthAppSettingsImportProfilesRouteImport } from './routes/_auth/app/settings/import-profiles'
 import { Route as AuthAppSettingsCyclesRouteImport } from './routes/_auth/app/settings/cycles'
 import { Route as AuthAppSettingsAccountRouteImport } from './routes/_auth/app/settings/account'
-import { Route as ApiImportProfilesProfileIdMappingsRouteImport } from './routes/api/import/profiles/$profileId/mappings'
-import { Route as ApiImportProfilesProfileIdActivateRouteImport } from './routes/api/import/profiles/$profileId/activate'
-import { Route as ApiImportBatchesBatchIdPostRouteImport } from './routes/api/import/batches/$batchId/post'
-import { Route as ApiImportBatchesBatchIdApproveRouteImport } from './routes/api/import/batches/$batchId/approve'
 import { Route as ApiArticlesArticleIdBomBomIdRouteImport } from './routes/api/articles/$articleId/bom/$bomId'
-import { Route as ApiAccountingBatchesBatchIdRebuildRouteImport } from './routes/api/accounting/batches/$batchId/rebuild'
-import { Route as ApiAccountingBatchesBatchIdExportRouteImport } from './routes/api/accounting/batches/$batchId/export'
-import { Route as ApiAccountingBatchesBatchIdCsvRouteImport } from './routes/api/accounting/batches/$batchId/csv'
-import { Route as ApiAccountingBatchesBatchIdBuildRouteImport } from './routes/api/accounting/batches/$batchId/build'
 
 const GuestRouteRoute = GuestRouteRouteImport.update({
   id: '/_guest',
@@ -192,26 +176,6 @@ const ApiMeCompanyRoute = ApiMeCompanyRouteImport.update({
   path: '/company',
   getParentRoute: () => ApiMeRoute,
 } as any)
-const ApiImportUploadRoute = ApiImportUploadRouteImport.update({
-  id: '/api/import/upload',
-  path: '/api/import/upload',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiImportProfilesRoute = ApiImportProfilesRouteImport.update({
-  id: '/api/import/profiles',
-  path: '/api/import/profiles',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiImportConnectorsRoute = ApiImportConnectorsRouteImport.update({
-  id: '/api/import/connectors',
-  path: '/api/import/connectors',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiImportBatchesRoute = ApiImportBatchesRouteImport.update({
-  id: '/api/import/batches',
-  path: '/api/import/batches',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiFeedbackSubmitRoute = ApiFeedbackSubmitRouteImport.update({
   id: '/api/feedback/submit',
   path: '/api/feedback/submit',
@@ -272,11 +236,6 @@ const ApiAdminCyclesRoute = ApiAdminCyclesRouteImport.update({
 const ApiAddressesSearchRoute = ApiAddressesSearchRouteImport.update({
   id: '/api/addresses/search',
   path: '/api/addresses/search',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAccountingBatchesRoute = ApiAccountingBatchesRouteImport.update({
-  id: '/api/accounting/batches',
-  path: '/api/accounting/batches',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthAppImportRoute = AuthAppImportRouteImport.update({
@@ -358,17 +317,6 @@ const ApiStatsAddressAddressIdRoute =
     path: '/api/stats/address/$addressId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiImportProfilesProfileIdRoute =
-  ApiImportProfilesProfileIdRouteImport.update({
-    id: '/$profileId',
-    path: '/$profileId',
-    getParentRoute: () => ApiImportProfilesRoute,
-  } as any)
-const ApiImportBatchesBatchIdRoute = ApiImportBatchesBatchIdRouteImport.update({
-  id: '/$batchId',
-  path: '/$batchId',
-  getParentRoute: () => ApiImportBatchesRoute,
-} as any)
 const ApiDocumentsDocumentIdPrintRoute =
   ApiDocumentsDocumentIdPrintRouteImport.update({
     id: '/api/documents/$documentId/print',
@@ -456,12 +404,6 @@ const ApiAdminDataSplatRoute = ApiAdminDataSplatRouteImport.update({
   path: '/api/admin/data/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAccountingBatchesBatchIdRoute =
-  ApiAccountingBatchesBatchIdRouteImport.update({
-    id: '/$batchId',
-    path: '/$batchId',
-    getParentRoute: () => ApiAccountingBatchesRoute,
-  } as any)
 const AuthAppSettingsVariantTemplatesRoute =
   AuthAppSettingsVariantTemplatesRouteImport.update({
     id: '/settings/variant-templates',
@@ -484,59 +426,11 @@ const AuthAppSettingsAccountRoute = AuthAppSettingsAccountRouteImport.update({
   path: '/settings/account',
   getParentRoute: () => AuthAppRouteRoute,
 } as any)
-const ApiImportProfilesProfileIdMappingsRoute =
-  ApiImportProfilesProfileIdMappingsRouteImport.update({
-    id: '/mappings',
-    path: '/mappings',
-    getParentRoute: () => ApiImportProfilesProfileIdRoute,
-  } as any)
-const ApiImportProfilesProfileIdActivateRoute =
-  ApiImportProfilesProfileIdActivateRouteImport.update({
-    id: '/activate',
-    path: '/activate',
-    getParentRoute: () => ApiImportProfilesProfileIdRoute,
-  } as any)
-const ApiImportBatchesBatchIdPostRoute =
-  ApiImportBatchesBatchIdPostRouteImport.update({
-    id: '/post',
-    path: '/post',
-    getParentRoute: () => ApiImportBatchesBatchIdRoute,
-  } as any)
-const ApiImportBatchesBatchIdApproveRoute =
-  ApiImportBatchesBatchIdApproveRouteImport.update({
-    id: '/approve',
-    path: '/approve',
-    getParentRoute: () => ApiImportBatchesBatchIdRoute,
-  } as any)
 const ApiArticlesArticleIdBomBomIdRoute =
   ApiArticlesArticleIdBomBomIdRouteImport.update({
     id: '/$bomId',
     path: '/$bomId',
     getParentRoute: () => ApiArticlesArticleIdBomRoute,
-  } as any)
-const ApiAccountingBatchesBatchIdRebuildRoute =
-  ApiAccountingBatchesBatchIdRebuildRouteImport.update({
-    id: '/rebuild',
-    path: '/rebuild',
-    getParentRoute: () => ApiAccountingBatchesBatchIdRoute,
-  } as any)
-const ApiAccountingBatchesBatchIdExportRoute =
-  ApiAccountingBatchesBatchIdExportRouteImport.update({
-    id: '/export',
-    path: '/export',
-    getParentRoute: () => ApiAccountingBatchesBatchIdRoute,
-  } as any)
-const ApiAccountingBatchesBatchIdCsvRoute =
-  ApiAccountingBatchesBatchIdCsvRouteImport.update({
-    id: '/csv',
-    path: '/csv',
-    getParentRoute: () => ApiAccountingBatchesBatchIdRoute,
-  } as any)
-const ApiAccountingBatchesBatchIdBuildRoute =
-  ApiAccountingBatchesBatchIdBuildRouteImport.update({
-    id: '/build',
-    path: '/build',
-    getParentRoute: () => ApiAccountingBatchesBatchIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -557,7 +451,6 @@ export interface FileRoutesByFullPath {
   '/app/email': typeof AuthAppEmailRoute
   '/app/email-templates': typeof AuthAppEmailTemplatesRoute
   '/app/import': typeof AuthAppImportRoute
-  '/api/accounting/batches': typeof ApiAccountingBatchesRouteWithChildren
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
@@ -570,10 +463,6 @@ export interface FileRoutesByFullPath {
   '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
-  '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
-  '/api/import/connectors': typeof ApiImportConnectorsRoute
-  '/api/import/profiles': typeof ApiImportProfilesRouteWithChildren
-  '/api/import/upload': typeof ApiImportUploadRoute
   '/api/me/company': typeof ApiMeCompanyRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/api/setup/initialize': typeof ApiSetupInitializeRoute
@@ -587,7 +476,6 @@ export interface FileRoutesByFullPath {
   '/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
   '/app/settings/import-profiles': typeof AuthAppSettingsImportProfilesRoute
   '/app/settings/variant-templates': typeof AuthAppSettingsVariantTemplatesRoute
-  '/api/accounting/batches/$batchId': typeof ApiAccountingBatchesBatchIdRouteWithChildren
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
@@ -603,8 +491,6 @@ export interface FileRoutesByFullPath {
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
   '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
-  '/api/import/batches/$batchId': typeof ApiImportBatchesBatchIdRouteWithChildren
-  '/api/import/profiles/$profileId': typeof ApiImportProfilesProfileIdRouteWithChildren
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
@@ -612,15 +498,7 @@ export interface FileRoutesByFullPath {
   '/app/admin/': typeof AuthAppAdminIndexRoute
   '/app/settings/': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
-  '/api/accounting/batches/$batchId/build': typeof ApiAccountingBatchesBatchIdBuildRoute
-  '/api/accounting/batches/$batchId/csv': typeof ApiAccountingBatchesBatchIdCsvRoute
-  '/api/accounting/batches/$batchId/export': typeof ApiAccountingBatchesBatchIdExportRoute
-  '/api/accounting/batches/$batchId/rebuild': typeof ApiAccountingBatchesBatchIdRebuildRoute
   '/api/articles/$articleId/bom/$bomId': typeof ApiArticlesArticleIdBomBomIdRoute
-  '/api/import/batches/$batchId/approve': typeof ApiImportBatchesBatchIdApproveRoute
-  '/api/import/batches/$batchId/post': typeof ApiImportBatchesBatchIdPostRoute
-  '/api/import/profiles/$profileId/activate': typeof ApiImportProfilesProfileIdActivateRoute
-  '/api/import/profiles/$profileId/mappings': typeof ApiImportProfilesProfileIdMappingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -638,7 +516,6 @@ export interface FileRoutesByTo {
   '/app/email': typeof AuthAppEmailRoute
   '/app/email-templates': typeof AuthAppEmailTemplatesRoute
   '/app/import': typeof AuthAppImportRoute
-  '/api/accounting/batches': typeof ApiAccountingBatchesRouteWithChildren
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
@@ -651,10 +528,6 @@ export interface FileRoutesByTo {
   '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
-  '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
-  '/api/import/connectors': typeof ApiImportConnectorsRoute
-  '/api/import/profiles': typeof ApiImportProfilesRouteWithChildren
-  '/api/import/upload': typeof ApiImportUploadRoute
   '/api/me/company': typeof ApiMeCompanyRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/api/setup/initialize': typeof ApiSetupInitializeRoute
@@ -668,7 +541,6 @@ export interface FileRoutesByTo {
   '/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
   '/app/settings/import-profiles': typeof AuthAppSettingsImportProfilesRoute
   '/app/settings/variant-templates': typeof AuthAppSettingsVariantTemplatesRoute
-  '/api/accounting/batches/$batchId': typeof ApiAccountingBatchesBatchIdRouteWithChildren
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
@@ -684,8 +556,6 @@ export interface FileRoutesByTo {
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
   '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
-  '/api/import/batches/$batchId': typeof ApiImportBatchesBatchIdRouteWithChildren
-  '/api/import/profiles/$profileId': typeof ApiImportProfilesProfileIdRouteWithChildren
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
@@ -693,15 +563,7 @@ export interface FileRoutesByTo {
   '/app/admin': typeof AuthAppAdminIndexRoute
   '/app/settings': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups': typeof ApiAdminDocumentGroupsIndexRoute
-  '/api/accounting/batches/$batchId/build': typeof ApiAccountingBatchesBatchIdBuildRoute
-  '/api/accounting/batches/$batchId/csv': typeof ApiAccountingBatchesBatchIdCsvRoute
-  '/api/accounting/batches/$batchId/export': typeof ApiAccountingBatchesBatchIdExportRoute
-  '/api/accounting/batches/$batchId/rebuild': typeof ApiAccountingBatchesBatchIdRebuildRoute
   '/api/articles/$articleId/bom/$bomId': typeof ApiArticlesArticleIdBomBomIdRoute
-  '/api/import/batches/$batchId/approve': typeof ApiImportBatchesBatchIdApproveRoute
-  '/api/import/batches/$batchId/post': typeof ApiImportBatchesBatchIdPostRoute
-  '/api/import/profiles/$profileId/activate': typeof ApiImportProfilesProfileIdActivateRoute
-  '/api/import/profiles/$profileId/mappings': typeof ApiImportProfilesProfileIdMappingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -724,7 +586,6 @@ export interface FileRoutesById {
   '/_auth/app/email': typeof AuthAppEmailRoute
   '/_auth/app/email-templates': typeof AuthAppEmailTemplatesRoute
   '/_auth/app/import': typeof AuthAppImportRoute
-  '/api/accounting/batches': typeof ApiAccountingBatchesRouteWithChildren
   '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
@@ -737,10 +598,6 @@ export interface FileRoutesById {
   '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
-  '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
-  '/api/import/connectors': typeof ApiImportConnectorsRoute
-  '/api/import/profiles': typeof ApiImportProfilesRouteWithChildren
-  '/api/import/upload': typeof ApiImportUploadRoute
   '/api/me/company': typeof ApiMeCompanyRoute
   '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/api/setup/initialize': typeof ApiSetupInitializeRoute
@@ -754,7 +611,6 @@ export interface FileRoutesById {
   '/_auth/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
   '/_auth/app/settings/import-profiles': typeof AuthAppSettingsImportProfilesRoute
   '/_auth/app/settings/variant-templates': typeof AuthAppSettingsVariantTemplatesRoute
-  '/api/accounting/batches/$batchId': typeof ApiAccountingBatchesBatchIdRouteWithChildren
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
@@ -770,8 +626,6 @@ export interface FileRoutesById {
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
   '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
-  '/api/import/batches/$batchId': typeof ApiImportBatchesBatchIdRouteWithChildren
-  '/api/import/profiles/$profileId': typeof ApiImportProfilesProfileIdRouteWithChildren
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
@@ -779,15 +633,7 @@ export interface FileRoutesById {
   '/_auth/app/admin/': typeof AuthAppAdminIndexRoute
   '/_auth/app/settings/': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
-  '/api/accounting/batches/$batchId/build': typeof ApiAccountingBatchesBatchIdBuildRoute
-  '/api/accounting/batches/$batchId/csv': typeof ApiAccountingBatchesBatchIdCsvRoute
-  '/api/accounting/batches/$batchId/export': typeof ApiAccountingBatchesBatchIdExportRoute
-  '/api/accounting/batches/$batchId/rebuild': typeof ApiAccountingBatchesBatchIdRebuildRoute
   '/api/articles/$articleId/bom/$bomId': typeof ApiArticlesArticleIdBomBomIdRoute
-  '/api/import/batches/$batchId/approve': typeof ApiImportBatchesBatchIdApproveRoute
-  '/api/import/batches/$batchId/post': typeof ApiImportBatchesBatchIdPostRoute
-  '/api/import/profiles/$profileId/activate': typeof ApiImportProfilesProfileIdActivateRoute
-  '/api/import/profiles/$profileId/mappings': typeof ApiImportProfilesProfileIdMappingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -809,7 +655,6 @@ export interface FileRouteTypes {
     | '/app/email'
     | '/app/email-templates'
     | '/app/import'
-    | '/api/accounting/batches'
     | '/api/addresses/search'
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
@@ -822,10 +667,6 @@ export interface FileRouteTypes {
     | '/api/delivery-addresses/search'
     | '/api/email/$'
     | '/api/feedback/submit'
-    | '/api/import/batches'
-    | '/api/import/connectors'
-    | '/api/import/profiles'
-    | '/api/import/upload'
     | '/api/me/company'
     | '/api/metadata/$'
     | '/api/setup/initialize'
@@ -839,7 +680,6 @@ export interface FileRouteTypes {
     | '/app/settings/cycles'
     | '/app/settings/import-profiles'
     | '/app/settings/variant-templates'
-    | '/api/accounting/batches/$batchId'
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
@@ -855,8 +695,6 @@ export interface FileRouteTypes {
     | '/api/capabilities/$key/execute'
     | '/api/data/tenantLlmConfig/test'
     | '/api/documents/$documentId/print'
-    | '/api/import/batches/$batchId'
-    | '/api/import/profiles/$profileId'
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
     | '/api/storage/article-images/$imageId'
@@ -864,15 +702,7 @@ export interface FileRouteTypes {
     | '/app/admin/'
     | '/app/settings/'
     | '/api/admin/document-groups/'
-    | '/api/accounting/batches/$batchId/build'
-    | '/api/accounting/batches/$batchId/csv'
-    | '/api/accounting/batches/$batchId/export'
-    | '/api/accounting/batches/$batchId/rebuild'
     | '/api/articles/$articleId/bom/$bomId'
-    | '/api/import/batches/$batchId/approve'
-    | '/api/import/batches/$batchId/post'
-    | '/api/import/profiles/$profileId/activate'
-    | '/api/import/profiles/$profileId/mappings'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -890,7 +720,6 @@ export interface FileRouteTypes {
     | '/app/email'
     | '/app/email-templates'
     | '/app/import'
-    | '/api/accounting/batches'
     | '/api/addresses/search'
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
@@ -903,10 +732,6 @@ export interface FileRouteTypes {
     | '/api/delivery-addresses/search'
     | '/api/email/$'
     | '/api/feedback/submit'
-    | '/api/import/batches'
-    | '/api/import/connectors'
-    | '/api/import/profiles'
-    | '/api/import/upload'
     | '/api/me/company'
     | '/api/metadata/$'
     | '/api/setup/initialize'
@@ -920,7 +745,6 @@ export interface FileRouteTypes {
     | '/app/settings/cycles'
     | '/app/settings/import-profiles'
     | '/app/settings/variant-templates'
-    | '/api/accounting/batches/$batchId'
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
@@ -936,8 +760,6 @@ export interface FileRouteTypes {
     | '/api/capabilities/$key/execute'
     | '/api/data/tenantLlmConfig/test'
     | '/api/documents/$documentId/print'
-    | '/api/import/batches/$batchId'
-    | '/api/import/profiles/$profileId'
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
     | '/api/storage/article-images/$imageId'
@@ -945,15 +767,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/settings'
     | '/api/admin/document-groups'
-    | '/api/accounting/batches/$batchId/build'
-    | '/api/accounting/batches/$batchId/csv'
-    | '/api/accounting/batches/$batchId/export'
-    | '/api/accounting/batches/$batchId/rebuild'
     | '/api/articles/$articleId/bom/$bomId'
-    | '/api/import/batches/$batchId/approve'
-    | '/api/import/batches/$batchId/post'
-    | '/api/import/profiles/$profileId/activate'
-    | '/api/import/profiles/$profileId/mappings'
   id:
     | '__root__'
     | '/'
@@ -975,7 +789,6 @@ export interface FileRouteTypes {
     | '/_auth/app/email'
     | '/_auth/app/email-templates'
     | '/_auth/app/import'
-    | '/api/accounting/batches'
     | '/api/addresses/search'
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
@@ -988,10 +801,6 @@ export interface FileRouteTypes {
     | '/api/delivery-addresses/search'
     | '/api/email/$'
     | '/api/feedback/submit'
-    | '/api/import/batches'
-    | '/api/import/connectors'
-    | '/api/import/profiles'
-    | '/api/import/upload'
     | '/api/me/company'
     | '/api/metadata/$'
     | '/api/setup/initialize'
@@ -1005,7 +814,6 @@ export interface FileRouteTypes {
     | '/_auth/app/settings/cycles'
     | '/_auth/app/settings/import-profiles'
     | '/_auth/app/settings/variant-templates'
-    | '/api/accounting/batches/$batchId'
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
@@ -1021,8 +829,6 @@ export interface FileRouteTypes {
     | '/api/capabilities/$key/execute'
     | '/api/data/tenantLlmConfig/test'
     | '/api/documents/$documentId/print'
-    | '/api/import/batches/$batchId'
-    | '/api/import/profiles/$profileId'
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
     | '/api/storage/article-images/$imageId'
@@ -1030,15 +836,7 @@ export interface FileRouteTypes {
     | '/_auth/app/admin/'
     | '/_auth/app/settings/'
     | '/api/admin/document-groups/'
-    | '/api/accounting/batches/$batchId/build'
-    | '/api/accounting/batches/$batchId/csv'
-    | '/api/accounting/batches/$batchId/export'
-    | '/api/accounting/batches/$batchId/rebuild'
     | '/api/articles/$articleId/bom/$bomId'
-    | '/api/import/batches/$batchId/approve'
-    | '/api/import/batches/$batchId/post'
-    | '/api/import/profiles/$profileId/activate'
-    | '/api/import/profiles/$profileId/mappings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1050,7 +848,6 @@ export interface RootRouteChildren {
   ApiMeRoute: typeof ApiMeRouteWithChildren
   ApiTenantsRoute: typeof ApiTenantsRoute
   ApiVariantTemplatesRoute: typeof ApiVariantTemplatesRouteWithChildren
-  ApiAccountingBatchesRoute: typeof ApiAccountingBatchesRouteWithChildren
   ApiAddressesSearchRoute: typeof ApiAddressesSearchRoute
   ApiAdminCyclesRoute: typeof ApiAdminCyclesRoute
   ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRouteWithChildren
@@ -1062,10 +859,6 @@ export interface RootRouteChildren {
   ApiDeliveryAddressesSearchRoute: typeof ApiDeliveryAddressesSearchRoute
   ApiEmailSplatRoute: typeof ApiEmailSplatRoute
   ApiFeedbackSubmitRoute: typeof ApiFeedbackSubmitRoute
-  ApiImportBatchesRoute: typeof ApiImportBatchesRouteWithChildren
-  ApiImportConnectorsRoute: typeof ApiImportConnectorsRoute
-  ApiImportProfilesRoute: typeof ApiImportProfilesRouteWithChildren
-  ApiImportUploadRoute: typeof ApiImportUploadRoute
   ApiMetadataSplatRoute: typeof ApiMetadataSplatRoute
   ApiSetupInitializeRoute: typeof ApiSetupInitializeRoute
   ApiSetupYearEndRoute: typeof ApiSetupYearEndRoute
@@ -1234,34 +1027,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMeCompanyRouteImport
       parentRoute: typeof ApiMeRoute
     }
-    '/api/import/upload': {
-      id: '/api/import/upload'
-      path: '/api/import/upload'
-      fullPath: '/api/import/upload'
-      preLoaderRoute: typeof ApiImportUploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/import/profiles': {
-      id: '/api/import/profiles'
-      path: '/api/import/profiles'
-      fullPath: '/api/import/profiles'
-      preLoaderRoute: typeof ApiImportProfilesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/import/connectors': {
-      id: '/api/import/connectors'
-      path: '/api/import/connectors'
-      fullPath: '/api/import/connectors'
-      preLoaderRoute: typeof ApiImportConnectorsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/import/batches': {
-      id: '/api/import/batches'
-      path: '/api/import/batches'
-      fullPath: '/api/import/batches'
-      preLoaderRoute: typeof ApiImportBatchesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/feedback/submit': {
       id: '/api/feedback/submit'
       path: '/api/feedback/submit'
@@ -1344,13 +1109,6 @@ declare module '@tanstack/react-router' {
       path: '/api/addresses/search'
       fullPath: '/api/addresses/search'
       preLoaderRoute: typeof ApiAddressesSearchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/accounting/batches': {
-      id: '/api/accounting/batches'
-      path: '/api/accounting/batches'
-      fullPath: '/api/accounting/batches'
-      preLoaderRoute: typeof ApiAccountingBatchesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_auth/app/import': {
@@ -1458,20 +1216,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStatsAddressAddressIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/import/profiles/$profileId': {
-      id: '/api/import/profiles/$profileId'
-      path: '/$profileId'
-      fullPath: '/api/import/profiles/$profileId'
-      preLoaderRoute: typeof ApiImportProfilesProfileIdRouteImport
-      parentRoute: typeof ApiImportProfilesRoute
-    }
-    '/api/import/batches/$batchId': {
-      id: '/api/import/batches/$batchId'
-      path: '/$batchId'
-      fullPath: '/api/import/batches/$batchId'
-      preLoaderRoute: typeof ApiImportBatchesBatchIdRouteImport
-      parentRoute: typeof ApiImportBatchesRoute
-    }
     '/api/documents/$documentId/print': {
       id: '/api/documents/$documentId/print'
       path: '/api/documents/$documentId/print'
@@ -1577,13 +1321,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminDataSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/accounting/batches/$batchId': {
-      id: '/api/accounting/batches/$batchId'
-      path: '/$batchId'
-      fullPath: '/api/accounting/batches/$batchId'
-      preLoaderRoute: typeof ApiAccountingBatchesBatchIdRouteImport
-      parentRoute: typeof ApiAccountingBatchesRoute
-    }
     '/_auth/app/settings/variant-templates': {
       id: '/_auth/app/settings/variant-templates'
       path: '/settings/variant-templates'
@@ -1612,68 +1349,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAppSettingsAccountRouteImport
       parentRoute: typeof AuthAppRouteRoute
     }
-    '/api/import/profiles/$profileId/mappings': {
-      id: '/api/import/profiles/$profileId/mappings'
-      path: '/mappings'
-      fullPath: '/api/import/profiles/$profileId/mappings'
-      preLoaderRoute: typeof ApiImportProfilesProfileIdMappingsRouteImport
-      parentRoute: typeof ApiImportProfilesProfileIdRoute
-    }
-    '/api/import/profiles/$profileId/activate': {
-      id: '/api/import/profiles/$profileId/activate'
-      path: '/activate'
-      fullPath: '/api/import/profiles/$profileId/activate'
-      preLoaderRoute: typeof ApiImportProfilesProfileIdActivateRouteImport
-      parentRoute: typeof ApiImportProfilesProfileIdRoute
-    }
-    '/api/import/batches/$batchId/post': {
-      id: '/api/import/batches/$batchId/post'
-      path: '/post'
-      fullPath: '/api/import/batches/$batchId/post'
-      preLoaderRoute: typeof ApiImportBatchesBatchIdPostRouteImport
-      parentRoute: typeof ApiImportBatchesBatchIdRoute
-    }
-    '/api/import/batches/$batchId/approve': {
-      id: '/api/import/batches/$batchId/approve'
-      path: '/approve'
-      fullPath: '/api/import/batches/$batchId/approve'
-      preLoaderRoute: typeof ApiImportBatchesBatchIdApproveRouteImport
-      parentRoute: typeof ApiImportBatchesBatchIdRoute
-    }
     '/api/articles/$articleId/bom/$bomId': {
       id: '/api/articles/$articleId/bom/$bomId'
       path: '/$bomId'
       fullPath: '/api/articles/$articleId/bom/$bomId'
       preLoaderRoute: typeof ApiArticlesArticleIdBomBomIdRouteImport
       parentRoute: typeof ApiArticlesArticleIdBomRoute
-    }
-    '/api/accounting/batches/$batchId/rebuild': {
-      id: '/api/accounting/batches/$batchId/rebuild'
-      path: '/rebuild'
-      fullPath: '/api/accounting/batches/$batchId/rebuild'
-      preLoaderRoute: typeof ApiAccountingBatchesBatchIdRebuildRouteImport
-      parentRoute: typeof ApiAccountingBatchesBatchIdRoute
-    }
-    '/api/accounting/batches/$batchId/export': {
-      id: '/api/accounting/batches/$batchId/export'
-      path: '/export'
-      fullPath: '/api/accounting/batches/$batchId/export'
-      preLoaderRoute: typeof ApiAccountingBatchesBatchIdExportRouteImport
-      parentRoute: typeof ApiAccountingBatchesBatchIdRoute
-    }
-    '/api/accounting/batches/$batchId/csv': {
-      id: '/api/accounting/batches/$batchId/csv'
-      path: '/csv'
-      fullPath: '/api/accounting/batches/$batchId/csv'
-      preLoaderRoute: typeof ApiAccountingBatchesBatchIdCsvRouteImport
-      parentRoute: typeof ApiAccountingBatchesBatchIdRoute
-    }
-    '/api/accounting/batches/$batchId/build': {
-      id: '/api/accounting/batches/$batchId/build'
-      path: '/build'
-      fullPath: '/api/accounting/batches/$batchId/build'
-      preLoaderRoute: typeof ApiAccountingBatchesBatchIdBuildRouteImport
-      parentRoute: typeof ApiAccountingBatchesBatchIdRoute
     }
   }
 }
@@ -1797,41 +1478,6 @@ const ApiVariantTemplatesRouteChildren: ApiVariantTemplatesRouteChildren = {
 const ApiVariantTemplatesRouteWithChildren =
   ApiVariantTemplatesRoute._addFileChildren(ApiVariantTemplatesRouteChildren)
 
-interface ApiAccountingBatchesBatchIdRouteChildren {
-  ApiAccountingBatchesBatchIdBuildRoute: typeof ApiAccountingBatchesBatchIdBuildRoute
-  ApiAccountingBatchesBatchIdCsvRoute: typeof ApiAccountingBatchesBatchIdCsvRoute
-  ApiAccountingBatchesBatchIdExportRoute: typeof ApiAccountingBatchesBatchIdExportRoute
-  ApiAccountingBatchesBatchIdRebuildRoute: typeof ApiAccountingBatchesBatchIdRebuildRoute
-}
-
-const ApiAccountingBatchesBatchIdRouteChildren: ApiAccountingBatchesBatchIdRouteChildren =
-  {
-    ApiAccountingBatchesBatchIdBuildRoute:
-      ApiAccountingBatchesBatchIdBuildRoute,
-    ApiAccountingBatchesBatchIdCsvRoute: ApiAccountingBatchesBatchIdCsvRoute,
-    ApiAccountingBatchesBatchIdExportRoute:
-      ApiAccountingBatchesBatchIdExportRoute,
-    ApiAccountingBatchesBatchIdRebuildRoute:
-      ApiAccountingBatchesBatchIdRebuildRoute,
-  }
-
-const ApiAccountingBatchesBatchIdRouteWithChildren =
-  ApiAccountingBatchesBatchIdRoute._addFileChildren(
-    ApiAccountingBatchesBatchIdRouteChildren,
-  )
-
-interface ApiAccountingBatchesRouteChildren {
-  ApiAccountingBatchesBatchIdRoute: typeof ApiAccountingBatchesBatchIdRouteWithChildren
-}
-
-const ApiAccountingBatchesRouteChildren: ApiAccountingBatchesRouteChildren = {
-  ApiAccountingBatchesBatchIdRoute:
-    ApiAccountingBatchesBatchIdRouteWithChildren,
-}
-
-const ApiAccountingBatchesRouteWithChildren =
-  ApiAccountingBatchesRoute._addFileChildren(ApiAccountingBatchesRouteChildren)
-
 interface ApiAdminLlmConfigRouteChildren {
   ApiAdminLlmConfigTestRoute: typeof ApiAdminLlmConfigTestRoute
 }
@@ -1842,62 +1488,6 @@ const ApiAdminLlmConfigRouteChildren: ApiAdminLlmConfigRouteChildren = {
 
 const ApiAdminLlmConfigRouteWithChildren =
   ApiAdminLlmConfigRoute._addFileChildren(ApiAdminLlmConfigRouteChildren)
-
-interface ApiImportBatchesBatchIdRouteChildren {
-  ApiImportBatchesBatchIdApproveRoute: typeof ApiImportBatchesBatchIdApproveRoute
-  ApiImportBatchesBatchIdPostRoute: typeof ApiImportBatchesBatchIdPostRoute
-}
-
-const ApiImportBatchesBatchIdRouteChildren: ApiImportBatchesBatchIdRouteChildren =
-  {
-    ApiImportBatchesBatchIdApproveRoute: ApiImportBatchesBatchIdApproveRoute,
-    ApiImportBatchesBatchIdPostRoute: ApiImportBatchesBatchIdPostRoute,
-  }
-
-const ApiImportBatchesBatchIdRouteWithChildren =
-  ApiImportBatchesBatchIdRoute._addFileChildren(
-    ApiImportBatchesBatchIdRouteChildren,
-  )
-
-interface ApiImportBatchesRouteChildren {
-  ApiImportBatchesBatchIdRoute: typeof ApiImportBatchesBatchIdRouteWithChildren
-}
-
-const ApiImportBatchesRouteChildren: ApiImportBatchesRouteChildren = {
-  ApiImportBatchesBatchIdRoute: ApiImportBatchesBatchIdRouteWithChildren,
-}
-
-const ApiImportBatchesRouteWithChildren =
-  ApiImportBatchesRoute._addFileChildren(ApiImportBatchesRouteChildren)
-
-interface ApiImportProfilesProfileIdRouteChildren {
-  ApiImportProfilesProfileIdActivateRoute: typeof ApiImportProfilesProfileIdActivateRoute
-  ApiImportProfilesProfileIdMappingsRoute: typeof ApiImportProfilesProfileIdMappingsRoute
-}
-
-const ApiImportProfilesProfileIdRouteChildren: ApiImportProfilesProfileIdRouteChildren =
-  {
-    ApiImportProfilesProfileIdActivateRoute:
-      ApiImportProfilesProfileIdActivateRoute,
-    ApiImportProfilesProfileIdMappingsRoute:
-      ApiImportProfilesProfileIdMappingsRoute,
-  }
-
-const ApiImportProfilesProfileIdRouteWithChildren =
-  ApiImportProfilesProfileIdRoute._addFileChildren(
-    ApiImportProfilesProfileIdRouteChildren,
-  )
-
-interface ApiImportProfilesRouteChildren {
-  ApiImportProfilesProfileIdRoute: typeof ApiImportProfilesProfileIdRouteWithChildren
-}
-
-const ApiImportProfilesRouteChildren: ApiImportProfilesRouteChildren = {
-  ApiImportProfilesProfileIdRoute: ApiImportProfilesProfileIdRouteWithChildren,
-}
-
-const ApiImportProfilesRouteWithChildren =
-  ApiImportProfilesRoute._addFileChildren(ApiImportProfilesRouteChildren)
 
 interface ApiArticlesArticleIdBomRouteChildren {
   ApiArticlesArticleIdBomBomIdRoute: typeof ApiArticlesArticleIdBomBomIdRoute
@@ -1922,7 +1512,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMeRoute: ApiMeRouteWithChildren,
   ApiTenantsRoute: ApiTenantsRoute,
   ApiVariantTemplatesRoute: ApiVariantTemplatesRouteWithChildren,
-  ApiAccountingBatchesRoute: ApiAccountingBatchesRouteWithChildren,
   ApiAddressesSearchRoute: ApiAddressesSearchRoute,
   ApiAdminCyclesRoute: ApiAdminCyclesRoute,
   ApiAdminLlmConfigRoute: ApiAdminLlmConfigRouteWithChildren,
@@ -1935,10 +1524,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDeliveryAddressesSearchRoute: ApiDeliveryAddressesSearchRoute,
   ApiEmailSplatRoute: ApiEmailSplatRoute,
   ApiFeedbackSubmitRoute: ApiFeedbackSubmitRoute,
-  ApiImportBatchesRoute: ApiImportBatchesRouteWithChildren,
-  ApiImportConnectorsRoute: ApiImportConnectorsRoute,
-  ApiImportProfilesRoute: ApiImportProfilesRouteWithChildren,
-  ApiImportUploadRoute: ApiImportUploadRoute,
   ApiMetadataSplatRoute: ApiMetadataSplatRoute,
   ApiSetupInitializeRoute: ApiSetupInitializeRoute,
   ApiSetupYearEndRoute: ApiSetupYearEndRoute,

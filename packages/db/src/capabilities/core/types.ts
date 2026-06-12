@@ -2,7 +2,14 @@ import type { z } from "zod";
 
 export type ActorMode = "user" | "assistant" | "system" | "test" | "external";
 
-export type CapabilityModule = "masterdata" | "sales" | "logistics" | "accounting" | "system";
+export type CapabilityModule =
+  | "masterdata"
+  | "sales"
+  | "logistics"
+  | "accounting"
+  | "communication"
+  | "import"
+  | "system";
 
 export type CapabilityKind = "read" | "create" | "update" | "archive" | "process";
 
@@ -27,18 +34,38 @@ export interface ExecutionContext {
   dryRun?: boolean;
 }
 
+// AI projection of a capability: everything an LLM needs to pick the right
+// tool. Confirmation is NOT a field here — it is always derived from
+// `exposure.llm === "confirm"` so the two can never drift apart.
+export interface CapabilityAiProjection {
+  /** Defaults to `${module}_${operation}_${entityName}`, e.g. "sales_post_document". */
+  toolName?: string;
+  useWhen: string[];
+  avoidWhen?: string[];
+  /** Context the model must already have resolved (e.g. "documentId"). */
+  requiredContext?: string[];
+  /** One-line compact description of the result shape. */
+  resultShape?: string;
+  /** Only curated tools are part of the default toolset. */
+  activeByDefault?: boolean;
+  /** Toolset scope, e.g. "sales-documents" | "catalog" | "mail". */
+  group?: string;
+}
+
 export interface CapabilityExposure {
   llm: LlmExposure;
   http: boolean;
   ui?: { placement?: string; icon?: string };
+  ai?: CapabilityAiProjection;
 }
 
 export interface CapabilityDefinition<
   I extends z.ZodType = z.ZodType,
   O extends z.ZodType = z.ZodType,
+  K extends string = string,
 > {
   /** Always `${module}.${entityName}.${operation}` — derived by defineCapability. */
-  key: string;
+  key: K;
   module: CapabilityModule;
   /** Schema export name of the primary entity, e.g. "articleVariantTemplate". */
   entityName: string;
@@ -77,6 +104,10 @@ export interface CapabilityIssue {
 
 export interface CapabilityMeta {
   capability: string;
+  /** Primary entity, used by clients to invalidate cached reads. */
+  entityName: string;
+  /** Additional written tables, used by clients to invalidate cached reads. */
+  writesTables: string[];
   schemaVersion: number;
   dryRun: boolean;
   durationMs: number;

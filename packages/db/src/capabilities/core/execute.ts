@@ -113,6 +113,8 @@ export async function executeCapability<T = unknown>(
       data: data as T,
       meta: {
         capability: key,
+        entityName: capability.entityName,
+        writesTables: capability.writesTables,
         schemaVersion: capability.schemaVersion,
         dryRun: Boolean(ctx.dryRun),
         durationMs: Math.round((performance.now() - startedAt) * 100) / 100,

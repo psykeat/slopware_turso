@@ -10,13 +10,14 @@ import { defineCapability } from "./core/define";
 import { registerCapabilities } from "./core/registry";
 import type { ExecutionContext } from "./core/types";
 import {
+  capabilityIndex,
   capabilityInputJsonSchema,
   capabilityOutputJsonSchema,
   listCapabilities,
 } from "./index";
 
 const KEY_PATTERN =
-  /^(masterdata|sales|logistics|accounting|system)\.[a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z][a-zA-Z0-9]*$/;
+  /^(masterdata|sales|logistics|accounting|communication|import|system)\.[a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z][a-zA-Z0-9]*$/;
 
 const ctx = (overrides: Partial<ExecutionContext> = {}): ExecutionContext => ({
   tenantId: "00000000-0000-7000-8000-000000000000",
@@ -156,14 +157,38 @@ test("output contract violations surface as internal errors outside production",
   }
 });
 
-test("success envelope carries meta", async () => {
+test("success envelope carries meta incl. invalidation hints", async () => {
   const result = await executeCapability(gateProbe.key, ctx({ role: "tenant_admin" }), {});
   assert.equal(result.ok, true);
   if (result.ok) {
     assert.equal(result.meta.capability, gateProbe.key);
+    assert.equal(result.meta.entityName, "test");
+    assert.deepEqual(result.meta.writesTables, ["test"]);
     assert.equal(result.meta.schemaVersion, 1);
     assert.equal(result.meta.dryRun, false);
     assert.ok(result.meta.durationMs >= 0);
+  }
+});
+
+test("capabilityIndex matches the registry", () => {
+  // The index drives client-side type inference; it must cover exactly the
+  // statically aggregated capabilities (test-only probes are not part of it).
+  for (const [key, capability] of Object.entries(capabilityIndex)) {
+    assert.equal(key, capability.key);
+  }
+  const registered = listCapabilities().filter((c) => !c.key.startsWith("system.test."));
+  assert.equal(Object.keys(capabilityIndex).length, registered.length);
+});
+
+test("ai projections are well-formed when present", () => {
+  for (const capability of listCapabilities()) {
+    const ai = capability.exposure.ai;
+    if (!ai) continue;
+    assert.notEqual(capability.exposure.llm, "hidden", `${capability.key} is hidden but has ai`);
+    assert.ok(ai.useWhen.length > 0, `${capability.key} ai projection has empty useWhen`);
+    if (ai.toolName) {
+      assert.match(ai.toolName, /^[a-z]+(_[a-z][a-zA-Z0-9]*)+$/);
+    }
   }
 });
 

@@ -345,6 +345,62 @@ export const documentDelete = defineCapability({
   handler: async (ctx, input) => new DocumentService().deleteDocument(input.documentId, ctx.tenantId),
 });
 
+const targetGroupCandidateSchema = z.object({
+  documentGroupId: z.uuid(),
+  name: z.string(),
+  documentType: z.string(),
+  groupNumber: z.number().int(),
+});
+
+export const documentConvertCandidates = defineCapability({
+  module: "sales",
+  entityName: "document",
+  operation: "convertCandidates",
+  kind: "read",
+  summary: {
+    en: "List conversion target groups for a document",
+    de: "Wandlungs-Zielgruppen eines Belegs auflisten",
+  },
+  input: z.object({ documentId: z.uuid() }),
+  output: z.object({ candidates: z.array(targetGroupCandidateSchema) }),
+  writesTables: [],
+  sideEffects: [],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => ({
+    candidates: await new DocumentService().getConversionCandidates(
+      input.documentId,
+      ctx.tenantId,
+    ),
+  }),
+});
+
+export const documentDuplicateCandidates = defineCapability({
+  module: "sales",
+  entityName: "document",
+  operation: "duplicateCandidates",
+  kind: "read",
+  summary: {
+    en: "List duplicate target groups for a document",
+    de: "Duplikat-Zielgruppen eines Belegs auflisten",
+  },
+  input: z.object({ documentId: z.uuid() }),
+  output: z.object({ candidates: z.array(targetGroupCandidateSchema) }),
+  writesTables: [],
+  sideEffects: [],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => ({
+    candidates: await new DocumentService().getDuplicateCandidates(input.documentId, ctx.tenantId),
+  }),
+});
+
 export const documentTree = defineCapability({
   module: "sales",
   entityName: "document",
@@ -471,7 +527,9 @@ export const documentCapabilities = [
   documentPost,
   documentStorno,
   documentDuplicate,
+  documentDuplicateCandidates,
   documentConvert,
+  documentConvertCandidates,
   documentDelete,
   documentTree,
   documentAudit,

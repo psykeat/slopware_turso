@@ -19,6 +19,7 @@ import React, {
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { executeCapability } from "../lib/capability-client";
 import { formatDate, formatMoney, StatusDot } from "../lib/formatters";
 import { cn } from "../lib/utils";
 import { useCommands } from "../platform/command-registry";
@@ -1005,13 +1006,11 @@ const DocumentLinesEditor = forwardRef<
 
   const korrMutation = useMutation({
     mutationFn: async ({ lineId, qtyDelta }: { lineId: string; qtyDelta: number }) => {
-      const res = await fetch(`/api/documents/lines/${lineId}/delta`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qtyDelta }),
+      const { data } = await executeCapability("sales.documentLine.delta", {
+        documentLineId: lineId,
+        qtyDelta,
       });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "documentLine", documentId] });
@@ -2589,9 +2588,10 @@ export function DocumentEditor({
   const { data: auditTrail, isLoading: isAuditLoading } = useQuery<DocumentAuditTrail>({
     queryKey: ["documents", "audit", documentId],
     queryFn: async () => {
-      const res = await fetch(`/api/documents/${documentId}/audit`);
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<DocumentAuditTrail>;
+      const { data } = await executeCapability<DocumentAuditTrail>("sales.document.audit", {
+        documentId,
+      });
+      return data;
     },
     enabled: !isNew,
     staleTime: 0,
@@ -2728,10 +2728,9 @@ export function DocumentEditor({
         throw new Error("Document group and type are required");
       }
 
-      const res = await fetch("/api/documents/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { data: doc } = await executeCapability<{ documentId?: string }>(
+        "sales.document.saveDraft",
+        {
           documentId: isNew ? null : documentId,
           documentGroupId: resolvedDocumentGroupId,
           documentType: resolvedDocumentType,
@@ -2774,10 +2773,8 @@ export function DocumentEditor({
           paymentTermId: header.paymentTermId ?? null,
           shippingMethodId: header.shippingMethodId ?? null,
           lines: draftLines,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const doc = (await res.json()) as { documentId?: string };
+        },
+      );
       return doc.documentId ?? documentId;
     },
     onSuccess: (savedId) => {
@@ -2802,9 +2799,8 @@ export function DocumentEditor({
 
   const postMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/documents/${documentId}/post`, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      const { data } = await executeCapability("sales.document.post", { documentId });
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
@@ -2816,17 +2812,18 @@ export function DocumentEditor({
 
   const convertMutation = useMutation({
     mutationFn: async (targetGroupId?: string) => {
-      const res = await fetch(`/api/documents/${documentId}/convert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: targetGroupId ? JSON.stringify({ targetGroupId }) : undefined,
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<{
-        candidates?: ConvertCandidate[];
-        success?: boolean;
-        newDocumentId?: string;
-      }>;
+      if (!targetGroupId) {
+        const { data } = await executeCapability<{ candidates: ConvertCandidate[] }>(
+          "sales.document.convertCandidates",
+          { documentId },
+        );
+        return data as { candidates?: ConvertCandidate[]; success?: boolean; newDocumentId?: string };
+      }
+      const { data } = await executeCapability<{ success: boolean; newDocumentId: string }>(
+        "sales.document.convert",
+        { documentId, targetGroupId },
+      );
+      return data as { candidates?: ConvertCandidate[]; success?: boolean; newDocumentId?: string };
     },
     onSuccess: (data) => {
       if (data.candidates) {
@@ -2848,9 +2845,11 @@ export function DocumentEditor({
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/documents/${documentId}/delete`, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<{ archived?: boolean; deleted?: boolean }>;
+      const { data } = await executeCapability<{ archived?: boolean; deleted?: boolean }>(
+        "sales.document.delete",
+        { documentId },
+      );
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
@@ -2863,13 +2862,11 @@ export function DocumentEditor({
 
   const duplicateMutation = useMutation({
     mutationFn: async (targetGroupId: string) => {
-      const res = await fetch(`/api/documents/${documentId}/duplicate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetGroupId }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<{ documentId: string; documentNo: string }>;
+      const { data } = await executeCapability<{ documentId: string; documentNo: string }>(
+        "sales.document.duplicate",
+        { documentId, targetGroupId },
+      );
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
@@ -2888,9 +2885,8 @@ export function DocumentEditor({
 
   const stornoMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/documents/${documentId}/storno`, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      const { data } = await executeCapability("sales.document.storno", { documentId });
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", "document"] });
@@ -2918,14 +2914,19 @@ export function DocumentEditor({
     saveDocMutate();
   }, [saveDocMutate]);
   const handleOpenDuplicateDialog = useCallback(async () => {
-    const res = await fetch(`/api/documents/${documentId}/duplicate`, { method: "POST" });
-    if (!res.ok) {
-      const message = await res.text();
-      toast.error(message || t("document.duplicate.noTargets"));
+    let candidates: DocumentTargetGroupCandidate[];
+    try {
+      const { data } = await executeCapability<{ candidates: DocumentTargetGroupCandidate[] }>(
+        "sales.document.duplicateCandidates",
+        { documentId },
+      );
+      candidates = data.candidates;
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message ? error.message : t("document.duplicate.noTargets"),
+      );
       return;
     }
-    const data = (await res.json()) as { candidates?: DocumentTargetGroupCandidate[] };
-    const candidates = data.candidates ?? [];
     if (candidates.length === 0) {
       toast.error(t("document.duplicate.noTargets"));
       return;

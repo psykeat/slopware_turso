@@ -3,6 +3,7 @@ import { Trash2Icon } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { executeCapability } from "../lib/capability-client";
 import { cn } from "../lib/utils";
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -62,8 +63,11 @@ export function TrackingEditor({
   const { data: existingRows = [] } = useQuery({
     queryKey: ["tracking", documentId, documentLineId],
     queryFn: async () => {
-      const r = await fetch(`/api/documents/${documentId}/lines/${documentLineId}/tracking`);
-      return r.ok ? (r.json() as Promise<TrackingRow[]>) : [];
+      const { data } = await executeCapability<{ items: TrackingRow[] }>(
+        "sales.documentLine.tracking",
+        { documentLineId },
+      );
+      return data.items;
     },
     enabled: !!documentLineId && !isNewLine,
   });
@@ -152,13 +156,12 @@ export function TrackingEditor({
       batchNo?: string;
       qty: string;
     }) => {
-      const r = await fetch(`/api/documents/${documentId}/lines/${documentLineId}/tracking`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(row),
+      const { data } = await executeCapability("sales.documentLineTracking.add", {
+        documentId,
+        documentLineId,
+        ...row,
       });
-      if (!r.ok) throw new Error(await r.text());
-      return r.json();
+      return data;
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["tracking", documentId, documentLineId] }),
@@ -167,11 +170,11 @@ export function TrackingEditor({
 
   const deleteMutation = useMutation({
     mutationFn: async (trackingId: string) => {
-      const r = await fetch(
-        `/api/documents/${documentId}/lines/${documentLineId}/tracking/${trackingId}`,
-        { method: "DELETE" },
-      );
-      if (!r.ok) throw new Error(await r.text());
+      await executeCapability("sales.documentLineTracking.remove", {
+        documentId,
+        documentLineId,
+        trackingId,
+      });
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["tracking", documentId, documentLineId] }),

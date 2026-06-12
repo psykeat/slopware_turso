@@ -283,6 +283,85 @@ test("storno: only posted invoices reverse, and only once", async () => {
   assert.equal(draftStorno.ok, false);
 });
 
+test("candidates and line tracking through the capability surface", async () => {
+  const fixture = await createDocumentFixture();
+  const { ctx } = fixture;
+
+  const created = expectOk<{ documentId: string }>(
+    await executeCapability("sales.document.create", ctx, {
+      documentGroupId: fixture.deliveryGroupId,
+      documentType: "L",
+      documentDirection: "OUTBOUND",
+      documentDate: today(),
+    }),
+  );
+  await executeCapability("sales.document.saveDraft", ctx, {
+    documentId: created.documentId,
+    documentGroupId: fixture.deliveryGroupId,
+    documentType: "L",
+    documentDirection: "OUTBOUND",
+    documentDate: today(),
+    lines: [
+      { lineNo: 1, variantId: fixture.variantId, quantity: 2, netPrice: 15, lineType: "article" },
+    ],
+  });
+
+  const convertCandidates = expectOk<{ candidates: Array<{ documentGroupId: string }> }>(
+    await executeCapability("sales.document.convertCandidates", ctx, {
+      documentId: created.documentId,
+    }),
+  );
+  assert.ok(Array.isArray(convertCandidates.candidates));
+
+  const dupCandidates = expectOk<{ candidates: Array<{ documentGroupId: string }> }>(
+    await executeCapability("sales.document.duplicateCandidates", ctx, {
+      documentId: created.documentId,
+    }),
+  );
+  assert.ok(dupCandidates.candidates.some((c) => c.documentGroupId === fixture.deliveryGroupId));
+
+  const lines = expectOk<{ items: Array<{ documentLineId: string }> }>(
+    await executeCapability("sales.documentLine.list", ctx, { documentId: created.documentId }),
+  );
+  const lineId = lines.items[0]?.documentLineId;
+  assert.ok(lineId);
+
+  const added = expectOk<{ trackingId: string }>(
+    await executeCapability("sales.documentLineTracking.add", ctx, {
+      documentId: created.documentId,
+      documentLineId: lineId,
+      batchNo: `BATCH-${fixture.suffix}`,
+      qty: 2,
+    }),
+  );
+  assert.ok(added.trackingId);
+
+  // Exactly-one-of constraint must reject mixed inputs.
+  const mixed = await executeCapability("sales.documentLineTracking.add", ctx, {
+    documentId: created.documentId,
+    documentLineId: lineId,
+    batchNo: "B",
+    serialNo: "S",
+    qty: 1,
+  });
+  assert.equal(mixed.ok, false);
+  assert.equal(!mixed.ok && mixed.error.code, "validation");
+
+  const tracked = expectOk<{ items: Array<{ trackingId: string }> }>(
+    await executeCapability("sales.documentLine.tracking", ctx, { documentLineId: lineId }),
+  );
+  assert.equal(tracked.items.length, 1);
+
+  const removed = expectOk<{ success: true }>(
+    await executeCapability("sales.documentLineTracking.remove", ctx, {
+      documentId: created.documentId,
+      documentLineId: lineId,
+      trackingId: added.trackingId,
+    }),
+  );
+  assert.equal(removed.success, true);
+});
+
 test("tenant isolation: document workflows are invisible to foreign tenants", async () => {
   const [a, b] = await Promise.all([createDocumentFixture(), createDocumentFixture()]);
 

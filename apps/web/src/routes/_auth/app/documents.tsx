@@ -36,7 +36,7 @@ import {
 } from "#/components/email/EmailComposeDialog";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
 import { invalidateAfterCapability } from "#/queries/invalidate";
-import { callCapability, CapabilityClientError } from "#/server-fns/capabilities";
+import { callCapability, capability, CapabilityClientError } from "#/server-fns/capabilities";
 
 export const Route = createFileRoute("/_auth/app/documents")({
   component: DocumentsModule,
@@ -368,9 +368,8 @@ function ShipmentInspector({ documentId }: ShipmentInspectorProps) {
     queryKey: ["document-shipment", documentId],
     queryFn: async () => {
       if (!documentId) return null;
-      const res = await fetch(`/api/documents/${documentId}/shipment`);
-      if (!res.ok) throw new Error("Failed to fetch shipment");
-      return res.json() as Promise<{ shipment: any; packages: any[] }>;
+      const result = await capability("sales.document.shipment")({ documentId });
+      return result as { shipment: any; packages: any[] };
     },
     enabled: !!documentId,
   });
@@ -484,36 +483,36 @@ function ShipmentForm({ documentId, initialData }: ShipmentFormProps) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/documents/${documentId}/shipment`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      await capability("logistics.documentShipment.update")({
+        documentId,
+        patch: {
+          recipientName,
+          company: company || null,
+          street,
+          houseNumber,
+          postalCode,
+          city,
+          countryCode,
+          email: email || null,
+          phone: phone || null,
+          trackingId: trackingId || null,
+          carrierKey,
+          carrierServiceKey,
+          shipmentStatus,
         },
-        body: JSON.stringify({
-          shipment: {
-            recipientName,
-            company: company || null,
-            street,
-            houseNumber,
-            postalCode,
-            city,
-            countryCode,
-            email: email || null,
-            phone: phone || null,
-            trackingId: trackingId || null,
-            carrierKey,
-            carrierServiceKey,
-            shipmentStatus,
-          },
-          packages: packageLines.map((pkg) => ({
+      });
+      const details = (await capability("sales.document.shipment")({ documentId })) as {
+        shipment?: { documentShipmentId?: string } | null;
+      };
+      const documentShipmentId = details.shipment?.documentShipmentId;
+      if (documentShipmentId) {
+        await capability("logistics.documentShipment.savePackages")({
+          documentShipmentId,
+          packageLines: packageLines.map((pkg) => ({
             seq: pkg.seq,
             weightKg: pkg.weightKg,
           })),
-        }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || "Failed to save shipment");
+        });
       }
       toast.success("Versanddetails erfolgreich gespeichert");
       queryClient.invalidateQueries({ queryKey: ["document-shipment", documentId] });
@@ -1066,15 +1065,9 @@ function DocumentsModule() {
     queryKey: ["documents", "tree", selectedCompanyId],
     staleTime: 0,
     queryFn: async () => {
-      const p = new URLSearchParams();
-      if (selectedCompanyId) p.set("companyId", selectedCompanyId);
-      const res = await fetch(`/api/documents/tree?${p}`);
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("[Tree] fetch failed", res.status, text);
-        throw new Error(`Tree fetch ${res.status}: ${text}`);
-      }
-      const raw = await res.json();
+      const raw = await capability("sales.document.tree")(
+        selectedCompanyId ? { companyId: selectedCompanyId } : {},
+      );
       // Normalise: older cached format may have `groups` instead of `types`
       return (raw as any[]).map((s: any) => ({
         ...s,
@@ -1408,17 +1401,17 @@ function DocumentsModule() {
       isEnabled: (s) => !!s.recordId && s.entity === "document",
       handler: async (s) => {
         if (!s.recordId) return;
-        const res = await fetch(`/api/documents/${s.recordId}/convert`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.requiresSelection) {
-          setConversionDialog({ open: true, recordId: s.recordId, candidates: data.candidates });
-        } else if (data.newDocumentId) {
-          queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+        try {
+          const { candidates } = await capability("sales.document.convertCandidates")({
+            documentId: s.recordId,
+          });
+          if (candidates.length === 0) {
+            toast.error(t("document.convert.noTargets", { defaultValue: "Keine Zielgruppen" }));
+            return;
+          }
+          setConversionDialog({ open: true, recordId: s.recordId, candidates });
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Unable to convert document");
         }
       },
     });
@@ -1431,21 +1424,20 @@ function DocumentsModule() {
       isEnabled: (s) => !!s.recordId && s.entity === "document",
       handler: async (s) => {
         if (!s.recordId) return;
-        const res = await fetch(`/api/documents/${s.recordId}/delete`, {
-          method: "POST",
-        });
-        if (!res.ok) {
-          const message = await res.text();
+        try {
+          const { data: result, meta } = await callCapability("sales.document.delete", {
+            documentId: s.recordId,
+          });
+          if (result.archived) {
+            toast.success(t("form.archiveSuccess"));
+          } else if (result.deleted) {
+            toast.success(t("form.deleteSuccess"));
+          }
+          invalidateAfterCapability(queryClient, meta);
+        } catch (error) {
+          const message = error instanceof CapabilityClientError ? error.message : null;
           toast.error(message || t("form.fkViolationError"));
-          return;
         }
-        const result = await res.json();
-        if (result.archived) {
-          toast.success(t("form.archiveSuccess"));
-        } else if (result.deleted) {
-          toast.success(t("form.deleteSuccess"));
-        }
-        queryClient.invalidateQueries({ queryKey: ["data", "document"] });
       },
     });
     const unregDup = registerCommand({
@@ -1457,14 +1449,17 @@ function DocumentsModule() {
       isEnabled: (s) => !!s.recordId && s.entity === "document",
       handler: async (s) => {
         if (!s.recordId) return;
-        const res = await fetch(`/api/documents/${s.recordId}/duplicate`, { method: "POST" });
-        if (!res.ok) {
-          const message = await res.text();
+        let candidates: DocumentTargetGroupCandidate[];
+        try {
+          const result = await capability("sales.document.duplicateCandidates")({
+            documentId: s.recordId,
+          });
+          candidates = result.candidates;
+        } catch (error) {
+          const message = error instanceof CapabilityClientError ? error.message : null;
           toast.error(message || t("document.duplicate.noTargets"));
           return;
         }
-        const data = (await res.json()) as { candidates?: DocumentTargetGroupCandidate[] };
-        const candidates = data.candidates ?? [];
         if (candidates.length === 0) {
           toast.error(t("document.duplicate.noTargets"));
           return;
@@ -1535,22 +1530,14 @@ function DocumentsModule() {
           const file = (e.target as HTMLInputElement).files?.[0];
           if (!file) return;
 
-          const formData = new FormData();
-          formData.append("file", file);
-
           try {
-            const res = await fetch("/api/documents/import-tracking", {
-              method: "POST",
-              body: formData,
-            });
-
-            if (!res.ok) {
-              throw new Error(await res.text());
-            }
-
-            const data = await res.json();
-            const updatedCount = data.count ?? 0;
-            toast.success(`${updatedCount} shipments updated / Sendungen aktualisiert`);
+            const csvContent = await file.text();
+            const { data, meta } = await callCapability(
+              "logistics.documentShipment.importTrackingCsv",
+              { csvContent },
+            );
+            toast.success(`${data.updatedCount} shipments updated / Sendungen aktualisiert`);
+            invalidateAfterCapability(queryClient, meta);
             queryClient.invalidateQueries({ queryKey: ["data", "document"] });
           } catch (err: any) {
             console.error("Error importing tracking CSV:", err);
@@ -2000,12 +1987,9 @@ function DocumentsModule() {
                       onClick: async (keys: string[]) => {
                         try {
                           await Promise.all(
-                            keys.map(async (id) => {
-                              const res = await fetch(`/api/documents/${id}/delete`, {
-                                method: "POST",
-                              });
-                              if (!res.ok) throw new Error(await res.text());
-                            }),
+                            keys.map((id) =>
+                              capability("sales.document.delete")({ documentId: id }),
+                            ),
                           );
                           queryClient.invalidateQueries({ queryKey: ["data", "document"] });
                         } catch (err) {
@@ -2021,14 +2005,9 @@ function DocumentsModule() {
                       label: "Versand-CSV (DHL GKP)",
                       onClick: async (keys: string[]) => {
                         try {
-                          const res = await fetch("/api/documents/export", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ documentIds: keys }),
-                          });
-                          if (!res.ok) throw new Error(await res.text());
-
-                          const csvText = await res.text();
+                          const csvText = await capability(
+                            "logistics.documentShipment.exportCsv",
+                          )({ documentIds: keys });
                           const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
                           const url = URL.createObjectURL(blob);
                           const link = document.createElement("a");
@@ -2102,24 +2081,21 @@ function DocumentsModule() {
           if (!duplicateDialog.recordId || !targetGroupId) return;
           setDuplicateDialog((p) => ({ ...p, isPending: true }));
           try {
-            const res = await fetch(`/api/documents/${duplicateDialog.recordId}/duplicate`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ targetGroupId }),
+            const { meta } = await callCapability("sales.document.duplicate", {
+              documentId: duplicateDialog.recordId,
+              targetGroupId,
             });
-            if (res.ok) {
-              setDuplicateDialog({
-                open: false,
-                recordId: null,
-                candidates: [],
-                selectedGroupId: null,
-                isPending: false,
-              });
-              queryClient.invalidateQueries({ queryKey: ["data", "document"] });
-              toast.success("Document duplicated");
-            } else {
-              toast.error("Unable to duplicate document");
-            }
+            setDuplicateDialog({
+              open: false,
+              recordId: null,
+              candidates: [],
+              selectedGroupId: null,
+              isPending: false,
+            });
+            invalidateAfterCapability(queryClient, meta);
+            toast.success("Document duplicated");
+          } catch {
+            toast.error("Unable to duplicate document");
           } finally {
             setDuplicateDialog((p) => ({ ...p, isPending: false }));
           }
@@ -2145,13 +2121,17 @@ function DocumentsModule() {
                 className="h-9 px-5 text-left text-[13px] transition-colors hover:bg-canvas-soft"
                 onClick={async () => {
                   setConversionDialog((p) => ({ ...p, open: false }));
-                  const res = await fetch(`/api/documents/${conversionDialog.recordId}/convert`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ targetGroupId: c.documentGroupId }),
-                  });
-                  if (res.ok) {
-                    queryClient.invalidateQueries({ queryKey: ["data", "document"] });
+                  if (!conversionDialog.recordId) return;
+                  try {
+                    const { meta } = await callCapability("sales.document.convert", {
+                      documentId: conversionDialog.recordId,
+                      targetGroupId: c.documentGroupId,
+                    });
+                    invalidateAfterCapability(queryClient, meta);
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error ? error.message : "Unable to convert document",
+                    );
                   }
                 }}
               >

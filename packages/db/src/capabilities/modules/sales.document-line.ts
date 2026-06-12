@@ -172,6 +172,106 @@ export const documentLineTrackingRead = defineCapability({
   },
 });
 
+async function assertLineInDocument(
+  tenantId: string,
+  documentId: string,
+  documentLineId: string,
+) {
+  const line = await new DataService(tenantId).get("documentLine", documentLineId);
+  if (!line || (line as { documentId?: string }).documentId !== documentId) {
+    throw new CapabilityError("not_found", "Document line not found");
+  }
+}
+
+export const documentLineTrackingAdd = defineCapability({
+  module: "sales",
+  entityName: "documentLineTracking",
+  operation: "add",
+  kind: "create",
+  summary: { en: "Add a tracking row to a document line", de: "Tracking-Zeile zur Belegzeile hinzufügen" },
+  description: {
+    en: "Exactly one of serialNumberId, serialNo or batchNo must be provided.",
+    de: "Genau eines von serialNumberId, serialNo oder batchNo muss übergeben werden.",
+  },
+  input: z
+    .object({
+      documentId: z.uuid(),
+      documentLineId: z.uuid(),
+      serialNumberId: z.uuid().optional(),
+      serialNo: z.string().trim().min(1).optional(),
+      batchNo: z.string().trim().min(1).optional(),
+      qty: z.union([z.string(), z.number()]),
+    })
+    .refine(
+      (value) =>
+        [value.serialNumberId, value.serialNo, value.batchNo].filter(Boolean).length === 1,
+      { message: "Exactly one of serialNumberId, serialNo or batchNo must be provided" },
+    ),
+  output: looseRowSchema,
+  writesTables: ["documentLineTracking"],
+  sideEffects: [],
+  idempotent: false,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => {
+    await assertLineInDocument(ctx.tenantId, input.documentId, input.documentLineId);
+    const [inserted] = await new DataService(ctx.tenantId).create("documentLineTracking", {
+      documentLineId: input.documentLineId,
+      serialNumberId: input.serialNumberId ?? null,
+      serialNo: input.serialNo ?? null,
+      batchNo: input.batchNo ?? null,
+      qty: String(input.qty),
+    });
+    return inserted;
+  },
+});
+
+export const documentLineTrackingRemove = defineCapability({
+  module: "sales",
+  entityName: "documentLineTracking",
+  operation: "remove",
+  kind: "archive",
+  summary: { en: "Remove a tracking row", de: "Tracking-Zeile entfernen" },
+  description: {
+    en: "Tracking rows are pre-posting working data; removing one deletes the row (the underlying movements stay untouched).",
+    de: "Tracking-Zeilen sind Arbeitsdaten vor der Verbuchung; das Entfernen löscht die Zeile (Bewegungen bleiben unberührt).",
+  },
+  input: z.object({
+    documentId: z.uuid(),
+    documentLineId: z.uuid(),
+    trackingId: z.uuid(),
+  }),
+  output: z.object({ success: z.literal(true) }),
+  writesTables: ["documentLineTracking"],
+  sideEffects: [],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => {
+    await assertLineInDocument(ctx.tenantId, input.documentId, input.documentLineId);
+    const tracking = await new DataService(ctx.tenantId).get(
+      "documentLineTracking",
+      input.trackingId,
+    );
+    if (
+      !tracking ||
+      (tracking as { documentLineId?: string }).documentLineId !== input.documentLineId
+    ) {
+      throw new CapabilityError("not_found", "Tracking entry not found");
+    }
+    const result = await new DataService(ctx.tenantId).delete(
+      "documentLineTracking",
+      input.trackingId,
+    );
+    if (!result.deleted) throw new CapabilityError("conflict", "Tracking entry could not be removed");
+    return { success: true as const };
+  },
+});
+
 export const documentLineDelta = defineCapability({
   module: "sales",
   entityName: "documentLine",
@@ -212,6 +312,8 @@ export const documentLineCapabilities = [
   documentLineTracking.create,
   documentLineTracking.update,
   documentLineTrackingRead,
+  documentLineTrackingAdd,
+  documentLineTrackingRemove,
   documentLineAllocation.list,
   documentLineAllocation.get,
   documentLineAllocation.create,

@@ -35,10 +35,6 @@ import { Route as ApiImportConnectorsRouteImport } from './routes/api/import/con
 import { Route as ApiImportBatchesRouteImport } from './routes/api/import/batches'
 import { Route as ApiFeedbackSubmitRouteImport } from './routes/api/feedback/submit'
 import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
-import { Route as ApiDocumentsTreeRouteImport } from './routes/api/documents/tree'
-import { Route as ApiDocumentsImportTrackingRouteImport } from './routes/api/documents/import-tracking'
-import { Route as ApiDocumentsExportRouteImport } from './routes/api/documents/export'
-import { Route as ApiDocumentsCreateRouteImport } from './routes/api/documents/create'
 import { Route as ApiDeliveryAddressesSearchRouteImport } from './routes/api/delivery-addresses/search'
 import { Route as ApiDeliveryAddressesDeliveryAddressIdRouteImport } from './routes/api/delivery-addresses/$deliveryAddressId'
 import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
@@ -67,15 +63,7 @@ import { Route as ApiStatsArticleArticleIdRouteImport } from './routes/api/stats
 import { Route as ApiStatsAddressAddressIdRouteImport } from './routes/api/stats/address/$addressId'
 import { Route as ApiImportProfilesProfileIdRouteImport } from './routes/api/import/profiles/$profileId'
 import { Route as ApiImportBatchesBatchIdRouteImport } from './routes/api/import/batches/$batchId'
-import { Route as ApiDocumentsDocumentIdStornoRouteImport } from './routes/api/documents/$documentId/storno'
-import { Route as ApiDocumentsDocumentIdShipmentRouteImport } from './routes/api/documents/$documentId/shipment'
 import { Route as ApiDocumentsDocumentIdPrintRouteImport } from './routes/api/documents/$documentId/print'
-import { Route as ApiDocumentsDocumentIdPostRouteImport } from './routes/api/documents/$documentId/post'
-import { Route as ApiDocumentsDocumentIdDuplicateRouteImport } from './routes/api/documents/$documentId/duplicate'
-import { Route as ApiDocumentsDocumentIdDeltaRouteImport } from './routes/api/documents/$documentId/delta'
-import { Route as ApiDocumentsDocumentIdDeleteRouteImport } from './routes/api/documents/$documentId/delete'
-import { Route as ApiDocumentsDocumentIdConvertRouteImport } from './routes/api/documents/$documentId/convert'
-import { Route as ApiDocumentsDocumentIdAuditRouteImport } from './routes/api/documents/$documentId/audit'
 import { Route as ApiDataTenantLlmConfigTestRouteImport } from './routes/api/data/tenantLlmConfig.test'
 import { Route as ApiCapabilitiesKeyExecuteRouteImport } from './routes/api/capabilities/$key/execute'
 import { Route as ApiArticlesArticleIdSerialNumbersRouteImport } from './routes/api/articles/$articleId/serial-numbers'
@@ -86,7 +74,6 @@ import { Route as ApiArticlesArticleIdGenerateVariantsRouteImport } from './rout
 import { Route as ApiArticlesArticleIdCopyVariantAxesRouteImport } from './routes/api/articles/$articleId/copy-variant-axes'
 import { Route as ApiArticlesArticleIdBomRouteImport } from './routes/api/articles/$articleId/bom'
 import { Route as ApiArticlesArticleIdBatchesRouteImport } from './routes/api/articles/$articleId/batches'
-import { Route as ApiArticlesArticleIdArchiveVariantsRouteImport } from './routes/api/articles/$articleId/archive-variants'
 import { Route as ApiArticlesArticleIdApplyVariantTemplateRouteImport } from './routes/api/articles/$articleId/apply-variant-template'
 import { Route as ApiAdminLlmConfigTestRouteImport } from './routes/api/admin/llm-config.test'
 import { Route as ApiAdminDocumentGroupsIdRouteImport } from './routes/api/admin/document-groups/$id'
@@ -100,14 +87,11 @@ import { Route as ApiImportProfilesProfileIdMappingsRouteImport } from './routes
 import { Route as ApiImportProfilesProfileIdActivateRouteImport } from './routes/api/import/profiles/$profileId/activate'
 import { Route as ApiImportBatchesBatchIdPostRouteImport } from './routes/api/import/batches/$batchId/post'
 import { Route as ApiImportBatchesBatchIdApproveRouteImport } from './routes/api/import/batches/$batchId/approve'
-import { Route as ApiDocumentsLinesLineIdDeltaRouteImport } from './routes/api/documents/lines/$lineId/delta'
 import { Route as ApiArticlesArticleIdBomBomIdRouteImport } from './routes/api/articles/$articleId/bom/$bomId'
 import { Route as ApiAccountingBatchesBatchIdRebuildRouteImport } from './routes/api/accounting/batches/$batchId/rebuild'
 import { Route as ApiAccountingBatchesBatchIdExportRouteImport } from './routes/api/accounting/batches/$batchId/export'
 import { Route as ApiAccountingBatchesBatchIdCsvRouteImport } from './routes/api/accounting/batches/$batchId/csv'
 import { Route as ApiAccountingBatchesBatchIdBuildRouteImport } from './routes/api/accounting/batches/$batchId/build'
-import { Route as ApiDocumentsDocumentIdLinesLineIdTrackingRouteImport } from './routes/api/documents/$documentId/lines/$lineId/tracking'
-import { Route as ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRouteImport } from './routes/api/documents/$documentId/lines/$lineId/tracking/$trackingId'
 
 const GuestRouteRoute = GuestRouteRouteImport.update({
   id: '/_guest',
@@ -236,27 +220,6 @@ const ApiFeedbackSubmitRoute = ApiFeedbackSubmitRouteImport.update({
 const ApiEmailSplatRoute = ApiEmailSplatRouteImport.update({
   id: '/api/email/$',
   path: '/api/email/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiDocumentsTreeRoute = ApiDocumentsTreeRouteImport.update({
-  id: '/api/documents/tree',
-  path: '/api/documents/tree',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiDocumentsImportTrackingRoute =
-  ApiDocumentsImportTrackingRouteImport.update({
-    id: '/api/documents/import-tracking',
-    path: '/api/documents/import-tracking',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiDocumentsExportRoute = ApiDocumentsExportRouteImport.update({
-  id: '/api/documents/export',
-  path: '/api/documents/export',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiDocumentsCreateRoute = ApiDocumentsCreateRouteImport.update({
-  id: '/api/documents/create',
-  path: '/api/documents/create',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDeliveryAddressesSearchRoute =
@@ -406,58 +369,10 @@ const ApiImportBatchesBatchIdRoute = ApiImportBatchesBatchIdRouteImport.update({
   path: '/$batchId',
   getParentRoute: () => ApiImportBatchesRoute,
 } as any)
-const ApiDocumentsDocumentIdStornoRoute =
-  ApiDocumentsDocumentIdStornoRouteImport.update({
-    id: '/api/documents/$documentId/storno',
-    path: '/api/documents/$documentId/storno',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiDocumentsDocumentIdShipmentRoute =
-  ApiDocumentsDocumentIdShipmentRouteImport.update({
-    id: '/api/documents/$documentId/shipment',
-    path: '/api/documents/$documentId/shipment',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiDocumentsDocumentIdPrintRoute =
   ApiDocumentsDocumentIdPrintRouteImport.update({
     id: '/api/documents/$documentId/print',
     path: '/api/documents/$documentId/print',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiDocumentsDocumentIdPostRoute =
-  ApiDocumentsDocumentIdPostRouteImport.update({
-    id: '/api/documents/$documentId/post',
-    path: '/api/documents/$documentId/post',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiDocumentsDocumentIdDuplicateRoute =
-  ApiDocumentsDocumentIdDuplicateRouteImport.update({
-    id: '/api/documents/$documentId/duplicate',
-    path: '/api/documents/$documentId/duplicate',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiDocumentsDocumentIdDeltaRoute =
-  ApiDocumentsDocumentIdDeltaRouteImport.update({
-    id: '/api/documents/$documentId/delta',
-    path: '/api/documents/$documentId/delta',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiDocumentsDocumentIdDeleteRoute =
-  ApiDocumentsDocumentIdDeleteRouteImport.update({
-    id: '/api/documents/$documentId/delete',
-    path: '/api/documents/$documentId/delete',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiDocumentsDocumentIdConvertRoute =
-  ApiDocumentsDocumentIdConvertRouteImport.update({
-    id: '/api/documents/$documentId/convert',
-    path: '/api/documents/$documentId/convert',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiDocumentsDocumentIdAuditRoute =
-  ApiDocumentsDocumentIdAuditRouteImport.update({
-    id: '/api/documents/$documentId/audit',
-    path: '/api/documents/$documentId/audit',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiDataTenantLlmConfigTestRoute =
@@ -517,12 +432,6 @@ const ApiArticlesArticleIdBatchesRoute =
   ApiArticlesArticleIdBatchesRouteImport.update({
     id: '/api/articles/$articleId/batches',
     path: '/api/articles/$articleId/batches',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiArticlesArticleIdArchiveVariantsRoute =
-  ApiArticlesArticleIdArchiveVariantsRouteImport.update({
-    id: '/api/articles/$articleId/archive-variants',
-    path: '/api/articles/$articleId/archive-variants',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiArticlesArticleIdApplyVariantTemplateRoute =
@@ -599,12 +508,6 @@ const ApiImportBatchesBatchIdApproveRoute =
     path: '/approve',
     getParentRoute: () => ApiImportBatchesBatchIdRoute,
   } as any)
-const ApiDocumentsLinesLineIdDeltaRoute =
-  ApiDocumentsLinesLineIdDeltaRouteImport.update({
-    id: '/api/documents/lines/$lineId/delta',
-    path: '/api/documents/lines/$lineId/delta',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiArticlesArticleIdBomBomIdRoute =
   ApiArticlesArticleIdBomBomIdRouteImport.update({
     id: '/$bomId',
@@ -634,18 +537,6 @@ const ApiAccountingBatchesBatchIdBuildRoute =
     id: '/build',
     path: '/build',
     getParentRoute: () => ApiAccountingBatchesBatchIdRoute,
-  } as any)
-const ApiDocumentsDocumentIdLinesLineIdTrackingRoute =
-  ApiDocumentsDocumentIdLinesLineIdTrackingRouteImport.update({
-    id: '/api/documents/$documentId/lines/$lineId/tracking',
-    path: '/api/documents/$documentId/lines/$lineId/tracking',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRoute =
-  ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRouteImport.update({
-    id: '/$trackingId',
-    path: '/$trackingId',
-    getParentRoute: () => ApiDocumentsDocumentIdLinesLineIdTrackingRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -677,10 +568,6 @@ export interface FileRoutesByFullPath {
   '/api/data/$': typeof ApiDataSplatRoute
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
-  '/api/documents/create': typeof ApiDocumentsCreateRoute
-  '/api/documents/export': typeof ApiDocumentsExportRoute
-  '/api/documents/import-tracking': typeof ApiDocumentsImportTrackingRoute
-  '/api/documents/tree': typeof ApiDocumentsTreeRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
@@ -705,7 +592,6 @@ export interface FileRoutesByFullPath {
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
   '/api/articles/$articleId/apply-variant-template': typeof ApiArticlesArticleIdApplyVariantTemplateRoute
-  '/api/articles/$articleId/archive-variants': typeof ApiArticlesArticleIdArchiveVariantsRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
   '/api/articles/$articleId/copy-variant-axes': typeof ApiArticlesArticleIdCopyVariantAxesRoute
@@ -716,15 +602,7 @@ export interface FileRoutesByFullPath {
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
   '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
-  '/api/documents/$documentId/audit': typeof ApiDocumentsDocumentIdAuditRoute
-  '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
-  '/api/documents/$documentId/delete': typeof ApiDocumentsDocumentIdDeleteRoute
-  '/api/documents/$documentId/delta': typeof ApiDocumentsDocumentIdDeltaRoute
-  '/api/documents/$documentId/duplicate': typeof ApiDocumentsDocumentIdDuplicateRoute
-  '/api/documents/$documentId/post': typeof ApiDocumentsDocumentIdPostRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
-  '/api/documents/$documentId/shipment': typeof ApiDocumentsDocumentIdShipmentRoute
-  '/api/documents/$documentId/storno': typeof ApiDocumentsDocumentIdStornoRoute
   '/api/import/batches/$batchId': typeof ApiImportBatchesBatchIdRouteWithChildren
   '/api/import/profiles/$profileId': typeof ApiImportProfilesProfileIdRouteWithChildren
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
@@ -739,13 +617,10 @@ export interface FileRoutesByFullPath {
   '/api/accounting/batches/$batchId/export': typeof ApiAccountingBatchesBatchIdExportRoute
   '/api/accounting/batches/$batchId/rebuild': typeof ApiAccountingBatchesBatchIdRebuildRoute
   '/api/articles/$articleId/bom/$bomId': typeof ApiArticlesArticleIdBomBomIdRoute
-  '/api/documents/lines/$lineId/delta': typeof ApiDocumentsLinesLineIdDeltaRoute
   '/api/import/batches/$batchId/approve': typeof ApiImportBatchesBatchIdApproveRoute
   '/api/import/batches/$batchId/post': typeof ApiImportBatchesBatchIdPostRoute
   '/api/import/profiles/$profileId/activate': typeof ApiImportProfilesProfileIdActivateRoute
   '/api/import/profiles/$profileId/mappings': typeof ApiImportProfilesProfileIdMappingsRoute
-  '/api/documents/$documentId/lines/$lineId/tracking': typeof ApiDocumentsDocumentIdLinesLineIdTrackingRouteWithChildren
-  '/api/documents/$documentId/lines/$lineId/tracking/$trackingId': typeof ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -774,10 +649,6 @@ export interface FileRoutesByTo {
   '/api/data/$': typeof ApiDataSplatRoute
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
-  '/api/documents/create': typeof ApiDocumentsCreateRoute
-  '/api/documents/export': typeof ApiDocumentsExportRoute
-  '/api/documents/import-tracking': typeof ApiDocumentsImportTrackingRoute
-  '/api/documents/tree': typeof ApiDocumentsTreeRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
@@ -802,7 +673,6 @@ export interface FileRoutesByTo {
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
   '/api/articles/$articleId/apply-variant-template': typeof ApiArticlesArticleIdApplyVariantTemplateRoute
-  '/api/articles/$articleId/archive-variants': typeof ApiArticlesArticleIdArchiveVariantsRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
   '/api/articles/$articleId/copy-variant-axes': typeof ApiArticlesArticleIdCopyVariantAxesRoute
@@ -813,15 +683,7 @@ export interface FileRoutesByTo {
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
   '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
-  '/api/documents/$documentId/audit': typeof ApiDocumentsDocumentIdAuditRoute
-  '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
-  '/api/documents/$documentId/delete': typeof ApiDocumentsDocumentIdDeleteRoute
-  '/api/documents/$documentId/delta': typeof ApiDocumentsDocumentIdDeltaRoute
-  '/api/documents/$documentId/duplicate': typeof ApiDocumentsDocumentIdDuplicateRoute
-  '/api/documents/$documentId/post': typeof ApiDocumentsDocumentIdPostRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
-  '/api/documents/$documentId/shipment': typeof ApiDocumentsDocumentIdShipmentRoute
-  '/api/documents/$documentId/storno': typeof ApiDocumentsDocumentIdStornoRoute
   '/api/import/batches/$batchId': typeof ApiImportBatchesBatchIdRouteWithChildren
   '/api/import/profiles/$profileId': typeof ApiImportProfilesProfileIdRouteWithChildren
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
@@ -836,13 +698,10 @@ export interface FileRoutesByTo {
   '/api/accounting/batches/$batchId/export': typeof ApiAccountingBatchesBatchIdExportRoute
   '/api/accounting/batches/$batchId/rebuild': typeof ApiAccountingBatchesBatchIdRebuildRoute
   '/api/articles/$articleId/bom/$bomId': typeof ApiArticlesArticleIdBomBomIdRoute
-  '/api/documents/lines/$lineId/delta': typeof ApiDocumentsLinesLineIdDeltaRoute
   '/api/import/batches/$batchId/approve': typeof ApiImportBatchesBatchIdApproveRoute
   '/api/import/batches/$batchId/post': typeof ApiImportBatchesBatchIdPostRoute
   '/api/import/profiles/$profileId/activate': typeof ApiImportProfilesProfileIdActivateRoute
   '/api/import/profiles/$profileId/mappings': typeof ApiImportProfilesProfileIdMappingsRoute
-  '/api/documents/$documentId/lines/$lineId/tracking': typeof ApiDocumentsDocumentIdLinesLineIdTrackingRouteWithChildren
-  '/api/documents/$documentId/lines/$lineId/tracking/$trackingId': typeof ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -876,10 +735,6 @@ export interface FileRoutesById {
   '/api/data/$': typeof ApiDataSplatRoute
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
-  '/api/documents/create': typeof ApiDocumentsCreateRoute
-  '/api/documents/export': typeof ApiDocumentsExportRoute
-  '/api/documents/import-tracking': typeof ApiDocumentsImportTrackingRoute
-  '/api/documents/tree': typeof ApiDocumentsTreeRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/import/batches': typeof ApiImportBatchesRouteWithChildren
@@ -904,7 +759,6 @@ export interface FileRoutesById {
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
   '/api/articles/$articleId/apply-variant-template': typeof ApiArticlesArticleIdApplyVariantTemplateRoute
-  '/api/articles/$articleId/archive-variants': typeof ApiArticlesArticleIdArchiveVariantsRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
   '/api/articles/$articleId/copy-variant-axes': typeof ApiArticlesArticleIdCopyVariantAxesRoute
@@ -915,15 +769,7 @@ export interface FileRoutesById {
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
   '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
-  '/api/documents/$documentId/audit': typeof ApiDocumentsDocumentIdAuditRoute
-  '/api/documents/$documentId/convert': typeof ApiDocumentsDocumentIdConvertRoute
-  '/api/documents/$documentId/delete': typeof ApiDocumentsDocumentIdDeleteRoute
-  '/api/documents/$documentId/delta': typeof ApiDocumentsDocumentIdDeltaRoute
-  '/api/documents/$documentId/duplicate': typeof ApiDocumentsDocumentIdDuplicateRoute
-  '/api/documents/$documentId/post': typeof ApiDocumentsDocumentIdPostRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
-  '/api/documents/$documentId/shipment': typeof ApiDocumentsDocumentIdShipmentRoute
-  '/api/documents/$documentId/storno': typeof ApiDocumentsDocumentIdStornoRoute
   '/api/import/batches/$batchId': typeof ApiImportBatchesBatchIdRouteWithChildren
   '/api/import/profiles/$profileId': typeof ApiImportProfilesProfileIdRouteWithChildren
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
@@ -938,13 +784,10 @@ export interface FileRoutesById {
   '/api/accounting/batches/$batchId/export': typeof ApiAccountingBatchesBatchIdExportRoute
   '/api/accounting/batches/$batchId/rebuild': typeof ApiAccountingBatchesBatchIdRebuildRoute
   '/api/articles/$articleId/bom/$bomId': typeof ApiArticlesArticleIdBomBomIdRoute
-  '/api/documents/lines/$lineId/delta': typeof ApiDocumentsLinesLineIdDeltaRoute
   '/api/import/batches/$batchId/approve': typeof ApiImportBatchesBatchIdApproveRoute
   '/api/import/batches/$batchId/post': typeof ApiImportBatchesBatchIdPostRoute
   '/api/import/profiles/$profileId/activate': typeof ApiImportProfilesProfileIdActivateRoute
   '/api/import/profiles/$profileId/mappings': typeof ApiImportProfilesProfileIdMappingsRoute
-  '/api/documents/$documentId/lines/$lineId/tracking': typeof ApiDocumentsDocumentIdLinesLineIdTrackingRouteWithChildren
-  '/api/documents/$documentId/lines/$lineId/tracking/$trackingId': typeof ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -977,10 +820,6 @@ export interface FileRouteTypes {
     | '/api/data/$'
     | '/api/delivery-addresses/$deliveryAddressId'
     | '/api/delivery-addresses/search'
-    | '/api/documents/create'
-    | '/api/documents/export'
-    | '/api/documents/import-tracking'
-    | '/api/documents/tree'
     | '/api/email/$'
     | '/api/feedback/submit'
     | '/api/import/batches'
@@ -1005,7 +844,6 @@ export interface FileRouteTypes {
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
     | '/api/articles/$articleId/apply-variant-template'
-    | '/api/articles/$articleId/archive-variants'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
     | '/api/articles/$articleId/copy-variant-axes'
@@ -1016,15 +854,7 @@ export interface FileRouteTypes {
     | '/api/articles/$articleId/serial-numbers'
     | '/api/capabilities/$key/execute'
     | '/api/data/tenantLlmConfig/test'
-    | '/api/documents/$documentId/audit'
-    | '/api/documents/$documentId/convert'
-    | '/api/documents/$documentId/delete'
-    | '/api/documents/$documentId/delta'
-    | '/api/documents/$documentId/duplicate'
-    | '/api/documents/$documentId/post'
     | '/api/documents/$documentId/print'
-    | '/api/documents/$documentId/shipment'
-    | '/api/documents/$documentId/storno'
     | '/api/import/batches/$batchId'
     | '/api/import/profiles/$profileId'
     | '/api/stats/address/$addressId'
@@ -1039,13 +869,10 @@ export interface FileRouteTypes {
     | '/api/accounting/batches/$batchId/export'
     | '/api/accounting/batches/$batchId/rebuild'
     | '/api/articles/$articleId/bom/$bomId'
-    | '/api/documents/lines/$lineId/delta'
     | '/api/import/batches/$batchId/approve'
     | '/api/import/batches/$batchId/post'
     | '/api/import/profiles/$profileId/activate'
     | '/api/import/profiles/$profileId/mappings'
-    | '/api/documents/$documentId/lines/$lineId/tracking'
-    | '/api/documents/$documentId/lines/$lineId/tracking/$trackingId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1074,10 +901,6 @@ export interface FileRouteTypes {
     | '/api/data/$'
     | '/api/delivery-addresses/$deliveryAddressId'
     | '/api/delivery-addresses/search'
-    | '/api/documents/create'
-    | '/api/documents/export'
-    | '/api/documents/import-tracking'
-    | '/api/documents/tree'
     | '/api/email/$'
     | '/api/feedback/submit'
     | '/api/import/batches'
@@ -1102,7 +925,6 @@ export interface FileRouteTypes {
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
     | '/api/articles/$articleId/apply-variant-template'
-    | '/api/articles/$articleId/archive-variants'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
     | '/api/articles/$articleId/copy-variant-axes'
@@ -1113,15 +935,7 @@ export interface FileRouteTypes {
     | '/api/articles/$articleId/serial-numbers'
     | '/api/capabilities/$key/execute'
     | '/api/data/tenantLlmConfig/test'
-    | '/api/documents/$documentId/audit'
-    | '/api/documents/$documentId/convert'
-    | '/api/documents/$documentId/delete'
-    | '/api/documents/$documentId/delta'
-    | '/api/documents/$documentId/duplicate'
-    | '/api/documents/$documentId/post'
     | '/api/documents/$documentId/print'
-    | '/api/documents/$documentId/shipment'
-    | '/api/documents/$documentId/storno'
     | '/api/import/batches/$batchId'
     | '/api/import/profiles/$profileId'
     | '/api/stats/address/$addressId'
@@ -1136,13 +950,10 @@ export interface FileRouteTypes {
     | '/api/accounting/batches/$batchId/export'
     | '/api/accounting/batches/$batchId/rebuild'
     | '/api/articles/$articleId/bom/$bomId'
-    | '/api/documents/lines/$lineId/delta'
     | '/api/import/batches/$batchId/approve'
     | '/api/import/batches/$batchId/post'
     | '/api/import/profiles/$profileId/activate'
     | '/api/import/profiles/$profileId/mappings'
-    | '/api/documents/$documentId/lines/$lineId/tracking'
-    | '/api/documents/$documentId/lines/$lineId/tracking/$trackingId'
   id:
     | '__root__'
     | '/'
@@ -1175,10 +986,6 @@ export interface FileRouteTypes {
     | '/api/data/$'
     | '/api/delivery-addresses/$deliveryAddressId'
     | '/api/delivery-addresses/search'
-    | '/api/documents/create'
-    | '/api/documents/export'
-    | '/api/documents/import-tracking'
-    | '/api/documents/tree'
     | '/api/email/$'
     | '/api/feedback/submit'
     | '/api/import/batches'
@@ -1203,7 +1010,6 @@ export interface FileRouteTypes {
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
     | '/api/articles/$articleId/apply-variant-template'
-    | '/api/articles/$articleId/archive-variants'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
     | '/api/articles/$articleId/copy-variant-axes'
@@ -1214,15 +1020,7 @@ export interface FileRouteTypes {
     | '/api/articles/$articleId/serial-numbers'
     | '/api/capabilities/$key/execute'
     | '/api/data/tenantLlmConfig/test'
-    | '/api/documents/$documentId/audit'
-    | '/api/documents/$documentId/convert'
-    | '/api/documents/$documentId/delete'
-    | '/api/documents/$documentId/delta'
-    | '/api/documents/$documentId/duplicate'
-    | '/api/documents/$documentId/post'
     | '/api/documents/$documentId/print'
-    | '/api/documents/$documentId/shipment'
-    | '/api/documents/$documentId/storno'
     | '/api/import/batches/$batchId'
     | '/api/import/profiles/$profileId'
     | '/api/stats/address/$addressId'
@@ -1237,13 +1035,10 @@ export interface FileRouteTypes {
     | '/api/accounting/batches/$batchId/export'
     | '/api/accounting/batches/$batchId/rebuild'
     | '/api/articles/$articleId/bom/$bomId'
-    | '/api/documents/lines/$lineId/delta'
     | '/api/import/batches/$batchId/approve'
     | '/api/import/batches/$batchId/post'
     | '/api/import/profiles/$profileId/activate'
     | '/api/import/profiles/$profileId/mappings'
-    | '/api/documents/$documentId/lines/$lineId/tracking'
-    | '/api/documents/$documentId/lines/$lineId/tracking/$trackingId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1265,10 +1060,6 @@ export interface RootRouteChildren {
   ApiDataSplatRoute: typeof ApiDataSplatRoute
   ApiDeliveryAddressesDeliveryAddressIdRoute: typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   ApiDeliveryAddressesSearchRoute: typeof ApiDeliveryAddressesSearchRoute
-  ApiDocumentsCreateRoute: typeof ApiDocumentsCreateRoute
-  ApiDocumentsExportRoute: typeof ApiDocumentsExportRoute
-  ApiDocumentsImportTrackingRoute: typeof ApiDocumentsImportTrackingRoute
-  ApiDocumentsTreeRoute: typeof ApiDocumentsTreeRoute
   ApiEmailSplatRoute: typeof ApiEmailSplatRoute
   ApiFeedbackSubmitRoute: typeof ApiFeedbackSubmitRoute
   ApiImportBatchesRoute: typeof ApiImportBatchesRouteWithChildren
@@ -1284,7 +1075,6 @@ export interface RootRouteChildren {
   ApiAdminDataSplatRoute: typeof ApiAdminDataSplatRoute
   ApiAdminDocumentGroupsIdRoute: typeof ApiAdminDocumentGroupsIdRoute
   ApiArticlesArticleIdApplyVariantTemplateRoute: typeof ApiArticlesArticleIdApplyVariantTemplateRoute
-  ApiArticlesArticleIdArchiveVariantsRoute: typeof ApiArticlesArticleIdArchiveVariantsRoute
   ApiArticlesArticleIdBatchesRoute: typeof ApiArticlesArticleIdBatchesRoute
   ApiArticlesArticleIdBomRoute: typeof ApiArticlesArticleIdBomRouteWithChildren
   ApiArticlesArticleIdCopyVariantAxesRoute: typeof ApiArticlesArticleIdCopyVariantAxesRoute
@@ -1294,22 +1084,12 @@ export interface RootRouteChildren {
   ApiArticlesArticleIdPricingRoute: typeof ApiArticlesArticleIdPricingRoute
   ApiArticlesArticleIdSerialNumbersRoute: typeof ApiArticlesArticleIdSerialNumbersRoute
   ApiDataTenantLlmConfigTestRoute: typeof ApiDataTenantLlmConfigTestRoute
-  ApiDocumentsDocumentIdAuditRoute: typeof ApiDocumentsDocumentIdAuditRoute
-  ApiDocumentsDocumentIdConvertRoute: typeof ApiDocumentsDocumentIdConvertRoute
-  ApiDocumentsDocumentIdDeleteRoute: typeof ApiDocumentsDocumentIdDeleteRoute
-  ApiDocumentsDocumentIdDeltaRoute: typeof ApiDocumentsDocumentIdDeltaRoute
-  ApiDocumentsDocumentIdDuplicateRoute: typeof ApiDocumentsDocumentIdDuplicateRoute
-  ApiDocumentsDocumentIdPostRoute: typeof ApiDocumentsDocumentIdPostRoute
   ApiDocumentsDocumentIdPrintRoute: typeof ApiDocumentsDocumentIdPrintRoute
-  ApiDocumentsDocumentIdShipmentRoute: typeof ApiDocumentsDocumentIdShipmentRoute
-  ApiDocumentsDocumentIdStornoRoute: typeof ApiDocumentsDocumentIdStornoRoute
   ApiStatsAddressAddressIdRoute: typeof ApiStatsAddressAddressIdRoute
   ApiStatsArticleArticleIdRoute: typeof ApiStatsArticleArticleIdRoute
   ApiStorageArticleImagesImageIdRoute: typeof ApiStorageArticleImagesImageIdRoute
   ApiStoragePreviewSplatRoute: typeof ApiStoragePreviewSplatRoute
   ApiAdminDocumentGroupsIndexRoute: typeof ApiAdminDocumentGroupsIndexRoute
-  ApiDocumentsLinesLineIdDeltaRoute: typeof ApiDocumentsLinesLineIdDeltaRoute
-  ApiDocumentsDocumentIdLinesLineIdTrackingRoute: typeof ApiDocumentsDocumentIdLinesLineIdTrackingRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -1494,34 +1274,6 @@ declare module '@tanstack/react-router' {
       path: '/api/email/$'
       fullPath: '/api/email/$'
       preLoaderRoute: typeof ApiEmailSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/tree': {
-      id: '/api/documents/tree'
-      path: '/api/documents/tree'
-      fullPath: '/api/documents/tree'
-      preLoaderRoute: typeof ApiDocumentsTreeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/import-tracking': {
-      id: '/api/documents/import-tracking'
-      path: '/api/documents/import-tracking'
-      fullPath: '/api/documents/import-tracking'
-      preLoaderRoute: typeof ApiDocumentsImportTrackingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/export': {
-      id: '/api/documents/export'
-      path: '/api/documents/export'
-      fullPath: '/api/documents/export'
-      preLoaderRoute: typeof ApiDocumentsExportRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/create': {
-      id: '/api/documents/create'
-      path: '/api/documents/create'
-      fullPath: '/api/documents/create'
-      preLoaderRoute: typeof ApiDocumentsCreateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/delivery-addresses/search': {
@@ -1720,67 +1472,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImportBatchesBatchIdRouteImport
       parentRoute: typeof ApiImportBatchesRoute
     }
-    '/api/documents/$documentId/storno': {
-      id: '/api/documents/$documentId/storno'
-      path: '/api/documents/$documentId/storno'
-      fullPath: '/api/documents/$documentId/storno'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdStornoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/$documentId/shipment': {
-      id: '/api/documents/$documentId/shipment'
-      path: '/api/documents/$documentId/shipment'
-      fullPath: '/api/documents/$documentId/shipment'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdShipmentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/documents/$documentId/print': {
       id: '/api/documents/$documentId/print'
       path: '/api/documents/$documentId/print'
       fullPath: '/api/documents/$documentId/print'
       preLoaderRoute: typeof ApiDocumentsDocumentIdPrintRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/$documentId/post': {
-      id: '/api/documents/$documentId/post'
-      path: '/api/documents/$documentId/post'
-      fullPath: '/api/documents/$documentId/post'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdPostRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/$documentId/duplicate': {
-      id: '/api/documents/$documentId/duplicate'
-      path: '/api/documents/$documentId/duplicate'
-      fullPath: '/api/documents/$documentId/duplicate'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdDuplicateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/$documentId/delta': {
-      id: '/api/documents/$documentId/delta'
-      path: '/api/documents/$documentId/delta'
-      fullPath: '/api/documents/$documentId/delta'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdDeltaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/$documentId/delete': {
-      id: '/api/documents/$documentId/delete'
-      path: '/api/documents/$documentId/delete'
-      fullPath: '/api/documents/$documentId/delete'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdDeleteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/$documentId/convert': {
-      id: '/api/documents/$documentId/convert'
-      path: '/api/documents/$documentId/convert'
-      fullPath: '/api/documents/$documentId/convert'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdConvertRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/$documentId/audit': {
-      id: '/api/documents/$documentId/audit'
-      path: '/api/documents/$documentId/audit'
-      fullPath: '/api/documents/$documentId/audit'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdAuditRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/data/tenantLlmConfig/test': {
@@ -1851,13 +1547,6 @@ declare module '@tanstack/react-router' {
       path: '/api/articles/$articleId/batches'
       fullPath: '/api/articles/$articleId/batches'
       preLoaderRoute: typeof ApiArticlesArticleIdBatchesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/articles/$articleId/archive-variants': {
-      id: '/api/articles/$articleId/archive-variants'
-      path: '/api/articles/$articleId/archive-variants'
-      fullPath: '/api/articles/$articleId/archive-variants'
-      preLoaderRoute: typeof ApiArticlesArticleIdArchiveVariantsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/articles/$articleId/apply-variant-template': {
@@ -1951,13 +1640,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImportBatchesBatchIdApproveRouteImport
       parentRoute: typeof ApiImportBatchesBatchIdRoute
     }
-    '/api/documents/lines/$lineId/delta': {
-      id: '/api/documents/lines/$lineId/delta'
-      path: '/api/documents/lines/$lineId/delta'
-      fullPath: '/api/documents/lines/$lineId/delta'
-      preLoaderRoute: typeof ApiDocumentsLinesLineIdDeltaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/articles/$articleId/bom/$bomId': {
       id: '/api/articles/$articleId/bom/$bomId'
       path: '/$bomId'
@@ -1992,20 +1674,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/accounting/batches/$batchId/build'
       preLoaderRoute: typeof ApiAccountingBatchesBatchIdBuildRouteImport
       parentRoute: typeof ApiAccountingBatchesBatchIdRoute
-    }
-    '/api/documents/$documentId/lines/$lineId/tracking': {
-      id: '/api/documents/$documentId/lines/$lineId/tracking'
-      path: '/api/documents/$documentId/lines/$lineId/tracking'
-      fullPath: '/api/documents/$documentId/lines/$lineId/tracking'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdLinesLineIdTrackingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/documents/$documentId/lines/$lineId/tracking/$trackingId': {
-      id: '/api/documents/$documentId/lines/$lineId/tracking/$trackingId'
-      path: '/$trackingId'
-      fullPath: '/api/documents/$documentId/lines/$lineId/tracking/$trackingId'
-      preLoaderRoute: typeof ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRouteImport
-      parentRoute: typeof ApiDocumentsDocumentIdLinesLineIdTrackingRoute
     }
   }
 }
@@ -2245,21 +1913,6 @@ const ApiArticlesArticleIdBomRouteWithChildren =
     ApiArticlesArticleIdBomRouteChildren,
   )
 
-interface ApiDocumentsDocumentIdLinesLineIdTrackingRouteChildren {
-  ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRoute: typeof ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRoute
-}
-
-const ApiDocumentsDocumentIdLinesLineIdTrackingRouteChildren: ApiDocumentsDocumentIdLinesLineIdTrackingRouteChildren =
-  {
-    ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRoute:
-      ApiDocumentsDocumentIdLinesLineIdTrackingTrackingIdRoute,
-  }
-
-const ApiDocumentsDocumentIdLinesLineIdTrackingRouteWithChildren =
-  ApiDocumentsDocumentIdLinesLineIdTrackingRoute._addFileChildren(
-    ApiDocumentsDocumentIdLinesLineIdTrackingRouteChildren,
-  )
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRouteRoute: AuthRouteRouteWithChildren,
@@ -2280,10 +1933,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDeliveryAddressesDeliveryAddressIdRoute:
     ApiDeliveryAddressesDeliveryAddressIdRoute,
   ApiDeliveryAddressesSearchRoute: ApiDeliveryAddressesSearchRoute,
-  ApiDocumentsCreateRoute: ApiDocumentsCreateRoute,
-  ApiDocumentsExportRoute: ApiDocumentsExportRoute,
-  ApiDocumentsImportTrackingRoute: ApiDocumentsImportTrackingRoute,
-  ApiDocumentsTreeRoute: ApiDocumentsTreeRoute,
   ApiEmailSplatRoute: ApiEmailSplatRoute,
   ApiFeedbackSubmitRoute: ApiFeedbackSubmitRoute,
   ApiImportBatchesRoute: ApiImportBatchesRouteWithChildren,
@@ -2300,8 +1949,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminDocumentGroupsIdRoute: ApiAdminDocumentGroupsIdRoute,
   ApiArticlesArticleIdApplyVariantTemplateRoute:
     ApiArticlesArticleIdApplyVariantTemplateRoute,
-  ApiArticlesArticleIdArchiveVariantsRoute:
-    ApiArticlesArticleIdArchiveVariantsRoute,
   ApiArticlesArticleIdBatchesRoute: ApiArticlesArticleIdBatchesRoute,
   ApiArticlesArticleIdBomRoute: ApiArticlesArticleIdBomRouteWithChildren,
   ApiArticlesArticleIdCopyVariantAxesRoute:
@@ -2315,23 +1962,12 @@ const rootRouteChildren: RootRouteChildren = {
   ApiArticlesArticleIdSerialNumbersRoute:
     ApiArticlesArticleIdSerialNumbersRoute,
   ApiDataTenantLlmConfigTestRoute: ApiDataTenantLlmConfigTestRoute,
-  ApiDocumentsDocumentIdAuditRoute: ApiDocumentsDocumentIdAuditRoute,
-  ApiDocumentsDocumentIdConvertRoute: ApiDocumentsDocumentIdConvertRoute,
-  ApiDocumentsDocumentIdDeleteRoute: ApiDocumentsDocumentIdDeleteRoute,
-  ApiDocumentsDocumentIdDeltaRoute: ApiDocumentsDocumentIdDeltaRoute,
-  ApiDocumentsDocumentIdDuplicateRoute: ApiDocumentsDocumentIdDuplicateRoute,
-  ApiDocumentsDocumentIdPostRoute: ApiDocumentsDocumentIdPostRoute,
   ApiDocumentsDocumentIdPrintRoute: ApiDocumentsDocumentIdPrintRoute,
-  ApiDocumentsDocumentIdShipmentRoute: ApiDocumentsDocumentIdShipmentRoute,
-  ApiDocumentsDocumentIdStornoRoute: ApiDocumentsDocumentIdStornoRoute,
   ApiStatsAddressAddressIdRoute: ApiStatsAddressAddressIdRoute,
   ApiStatsArticleArticleIdRoute: ApiStatsArticleArticleIdRoute,
   ApiStorageArticleImagesImageIdRoute: ApiStorageArticleImagesImageIdRoute,
   ApiStoragePreviewSplatRoute: ApiStoragePreviewSplatRoute,
   ApiAdminDocumentGroupsIndexRoute: ApiAdminDocumentGroupsIndexRoute,
-  ApiDocumentsLinesLineIdDeltaRoute: ApiDocumentsLinesLineIdDeltaRoute,
-  ApiDocumentsDocumentIdLinesLineIdTrackingRoute:
-    ApiDocumentsDocumentIdLinesLineIdTrackingRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

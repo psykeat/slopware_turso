@@ -3848,9 +3848,12 @@ export class DocumentService {
 
       if (lines.length > 0) {
         await tx.insert(documentLine).values(
+          // loadActiveDocumentLines projects no tenant_id/transaction_id;
+          // both must come from the surrounding duplicate context.
           lines.map((l) => ({
-            tenantId: l.tenantId,
+            tenantId,
             documentId: newDoc.documentId,
+            transactionId: newDoc.transactionId,
             lineNo: l.lineNo,
             lineType: l.lineType,
             bomGroupId: l.bomGroupId ?? null,

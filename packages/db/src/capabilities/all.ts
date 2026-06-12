@@ -1,4 +1,6 @@
 import { accountingCapabilities } from "./modules/accounting.core";
+import { communicationEmailCapabilities } from "./modules/communication.email";
+import { importCapabilities } from "./modules/import.core";
 import { logisticsCapabilities } from "./modules/logistics.core";
 import { addressCapabilities } from "./modules/masterdata.address";
 import { articleCapabilities } from "./modules/masterdata.article";
@@ -47,6 +49,8 @@ export const allCapabilities = [
   ...paymentTermCapabilities,
   ...priceListCapabilities,
   ...accountingCapabilities,
+  ...communicationEmailCapabilities,
+  ...importCapabilities,
   ...documentLineCapabilities,
   ...documentCapabilities,
   ...logisticsCapabilities,

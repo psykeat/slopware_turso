@@ -727,6 +727,30 @@ export class EmailSyncService {
     return { ok: true };
   }
 
+  async linkThread(
+    threadId: string,
+    link: { addressId?: string | null; documentId?: string | null },
+  ) {
+    const [thread] = await db
+      .select()
+      .from(emailThread)
+      .where(and(eq(emailThread.tenantId, this.tenantId), eq(emailThread.emailThreadId, threadId)))
+      .limit(1);
+    if (!thread) return null;
+    await this.accountService.assertGrant(thread.emailAccountId, "read");
+
+    const patch: Partial<typeof emailThread.$inferInsert> = { updatedAt: new Date() };
+    if (link.addressId !== undefined) patch.relatedAddressId = link.addressId;
+    if (link.documentId !== undefined) patch.relatedDocumentId = link.documentId;
+
+    const [updated] = await db
+      .update(emailThread)
+      .set(patch)
+      .where(and(eq(emailThread.tenantId, this.tenantId), eq(emailThread.emailThreadId, threadId)))
+      .returning();
+    return updated ?? null;
+  }
+
   async syncContactsForAccount(accountId: string) {
     const [account] = await db
       .select({

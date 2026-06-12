@@ -283,11 +283,41 @@ export const articleVariantPricing = defineCapability({
   },
 });
 
+export const articleVariantArchiveBulk = defineCapability({
+  module: "masterdata",
+  entityName: "articleVariant",
+  operation: "archiveBulk",
+  kind: "archive",
+  summary: {
+    en: "Archive variants of an article",
+    de: "Varianten eines Artikels archivieren",
+  },
+  description: {
+    en: "Archives all variants of the article, or only the given variantIds.",
+    de: "Archiviert alle Varianten des Artikels oder nur die übergebenen variantIds.",
+  },
+  input: z.object({
+    articleId: z.uuid(),
+    variantIds: z.array(z.uuid()).optional(),
+  }),
+  output: z.object({ archivedVariants: z.number().int() }),
+  writesTables: ["articleVariant"],
+  sideEffects: [],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) =>
+    archiveArticleVariants(ctx.tenantId, input.articleId, input.variantIds),
+});
+
 export const articleVariantCapabilities = [
   articleVariantList,
   articleVariantGet,
   articleVariantUpdate,
   articleVariantArchive,
+  articleVariantArchiveBulk,
   articleVariantGenerateVariants,
   articleVariantPreviewVariants,
   articleVariantCopyVariantAxes,

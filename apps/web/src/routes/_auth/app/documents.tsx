@@ -35,6 +35,8 @@ import {
   type EmailComposeValue,
 } from "#/components/email/EmailComposeDialog";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
+import { invalidateAfterCapability } from "#/queries/invalidate";
+import { callCapability, CapabilityClientError } from "#/server-fns/capabilities";
 
 export const Route = createFileRoute("/_auth/app/documents")({
   component: DocumentsModule,
@@ -1496,16 +1498,16 @@ function DocumentsModule() {
       isEnabled: (s) => !!s.recordId && s.entity === "document",
       handler: async (s) => {
         if (!s.recordId) return;
-        const res = await fetch(`/api/documents/${s.recordId}/post`, {
-          method: "POST",
-        });
-        if (!res.ok) {
-          const message = await res.text();
-          toast.error(message || "Unable to post document");
-          return;
+        try {
+          const { meta } = await callCapability("sales.document.post", {
+            documentId: s.recordId,
+          });
+          invalidateAfterCapability(queryClient, meta);
+        } catch (error) {
+          const message =
+            error instanceof CapabilityClientError ? error.message : "Unable to post document";
+          toast.error(message);
         }
-        queryClient.invalidateQueries({ queryKey: ["data", "document"] });
-        queryClient.invalidateQueries({ queryKey: ["data", "documentLine"] });
       },
     });
     const unregEmail = registerCommand({

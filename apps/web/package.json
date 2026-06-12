@@ -28,7 +28,8 @@
     "react-dom": "catalog:",
     "react-i18next": "catalog:",
     "sonner": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@babel/core": "catalog:",

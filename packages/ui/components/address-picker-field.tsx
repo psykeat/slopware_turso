@@ -279,6 +279,8 @@ export function AddressPickerField({
     } else if (e.key === "Enter" && isOpen && results[selectedIndex]) {
       e.preventDefault();
       void handleSelect(results[selectedIndex]);
+    } else if (e.key === "Tab" && isOpen && results[selectedIndex]) {
+      void handleSelect(results[selectedIndex]);
     } else if (e.key === "Escape") {
       setIsOpen(false);
     }

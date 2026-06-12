@@ -357,10 +357,12 @@ export class DataService {
       const dataQ = db
         .select({
           ...getColumns(table),
+          articleId: schema.articleVariant.articleId,
           articleNo: schema.article.articleNo,
         })
         .from(table)
-        .leftJoin(schema.article, eq(table.articleId, schema.article.articleId));
+        .leftJoin(schema.articleVariant, eq(table.variantId, schema.articleVariant.variantId))
+        .leftJoin(schema.article, eq(schema.articleVariant.articleId, schema.article.articleId));
       if (whereClause) dataQ.where(whereClause);
       applyOptions(dataQ);
 
@@ -369,7 +371,8 @@ export class DataService {
       const countQ = db
         .select({ total: drizzleCount() })
         .from(table)
-        .leftJoin(schema.article, eq(table.articleId, schema.article.articleId));
+        .leftJoin(schema.articleVariant, eq(table.variantId, schema.articleVariant.variantId))
+        .leftJoin(schema.article, eq(schema.articleVariant.articleId, schema.article.articleId));
       if (whereClause) countQ.where(whereClause);
 
       const [data, countRows] = await Promise.all([dataQ, countQ]);

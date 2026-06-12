@@ -1249,6 +1249,243 @@ export const Route = createFileRoute("/api/ai/$")({
             });
           }
 
+          // POST /api/ai/variant-template-suggest
+          // AI is a suggestion layer only: output must pass the zod schema and
+          // is never persisted here.
+          if (path === "/api/ai/variant-template-suggest") {
+            const body = (await request.json()) as {
+              mode: "template" | "normalizeValues";
+              articleId?: string;
+              name?: string;
+              groupLabel?: string;
+              description?: string;
+              values?: string[];
+            };
+
+            const { resolveLlmRuntimeConfig } = await import("@repo/db/services/ai-orchestrator");
+            const llm = await resolveLlmRuntimeConfig(tenantId, userId);
+
+            const { createConfiguredProvider } = await import("@repo/agent");
+            const provider = createConfiguredProvider({
+              provider: llm.providerName,
+              model: llm.modelName,
+              apiKey: llm.apiKey || undefined,
+              endpointUrl: llm.gatewayUrl || undefined,
+              vertexCredentials: llm.vertexCredentials || undefined,
+              vertexProject: llm.vertexProject || undefined,
+              vertexLocation: llm.vertexLocation || undefined,
+            });
+
+            const chatText = async (prompt: string) => {
+              const response = (await provider.chat({
+                messages: [{ role: "user", content: prompt }],
+              })) as string;
+              return typeof response === "string" ? response : "";
+            };
+
+            const extractJson = (text: string): unknown => {
+              const stripped = text.replace(/```(?:json)?/g, "").trim();
+              const start = stripped.indexOf("{");
+              const end = stripped.lastIndexOf("}");
+              if (start === -1 || end <= start) throw new Error("No JSON object in response");
+              return JSON.parse(stripped.slice(start, end + 1));
+            };
+
+            if (body.mode === "normalizeValues") {
+              if (!Array.isArray(body.values) || body.values.length === 0) {
+                return new Response(JSON.stringify({ error: "values are required" }), {
+                  status: 400,
+                  headers: { "content-type": "application/json" },
+                });
+              }
+
+              const text = await chatText(
+                [
+                  'Du normalisierst Variantenwerte für ein ERP (z. B. "dunkelblau" → "Navy", "xtra large" → "XL").',
+                  'Antworte ausschließlich mit JSON der Form {"mappings":[{"from":"...","to":"..."}]}.',
+                  "Behalte Werte unverändert, wenn sie bereits sauber sind.",
+                  "",
+                  `Werte: ${JSON.stringify(body.values)}`,
+                ].join("\n"),
+              );
+
+              const parsed = extractJson(text) as { mappings?: unknown };
+              const mappings = Array.isArray(parsed.mappings)
+                ? parsed.mappings.filter(
+                    (entry: any) =>
+                      entry &&
+                      typeof entry.from === "string" &&
+                      typeof entry.to === "string",
+                  )
+                : [];
+
+              return new Response(JSON.stringify({ mappings }), {
+                headers: { "content-type": "application/json" },
+              });
+            }
+
+            // mode: "template"
+            let articleName = body.name ?? "";
+            let groupLabel = body.groupLabel ?? "";
+            let description = body.description ?? "";
+
+            if (body.articleId) {
+              const { article, articleGroup } = await import("@repo/db/schema");
+              const [articleRow] = await db
+                .select({
+                  name: article.name,
+                  description: article.description,
+                  groupName: articleGroup.name,
+                })
+                .from(article)
+                .leftJoin(articleGroup, eq(articleGroup.articleGroupId, article.articleGroupId))
+                .where(and(eq(article.tenantId, tenantId), eq(article.articleId, body.articleId)))
+                .limit(1);
+
+              if (!articleRow) {
+                return new Response("Article not found", { status: 404 });
+              }
+              articleName = articleRow.name ?? articleName;
+              description = articleRow.description ?? description;
+              groupLabel =
+                typeof articleRow.groupName === "string"
+                  ? articleRow.groupName
+                  : ((articleRow.groupName as any)?.de ??
+                    (articleRow.groupName as any)?.en ??
+                    groupLabel);
+            }
+
+            if (!articleName.trim()) {
+              return new Response(JSON.stringify({ error: "articleId or name is required" }), {
+                status: 400,
+                headers: { "content-type": "application/json" },
+              });
+            }
+
+            const { listVariantTemplates } = await import("@repo/db/services/variant-template");
+            const { parseVariantTemplateDefinition } = await import(
+              "@repo/db/services/variant-template-schema"
+            );
+
+            const templates = await listVariantTemplates(tenantId);
+            const templateSummaries = templates.map((template) => ({
+              templateId: template.templateId,
+              label: template.label,
+              productTypeLabel: template.definition.productTypeLabel,
+              axes: template.definition.axes.map((axis) => axis.name),
+            }));
+
+            const systemPrompt = [
+              "Du bist Assistent für Variantenvorlagen in einem ERP-System.",
+              "Eine Vorlage definiert Variantenachsen (z. B. Farbe, Größe) mit erlaubten Werten, optionalen SKU-Codes und Preisaufschlägen, Ausschlussregeln und ein SKU-Muster.",
+              "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärtext.",
+              "Wenn eine der vorhandenen Vorlagen gut zum Artikel passt, antworte mit {\"matchedTemplateId\": \"<templateId>\"}.",
+              "Sonst entwirf eine neue Vorlage und antworte mit {\"label\": \"<Kurzname>\", \"definition\": <Definition>}.",
+              "Die Definition folgt exakt diesem Schema:",
+              JSON.stringify({
+                version: 1,
+                productTypeLabel: "T-Shirt",
+                axes: [
+                  {
+                    name: "Farbe",
+                    sortOrder: 0,
+                    values: [{ value: "Navy", sortOrder: 0, skuCode: "NV", priceSurcharge: 0 }],
+                  },
+                ],
+                skuPattern: "{articleNo}-{axis:Farbe}",
+                exclusions: [
+                  {
+                    id: "regel-1",
+                    label: "Beschreibung",
+                    when: { axis: "Farbe", value: "Navy" },
+                    exclude: { axis: "Farbe", values: ["Navy"] },
+                  },
+                ],
+                defaults: { priceMode: "inherit", weightMode: "inherit" },
+              }),
+              "Achsennamen und Werte auf Deutsch, kurz und konsistent. Maximal 3 Achsen, nur plausible Werte. skuCode optional und max. 6 Zeichen. Ausschlussregeln nur wenn fachlich sinnvoll.",
+            ].join("\n");
+
+            const userPrompt = [
+              `Artikel: ${articleName}`,
+              groupLabel ? `Artikelgruppe: ${groupLabel}` : "",
+              description ? `Beschreibung: ${description.slice(0, 500)}` : "",
+              `Vorhandene Vorlagen: ${JSON.stringify(templateSummaries)}`,
+            ]
+              .filter(Boolean)
+              .join("\n");
+
+            const basePrompt = `${systemPrompt}\n\n${userPrompt}`;
+            const firstText = await chatText(basePrompt);
+
+            let suggestionErrors: string[] = [];
+
+            const tryParseSuggestion = (text: string) => {
+              const parsed = extractJson(text) as {
+                matchedTemplateId?: string;
+                label?: string;
+                definition?: unknown;
+              };
+
+              if (
+                parsed.matchedTemplateId &&
+                templates.some((template) => template.templateId === parsed.matchedTemplateId)
+              ) {
+                return { matchedTemplateId: parsed.matchedTemplateId };
+              }
+
+              if (parsed.definition) {
+                const validated = parseVariantTemplateDefinition(parsed.definition);
+                if (validated.ok) {
+                  return {
+                    suggestion: {
+                      label: parsed.label?.trim() || articleName,
+                      definition: validated.definition,
+                    },
+                  };
+                }
+                suggestionErrors = validated.errors;
+                return null;
+              }
+
+              suggestionErrors = ["Antwort enthielt weder matchedTemplateId noch definition"];
+              return null;
+            };
+
+            let result: ReturnType<typeof tryParseSuggestion> = null;
+            try {
+              result = tryParseSuggestion(firstText);
+            } catch (parseErr) {
+              suggestionErrors = [
+                parseErr instanceof Error ? parseErr.message : "Antwort war kein JSON",
+              ];
+            }
+
+            if (!result) {
+              const retryText = await chatText(
+                `${basePrompt}\n\nDeine vorherige Antwort war ungültig (${suggestionErrors.join("; ")}). Antworte erneut, ausschließlich mit gültigem JSON nach dem Schema.`,
+              );
+              try {
+                result = tryParseSuggestion(retryText);
+              } catch (parseErr) {
+                suggestionErrors = [
+                  parseErr instanceof Error ? parseErr.message : "Antwort war kein JSON",
+                ];
+              }
+            }
+
+            if (!result) {
+              return new Response(JSON.stringify({ errors: suggestionErrors }), {
+                status: 422,
+                headers: { "content-type": "application/json" },
+              });
+            }
+
+            return new Response(JSON.stringify(result), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+
           // POST /api/ai/memories/:memoryId/confirm
           if (path.startsWith("/api/ai/memories/") && path.endsWith("/confirm")) {
             const parts = path.split("/");

@@ -6,12 +6,14 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
+    "./capabilities": "./src/capabilities/index.ts",
     "./services/*": "./src/services/*.ts"
   },
   "scripts": {
     "db": "drizzle-kit",
     "generate": "drizzle-kit generate && pnpm run docs",
-    "migrate": "drizzle-kit migrate && pnpm run docs && pnpm run seed:metadata",
+    "migrate": "drizzle-kit migrate && pnpm run docs && pnpm run seed:metadata && pnpm run sync:capabilities",
+    "sync:capabilities": "tsx src/scripts/sync-capabilities.ts",
     "docs": "tsx src/scripts/generate-docs.ts",
     "sql": "tsx src/scripts/sql.ts",
     "psql": "tsx src/scripts/psql.ts",
@@ -37,7 +39,8 @@
     "@repo/agent": "workspace:*",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
-    "postgres": "catalog:"
+    "postgres": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@repo/tsconfig": "workspace:*",

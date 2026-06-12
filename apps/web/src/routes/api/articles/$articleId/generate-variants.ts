@@ -24,7 +24,10 @@ export const Route = createFileRoute("/api/articles/$articleId/generate-variants
         }
 
         try {
-          const result = await generateArticleVariants(context.tenantId, params.articleId);
+          const body = (await request.json().catch(() => ({}))) as { templateId?: string };
+          const result = await generateArticleVariants(context.tenantId, params.articleId, {
+            templateId: body.templateId,
+          });
           return new Response(JSON.stringify(result), {
             headers: { "content-type": "application/json" },
           });

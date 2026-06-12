@@ -24,29 +24,30 @@ Codex repo instructions. Keep startup context lean.
 
 ## Stack
 
-React 19 · TanStack Start/Router/Query · Drizzle ORM v1 · Better Auth · Tailwind v4 · Vite+ (`vp`)
+React 19 · TanStack Start/Router/Query · Drizzle ORM · Better Auth · Tailwind v4 · Vite+ (`vp`)
 
 ## Rules
 
 - Never run linting multiple times or for intermediate small changes within a single turn. Run it once at the end of the task.
-- Do not run production builds unless build output or bundling is the issue.
 - No hard delete for business data. Archive with `PATCH archived true`.
 - Tenant isolation is server-side only. Never trust client payloads for `tenantId`.
 - All keyboard shortcuts go through `CommandProvider`. No ad hoc keydown business logic.
-- Dependencies go through the catalog in `pnpm-workspace.yaml`.
-- Use `lucide-react` for UI icons and `react-simple-icons` for brand icons.
-- Prefer `repoui` components over local one-off components.
+
+## Testing the platform (capabilities first, no bypass)
+
+- For API/integration tests, use **only** the capability surface: `GET /api/capabilities`, `GET /api/capabilities/{key}`, `POST /api/capabilities/{key}/execute` — or in-process `executeCapability`. Quickstart, test login, client, and example: `AI_TESTING.md`.
+- Never build auth bypasses, mock servers, or new routes for existing capabilities; never put `tenantId` in capability input.
+- Unknown capability landscape → call discovery first. Missing capability → stop and report the gap instead of coding a substitute.
+
 
 ## Dev Commands
 
-- Start local environment: `sudo docker compose up -d`
-- Run dev: `pnpm dev`
-- Validate changes: `pnpm lint`
+- Run dev: `npnm dev`
+- Validate changes: `vp lint`
 - Generate DB types/schema: `pnpm db generate`
 - Run DB migrations: `pnpm db migrate`
 - Add UI components: `pnpm ui add <component>`
-- Search TanStack docs: `pnpm tanstack search-docs q --library <lib> --json`
-- If `pnpm` or Corepack is slow/unavailable, use the local `vp` binary from `node_modules/.bin/vp` for lint/check runs.
+
 
 ## Database Access
 
@@ -54,7 +55,6 @@ React 19 · TanStack Start/Router/Query · Drizzle ORM v1 · Better Auth · Tail
 - Use `pnpm db psql` for an interactive psql session.
 - Use `pnpm db sql -- <query>` for one-off queries.
 - Use `cat query.sql | pnpm db sql` for longer statements.
-- If `psql` is missing, install it with `sudo apt-get install postgresql-client`.
 
 ## Environment Constants
 
@@ -67,14 +67,9 @@ React 19 · TanStack Start/Router/Query · Drizzle ORM v1 · Better Auth · Tail
 ## Documentation Routing
 
 - Use `map.md` for fast orientation only when needed.
-- Use `.agents00corearchitecture.md`, `.agents01projectfoundation.md`, `.agents02entityintrospectionandgenericui.md` for architecture invariants.
-- Use `.agentsdesign.md` and `.agentsdesigner.md` for frontend shell, shared UI, and design.
-- Use `.agentsauth.md`, `.agentstypescript.md`, `.agentsworkflow.md` for auth, TypeScript, and workflow.
-- Use `.agentspostgres.md`, live Drizzle schema, and `.agentsschema.md` / targeted table docs for database, migrations, and tenancy.
-- For feature slices, open the active `.agents.md` file for the slice, then verify against live code.
-- Treat `.agentsschema.md` as generated reference, `.agentsdecision-index.md` as the short-form decision summary, and `.agentsarchive*` as historical-only docs.
-
-## Known Documentation Hygiene
-
-- If a doc still references `.gemini`, resolve it to the equivalent `.agents` path.
-- Keep docs short, specific, and task-oriented.
+- Use `.agents/00_core_architecture.md`, `.agents/01_project_foundation.md`, `.agents/02_entity_introspection_and_generic_ui.md` for architecture invariants.
+- Use `.agents/design.md` and `.agents/designer.md` for frontend shell, shared UI, and design.
+- Use `.agents/auth.md`, `.agents/typescript.md`, `.agents/workflow.md` for auth, TypeScript, and workflow.
+- Use `.agents/postgres.md`, live Drizzle schema, and `.agents/schema.md` / targeted table docs for database, migrations, and tenancy.
+- For feature slices, open the matching `.agents/<slice>.md` file, then verify against live code.
+- Treat `.agents/schema.md` as generated reference, `.agents/decision-index.md` as the short-form decision summary, and `.agents/archive/` as historical-only docs.

@@ -1,4 +1,4 @@
-import { and, eq, getColumns } from "drizzle-orm";
+import { and, eq, getColumns, isNull, or } from "drizzle-orm";
 
 import { db } from "../index";
 import {
@@ -53,6 +53,8 @@ export interface SemanticCommand {
   entityName: string;
   inputSchema: Record<string, any>;
   writesTables: string[];
+  /** Set when the command is executable through the capability registry. */
+  capabilityKey?: string | null;
 }
 
 // Built-in business-focused defaulting relationship mappings (Semantic Relationship Catalog)
@@ -616,22 +618,39 @@ export class AIDiscoveryService {
     tenantId: string,
     _taskScope: string[],
   ): Promise<SemanticCommand[]> {
-    // 1. Read registered commands from the DB
+    // 1. Read registered commands from the DB: tenant-scoped rows plus the
+    // global capability-registry projection (tenant rows win on key clashes).
     const dbCommands = await db
       .select()
       .from(entityCommands)
       .where(
-        and(eq(entityCommands.commandState, "published"), eq(entityCommands.tenantId, tenantId)),
+        and(
+          eq(entityCommands.commandState, "published"),
+          or(eq(entityCommands.tenantId, tenantId), isNull(entityCommands.tenantId)),
+        ),
       );
 
-    const commands: SemanticCommand[] = dbCommands.map((c) => ({
-      commandKey: c.commandKey,
-      label: (c.label as any).de || (c.label as any).en || c.commandKey,
-      description: c.description ? (c.description as any).de || (c.description as any).en : "",
-      entityName: c.entityName,
-      inputSchema: c.inputSchema as Record<string, any>,
-      writesTables: c.writesTables as string[],
-    }));
+    const seenCommands = new Set<string>();
+    const commands: SemanticCommand[] = [];
+    for (const c of [...dbCommands].sort((a, b) =>
+      a.tenantId === b.tenantId ? 0 : a.tenantId ? -1 : 1,
+    )) {
+      if (c.visibility === "hidden") continue;
+      const dedupeKey = `${c.entityName}::${c.commandKey}`;
+      if (seenCommands.has(dedupeKey)) continue;
+      seenCommands.add(dedupeKey);
+      commands.push({
+        commandKey: c.commandKey,
+        label: (c.label as any).de || (c.label as any).en || c.commandKey,
+        description: c.description ? (c.description as any).de || (c.description as any).en : "",
+        entityName: c.entityName,
+        inputSchema: c.inputSchema as Record<string, any>,
+        writesTables: c.writesTables as string[],
+        // Set for commands backed by the capability registry: executable via
+        // POST /api/capabilities/{capabilityKey}/execute.
+        capabilityKey: c.handlerkey ?? null,
+      });
+    }
 
     // 2. Supplement with bootstrapped commands matching the scopes
     for (const bCmd of BOOTSTRAPPED_COMMANDS) {

@@ -335,7 +335,7 @@ function isBlankDraftLine(line: LineRow): boolean {
   );
 }
 
-function normalizeLineForSave(line: LineRow) {
+export function normalizeLineForSave(line: LineRow) {
   return {
     lineNo: line.lineNo,
     articleId: line.articleId,
@@ -348,9 +348,9 @@ function normalizeLineForSave(line: LineRow) {
     langTextSourceField: line.langTextSourceField ?? null,
     langTextLinkedAt: line.langTextLinkedAt ?? null,
     langTextOverriddenAt: line.langTextOverriddenAt ?? null,
-    lineType: line.variantId 
-      ? (line.lineType ?? "article") 
-      : (line.lineType === "article" || !line.lineType ? "text" : line.lineType),
+    lineType: line.variantId
+      ? (line.lineType ?? "article")
+      : (line.lineType === "article" || !line.lineType ? "comment" : line.lineType),
     quantity: String(line.quantity),
     unit: line.unit,
     netPrice: String(line.netPrice),
@@ -604,6 +604,7 @@ const DocLookupField = React.forwardRef<
     placeholder?: string;
     tabIndex?: number;
     onTabForward?: () => void;
+    onTabBackward?: () => void;
   }
 >(function DocLookupField(
   {
@@ -615,6 +616,7 @@ const DocLookupField = React.forwardRef<
     placeholder = "—",
     tabIndex,
     onTabForward,
+    onTabBackward,
   },
   ref,
 ) {
@@ -642,6 +644,7 @@ const DocLookupField = React.forwardRef<
       tabIndex={tabIndex}
       placeholder={placeholder}
       onTabForward={onTabForward}
+      onTabBackward={onTabBackward}
       onFocusChange={(focused) => {
         if (focused) {
           setFocus({ area: "lookup", field: focusField, row: null });
@@ -662,6 +665,7 @@ function ArticleSearchCell({
   rowIndex,
   onFocus,
   onTabForward,
+  onTabBackward,
 }: {
   value: string | null;
   textSnapshot: string | null;
@@ -670,6 +674,7 @@ function ArticleSearchCell({
   rowIndex: number;
   onFocus?: () => void;
   onTabForward?: () => void;
+  onTabBackward?: () => void;
 }) {
   const { setFocus } = useFocus();
   const source = useMemo<LookupSource<ArticleResult>>(
@@ -718,6 +723,7 @@ function ArticleSearchCell({
       ref={inputRef}
       className="min-w-0"
       onTabForward={onTabForward}
+      onTabBackward={onTabBackward}
       onFocusChange={(focused) => {
         if (!focused) return;
         setFocus({
@@ -764,6 +770,7 @@ function VariantSearchCell({
   onSelect,
   onFocus,
   onTabForward,
+  onTabBackward,
   disabled = false,
   placeholder,
 }: {
@@ -774,6 +781,7 @@ function VariantSearchCell({
   onSelect: (variant: ArticleVariantRow | null, rowIndex: number) => void;
   onFocus?: () => void;
   onTabForward?: () => void;
+  onTabBackward?: () => void;
   disabled?: boolean;
   placeholder?: string;
 }) {
@@ -844,6 +852,7 @@ function VariantSearchCell({
       disabled={disabled}
       className="min-w-0"
       onTabForward={onTabForward}
+      onTabBackward={onTabBackward}
       onFocusChange={(focused) => {
         if (!focused) return;
         setFocus({
@@ -889,6 +898,8 @@ interface DocumentLinesEditorHandle {
   getPersistableLines: () => LineRow[];
 }
 
+type LineField = "articleId" | "variantId" | "qty" | "price" | "disc";
+
 const DocumentLinesEditor = forwardRef<
   DocumentLinesEditorHandle,
   {
@@ -902,6 +913,7 @@ const DocumentLinesEditor = forwardRef<
     onLinesChange?: (lines: LineRow[]) => void;
     onDirtyChange?: (dirty: boolean) => void;
     onActiveLineChange?: (line: LineRow | null) => void;
+    onTabBackwardFromFirstLine?: () => void;
   }
 >(function DocumentLinesEditor(
   {
@@ -915,6 +927,7 @@ const DocumentLinesEditor = forwardRef<
     onLinesChange,
     onDirtyChange,
     onActiveLineChange,
+    onTabBackwardFromFirstLine,
   },
   ref,
 ) {
@@ -984,10 +997,10 @@ const DocumentLinesEditor = forwardRef<
         area: "grid",
         field,
         row,
-        mode: isPosted ? "view" : "edit",
+        mode: "edit",
       });
     },
-    [documentId, isPosted, setFocus],
+    [documentId, setFocus],
   );
 
   const korrMutation = useMutation({
@@ -1337,15 +1350,13 @@ const DocumentLinesEditor = forwardRef<
 
   useImperativeHandle(ref, () => ({
     focusFirstLine: () => {
-      const firstVisible = lines.find((l) => !l.isDeleted && l.lineType !== "bom_component");
+      const firstVisible = getFocusableLines()[0] ?? null;
       if (firstVisible) {
-        startEdit(
-          firstVisible,
-          lines.findIndex((l) => l._id === firstVisible._id),
-        );
-      } else {
-        addLine();
+        const rowIndex = getFocusableLines().findIndex((l) => l._id === firstVisible._id);
+        focusLineField(rowIndex >= 0 ? rowIndex : 0, "articleId");
+        return;
       }
+      addLine();
       setTimeout(() => articleInputRef.current?.focus(), 50);
     },
     addLine: () => {
@@ -1370,13 +1381,89 @@ const DocumentLinesEditor = forwardRef<
     getPersistableLines: () => getPersistableLines(effectiveLines),
   }));
 
-  function startEdit(line: LineRow, rowIndex?: number) {
-    if (line.lineType === "bom_component") return;
-    setEditingId(line._id);
-    setEditVals({ ...line });
-    setEditingArticleMeta(line.articleId ? (articleMetaById.get(line.articleId) ?? null) : null);
-    pushGridFocus("articleId", rowIndex ?? linesRef.current.findIndex((l) => l._id === line._id));
-  }
+  const startEdit = useCallback(
+    (line: LineRow, rowIndex?: number) => {
+      if (line.lineType === "bom_component") return;
+      setEditingId(line._id);
+      setEditVals({ ...line });
+      setEditingArticleMeta(line.articleId ? (articleMetaById.get(line.articleId) ?? null) : null);
+      pushGridFocus("articleId", rowIndex ?? linesRef.current.findIndex((l) => l._id === line._id));
+    },
+    [articleMetaById, pushGridFocus],
+  );
+
+  const getFocusableLines = useCallback(
+    () => linesRef.current.filter((line) => !line.isDeleted && line.lineType !== "bom_component"),
+    [],
+  );
+
+  const focusLineField = useCallback(
+    (rowIndex: number, field: LineField) => {
+      const row = getFocusableLines()[rowIndex];
+      if (!row) return;
+      if (editingId !== row._id) {
+        startEdit(row, rowIndex);
+      }
+      window.setTimeout(() => {
+        switch (field) {
+          case "articleId":
+            articleInputRef.current?.focus();
+            articleInputRef.current?.select();
+            break;
+          case "variantId":
+            variantInputRef.current?.focus();
+            variantInputRef.current?.select();
+            break;
+          case "qty":
+            qtyRef.current?.focus();
+            qtyRef.current?.select();
+            break;
+          case "price":
+            priceRef.current?.focus();
+            priceRef.current?.select();
+            break;
+          case "disc":
+            discRef.current?.focus();
+            discRef.current?.select();
+            break;
+        }
+      }, 30);
+    },
+    [editingId, getFocusableLines, startEdit],
+  );
+
+  const focusPreviousLineField = useCallback(
+    (rowIndex: number, field: LineField) => {
+      if (field === "articleId") {
+        if (rowIndex <= 0) {
+          onTabBackwardFromFirstLine?.();
+          return;
+        }
+        focusLineField(rowIndex - 1, "disc");
+        return;
+      }
+
+      if (field === "variantId") {
+        focusLineField(rowIndex, "articleId");
+        return;
+      }
+
+      if (field === "qty") {
+        focusLineField(rowIndex, "variantId");
+        return;
+      }
+
+      if (field === "price") {
+        focusLineField(rowIndex, "qty");
+        return;
+      }
+
+      if (field === "disc") {
+        focusLineField(rowIndex, "price");
+      }
+    },
+    [focusLineField, onTabBackwardFromFirstLine],
+  );
 
   const getEditableLineDraft = useCallback(() => {
     if (!editingId) return null;
@@ -1817,6 +1904,16 @@ const DocumentLinesEditor = forwardRef<
   ) {
     if (e.key === "Tab") {
       e.preventDefault();
+      if (e.shiftKey) {
+        if (field === "qty") {
+          focusPreviousLineField(currentRowIndex, "qty");
+        } else if (field === "price") {
+          focusPreviousLineField(currentRowIndex, "price");
+        } else if (field === "disc") {
+          focusPreviousLineField(currentRowIndex, "disc");
+        }
+        return;
+      }
       if (field === "qty") {
         priceRef.current?.focus();
         priceRef.current?.select();
@@ -1917,7 +2014,7 @@ const DocumentLinesEditor = forwardRef<
             const isEditing = editingId === line._id;
             const isKorr = korrLineId === line._id;
             const isBomComponent = line.lineType === "bom_component";
-            const canEditRow = !isPosted && !isBomComponent;
+            const canEditRow = !isBomComponent;
             const row = isEditing ? { ...line, ...editVals } : line;
             const net = lineNet(row.quantity, row.netPrice, row.discountPercentage);
             const articleMeta = isEditing
@@ -2000,6 +2097,7 @@ const DocumentLinesEditor = forwardRef<
                             inputRef={articleInputRef}
                             rowIndex={rowIndex}
                             onTabForward={() => variantInputRef.current?.focus()}
+                            onTabBackward={() => focusPreviousLineField(rowIndex, "articleId")}
                           />
                         </div>
                       </div>
@@ -2041,6 +2139,7 @@ const DocumentLinesEditor = forwardRef<
                           }
                           onSelect={handleVariantSelect}
                           onTabForward={() => qtyRef.current?.focus()}
+                          onTabBackward={() => focusPreviousLineField(rowIndex, "variantId")}
                         />
                       ) : (
                         <span className="block truncate font-mono text-[12px] text-ink-mute">
@@ -2219,7 +2318,7 @@ const DocumentLinesEditor = forwardRef<
                         documentType={documentType ?? ""}
                         articleId={line.articleId ?? ""}
                         warehouseId={warehouseId ?? undefined}
-                        isPosted={isPosted}
+                        isPosted={false}
                         autoFocusToken={
                           trackingFocus?.lineId === line._id ? trackingFocus.token : null
                         }
@@ -2611,22 +2710,7 @@ export function DocumentEditor({
           const net = lineNet(line.quantity, line.netPrice, line.discountPercentage);
           return {
             documentLineId: line.documentLineId ?? null,
-            lineNo: line.lineNo,
-            articleId: line.articleId,
-            articleTextSnapshot: line.articleTextSnapshot,
-            langText: line.langText ?? null,
-            langTextSourceEntity: line.langTextSourceEntity ?? null,
-            langTextSourceId: line.langTextSourceId ?? null,
-            langTextSourceField: line.langTextSourceField ?? null,
-            langTextLinkedAt: line.langTextLinkedAt ?? null,
-            langTextOverriddenAt: line.langTextOverriddenAt ?? null,
-            lineType: line.lineType ?? "article",
-            quantity: String(line.quantity),
-            unit: line.unit,
-            netPrice: String(line.netPrice),
-            discountPercentage:
-              line.discountPercentage != null ? String(line.discountPercentage) : null,
-            taxCodeId: line.taxCodeId,
+            ...normalizeLineForSave(line),
             taxAmount: String(lineTax(net, line.taxRate)),
             lineTotalNet: String(net),
             warehouseId: header.warehouseId ?? null,
@@ -2856,7 +2940,6 @@ export function DocumentEditor({
   }, [documentId, t]);
 
   const docStatus = (header as any).status ?? (isNew ? "draft" : "—");
-  const isPosted = docStatus === "posted";
   const docNo = isNew ? "wird vergeben" : (header.documentNo ?? documentId);
   const groupLabel = groupData
     ? `${groupData.documentType}${String(groupData.documentGroupId).slice(-2)} · ${groupData.name}`
@@ -3015,12 +3098,8 @@ export function DocumentEditor({
       group: "document",
       scope: "local",
       isEnabled: () => true,
-      handler: (state) => {
-        if (state.area === "grid") {
-          linesEditorRef.current?.addLine();
-          return;
-        }
-        commandRefs.current.handleCreateNewDocument();
+      handler: () => {
+        linesEditorRef.current?.addLine();
       },
     });
 
@@ -3280,9 +3359,8 @@ export function DocumentEditor({
                     tabIndex={headerTabOrder.billingAddress}
                     value={header.customerId ?? null}
                     addressData={header.billingAddress ?? null}
-                    locked={isPosted}
+                    locked={false}
                     onChange={(id, json, raw) => {
-                      if (isPosted) return;
                       const update: Partial<DocHeader> = {
                         customerId: id,
                         billingAddress: json,
@@ -3292,7 +3370,7 @@ export function DocumentEditor({
                       if (raw?.paymentTermId && !header.paymentTermId)
                         update.paymentTermId = raw.paymentTermId;
                       // Auto-fill delivery address from address default
-                      if (raw?.defaultDeliveryAddressId && !header.deliveryAddressId && !isPosted) {
+                      if (raw?.defaultDeliveryAddressId && !header.deliveryAddressId) {
                         update.deliveryAddressId = raw.defaultDeliveryAddressId;
                       }
                       patchHeader(update);
@@ -3342,9 +3420,8 @@ export function DocumentEditor({
                     value={header.deliveryAddressId ?? null}
                     addressId={header.customerId ?? null}
                     addressData={header.deliveryAddress ?? null}
-                    locked={isPosted}
+                    locked={false}
                     onChange={(id, json) => {
-                      if (isPosted) return;
                       patchHeader({ deliveryAddressId: id, deliveryAddress: json });
                     }}
                   />
@@ -3374,6 +3451,7 @@ export function DocumentEditor({
                   items={paymentTermItems}
                   placeholder="—"
                   onTabForward={() => shippingFieldRef.current?.focus()}
+                  onTabBackward={() => warehouseFieldRef.current?.focus()}
                 />
                 <DocLookupField
                   label={t("document.fields.shippingMethod")}
@@ -3385,6 +3463,7 @@ export function DocumentEditor({
                   items={shippingItems}
                   placeholder="—"
                   onTabForward={() => dateFieldRef.current?.focus()}
+                  onTabBackward={() => paymentTermFieldRef.current?.focus()}
                 />
               </div>
 
@@ -3401,9 +3480,15 @@ export function DocumentEditor({
                     className={cn(inputBase, "h-8")}
                     value={header.documentDate ?? ""}
                     onKeyDown={(e) => {
-                      if (e.key === "Tab" && !e.shiftKey) {
+                      if (e.key === "Enter") {
                         e.preventDefault();
                         currencyFieldRef.current?.focus();
+                      } else if (e.key === "Tab" && !e.shiftKey) {
+                        e.preventDefault();
+                        currencyFieldRef.current?.focus();
+                      } else if (e.key === "Tab" && e.shiftKey) {
+                        e.preventDefault();
+                        shippingFieldRef.current?.focus();
                       }
                     }}
                     onFocus={() =>
@@ -3430,6 +3515,7 @@ export function DocumentEditor({
                   items={currencyItems}
                   placeholder="EUR"
                   onTabForward={() => linesEditorRef.current?.focusFirstLine()}
+                  onTabBackward={() => dateFieldRef.current?.focus()}
                 />
               </div>
             </div>
@@ -3507,6 +3593,7 @@ export function DocumentEditor({
               onLinesChange={setPendingLines}
               onDirtyChange={setIsLinesDirty}
               onActiveLineChange={setActiveLine}
+              onTabBackwardFromFirstLine={() => currencyFieldRef.current?.focus()}
             />
           </div>
         </div>

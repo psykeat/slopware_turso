@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 
+export const DEFAULT_VARIANT_OPTION_VALUE_HASH =
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
 export type VariantOptionValueIdentity = {
   optionName: string;
   valueId: string;

@@ -6,7 +6,7 @@ import { cn } from "@repo/ui/lib/utils";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Sparkles as SparklesIcon, CalendarRange as CalendarRangeIcon } from "lucide-react";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -723,33 +723,46 @@ function SettingsView() {
               ))}
             </div>
           ) : (
-            groupedEntries.map((group) => (
-              <div key={group.id} className="mb-4">
-                <div className="mb-1 px-3 text-[10px] font-bold tracking-widest text-ink-mute/60 uppercase">
-                  {resolveGroupLabel(group.id, t)}
+            <>
+              {groupedEntries.map((group) => (
+                <div key={group.id} className="mb-4">
+                  <div className="mb-1 px-3 text-[10px] font-bold tracking-widest text-ink-mute/60 uppercase">
+                    {resolveGroupLabel(group.id, t)}
+                  </div>
+                  {group.entities.map((entity) => {
+                    const isActive = selectedKey === entity.tableName;
+                    return (
+                      <button
+                        key={entity.tableName}
+                        ref={(node) => {
+                          sidebarItemRefs.current[entity.tableName] = node;
+                        }}
+                        onClick={() => selectEntity(entity.tableName)}
+                        className={cn(
+                          "group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] transition-colors",
+                          isActive
+                            ? "bg-primary text-primary-fg"
+                            : "text-ink-secondary hover:bg-canvas-soft hover:text-ink",
+                        )}
+                      >
+                        <span>{entity.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-                {group.entities.map((entity) => {
-                  const isActive = selectedKey === entity.tableName;
-                  return (
-                    <button
-                      key={entity.tableName}
-                      ref={(node) => {
-                        sidebarItemRefs.current[entity.tableName] = node;
-                      }}
-                      onClick={() => selectEntity(entity.tableName)}
-                      className={cn(
-                        "group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] transition-colors",
-                        isActive
-                          ? "bg-primary text-primary-fg"
-                          : "text-ink-secondary hover:bg-canvas-soft hover:text-ink",
-                      )}
-                    >
-                      <span>{entity.label}</span>
-                    </button>
-                  );
-                })}
+              ))}
+              <div className="mb-4">
+                <div className="mb-1 px-3 text-[10px] font-bold tracking-widest text-ink-mute/60 uppercase">
+                  Werkzeuge
+                </div>
+                <Link
+                  to="/app/settings/variant-templates"
+                  className="group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] text-ink-secondary transition-colors hover:bg-canvas-soft hover:text-ink"
+                >
+                  <span>Variantenvorlagen</span>
+                </Link>
               </div>
-            ))
+            </>
           )}
         </div>
       </div>

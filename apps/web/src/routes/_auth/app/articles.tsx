@@ -22,7 +22,10 @@ import React, { useEffect, useMemo, useState, useRef, useCallback } from "react"
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { VariantGeneratorDialog } from "#/components/articles/VariantGeneratorDialog";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
+const DEFAULT_VARIANT_OPTION_VALUE_HASH =
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 import { resolveArticleVariantMode } from "@repo/db/services/article-variant-mode";
 
 export const Route = createFileRoute("/_auth/app/articles")({
@@ -30,8 +33,6 @@ export const Route = createFileRoute("/_auth/app/articles")({
 });
 
 const EMPTY_ARRAY: any[] = [];
-const DEFAULT_VARIANT_OPTION_VALUE_HASH =
-  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 const ARTICLE_FIELD_OVERRIDES = [
   {
@@ -70,14 +71,6 @@ const ARTICLE_LANGTEXT_FIELDS = [
   { field: "warntext", label: "Warntext" },
 ];
 
-const ARTICLE_VARIANT_FIELD_OVERRIDES = [
-  { key: "tenantId", visible: false },
-  { key: "articleId", visible: false },
-  { key: "optionValueHash", visible: false },
-  { key: "createdAt", visible: false },
-  { key: "updatedAt", visible: false },
-];
-
 type SalesDraft = {
   price: string;
   ean: string;
@@ -95,40 +88,29 @@ const EMPTY_SALES_DRAFT: SalesDraft = {
 };
 
 function ArticleSalesBlock({
-  articleId,
+  defaultVariant,
   articleRecord,
+  variantMode,
   draft,
   onDraftChange,
 }: {
-  articleId: string | null;
+  defaultVariant: Record<string, any> | null;
   articleRecord?: { trackingMode?: string | null } | null;
+  variantMode?: "simple" | "variants";
   draft: SalesDraft;
-  onDraftChange: (draft: SalesDraft) => void;
+  onDraftChange: (d: SalesDraft) => void;
 }) {
   const { t } = useTranslation("ui");
   const queryClient = useQueryClient();
+  const isEdit = defaultVariant !== null;
 
-  const { data: variantRows = EMPTY_ARRAY, isLoading: isVariantsLoading } = useQuery({
-    queryKey: ["data", "articleVariant", articleId],
-    queryFn: async () => {
-      if (!articleId) return [];
-      const res = await fetch(`/api/data/articleVariant?articleId=${articleId}`);
-      if (!res.ok) throw new Error("Failed to fetch article variants");
-      return res.json() as Promise<any[]>;
-    },
-    enabled: !!articleId,
-    placeholderData: keepPreviousData,
-  });
-
-  const defaultVariant = useMemo(() => {
-    if (!articleId) return null;
-    return (
-      variantRows.find((row: any) => row.optionValueHash === DEFAULT_VARIANT_OPTION_VALUE_HASH) ??
-      variantRows[0] ??
-      null
-    );
-  }, [articleId, variantRows]);
-  const defaultVariantId = defaultVariant?.variantId ?? null;
+  const [localValues, setLocalValues] = useState(() => ({
+    price: String(defaultVariant?.price ?? draft.price ?? ""),
+    ean: String(defaultVariant?.ean ?? draft.ean ?? ""),
+    weight: String(defaultVariant?.weight ?? draft.weight ?? ""),
+    isActive: Boolean(defaultVariant?.isActive ?? draft.isActive ?? true),
+    trackingMode: String(articleRecord?.trackingMode ?? draft.trackingMode ?? ""),
+  }));
 
   const patchJson = useCallback(async (url: string, body: Record<string, unknown>) => {
     const res = await fetch(url, {
@@ -136,60 +118,66 @@ function ArticleSalesBlock({
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      throw new Error((await res.text()) || `Request failed with status ${res.status}`);
-    }
+    if (!res.ok) throw new Error((await res.text()) || `Request failed with status ${res.status}`);
     return res.json();
   }, []);
 
   const persistField = useCallback(
     async (field: keyof SalesDraft, value: string | boolean) => {
+      const articleId = defaultVariant?.articleId;
       if (!articleId) return;
       if (field === "trackingMode") {
-        await patchJson(`/api/data/article/${articleId}`, {
-          trackingMode: value || null,
-        });
+        await patchJson(`/api/data/article/${articleId}`, { trackingMode: value || null });
         await queryClient.invalidateQueries({ queryKey: ["data", "article", articleId] });
         return;
       }
-
-      if (!defaultVariantId) return;
+      const variantId = defaultVariant?.variantId;
+      if (!variantId) return;
       const payload =
-        field === "isActive"
-          ? { isActive: Boolean(value) }
-          : { [field]: value || null };
-      await patchJson(`/api/data/articleVariant/${defaultVariantId}`, payload);
-      await queryClient.invalidateQueries({ queryKey: ["data", "articleVariant", articleId] });
+        field === "isActive" ? { isActive: Boolean(value) } : { [field]: value || null };
+      await patchJson(`/api/data/articleVariant/${variantId}`, payload);
+      await queryClient.invalidateQueries({
+        queryKey: ["data", "articleVariant", articleId],
+      });
     },
-    [articleId, defaultVariantId, patchJson, queryClient],
+    [defaultVariant, patchJson, queryClient],
   );
 
-  const resolveVariantModeLabel = useMemo(
-    () =>
-      resolveArticleVariantMode({
-        optionCount: 0,
-        variantCount: articleId ? variantRows.length : 1,
-      }),
-    [articleId, variantRows.length],
+  const handleChange = useCallback(
+    (field: keyof SalesDraft, value: string | boolean) => {
+      const next = { ...localValues, [field]: value };
+      setLocalValues(next);
+      if (!isEdit) {
+        onDraftChange({
+          price: next.price,
+          ean: next.ean,
+          weight: next.weight,
+          isActive: next.isActive,
+          trackingMode: next.trackingMode,
+        });
+      }
+    },
+    [isEdit, localValues, onDraftChange],
   );
 
-  if (articleId && isVariantsLoading) {
-    return (
-      <section className="rounded-md border border-hairline bg-canvas shadow-sm">
-        <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
-          <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-            {t("article.sales", { defaultValue: "Sales" })}
-          </div>
-          <div className="mt-0.5 text-[12px] text-ink-secondary">
-            {t("common.loading", { defaultValue: "Loading..." })}
-          </div>
-        </div>
-        <div className="px-3 py-4 text-[13px] text-ink-mute">
-          {t("common.loading", { defaultValue: "Loading..." })}
-        </div>
-      </section>
-    );
-  }
+  const handleBlur = useCallback(
+    async (field: keyof SalesDraft) => {
+      if (!isEdit) return;
+      await persistField(field, localValues[field]).catch((err) =>
+        toast.error(err instanceof Error && err.message ? err.message : `Failed to save ${field}`),
+      );
+    },
+    [isEdit, localValues, persistField],
+  );
+
+  const subtitle =
+    variantMode === "variants"
+      ? t("article.salesVariants", {
+          defaultValue: "Sales data is written to the default variant row.",
+        })
+      : t("article.salesSimple", {
+          defaultValue: "Default values are written to the single sellable variant.",
+        });
 
   return (
     <section className="rounded-md border border-hairline bg-canvas shadow-sm">
@@ -197,197 +185,242 @@ function ArticleSalesBlock({
         <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
           {t("article.sales", { defaultValue: "Sales" })}
         </div>
-        <div className="mt-0.5 text-[12px] text-ink-secondary">
-          {resolveVariantModeLabel === "simple"
-            ? t("article.salesSimple", {
-                defaultValue: "Default values are written to the single sellable variant.",
-              })
-            : t("article.salesVariants", {
-                defaultValue: "Sales data is written to the default variant row.",
-              })}
-        </div>
+        <div className="mt-0.5 text-[12px] text-ink-secondary">{subtitle}</div>
       </div>
-
-      {articleId ? (
-        <div className="grid gap-3 p-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[12px] font-medium text-ink-secondary">Price</span>
-            <input
-              type="number"
-              step="0.0001"
-              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              defaultValue={defaultVariant?.price ?? ""}
-              onBlur={(e) =>
-                void persistField("price", e.currentTarget.value).catch((err) =>
-                  toast.error(
-                    err instanceof Error && err.message ? err.message : "Failed to save price",
-                  ),
-                )
-              }
-              placeholder="0.00"
-              disabled={isVariantsLoading || !defaultVariantId}
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[12px] font-medium text-ink-secondary">EAN</span>
-            <input
-              type="text"
-              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              defaultValue={defaultVariant?.ean ?? ""}
-              onBlur={(e) =>
-                void persistField("ean", e.currentTarget.value).catch((err) =>
-                  toast.error(
-                    err instanceof Error && err.message ? err.message : "Failed to save EAN",
-                  ),
-                )
-              }
-              placeholder="EAN"
-              disabled={isVariantsLoading || !defaultVariantId}
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[12px] font-medium text-ink-secondary">Weight</span>
-            <input
-              type="number"
-              step="0.0001"
-              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              defaultValue={defaultVariant?.weight ?? ""}
-              onBlur={(e) =>
-                void persistField("weight", e.currentTarget.value).catch((err) =>
-                  toast.error(
-                    err instanceof Error && err.message ? err.message : "Failed to save weight",
-                  ),
-                )
-              }
-              placeholder="0.0000"
-              disabled={isVariantsLoading || !defaultVariantId}
-            />
-          </label>
-
-          <label className="flex items-center gap-2 sm:col-span-2">
-            <input
-              type="checkbox"
-              className="size-4 rounded border-hairline-input accent-[var(--primary)]"
-              defaultChecked={defaultVariant?.isActive ?? true}
-              onChange={(e) => {
+      <div className="grid gap-3 p-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5 sm:col-span-2">
+          <span className="text-[12px] font-medium text-ink-secondary">Price</span>
+          <input
+            type="number"
+            step="0.0001"
+            className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+            value={localValues.price}
+            onChange={(e) => handleChange("price", e.target.value)}
+            onBlur={() => void handleBlur("price")}
+            placeholder="0.00"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[12px] font-medium text-ink-secondary">EAN</span>
+          <input
+            type="text"
+            className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+            value={localValues.ean}
+            onChange={(e) => handleChange("ean", e.target.value)}
+            onBlur={() => void handleBlur("ean")}
+            placeholder="EAN"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[12px] font-medium text-ink-secondary">Weight</span>
+          <input
+            type="number"
+            step="0.0001"
+            className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+            value={localValues.weight}
+            onChange={(e) => handleChange("weight", e.target.value)}
+            onBlur={() => void handleBlur("weight")}
+            placeholder="0.0000"
+          />
+        </label>
+        <label className="flex items-center gap-2 sm:col-span-2">
+          <input
+            type="checkbox"
+            className="size-4 rounded border-hairline-input accent-[var(--primary)]"
+            checked={localValues.isActive}
+            onChange={(e) => {
+              handleChange("isActive", e.target.checked);
+              if (isEdit) {
                 void persistField("isActive", e.target.checked).catch((err) =>
                   toast.error(
-                    err instanceof Error && err.message
-                      ? err.message
-                      : "Failed to save bookable status",
+                    err instanceof Error ? err.message : "Failed to save bookable status",
                   ),
                 );
-              }}
-              disabled={isVariantsLoading || !defaultVariantId}
-            />
-            <span className="text-[13px] text-ink">Bookable</span>
-          </label>
-
-          <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[12px] font-medium text-ink-secondary">Tracking</span>
-            <select
-              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              defaultValue={articleRecord?.trackingMode ?? ""}
-              onChange={(e) => {
-                void persistField("trackingMode", e.target.value).catch((err) =>
-                  toast.error(
-                    err instanceof Error && err.message ? err.message : "Failed to save tracking",
-                  ),
-                );
-              }}
-            >
-              <option value="">None</option>
-              <option value="serial">Serial</option>
-              <option value="batch">Batch</option>
-            </select>
-          </label>
-        </div>
-      ) : (
-        <div className="grid gap-3 p-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[12px] font-medium text-ink-secondary">Price</span>
-            <input
-              type="number"
-              step="0.0001"
-              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              value={draft.price}
-              onChange={(e) => {
-                const next = { ...draft, price: e.target.value };
-                onDraftChange(next);
-              }}
-              placeholder="0.00"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[12px] font-medium text-ink-secondary">EAN</span>
-            <input
-              type="text"
-              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              value={draft.ean}
-              onChange={(e) => {
-                const next = { ...draft, ean: e.target.value };
-                onDraftChange(next);
-              }}
-              placeholder="EAN"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[12px] font-medium text-ink-secondary">Weight</span>
-            <input
-              type="number"
-              step="0.0001"
-              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              value={draft.weight}
-              onChange={(e) => {
-                const next = { ...draft, weight: e.target.value };
-                onDraftChange(next);
-              }}
-              placeholder="0.0000"
-            />
-          </label>
-
-          <label className="flex items-center gap-2 sm:col-span-2">
-            <input
-              type="checkbox"
-              className="size-4 rounded border-hairline-input accent-[var(--primary)]"
-              checked={draft.isActive}
-              onChange={(e) => {
-                const next = { ...draft, isActive: e.target.checked };
-                onDraftChange(next);
-              }}
-            />
-            <span className="text-[13px] text-ink">Bookable</span>
-          </label>
-
-          <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[12px] font-medium text-ink-secondary">Tracking</span>
-            <select
-              className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
-              value={draft.trackingMode}
-              onChange={(e) => {
-                const next = { ...draft, trackingMode: e.target.value };
-                onDraftChange(next);
-              }}
-            >
-              <option value="">None</option>
-              <option value="serial">Serial</option>
-              <option value="batch">Batch</option>
-            </select>
-          </label>
-
+              }
+            }}
+          />
+          <span className="text-[13px] text-ink">Bookable</span>
+        </label>
+        <label className="flex flex-col gap-1.5 sm:col-span-2">
+          <span className="text-[12px] font-medium text-ink-secondary">Tracking</span>
+          <select
+            className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+            value={localValues.trackingMode}
+            onChange={(e) => handleChange("trackingMode", e.target.value)}
+            onBlur={() => void handleBlur("trackingMode")}
+          >
+            <option value="">None</option>
+            <option value="serial">Serial</option>
+            <option value="batch">Batch</option>
+          </select>
+        </label>
+        {!isEdit && (
           <p className="sm:col-span-2 text-[12px] text-ink-mute">
             {t("article.salesCreateHint", {
               defaultValue:
                 "These values are applied to the default variant after the article is saved.",
             })}
           </p>
-        </div>
-      )}
+        )}
+      </div>
     </section>
+  );
+}
+
+function ArticleVariantEditForm({
+  variant,
+  onOpenChange,
+  onSaved,
+}: {
+  variant: Record<string, any>;
+  onOpenChange: (v: boolean) => void;
+  onSaved: (record: unknown) => void;
+}) {
+  const { t } = useTranslation("ui");
+  const [form, setForm] = useState({
+    sku: String(variant.sku ?? ""),
+    price: String(variant.price ?? ""),
+    ean: String(variant.ean ?? ""),
+    weight: String(variant.weight ?? ""),
+    isActive: Boolean(variant.isActive ?? true),
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/data/articleVariant/${variant.variantId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sku: form.sku || null,
+          price: form.price || null,
+          ean: form.ean || null,
+          weight: form.weight || null,
+          isActive: form.isActive,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.text()) || `Request failed with status ${res.status}`);
+      const saved = await res.json();
+      onSaved(saved);
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : "Failed to save variant");
+    } finally {
+      setSaving(false);
+    }
+  }, [form, onSaved, variant.variantId]);
+
+  return (
+    <div className="flex flex-col gap-0">
+      <div className="border-b border-hairline bg-canvas-soft px-4 py-3">
+        <div className="text-[14px] font-medium text-ink">
+          {t("article.variants.edit", { defaultValue: "Edit Variant" })}
+        </div>
+        {variant.variantOptionSummary && (
+          <div className="mt-0.5 text-[12px] text-ink-secondary">{variant.variantOptionSummary}</div>
+        )}
+      </div>
+      <div className="grid gap-3 p-4 sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5 sm:col-span-2">
+          <span className="text-[12px] font-medium text-ink-secondary">SKU</span>
+          <input
+            type="text"
+            className="h-8 rounded border border-hairline bg-canvas px-2 font-mono text-[13px] text-ink outline-none"
+            value={form.sku}
+            onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))}
+            placeholder="SKU"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[12px] font-medium text-ink-secondary">Price</span>
+          <input
+            type="number"
+            step="0.0001"
+            className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+            value={form.price}
+            onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
+            placeholder="0.00"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[12px] font-medium text-ink-secondary">EAN</span>
+          <input
+            type="text"
+            className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+            value={form.ean}
+            onChange={(e) => setForm((p) => ({ ...p, ean: e.target.value }))}
+            placeholder="EAN"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[12px] font-medium text-ink-secondary">Weight</span>
+          <input
+            type="number"
+            step="0.0001"
+            className="h-8 rounded border border-hairline bg-canvas px-2 text-[13px] text-ink outline-none"
+            value={form.weight}
+            onChange={(e) => setForm((p) => ({ ...p, weight: e.target.value }))}
+            placeholder="0.0000"
+          />
+        </label>
+        <label className="flex items-center gap-2 sm:col-span-2">
+          <input
+            type="checkbox"
+            className="size-4 rounded border-hairline-input accent-[var(--primary)]"
+            checked={form.isActive}
+            onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
+          />
+          <span className="text-[13px] text-ink">Bookable</span>
+        </label>
+      </div>
+      <div className="flex justify-end gap-2 border-t border-hairline bg-canvas-soft px-4 py-3">
+        <button
+          type="button"
+          className="h-8 rounded border border-hairline px-4 text-[13px] hover:bg-canvas-soft"
+          onClick={() => onOpenChange(false)}
+          disabled={saving}
+        >
+          {t("actions.cancel", { defaultValue: "Cancel" })}
+        </button>
+        <button
+          type="button"
+          className="h-8 rounded bg-primary px-4 text-[13px] text-white hover:opacity-90 disabled:opacity-60"
+          onClick={() => void handleSave()}
+          disabled={saving}
+        >
+          {saving
+            ? t("common.saving", { defaultValue: "Saving…" })
+            : t("actions.save", { defaultValue: "Save" })}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ArticleVariantEditDialog({
+  variant,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  variant: Record<string, any> | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSaved: (record: unknown) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sw-root max-w-lg overflow-hidden p-0" variant="form">
+        {variant && (
+          <ArticleVariantEditForm
+            key={variant.variantId}
+            variant={variant}
+            onOpenChange={onOpenChange}
+            onSaved={onSaved}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -408,9 +441,16 @@ function ArticleVariantsAndOptionsTab({
   const [showVariantEdit, setShowVariantEdit] = useState(false);
   const [showBulkPriceDialog, setShowBulkPriceDialog] = useState(false);
   const [bulkPriceMode, setBulkPriceMode] = useState<"set" | "adjust">("set");
+  const [bulkPriceField, setBulkPriceField] = useState<"price" | "weight">("price");
   const [bulkPriceValue, setBulkPriceValue] = useState("");
   const [bulkPriceVariantIds, setBulkPriceVariantIds] = useState<string[]>([]);
   const [bulkPriceSubmitting, setBulkPriceSubmitting] = useState(false);
+  const [showGeneratorDialog, setShowGeneratorDialog] = useState(false);
+  const [showSurchargeDialog, setShowSurchargeDialog] = useState(false);
+  const [surchargeVariantIds, setSurchargeVariantIds] = useState<string[]>([]);
+  const [surchargeValueId, setSurchargeValueId] = useState<string | null>(null);
+  const [surchargeAmount, setSurchargeAmount] = useState("");
+  const [surchargeSubmitting, setSurchargeSubmitting] = useState(false);
 
   const { data: optionRows = EMPTY_ARRAY, isLoading: isOptionsLoading } = useQuery({
     queryKey: ["data", "articleOption", articleId],
@@ -520,7 +560,7 @@ function ArticleVariantsAndOptionsTab({
     if (!showBulkPriceDialog || !Number.isFinite(parsed)) return [];
 
     return bulkVariantRows.map((row: any) => {
-      const current = Number(row.price ?? 0);
+      const current = Number(row[bulkPriceField] ?? 0);
       const next = bulkPriceMode === "adjust" ? current * (1 + parsed / 100) : parsed;
       return {
         variantId: row.variantId as string,
@@ -529,7 +569,7 @@ function ArticleVariantsAndOptionsTab({
         next: Math.round(next * 10000) / 10000,
       };
     });
-  }, [bulkPriceMode, bulkPriceValue, bulkVariantRows, showBulkPriceDialog]);
+  }, [bulkPriceField, bulkPriceMode, bulkPriceValue, bulkVariantRows, showBulkPriceDialog]);
 
   const handleArchiveVariants = useCallback(
     async (keys: string[]) => {
@@ -560,7 +600,8 @@ function ArticleVariantsAndOptionsTab({
           keys.map(async (variantId) => {
             const row = variantById.get(variantId);
             if (!row) throw new Error(`Variant ${variantId} not found.`);
-            const suggestedSku = `${articleNo}-${row.optionValueHash}`;
+            const shortHash = (row.optionValueHash as string).slice(0, 8);
+            const suggestedSku = `${articleNo}-${shortHash}`;
             await patchEntity("articleVariant", variantId, { sku: suggestedSku });
             await patchVariantInventorySku(variantId, suggestedSku);
           }),
@@ -578,10 +619,116 @@ function ArticleVariantsAndOptionsTab({
 
   const handleOpenBulkPriceUpdate = useCallback((keys: string[]) => {
     setBulkPriceVariantIds(keys);
+    setBulkPriceField("price");
     setBulkPriceMode("set");
     setBulkPriceValue("");
     setShowBulkPriceDialog(true);
   }, []);
+
+  const handleOpenBulkWeightUpdate = useCallback((keys: string[]) => {
+    setBulkPriceVariantIds(keys);
+    setBulkPriceField("weight");
+    setBulkPriceMode("set");
+    setBulkPriceValue("");
+    setShowBulkPriceDialog(true);
+  }, []);
+
+  const handleActivateVariants = useCallback(
+    async (keys: string[]) => {
+      try {
+        await Promise.all(
+          keys.map((variantId) => patchEntity("articleVariant", variantId, { isActive: true })),
+        );
+        await refreshVariants();
+        toast.success(`Activated ${keys.length} variant${keys.length === 1 ? "" : "s"}.`);
+      } catch (err) {
+        toast.error(
+          err instanceof Error && err.message ? err.message : "Failed to activate variants",
+        );
+        throw err;
+      }
+    },
+    [patchEntity, refreshVariants],
+  );
+
+  const handleOpenSurchargeDialog = useCallback((keys: string[]) => {
+    setSurchargeVariantIds(keys);
+    setSurchargeValueId(null);
+    setSurchargeAmount("");
+    setShowSurchargeDialog(true);
+  }, []);
+
+  // All option values of this article, grouped for the surcharge dialog
+  const { data: surchargeValueOptions = EMPTY_ARRAY } = useQuery({
+    queryKey: ["data", "articleOptionValue", "by-article", articleId, optionRows],
+    queryFn: async () => {
+      const valueLists = await Promise.all(
+        optionRows.map(async (option: any) => {
+          const res = await fetch(`/api/data/articleOptionValue?optionId=${option.optionId}`);
+          if (!res.ok) return [];
+          const values = (await res.json()) as any[];
+          return values.map((value) => ({
+            valueId: value.valueId as string,
+            label: `${option.name}: ${value.value}`,
+          }));
+        }),
+      );
+      return valueLists.flat();
+    },
+    enabled: !!articleId && showSurchargeDialog && optionRows.length > 0,
+  });
+
+  const handleApplySurcharge = useCallback(async () => {
+    const parsed = Number(surchargeAmount);
+    if (!surchargeValueId || !Number.isFinite(parsed) || parsed === 0) {
+      toast.error("Merkmalswert und Betrag wählen.");
+      return;
+    }
+
+    setSurchargeSubmitting(true);
+    try {
+      const junctionRows = (await fetchJson(
+        `/api/data/articleVariantOptionValue?valueId=${encodeURIComponent(surchargeValueId)}`,
+      )) as any[];
+      const matchingVariantIds = new Set(junctionRows.map((row) => row.variantId as string));
+      const targets = surchargeVariantIds.filter((variantId) =>
+        matchingVariantIds.has(variantId),
+      );
+
+      if (targets.length === 0) {
+        toast.info("Keine der ausgewählten Varianten trägt diesen Merkmalswert.");
+        return;
+      }
+
+      await Promise.all(
+        targets.map(async (variantId) => {
+          const row = variantById.get(variantId);
+          const current = Number(row?.price ?? 0);
+          const next = Math.round((current + parsed) * 10000) / 10000;
+          await patchEntity("articleVariant", variantId, { price: String(next) });
+        }),
+      );
+
+      await refreshVariants();
+      setShowSurchargeDialog(false);
+      setSurchargeVariantIds([]);
+      toast.success(
+        `Aufschlag auf ${targets.length} Variante${targets.length === 1 ? "" : "n"} angewendet.`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : "Aufschlag fehlgeschlagen");
+    } finally {
+      setSurchargeSubmitting(false);
+    }
+  }, [
+    fetchJson,
+    patchEntity,
+    refreshVariants,
+    surchargeAmount,
+    surchargeValueId,
+    surchargeVariantIds,
+    variantById,
+  ]);
 
   const handleApplyBulkPriceUpdate = useCallback(async () => {
     const parsed = Number(bulkPriceValue);
@@ -599,10 +746,12 @@ function ArticleVariantsAndOptionsTab({
     try {
       await Promise.all(
         bulkVariantRows.map(async (row: any) => {
-          const current = Number(row.price ?? 0);
-          const nextPrice = bulkPriceMode === "adjust" ? current * (1 + parsed / 100) : parsed;
-          const normalized = Math.round(nextPrice * 10000) / 10000;
-          await patchEntity("articleVariant", row.variantId, { price: String(normalized) });
+          const current = Number(row[bulkPriceField] ?? 0);
+          const nextValue = bulkPriceMode === "adjust" ? current * (1 + parsed / 100) : parsed;
+          const normalized = Math.round(nextValue * 10000) / 10000;
+          await patchEntity("articleVariant", row.variantId, {
+            [bulkPriceField]: String(normalized),
+          });
         }),
       );
 
@@ -610,15 +759,15 @@ function ArticleVariantsAndOptionsTab({
       setShowBulkPriceDialog(false);
       setBulkPriceVariantIds([]);
       toast.success(
-        `Updated prices for ${bulkVariantRows.length} variant${bulkVariantRows.length === 1 ? "" : "s"}.`,
+        `Updated ${bulkPriceField === "price" ? "prices" : "weights"} for ${bulkVariantRows.length} variant${bulkVariantRows.length === 1 ? "" : "s"}.`,
       );
     } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : "Failed to update prices");
+      toast.error(err instanceof Error && err.message ? err.message : "Failed to update variants");
       throw err;
     } finally {
       setBulkPriceSubmitting(false);
     }
-  }, [bulkPriceMode, bulkPriceValue, bulkVariantRows, patchEntity, refreshVariants]);
+  }, [bulkPriceField, bulkPriceMode, bulkPriceValue, bulkVariantRows, patchEntity, refreshVariants]);
 
   const handleVariantSaved = useCallback(
     async (record: unknown) => {
@@ -627,7 +776,7 @@ function ArticleVariantsAndOptionsTab({
       const previousSku = variantEditId ? (variantById.get(variantEditId)?.sku ?? null) : null;
 
       setShowVariantEdit(false);
-      queryClient.invalidateQueries({ queryKey: ["data", "articleVariant", articleId] });
+      await queryClient.invalidateQueries({ queryKey: ["data", "articleVariant", articleId] });
 
       if (savedVariantId && nextSku && nextSku !== previousSku) {
         try {
@@ -777,13 +926,22 @@ function ArticleVariantsAndOptionsTab({
           </div>
 
           <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-hairline bg-canvas shadow-sm">
-            <div className="border-b border-hairline bg-canvas-soft px-3 py-2">
-              <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
-                {t("article.variants", { defaultValue: "Variants" })}
+            <div className="flex items-center gap-2 border-b border-hairline bg-canvas-soft px-3 py-2">
+              <div className="flex-1">
+                <div className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
+                  {t("article.variants", { defaultValue: "Variants" })}
+                </div>
+                <div className="mt-0.5 text-[12px] text-ink-secondary">
+                  {articleLabel || t("nav.articles", { defaultValue: "Articles" })}
+                </div>
               </div>
-              <div className="mt-0.5 text-[12px] text-ink-secondary">
-                {articleLabel || t("nav.articles", { defaultValue: "Articles" })}
-              </div>
+              <button
+                type="button"
+                className="h-6 rounded bg-primary px-3 text-[11px] text-white hover:opacity-90"
+                onClick={() => setShowGeneratorDialog(true)}
+              >
+                {t("article.generateVariants", { defaultValue: "Varianten erzeugen" })}
+              </button>
             </div>
             <div className="min-h-0 flex-1">
               <DataGrid
@@ -806,12 +964,24 @@ function ArticleVariantsAndOptionsTab({
                     onClick: handleArchiveVariants,
                   },
                   {
+                    label: "Aktivieren",
+                    onClick: handleActivateVariants,
+                  },
+                  {
                     label: "Suggest SKU",
                     onClick: handleSuggestSku,
                   },
                   {
                     label: "Update prices",
                     onClick: handleOpenBulkPriceUpdate,
+                  },
+                  {
+                    label: "Update weights",
+                    onClick: handleOpenBulkWeightUpdate,
+                  },
+                  {
+                    label: "Aufschlag je Merkmal",
+                    onClick: handleOpenSurchargeDialog,
                   },
                 ]}
                 emptyTitle={t("empty.title")}
@@ -858,18 +1028,87 @@ function ArticleVariantsAndOptionsTab({
         </section>
       )}
 
-      <Dialog open={showVariantEdit} onOpenChange={setShowVariantEdit}>
-        <DialogContent className="sw-root max-w-2xl overflow-hidden p-0" variant="form">
-          <EntityMask
-            entityName="articleVariant"
-            mode="edit"
-            recordId={variantEditId}
-            title={t("article.variants.edit", { defaultValue: "Edit Variant" })}
-            fieldOverrides={ARTICLE_VARIANT_FIELD_OVERRIDES}
-            onCancel={() => setShowVariantEdit(false)}
-            onSaved={handleVariantSaved}
-            className="rounded-none border-none shadow-none"
-          />
+      <ArticleVariantEditDialog
+        variant={variantEditId ? (variantById.get(variantEditId) ?? null) : null}
+        open={showVariantEdit}
+        onOpenChange={setShowVariantEdit}
+        onSaved={handleVariantSaved}
+      />
+
+      <VariantGeneratorDialog
+        open={showGeneratorDialog}
+        onOpenChange={setShowGeneratorDialog}
+        articleId={articleId}
+        onGenerated={refreshVariants}
+      />
+
+      <Dialog
+        open={showSurchargeDialog}
+        onOpenChange={(open) => {
+          setShowSurchargeDialog(open);
+          if (!open) setSurchargeVariantIds([]);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <div className="flex flex-col gap-5 p-6">
+            <div>
+              <h3 className="text-[15px] font-medium text-ink">Preisaufschlag je Merkmalswert</h3>
+              <p className="mt-1 text-[13px] text-ink-mute">
+                {surchargeVariantIds.length} Variante
+                {surchargeVariantIds.length === 1 ? "" : "n"} ausgewählt — der Aufschlag wird nur
+                auf Varianten mit dem gewählten Merkmalswert angewendet.
+              </p>
+            </div>
+
+            <label className="flex flex-col gap-1.5 text-[13px] text-ink">
+              <span className="text-[12px] font-medium text-ink-secondary">Merkmalswert</span>
+              <select
+                className="h-9 rounded border border-hairline bg-canvas px-2 text-[13px]"
+                value={surchargeValueId ?? ""}
+                onChange={(e) => setSurchargeValueId(e.target.value || null)}
+              >
+                <option value="">Bitte wählen…</option>
+                {surchargeValueOptions.map((option: any) => (
+                  <option key={option.valueId} value={option.valueId}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1.5 text-[13px] text-ink">
+              <span className="text-[12px] font-medium text-ink-secondary">
+                Aufschlag (z. B. 2 oder -1.5)
+              </span>
+              <input
+                type="number"
+                step="0.0001"
+                className="h-9 rounded border border-hairline bg-canvas px-2 text-[13px]"
+                value={surchargeAmount}
+                onChange={(e) => setSurchargeAmount(e.target.value)}
+                placeholder="0.00"
+              />
+            </label>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="h-8 rounded border border-hairline px-4 text-[13px] hover:bg-canvas-soft"
+                onClick={() => setShowSurchargeDialog(false)}
+                disabled={surchargeSubmitting}
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                className="h-8 rounded bg-primary px-4 text-[13px] text-white hover:opacity-90 disabled:opacity-60"
+                onClick={() => void handleApplySurcharge()}
+                disabled={surchargeSubmitting || !surchargeValueId || !surchargeAmount}
+              >
+                {surchargeSubmitting ? "Wird angewendet…" : "Anwenden"}
+              </button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -884,7 +1123,9 @@ function ArticleVariantsAndOptionsTab({
           <div className="flex flex-col gap-5 p-6">
             <div>
               <h3 className="text-[15px] font-medium text-ink">
-                {t("article.bulkUpdatePrices", { defaultValue: "Update variant prices" })}
+                {bulkPriceField === "price"
+                  ? t("article.bulkUpdatePrices", { defaultValue: "Update variant prices" })
+                  : t("article.bulkUpdateWeights", { defaultValue: "Update variant weights" })}
               </h3>
               <p className="mt-1 text-[13px] text-ink-mute">
                 {bulkVariantRows.length} variant{bulkVariantRows.length === 1 ? "" : "s"} selected
@@ -899,13 +1140,19 @@ function ArticleVariantsAndOptionsTab({
                   value={bulkPriceMode}
                   onChange={(e) => setBulkPriceMode(e.target.value as "set" | "adjust")}
                 >
-                  <option value="set">Set absolute price</option>
+                  <option value="set">
+                    {bulkPriceField === "price" ? "Set absolute price" : "Set absolute weight"}
+                  </option>
                   <option value="adjust">Adjust by percent</option>
                 </select>
               </label>
               <label className="flex flex-col gap-1.5 text-[13px] text-ink">
                 <span className="text-[12px] font-medium text-ink-secondary">
-                  {bulkPriceMode === "adjust" ? "Percent" : "Price"}
+                  {bulkPriceMode === "adjust"
+                    ? "Percent"
+                    : bulkPriceField === "price"
+                      ? "Price"
+                      : "Weight"}
                 </span>
                 <input
                   type="number"
@@ -1045,6 +1292,28 @@ function ArticlesModule() {
   });
 
   const articles = useMemo(() => articleData?.data ?? EMPTY_ARRAY, [articleData]);
+
+  // Fetch variants for the active article (shared query key with context tabs)
+  const { data: activeVariantRows = EMPTY_ARRAY } = useQuery({
+    queryKey: ["data", "articleVariant", activeArticleId],
+    queryFn: async () => {
+      const res = await fetch(`/api/data/articleVariant?articleId=${activeArticleId}`);
+      if (!res.ok) throw new Error("Failed to fetch article variants");
+      return res.json() as Promise<any[]>;
+    },
+    enabled: !!activeArticleId,
+    placeholderData: keepPreviousData,
+  });
+
+  const activeDefaultVariant = useMemo(
+    () =>
+      activeVariantRows.find(
+        (r: any) => r.optionValueHash === DEFAULT_VARIANT_OPTION_VALUE_HASH,
+      ) ??
+      activeVariantRows[0] ??
+      null,
+    [activeVariantRows],
+  );
 
   // Fetch article groups
   const { data: groups = EMPTY_ARRAY, isLoading: isTreeLoading } = useQuery({
@@ -1381,78 +1650,48 @@ function ArticlesModule() {
         id: "details",
         label: t("articleView.tabs.details"),
         content: (
-          <InspectorPanel
-            title={selectedArticle?.name ?? t("nav.articles")}
-            recordId={activeArticleId ?? undefined}
-            sections={[
-              {
-                title: t("articleView.tabs.details"),
-                fields: [
-                  {
-                    label: t("articleView.table.no"),
-                    value: (
-                      <span className="font-mono tabular-nums">{selectedArticle?.articleNo}</span>
-                    ),
-                  },
-                  { label: t("articleView.table.name"), value: selectedArticle?.name },
-                  {
-                    label: t("articleView.table.unit"),
-                    value: selectedArticle?.baseUnitId
-                      ? (unitMap.get(selectedArticle.baseUnitId) ?? selectedArticle.baseUnitId)
-                      : "—",
-                  },
-                ],
-              },
-              {
-                title: t("articleView.inventory.title"),
-                fields: [
-                  {
-                    label: t("articleView.table.group"),
-                    value: selectedArticle?.articleGroupId
-                      ? (groupMap.get(selectedArticle.articleGroupId) ??
-                        selectedArticle.articleGroupId)
-                      : "—",
-                  },
-                  {
-                    label: t("document.fields.warehouse"),
-                    value: selectedArticle?.defaultWarehouseId,
-                  },
-                  {
-                    label: t("articleView.table.tracking"),
-                    value: selectedArticle?.trackingMode ? (
-                      <span
-                        className={
-                          selectedArticle.trackingMode === "serial"
-                            ? "inline-flex rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-mono text-[11px] text-emerald-800"
-                            : "inline-flex rounded-full border border-sky-300 bg-sky-50 px-2 py-0.5 font-mono text-[11px] text-sky-800"
-                        }
-                      >
-                        {selectedArticle.trackingMode}
-                      </span>
-                    ) : (
-                      "—"
-                    ),
-                  },
-                  {
-                    label: "BOM",
-                    value: selectedArticle?.bomType ? (
-                      <span
-                        className={
-                          selectedArticle.bomType === "sales"
-                            ? "inline-flex rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 font-mono text-[11px] text-amber-800"
-                            : "inline-flex rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 font-mono text-[11px] text-violet-800"
-                        }
-                      >
-                        {selectedArticle.bomType}
-                      </span>
-                    ) : (
-                      "—"
-                    ),
-                  },
-                ],
-              },
-            ]}
-          />
+          <div className="flex h-full flex-col gap-3 overflow-auto p-3">
+            <InspectorPanel
+              title={selectedArticle?.name ?? t("nav.articles")}
+              recordId={activeArticleId ?? undefined}
+              sections={[
+                {
+                  title: t("articleView.tabs.details"),
+                  fields: [
+                    {
+                      label: t("articleView.table.no"),
+                      value: (
+                        <span className="font-mono tabular-nums">{selectedArticle?.articleNo}</span>
+                      ),
+                    },
+                    { label: t("articleView.table.name"), value: selectedArticle?.name },
+                    {
+                      label: t("articleView.table.unit"),
+                      value: selectedArticle?.baseUnitId
+                        ? (unitMap.get(selectedArticle.baseUnitId) ?? selectedArticle.baseUnitId)
+                        : "—",
+                    },
+                    {
+                      label: t("articleView.table.group"),
+                      value: selectedArticle?.articleGroupId
+                        ? (groupMap.get(selectedArticle.articleGroupId) ??
+                          selectedArticle.articleGroupId)
+                        : "—",
+                    },
+                  ],
+                },
+              ]}
+            />
+            {activeArticleId && (
+              <ArticleSalesBlock
+                key={activeDefaultVariant?.variantId ?? activeArticleId}
+                defaultVariant={activeDefaultVariant}
+                articleRecord={selectedArticle}
+                draft={EMPTY_SALES_DRAFT}
+                onDraftChange={() => undefined}
+              />
+            )}
+          </div>
         ),
       },
       {
@@ -1554,7 +1793,7 @@ function ArticlesModule() {
       },
       {
         id: "variants",
-        label: t("article.variantsAndOptions", { defaultValue: "Varianten & Optionen" }),
+        label: t("article.variants", { defaultValue: "Varianten" }),
         content: (
           <ArticleVariantsAndOptionsTab
             key={activeArticleId ?? "none"}
@@ -1568,6 +1807,7 @@ function ArticlesModule() {
     [
       selectedArticle,
       activeArticleId,
+      activeDefaultVariant,
       selectedArticleLabel,
       unitMap,
       groupMap,
@@ -1579,42 +1819,6 @@ function ArticlesModule() {
   );
 
   useEffect(() => {
-    const unregGenerateVariants = registerCommand({
-      id: "generate-variants",
-      scope: "context",
-      group: "recordOps",
-      label: {
-        en: "Generate Variants",
-        de: "Varianten erzeugen",
-      },
-      isEnabled: () => !!activeArticleId && !modalOpen,
-      handler: async () => {
-        if (!activeArticleId) return;
-        try {
-          const res = await fetch(`/api/articles/${activeArticleId}/generate-variants`, {
-            method: "POST",
-          });
-          if (!res.ok) {
-            throw new Error(await res.text());
-          }
-          const result = (await res.json()) as {
-            createdVariants?: number;
-            skippedVariants?: number;
-          };
-          await queryClient.invalidateQueries({
-            queryKey: ["data", "articleVariant", activeArticleId],
-          });
-          toast.success(
-            `Generated ${result.createdVariants ?? 0} variant${(result.createdVariants ?? 0) === 1 ? "" : "s"}${typeof result.skippedVariants === "number" ? ` (${result.skippedVariants} skipped)` : ""}`,
-          );
-        } catch (err) {
-          toast.error(
-            err instanceof Error && err.message ? err.message : "Failed to generate variants",
-          );
-        }
-      },
-    });
-
     const navigateTree = (delta: number) => {
       if (treeNodes.length === 0) return;
       const currentId = selectedGroupId ?? "ALL";
@@ -1647,15 +1851,12 @@ function ArticlesModule() {
     });
 
     return () => {
-      unregGenerateVariants();
       unregDown();
       unregUp();
     };
   }, [
-    activeArticleId,
     modalOpen,
     registerCommand,
-    queryClient,
     restoreArticleGrid,
     selectTreeNode,
     selectedGroupId,
@@ -1853,7 +2054,8 @@ function ArticlesModule() {
             title="New Article"
             postFieldsSection={
               <ArticleSalesBlock
-                articleId={null}
+                key="draft"
+                defaultVariant={null}
                 draft={createSalesDraft}
                 onDraftChange={setCreateSalesDraft}
               />
@@ -1877,7 +2079,8 @@ function ArticlesModule() {
             recordId={activeArticleId ?? undefined}
             postFieldsSection={
               <ArticleSalesBlock
-                articleId={activeArticleId}
+                key={activeDefaultVariant?.variantId ?? activeArticleId ?? "no-variant"}
+                defaultVariant={activeDefaultVariant}
                 articleRecord={selectedArticle}
                 draft={EMPTY_SALES_DRAFT}
                 onDraftChange={() => undefined}
@@ -1964,7 +2167,7 @@ function ArticlesModule() {
                   },
                   {
                     id: "varianten",
-                    label: t("article.variantsAndOptions", { defaultValue: "Varianten" }),
+                    label: t("article.variants", { defaultValue: "Varianten" }),
                     content: (
                       <ArticleVariantsAndOptionsTab
                         key={activeArticleId ?? "none"}

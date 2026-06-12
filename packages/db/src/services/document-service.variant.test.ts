@@ -227,6 +227,63 @@ test("postDocument resolves article truth from variantId, not the stored article
   assert.ok(inventoryItemRow?.itemId);
 });
 
+test("saveDocumentDraft accepts posted documents and keeps them posted", async () => {
+  const fixture = await createVariantDocumentFixture();
+  const service = new DocumentService();
+  const documentId = crypto.randomUUID();
+
+  await db.insert(document).values({
+    documentId,
+    tenantId: fixture.tenantId,
+    companyId: fixture.companyId,
+    documentType: "L",
+    documentDirection: "OUTBOUND",
+    documentNo: `DOC-${crypto.randomUUID().slice(0, 8)}`,
+    status: "posted",
+    postedAt: new Date(),
+    postedBy: "variant-test-user",
+    documentDate: new Date().toISOString().slice(0, 10),
+    documentGroupId: fixture.documentGroupId,
+    warehouseId: fixture.warehouseId,
+    transactionId: crypto.randomUUID(),
+  });
+
+  const result = await service.saveDocumentDraft(fixture.tenantId, "variant-test-user", {
+    documentId,
+    documentGroupId: fixture.documentGroupId,
+    documentType: "L",
+    documentDirection: "OUTBOUND",
+    documentDate: new Date().toISOString().slice(0, 10),
+    lines: [
+      {
+        lineNo: 1,
+        variantId: fixture.variantId,
+        quantity: 2,
+        netPrice: 15,
+        lineType: "article",
+      },
+    ],
+  });
+
+  assert.equal(result.documentId, documentId);
+
+  const [savedDoc] = (await db.execute(sql`
+    select status as "status"
+    from document
+    where document_id = ${documentId}
+    limit 1
+  `)) as Array<{ status: string | null }>;
+  const [savedLine] = (await db.execute(sql`
+    select variant_id as "variantId"
+    from document_line
+    where document_id = ${documentId}
+    limit 1
+  `)) as Array<{ variantId: string | null }>;
+
+  assert.equal(savedDoc?.status, "posted");
+  assert.equal(savedLine?.variantId, fixture.variantId);
+});
+
 after(async () => {
   await closeDb();
 });

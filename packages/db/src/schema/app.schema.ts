@@ -3547,6 +3547,29 @@ export const inventoryItem = pgTable(
   ],
 );
 
+export const articleVariantTemplate = pgTable(
+  "article_variant_template",
+  {
+    templateId: uuid("template_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    slug: text("slug").notNull(),
+    label: text("label").notNull(),
+    articleGroupId: uuid("article_group_id").references(() => articleGroup.articleGroupId),
+    definition: jsonb("definition").notNull(),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("uq_article_variant_template_slug").on(table.tenantId, table.slug),
+    index("idx_article_variant_template_tenant").on(table.tenantId),
+  ],
+);
+
 export const inventoryLevel = pgTable(
   "inventory_level",
   {

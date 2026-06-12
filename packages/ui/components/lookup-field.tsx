@@ -39,6 +39,7 @@ export interface LookupFieldProps<T = unknown> {
   disabled?: boolean;
   placeholder?: string;
   onTabForward?: () => void;
+  onTabBackward?: () => void;
   onFocusChange?: (focused: boolean) => void;
 }
 
@@ -115,6 +116,7 @@ function LookupFieldInner<T>(
     disabled = false,
     placeholder,
     onTabForward,
+    onTabBackward,
     onFocusChange,
   }: LookupFieldProps<T>,
   forwardedRef: React.ForwardedRef<HTMLInputElement>,
@@ -232,6 +234,20 @@ function LookupFieldInner<T>(
     closeLookup();
   };
 
+  const commitHighlightedResult = () => {
+    const item = selectedResult;
+    if (item) {
+      pick(item);
+      return true;
+    }
+    if (query === "") {
+      onChange(null, null);
+      closeLookup();
+      return true;
+    }
+    return false;
+  };
+
   const openInline = (initialQuery = "") => {
     setDialogOpen(false);
     setIsOpen(true);
@@ -293,31 +309,32 @@ function LookupFieldInner<T>(
 
     if (event.key === "Enter") {
       event.preventDefault();
-      if (query === "") {
-        onChange(null, null);
-        closeLookup();
-      } else {
-        const item = selectedResult;
-        if (item) pick(item);
-      }
+      commitHighlightedResult();
       return;
     }
 
     if (event.key === "Tab" && !event.shiftKey) {
       if (userHasInteracted) {
-        if (query === "") {
-          onChange(null, null);
-          closeLookup();
-        } else {
-          const item = selectedResult;
-          if (item) pick(item);
-        }
+        commitHighlightedResult();
       } else {
         closeLookup();
       }
       if (onTabForward) {
         event.preventDefault();
         requestAnimationFrame(() => onTabForward());
+      }
+      return;
+    }
+
+    if (event.key === "Tab" && event.shiftKey) {
+      if (userHasInteracted) {
+        commitHighlightedResult();
+      } else {
+        closeLookup();
+      }
+      if (onTabBackward) {
+        event.preventDefault();
+        requestAnimationFrame(() => onTabBackward());
       }
       return;
     }

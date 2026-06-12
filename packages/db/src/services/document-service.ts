@@ -1872,7 +1872,7 @@ export class DocumentService {
         lineType: data.variantId
           ? (data.lineType ?? "article")
           : data.lineType === "article" || !data.lineType
-            ? "text"
+            ? "comment"
             : data.lineType,
         bomGroupId: data.bomGroupId ?? null,
         transactionId: crypto.randomUUID(),
@@ -3148,8 +3148,6 @@ export class DocumentService {
           .for("update");
 
         if (!lockedDoc) throw new Error("Document not found");
-        if (lockedDoc.status !== "draft")
-          throw new Error("Document must be in draft status to save");
 
         docRecord = lockedDoc;
 
@@ -3279,7 +3277,7 @@ export class DocumentService {
             lineType: line.variantId
               ? (line.lineType ?? "article")
               : line.lineType === "article" || !line.lineType
-                ? "text"
+                ? "comment"
                 : line.lineType,
             bomGroupId: line.bomGroupId ?? null,
           };

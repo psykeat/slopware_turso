@@ -171,6 +171,8 @@ export function DeliveryAddressPickerField({
     } else if (e.key === "Enter" && isOpen && results[selectedIndex]) {
       e.preventDefault();
       handleSelect(results[selectedIndex]);
+    } else if (e.key === "Tab" && isOpen && results[selectedIndex]) {
+      handleSelect(results[selectedIndex]);
     } else if (e.key === "Escape") {
       setIsOpen(false);
     }

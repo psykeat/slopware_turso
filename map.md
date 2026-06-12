@@ -79,6 +79,8 @@ api/me.ts                      GET /api/me → { tenantName, orgName }
 | `GET /api/admin/data/{entity}`      | isSystemAdmin | `T[]` — cross-tenant                |
 | `GET /api/stats/dashboard`          | session       | Global KPIs                         |
 | `GET /api/me`                       | session       | `{ tenantId, tenantName, orgName }` |
+| `GET /api/capabilities`             | session       | Capability catalog + JSON Schemas   |
+| `POST /api/capabilities/{key}/execute` | session    | `CapabilityResult` envelope — see `.agents/07_api.md` |
 
 **Fetch pattern used in module routes:**
 

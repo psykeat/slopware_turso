@@ -22,6 +22,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { entityList, entitySave } from "#/lib/entity-capabilities";
+
 interface SetupGuideProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -243,28 +245,15 @@ export function SetupGuide({
     try {
       // Task 1: PATCH Legal Profile
       await new Promise((r) => setTimeout(r, 800)); // nice feel
-      const patchRes = await fetch(`/api/data/company/${companyId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          legalName: profile.legalName,
-          taxNumber: profile.taxNumber,
-          vatId: profile.vatId.replace(/\s+/g, "").toUpperCase(),
-          bankName: profile.bankName,
-          bankBic: profile.bankBic.replace(/\s+/g, "").toUpperCase(),
-          bankIban: profile.bankIban.replace(/\s+/g, "").toUpperCase(),
-          countryCode: countryCode,
-        }),
+      await entitySave("company", companyId, {
+        legalName: profile.legalName,
+        taxNumber: profile.taxNumber,
+        vatId: profile.vatId.replace(/\s+/g, "").toUpperCase(),
+        bankName: profile.bankName,
+        bankBic: profile.bankBic.replace(/\s+/g, "").toUpperCase(),
+        bankIban: profile.bankIban.replace(/\s+/g, "").toUpperCase(),
+        countryCode: countryCode,
       });
-
-      if (!patchRes.ok) {
-        throw new Error(
-          (await patchRes.text()) ||
-            (isDe
-              ? "Aktualisierung der Firmendaten fehlgeschlagen"
-              : "Failed to update company legal profile"),
-        );
-      }
 
       setProgressStep(2);
       await new Promise((r) => setTimeout(r, 1000)); // nice visual feel for seeding
@@ -314,22 +303,17 @@ export function SetupGuide({
           // Since setup/initialize already seeds them, let's look up or let's just make a POST to API /api/data/numberSequence to update.
           // In base-ui we can query list and find the correct sequence id.
           try {
-            const listRes = await fetch(
-              `/api/data/numberSequence?companyId=${companyId}&prefix=${seq.key}-&fiscalYear=${currentYear}`,
-            );
-            if (listRes.ok) {
-              const seqs = await listRes.json();
-              if (Array.isArray(seqs) && seqs.length > 0) {
-                const existingSeq = seqs[0];
-                await fetch(`/api/data/numberSequence/${existingSeq.numberSequenceId}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    prefix: seq.prefix,
-                    nextValue: customStart,
-                  }),
-                });
-              }
+            const seqs = await entityList<{ numberSequenceId: string }>("numberSequence", {
+              companyId,
+              prefix: `${seq.key}-`,
+              fiscalYear: String(currentYear),
+            });
+            const existingSeq = seqs[0];
+            if (existingSeq) {
+              await entitySave("numberSequence", existingSeq.numberSequenceId, {
+                prefix: seq.prefix,
+                nextValue: customStart,
+              });
             }
           } catch (e) {
             console.error("Non-blocking failure: failed to customize prefix/start value: ", e);

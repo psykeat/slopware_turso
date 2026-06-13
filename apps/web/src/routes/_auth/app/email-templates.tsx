@@ -6,6 +6,8 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
+import { entityList } from "#/lib/entity-capabilities";
+
 export const Route = createFileRoute("/_auth/app/email-templates")({
   component: EmailTemplatesRoute,
 });
@@ -112,11 +114,10 @@ function EmailTemplatesRoute() {
 
   const { data: templates = EMPTY } = useQuery<EmailTemplateRow[]>({
     queryKey: ["email-templates", "templates"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/emailTemplate?limit=200&orderBy=updatedAt:desc");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () =>
+      entityList<EmailTemplateRow>("emailTemplate", {}, { limit: 200, orderBy: "updatedAt:desc" }).catch(
+        () => [],
+      ),
     placeholderData: keepPreviousData,
   });
 
@@ -124,10 +125,11 @@ function EmailTemplatesRoute() {
     queryKey: ["email-templates", "bindings", selectedTemplateId],
     queryFn: async () => {
       if (!selectedTemplateId) return [];
-      const params = new URLSearchParams({ emailTemplateId: selectedTemplateId, limit: "200" });
-      const res = await fetch(`/api/data/emailTemplateBinding?${params.toString()}`);
-      if (!res.ok) return [];
-      return res.json();
+      return entityList<EmailTemplateBindingRow>(
+        "emailTemplateBinding",
+        { emailTemplateId: selectedTemplateId },
+        { limit: 200 },
+      ).catch(() => []);
     },
     enabled: Boolean(selectedTemplateId),
     placeholderData: keepPreviousData,

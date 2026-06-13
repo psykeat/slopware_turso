@@ -16,6 +16,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
+import { entityList } from "#/lib/entity-capabilities";
 import { capability, CapabilityClientError } from "#/server-fns/capabilities";
 
 export const Route = createFileRoute("/_auth/app/accounting")({
@@ -87,21 +88,14 @@ function AccountingModule() {
 
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["data", "company"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/company");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => entityList<Company>("company").catch(() => []),
   });
 
   const { data: periods = [] } = useQuery<FiscalPeriod[]>({
     queryKey: ["data", "fiscal_period", newCompanyId],
     enabled: !!newCompanyId,
-    queryFn: async () => {
-      const res = await fetch(`/api/data/fiscal_period?companyId=${newCompanyId}`);
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () =>
+      entityList<FiscalPeriod>("fiscalPeriod", { companyId: newCompanyId! }).catch(() => []),
   });
 
   const selectedBatch = batches.find((b) => b.batchId === selectedBatchId) ?? null;

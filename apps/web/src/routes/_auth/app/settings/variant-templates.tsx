@@ -31,6 +31,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { entityList } from "#/lib/entity-capabilities";
 import { capability } from "#/server-fns/capabilities";
 
 export const Route = createFileRoute("/_auth/app/settings/variant-templates")({
@@ -205,10 +206,7 @@ function VariantTemplatesView() {
 
   const { data: articleGroups = [] } = useQuery<any[]>({
     queryKey: ["data", "articleGroup"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/articleGroup");
-      return res.ok ? res.json() : [];
-    },
+    queryFn: () => entityList<any>("articleGroup").catch(() => []),
   });
 
   const loadTemplate = (template: VariantTemplateRecord) => {

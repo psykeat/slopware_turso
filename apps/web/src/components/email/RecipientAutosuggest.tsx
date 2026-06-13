@@ -1,5 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import React, { useRef, useState } from "react";
+
+import { capability } from "#/server-fns/capabilities";
+
 import { formatRecipientAutocompleteContact, getRecipientTokenRange, replaceRecipientToken, type RecipientAutocompleteContact } from "./email-recipient-autocomplete";
 
 export function RecipientAutosuggest({ value, onChange, placeholder, disabled }: { value: string; onChange: (val: string) => void; placeholder?: string; disabled?: boolean }) {
@@ -14,10 +17,11 @@ export function RecipientAutosuggest({ value, onChange, placeholder, disabled }:
     queryKey: ["email", "contacts", "lookup", searchQuery],
     queryFn: async () => {
       if (!searchQuery || searchQuery.length < 2) return [];
-      const res = await fetch(`/api/data/addressContact?q=${encodeURIComponent(searchQuery)}&limit=10`);
-      if (!res.ok) return [];
-      const json = await res.json();
-      return Array.isArray(json) ? json : (json.data || []);
+      const { items } = await capability("masterdata.addressContact.search")({
+        q: searchQuery,
+        limit: 10,
+      });
+      return items;
     },
     enabled: searchQuery.length >= 2,
   });

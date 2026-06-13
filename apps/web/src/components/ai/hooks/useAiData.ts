@@ -1,13 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { entityList } from "#/lib/entity-capabilities";
+
 export function useAddresses() {
   return useQuery({
     queryKey: ["ai-all-addresses"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/address");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => entityList("address").catch(() => []),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -15,12 +13,8 @@ export function useAddresses() {
 export function useDocuments() {
   return useQuery({
     queryKey: ["ai-all-documents"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/document?limit=100&orderBy=documentNo:asc");
-      if (!res.ok) return [];
-      const data = await res.json();
-      return Array.isArray(data) ? data : (data?.data ?? []);
-    },
+    queryFn: () =>
+      entityList("document", {}, { limit: 100, orderBy: "documentNo:asc" }).catch(() => []),
     staleTime: 5 * 60 * 1000,
   });
 }

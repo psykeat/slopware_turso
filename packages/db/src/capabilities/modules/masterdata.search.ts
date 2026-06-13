@@ -1,9 +1,20 @@
-import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../index";
-import { address, article, deliveryAddress, unit } from "../../schema/app.schema";
+import {
+  address,
+  addressContact,
+  addressContactIdentity,
+  article,
+  deliveryAddress,
+  unit,
+} from "../../schema/app.schema";
 import { defineCapability } from "../core/define";
+
+function formatContactName(firstName: string | null, lastName: string | null) {
+  return [firstName, lastName].filter(Boolean).join(" ").trim();
+}
 
 const looseRowSchema = z.looseObject({});
 
@@ -174,4 +185,84 @@ export const deliveryAddressSearch = defineCapability({
   },
 });
 
-export const searchCapabilities = [articleSearch, addressSearch, deliveryAddressSearch];
+// Contact type-ahead, moved verbatim from the `?q=` branch of /api/data/$.ts.
+// Searches contact name/email and external identity values, dedups by contact,
+// and synthesizes a display `name`. Bespoke identity join, so hand-written.
+export const addressContactSearch = defineCapability({
+  module: "masterdata",
+  entityName: "addressContact",
+  operation: "search",
+  kind: "read",
+  summary: { en: "Search contacts for lookup", de: "Kontakte für Lookup suchen" },
+  description: {
+    en: "Type-ahead lookup over contact name, email and external identity values; returns a compact row with a display name for pickers.",
+    de: "Type-ahead-Lookup über Kontaktname, E-Mail und externe Identitätswerte; liefert eine kompakte Zeile mit Anzeigename für Picker.",
+  },
+  input: searchInputSchema,
+  output: z.object({ items: z.array(looseRowSchema) }),
+  writesTables: [],
+  sideEffects: [],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => {
+    if (input.q.length === 0) return { items: [] };
+    const term = `%${input.q}%`;
+    const rows = await db
+      .select({
+        contactId: addressContact.contactId,
+        addressId: addressContact.addressId,
+        firstName: addressContact.firstName,
+        lastName: addressContact.lastName,
+        email: addressContact.email,
+        isPrimary: addressContact.isPrimary,
+        sourceSystem: addressContactIdentity.sourceSystem,
+      })
+      .from(addressContact)
+      .leftJoin(
+        addressContactIdentity,
+        eq(addressContact.contactId, addressContactIdentity.contactId),
+      )
+      .where(
+        and(
+          eq(addressContact.tenantId, ctx.tenantId),
+          eq(addressContact.archived, false),
+          or(
+            and(
+              isNotNull(addressContact.email),
+              sql`${addressContact.email} <> ''`,
+              or(
+                ilike(addressContact.firstName, term),
+                ilike(addressContact.lastName, term),
+                ilike(addressContact.email, term),
+              ),
+            ),
+            ilike(addressContactIdentity.value, term),
+            ilike(addressContactIdentity.normalizedValue, term),
+          ),
+        ),
+      )
+      .orderBy(asc(addressContact.lastName), asc(addressContact.firstName), asc(addressContact.email))
+      .limit(input.limit * 5);
+
+    const deduped = new Map<string, z.output<typeof looseRowSchema>>();
+    for (const row of rows) {
+      if (deduped.has(row.contactId)) continue;
+      deduped.set(row.contactId, {
+        ...row,
+        sourceSystem: row.sourceSystem ?? "crm",
+        name: formatContactName(row.firstName, row.lastName),
+      });
+    }
+    return { items: Array.from(deduped.values()).slice(0, input.limit) };
+  },
+});
+
+export const searchCapabilities = [
+  articleSearch,
+  addressSearch,
+  deliveryAddressSearch,
+  addressContactSearch,
+];

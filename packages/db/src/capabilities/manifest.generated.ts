@@ -62,6 +62,7 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
       "create": "masterdata.addressContact.create",
       "get": "masterdata.addressContact.get",
       "list": "masterdata.addressContact.list",
+      "search": "masterdata.addressContact.search",
       "update": "masterdata.addressContact.update",
     },
   },
@@ -277,6 +278,13 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
       "update": "sales.document.update",
     },
   },
+  "documentGroup": {
+    module: "sales",
+    ops: {
+      "get": "sales.documentGroup.get",
+      "list": "sales.documentGroup.list",
+    },
+  },
   "documentLine": {
     module: "sales",
     ops: {
@@ -328,6 +336,13 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
       "update": "logistics.documentShipmentPackage.update",
     },
   },
+  "documentType": {
+    module: "sales",
+    ops: {
+      "get": "sales.documentType.get",
+      "list": "sales.documentType.list",
+    },
+  },
   "emailAccount": {
     module: "communication",
     ops: {
@@ -340,6 +355,27 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
       "composeDefaults": "communication.emailOutbox.composeDefaults",
       "confirmSend": "communication.emailOutbox.confirmSend",
       "prepareSend": "communication.emailOutbox.prepareSend",
+    },
+  },
+  "emailTemplate": {
+    module: "communication",
+    ops: {
+      "get": "communication.emailTemplate.get",
+      "list": "communication.emailTemplate.list",
+    },
+  },
+  "emailTemplateBinding": {
+    module: "communication",
+    ops: {
+      "get": "communication.emailTemplateBinding.get",
+      "list": "communication.emailTemplateBinding.list",
+    },
+  },
+  "emailTemplateRenderLog": {
+    module: "communication",
+    ops: {
+      "get": "communication.emailTemplateRenderLog.get",
+      "list": "communication.emailTemplateRenderLog.list",
     },
   },
   "emailThread": {

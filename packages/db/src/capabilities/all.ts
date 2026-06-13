@@ -1,5 +1,6 @@
 import { accountingCapabilities } from "./modules/accounting.core";
 import { communicationEmailCapabilities } from "./modules/communication.email";
+import { emailTemplateCapabilities } from "./modules/communication.email-template";
 import { importCapabilities } from "./modules/import.core";
 import { logisticsCapabilities } from "./modules/logistics.core";
 import { addressCapabilities } from "./modules/masterdata.address";
@@ -25,6 +26,7 @@ import { unitCapabilities } from "./modules/masterdata.unit";
 import { variantTemplateCapabilities } from "./modules/masterdata.variant-template";
 import { documentCapabilities } from "./modules/sales.document";
 import { documentLineCapabilities } from "./modules/sales.document-line";
+import { salesReferenceCapabilities } from "./modules/sales.reference";
 import { systemCapabilities } from "./modules/system.core";
 
 // Single aggregation point for every capability module. index.ts registers
@@ -51,9 +53,11 @@ export const allCapabilities = [
   ...priceListCapabilities,
   ...accountingCapabilities,
   ...communicationEmailCapabilities,
+  ...emailTemplateCapabilities,
   ...importCapabilities,
   ...documentLineCapabilities,
   ...documentCapabilities,
+  ...salesReferenceCapabilities,
   ...logisticsCapabilities,
   ...systemCapabilities,
   ...masterdataRemainingCapabilities,

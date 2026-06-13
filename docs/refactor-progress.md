@@ -48,7 +48,7 @@ Lint once at the very end of a phase: `vp lint` (never mid-phase).
 | 3 Capability gaps | ✅ | `a39bf2af` communication.email, import.core, articleVariant.archiveBulk |
 | 4 UI write migration | ✅ | `eff85be5` documents, `167887d4` import+accounting, `d6e0cfbc` variant-templates. **All duplicate ad-hoc business-write routes deleted.** |
 | 5 Read migration + delete /api/data | ✅ | manifest+resolver+helpers, gap read-caps, by-id write-caps, enhanced list contract (orderBy/pagination/total/filterRules), all consumers migrated incl. document-editor + articles/addresses/documents/settings + email template reads; **`/api/data/$.ts` deleted** (`f9abe012`), `/api/admin/data` kept. `vp lint`: 0 errors, 7 pre-existing warnings |
-| 6 AI projection + /api/ai/execute | ⬜ | annotate ~20-25 caps with `exposure.ai`; `packages/agent` tool generator + orchestrator; delete hand-written tools |
+| 6 AI projection + /api/ai/execute | ✅ | `4df40639` 20 caps annotated (`exposure.ai`) + tool-name uniqueness test; `5aa71a15` `buildCapabilityTools` generator + tests; `26b33304` `/api/ai/execute` orchestrator; `be9347d1` deleted dead hand-written CRUD/mutation tools (kept bespoke mail-resolution scorers) |
 | 7 Idempotency enforcement | ⬜ | `capabilityExecutionLog` table; honor `ctx.idempotencyKey` replay |
 | 8 RLS pilot | ⬜ HIGH RISK | `runWithTenantContext` + AsyncLocalStorage db proxy in `executeCapability`; then RLS on 5 tables w/ `app_runtime` role |
 | 9 Cleanup + guardrails + docs | ⬜ | ESLint no-fetch rules, AI_TESTING.md, finalize plan docs |
@@ -183,9 +183,44 @@ array shape mean generic `entitySave` is not used for documentLine.
 Verify reminder: `base` tenant id in CLAUDE.md is stale for the local docker DB —
 resolve by slug `base` (as capabilities.smoke.test.ts does) for in-process checks.
 
-## Phase 6 — next (AI projection + /api/ai/execute)
-Annotate ~20-25 caps with `exposure.ai`; build the `packages/agent` tool
-generator + orchestrator over `executeCapability`; delete hand-written tools.
-`exposure.ai.activeByDefault`/`group` already exist in the type. The by-id
-`masterdata.editable` create/update caps are `llm:"hidden"` on purpose — keep the
-AI write path on the natural-key `upsert`.
+## Phase 6 — DONE (AI projection + /api/ai/execute)
+- **Annotations** (`4df40639`): 20 caps carry `exposure.ai` across three groups —
+  `sales-documents` (list/get/create/update/post/storno/convert/convertCandidates
+  /pricing), `mail` (emailThread list/get/archive/markRead/link + addressContact
+  .search), `catalog` (article/address get + search, address upsert). Confirmation
+  stays derived from `exposure.llm === "confirm"`. Contract test guards AI
+  tool-name uniqueness under the default `module_operation_entity` naming.
+- **Generator** (`5aa71a15`): `buildCapabilityTools(ctx, options)` in
+  `packages/agent/src/capability-tools.ts` projects AI-exposed caps into
+  `@tanstack/ai` server tools that delegate to `executeCapability` with a
+  server-built ctx (no `tenantId` reaches the model). Options: `group`, `keys`,
+  `activeByDefaultOnly` (default true), `confirmMode` (`approval`|`exclude`|`allow`).
+  `needsApproval` derived from `llm === "confirm"`. Tests in
+  `capability-tools.test.ts` (incl. fail-closed delegation + no-tenantId-leak).
+- **Orchestrator** (`26b33304`): `apps/web/src/routes/api/ai/execute.ts` (POST).
+  Resolves the tenant/actor ctx via `resolveExecutionContext` (overridden to
+  `actorMode:"assistant"`), builds the toolset, runs the agent loop, returns JSON
+  or SSE. Confirm-gated caps EXCLUDED by default (no interactive approval channel
+  on a REST call); opt in with `confirmMode`.
+- **Deletion** (`be9347d1`): removed `tools.ts` + `mutations.ts` (dead generic
+  CRUD/mutation tools duplicating caps). Kept the bespoke mail candidate-resolution
+  tools (score/reason ranking, a read-layer concern) in `mail-resolution-tools.ts`.
+
+Verify: 14 contract + 10 agent tests green; `pnpm run build:web` ✅; `vp lint`
+0 errors, 7 pre-existing warnings.
+
+### Phase 6 follow-ups (not blocking)
+- **Live LLM smoke not run**: `/api/ai/execute` round-trip needs a running
+  dev server + a configured provider (real API key). Wiring is build- and
+  unit-verified; do a manual smoke when credentials are available (see
+  `AI_TESTING.md`).
+- **Legacy mail pipeline untouched**: `AIOrchestratorService` (interpret/resolve
+  /review) + `runMailAgentLoop` (which uses the kept mail-resolution tools) remain
+  the production mail path. `/api/ai/execute` is the new general capability path;
+  folding the mail flow onto it (and onto generated tools) is a separate effort.
+- The by-id `masterdata.editable` create/update caps stay `llm:"hidden"` — the AI
+  write path is the natural-key `upsert`.
+
+## Phase 7 — next (idempotency enforcement)
+`capabilityExecutionLog` table; honor `ctx.idempotencyKey` replay. See the Phase
+status table for 7–9.

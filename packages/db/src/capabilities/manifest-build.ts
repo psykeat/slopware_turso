@@ -2,16 +2,28 @@ import type { AnyCapability } from "./core/types";
 
 // Pure projection of the capability registry into a per-entity operation map.
 // The generic TriView grid does POST/PATCH/DELETE on a *dynamic* entityName but
-// capability ops are heterogeneous (upsert+archive vs create/update/delete, and
-// the module prefix varies). This manifest is the runtime entity→op→key lookup
-// the grid needs. It is intentionally STRINGS ONLY so the generated file can be
-// imported from client bundles without dragging in handlers or Drizzle.
+// capability ops are heterogeneous — and not only in which ops exist: their
+// *input shapes* differ too (factory CRUD takes `{ filters }` / `{ id }`, while
+// hand-written caps take flat FK fields and entity-specific id params like
+// `optionId` / `documentId`). We introspect each input schema at generation time
+// and bake the shape facts the runtime resolver needs (idParam, filtersWrapped)
+// into the manifest. It stays STRINGS ONLY so the generated file is safe to
+// import from client bundles.
+
+export interface EntityCapabilityOp {
+  /** Full capability key (`${module}.${entityName}.${operation}`). */
+  key: string;
+  /** For id-addressed ops (get/update/archive/delete): the input key holding the record id. */
+  idParam?: string;
+  /** For list: true if FK filters go under a `filters` wrapper, false if they are flat fields. */
+  filtersWrapped?: boolean;
+}
 
 export interface EntityCapabilityEntry {
   /** The single module that owns this entity's capabilities. */
   module: string;
-  /** operation name → full capability key (`${module}.${entityName}.${operation}`). */
-  ops: Record<string, string>;
+  /** operation name → resolved op descriptor. */
+  ops: Record<string, EntityCapabilityOp>;
 }
 
 export type EntityCapabilityManifest = Record<string, EntityCapabilityEntry>;
@@ -25,6 +37,35 @@ export type EntityCapabilityManifest = Record<string, EntityCapabilityEntry>;
 const ENTITY_CANONICAL_MODULE: Record<string, string> = {
   tenantConnector: "system",
 };
+
+// Ops addressed by a single record id; their input carries one id field
+// (plus `patch` for update). Used to derive idParam.
+const ID_ADDRESSED_OPS = new Set(["get", "update", "archive", "delete"]);
+
+// Top-level object keys of a zod schema. Every generic-op input in the registry
+// is a ZodObject (possibly via .extend), which exposes `.shape`.
+function objectKeys(schema: unknown): string[] {
+  const shape = (schema as { shape?: Record<string, unknown> } | null)?.shape;
+  return shape && typeof shape === "object" ? Object.keys(shape) : [];
+}
+
+function deriveIdParam(operation: string, input: unknown): string | undefined {
+  if (!ID_ADDRESSED_OPS.has(operation)) return undefined;
+  const candidates = objectKeys(input).filter((key) => key !== "patch");
+  // Unambiguous only when exactly one id-like key remains; bespoke multi-key ops
+  // (e.g. a join-row delete keyed by two ids) are left unresolved on purpose.
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function describeOp(capability: AnyCapability): EntityCapabilityOp {
+  const op: EntityCapabilityOp = { key: capability.key };
+  const idParam = deriveIdParam(capability.operation, capability.input);
+  if (idParam) op.idParam = idParam;
+  if (capability.operation === "list") {
+    op.filtersWrapped = objectKeys(capability.input).includes("filters");
+  }
+  return op;
+}
 
 // Builds the manifest from the live registry. Throws on the two invariants the
 // dynamic-entity grid relies on: an entity must resolve to exactly one module
@@ -53,9 +94,16 @@ export function buildEntityCapabilityManifest(
         `duplicate operation "${capability.operation}" for entity "${capability.entityName}"`,
       );
     }
-    entry.ops[capability.operation] = capability.key;
+    entry.ops[capability.operation] = describeOp(capability);
   }
   return manifest;
+}
+
+function serializeOp(op: EntityCapabilityOp): string {
+  const parts = [`key: ${JSON.stringify(op.key)}`];
+  if (op.idParam !== undefined) parts.push(`idParam: ${JSON.stringify(op.idParam)}`);
+  if (op.filtersWrapped !== undefined) parts.push(`filtersWrapped: ${op.filtersWrapped}`);
+  return `{ ${parts.join(", ")} }`;
 }
 
 // Deterministic source rendering (entities + ops sorted) so the generated file
@@ -66,7 +114,7 @@ export function serializeEntityCapabilityManifest(manifest: EntityCapabilityMani
     const entry = manifest[entityName];
     const ops = Object.keys(entry.ops)
       .sort()
-      .map((op) => `      ${JSON.stringify(op)}: ${JSON.stringify(entry.ops[op])},`)
+      .map((op) => `      ${JSON.stringify(op)}: ${serializeOp(entry.ops[op])},`)
       .join("\n");
     return [
       `  ${JSON.stringify(entityName)}: {`,
@@ -83,7 +131,7 @@ export function serializeEntityCapabilityManifest(manifest: EntityCapabilityMani
     "// Strings only: safe to import from client bundles (no handlers, no Drizzle).",
     'import type { EntityCapabilityManifest } from "./manifest-build";',
     "",
-    'export type { EntityCapabilityEntry, EntityCapabilityManifest } from "./manifest-build";',
+    'export type { EntityCapabilityEntry, EntityCapabilityManifest, EntityCapabilityOp } from "./manifest-build";',
     "",
     "export const entityCapabilityManifest: EntityCapabilityManifest = {",
     entries.join("\n"),

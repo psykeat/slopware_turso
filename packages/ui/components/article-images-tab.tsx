@@ -11,6 +11,8 @@ import {
 import React, { useState, useRef } from "react";
 import { toast } from "sonner";
 
+import { entitySave } from "../lib/entity-capabilities";
+
 interface ArticleImage {
   articleImageId: string;
   tenantId: string;
@@ -80,15 +82,7 @@ export function ArticleImagesTab({
 
   // Mutate: Set Primary Image
   const setPrimaryMutation = useMutation({
-    mutationFn: async (imageId: string) => {
-      const res = await fetch(`/api/data/article/${articleId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ primaryImageId: imageId }),
-      });
-      if (!res.ok) throw new Error("Failed to update primary image");
-      return res.json();
-    },
+    mutationFn: (imageId: string) => entitySave("article", articleId, { primaryImageId: imageId }),
     onSuccess: () => {
       toast.success("Hauptbild aktualisiert");
       queryClient.invalidateQueries({ queryKey: ["data", "article"] });
@@ -101,26 +95,14 @@ export function ArticleImagesTab({
 
   // Mutate: Delete Image (Soft Delete / Archive)
   const deleteMutation = useMutation({
-    mutationFn: async (imageId: string) => {
-      const res = await fetch(`/api/data/articleImage/${imageId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archived: true }),
-      });
-      if (!res.ok) throw new Error("Failed to delete image");
-      return res.json();
-    },
+    mutationFn: (imageId: string) => entitySave("articleImage", imageId, { archived: true }),
     onSuccess: (data, deletedImageId) => {
       toast.success("Bild gelöscht");
       queryClient.invalidateQueries({ queryKey: ["article-images", articleId] });
 
       // If the deleted image was the primary image, clear primaryImageId on the article
       if (primaryImageId === deletedImageId) {
-        void fetch(`/api/data/article/${articleId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ primaryImageId: null }),
-        }).then(() => {
+        void entitySave("article", articleId, { primaryImageId: null }).then(() => {
           queryClient.invalidateQueries({ queryKey: ["data", "article"] });
           onRefreshArticle?.();
         });
@@ -154,17 +136,8 @@ export function ArticleImagesTab({
       const targetSort = targetImg.sortOrder;
 
       // Make sequential updates to database
-      await fetch(`/api/data/articleImage/${currentImg.articleImageId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sortOrder: targetSort }),
-      });
-
-      await fetch(`/api/data/articleImage/${targetImg.articleImageId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sortOrder: currentSort }),
-      });
+      await entitySave("articleImage", currentImg.articleImageId, { sortOrder: targetSort });
+      await entitySave("articleImage", targetImg.articleImageId, { sortOrder: currentSort });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["article-images", articleId] });

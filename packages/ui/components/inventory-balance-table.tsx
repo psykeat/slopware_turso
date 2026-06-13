@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import React from "react";
 
+import { entityList } from "../lib/entity-capabilities";
 import { Skeleton } from "./skeleton";
 
 interface InventoryBalance {
@@ -18,13 +19,7 @@ function formatQty(n: number) {
 export function InventoryBalanceTable({ articleId }: { articleId: string }) {
   const { data: rows = [], isLoading } = useQuery<InventoryBalance[]>({
     queryKey: ["data", "inventoryBalance", articleId],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/data/inventoryBalance?articleId=${encodeURIComponent(articleId)}`,
-      );
-      if (!res.ok) throw new Error("Failed to fetch inventory balance");
-      return res.json();
-    },
+    queryFn: () => entityList<InventoryBalance>("inventoryBalance", { articleId }),
     enabled: !!articleId,
   });
 

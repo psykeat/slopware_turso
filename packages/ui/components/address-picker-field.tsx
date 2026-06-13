@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { executeCapability } from "../lib/capability-client";
+import { entityGet } from "../lib/entity-capabilities";
 import { cn } from "../lib/utils";
 
 interface AddressResult {
@@ -182,9 +183,11 @@ export function AddressPickerField({
     queryKey: ["address", value],
     queryFn: async () => {
       if (!value) return null;
-      const res = await fetch(`/api/data/address/${value}`);
-      if (!res.ok) return null;
-      return res.json();
+      try {
+        return await entityGet<Record<string, any>>("address", value);
+      } catch {
+        return null;
+      }
     },
     enabled: Boolean(value),
   });
@@ -261,8 +264,7 @@ export function AddressPickerField({
 
   const handleSelect = async (addr: AddressResult) => {
     if (locked) return;
-    const fullRes = await fetch(`/api/data/address/${addr.addressId}`);
-    const fullData = fullRes.ok ? await fullRes.json() : null;
+    const fullData = await entityGet<Record<string, any>>("address", addr.addressId).catch(() => null);
     const snap = normalizeSnapshot(fullData ?? addr, snapshotFromSearchResult(addr));
     setLocalSnap(snap);
     onChange(addr.addressId, snap, addr);

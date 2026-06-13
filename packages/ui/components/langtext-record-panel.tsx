@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { entityGet, entitySave } from "../lib/entity-capabilities";
 import { cn } from "../lib/utils";
 import { LangtextEditor, type LangTextEntry } from "./langtext-editor";
 
@@ -102,13 +103,7 @@ function LangTextRecordPanelView({
   const saveMutation = useMutation({
     mutationFn: async ({ fieldKey, html }: { fieldKey: string; html: string }) => {
       if (!recordId) return null;
-      const res = await fetch(`/api/data/${entityName}/${recordId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [fieldKey]: html }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      return entitySave(entityName, recordId, { [fieldKey]: html });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["data", entityName, recordId] });
@@ -173,9 +168,7 @@ export function LangTextRecordPanel({
     queryKey: ["data", entityName, recordId],
     queryFn: async () => {
       if (!recordId) return null;
-      const res = await fetch(`/api/data/${entityName}/${recordId}`);
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      return entityGet<Record<string, any>>(entityName, recordId);
     },
     enabled: !!recordId && !isControlled,
   });

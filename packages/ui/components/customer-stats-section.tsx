@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import React from "react";
 
+import { entityList } from "../lib/entity-capabilities";
 import { formatMoney, formatDate, StatusDot } from "../lib/formatters";
 import { Skeleton } from "./skeleton";
 
@@ -21,13 +22,7 @@ interface AnnualRevenue {
 export function CustomerStatsSection({ addressId }: { addressId: string }) {
   const { data: documents = [], isLoading } = useQuery<Document[]>({
     queryKey: ["data", "document", "customer", addressId],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/data/document?customerId=${encodeURIComponent(addressId)}&limit=10&orderBy=document_date:desc`,
-      );
-      if (!res.ok) throw new Error("Failed to fetch documents");
-      return res.json();
-    },
+    queryFn: () => entityList<Document>("document", { customerId: addressId }, { limit: 10 }),
     enabled: !!addressId,
   });
 

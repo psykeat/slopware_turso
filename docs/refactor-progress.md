@@ -47,7 +47,7 @@ Lint once at the very end of a phase: `vp lint` (never mid-phase).
 | 2 Server-fn + query layer | ✅ | `b82d7c7f` `$executeCapability`, `capability(key)`, `queries/{keys,invalidate,capability}.ts`, `useCapabilityMutation` |
 | 3 Capability gaps | ✅ | `a39bf2af` communication.email, import.core, articleVariant.archiveBulk |
 | 4 UI write migration | ✅ | `eff85be5` documents, `167887d4` import+accounting, `d6e0cfbc` variant-templates. **All duplicate ad-hoc business-write routes deleted.** |
-| 5 Read migration + delete /api/data | 🟡 in progress | search caps `89aaac8f`; manifest+helper+grid+gap-caps+by-id-write-caps landed (`7c901a9e`→`1df3de25`). **BLOCKED on list-capability surface gap** for paginated grids — see below |
+| 5 Read migration + delete /api/data | 🟡 in progress | manifest+helper+grid+gap-caps+by-id-write-caps + enhanced list contract + ~13 consumers migrated (`7c901a9e`→`77a83645`). Remaining: document-editor, 3 TriView pages, settings/index, then delete route. email.tsx deferred. See below |
 | 6 AI projection + /api/ai/execute | ⬜ | annotate ~20-25 caps with `exposure.ai`; `packages/agent` tool generator + orchestrator; delete hand-written tools |
 | 7 Idempotency enforcement | ⬜ | `capabilityExecutionLog` table; honor `ctx.idempotencyKey` replay |
 | 8 RLS pilot | ⬜ HIGH RISK | `runWithTenantContext` + AsyncLocalStorage db proxy in `executeCapability`; then RLS on 5 tables w/ `app_runtime` role |
@@ -149,19 +149,39 @@ DONE (commits `7c901a9e` … `1df3de25`):
   `customer-stats-section`, `inventory-balance-table`, `address-picker-field`,
   `article-image-strip`, `article-images-tab`.
 
-⚠️ **BLOCKER — list-capability surface gap.** The paginated/sortable grids can't
-migrate yet: apps/web `{articles,addresses,documents}` main lists use
-`paginated/page/limit/orderBy/search/filters(JSON filterRules)` and expect
-`{ data, total }`; `data-grid` CSV export uses `orderBy`+`filterRules`;
-`lookup-field` uses `orderBy`. The capability `list` ops return only `{ items }`
-with a fixed `orderBy`, no `total`, no `filterRules`. Resolving this needs a
-decision on enhancing the shared list contract (add `orderBy`, pagination+`total`,
-`filterRules`) across the factory `list` caps + their output schema — paused for
-user input.
+RESOLVED — list-capability surface gap (user-approved "enhance shared contract").
+`core/list.ts` adds a shared list contract: optional `orderBy`, `filterRules`,
+offset pagination, and `withTotal` → `{ items, total? }`, all delegating to
+DataService.list. Migrated the CRUD factories + the bespoke main lists
+article/address/document. Helpers gained `entityListPage` (+ EntityListOptions
+orderBy/filterRules/withTotal).
 
-STILL ON /api/data (pending the above): `lookup-field`, `data-grid` (export),
-`entity-mask`, `document-editor`, apps/web `{articles,addresses,documents}`,
-`email-templates`, `accounting`, `settings/index`, `settings/variant-templates`,
-`email.tsx` (deferred), `components/ai/hooks/useAiData`, `setup/SetupGuide`,
-email recipient autocomplete/suggest, `queries/keys.ts`. Delete `/api/data/$.ts`
-(keep `/api/admin/data/$.ts`) once all are migrated.
+Consumers migrated so far (commits through `77a83645`): inline-edit-grid,
+langtext-record-panel, customer-stats-section, inventory-balance-table,
+address-picker-field, article-image-strip, article-images-tab, data-grid (export
+pages through 200-row windows), lookup-field (search via entityList, resolve via
+entityGet for the PK / filtered list for custom column), entity-mask (caps for
+`/api/data`, raw fetch kept for `/api/admin/data`, postalCode→city via
+entityList), accounting, email-templates, settings/variant-templates,
+ai/useAiData, RecipientAutosuggest, setup/SetupGuide.
+
+STILL ON /api/data (remaining):
+- `packages/ui/components/document-editor.tsx` — ~17 reads + a documentLine
+  create. CARE: its `/api/data` POST documentLine hits DocumentService.create-
+  DocumentLine (special-case in the route); map to `sales.documentLine.create`
+  only after confirming that cap delegates to the same service. A couple of its
+  lists need controls too: `articleVariant.list` (limit 500 + orderBy sku — bump
+  past the 200 cap or page) and `documentLine.list` (orderBy lineNo); enhance
+  those two bespoke lists with the shared controls like article/address/document.
+- apps/web `articles.tsx` (~22 calls: paginated main grid via entityListPage +
+  many lookups/writes), `addresses.tsx` (~9), `documents.tsx` (~7: company/
+  address/documentGroup/warehouse/documentLine + /api/me — keep /api/me).
+- `settings/index.tsx`.
+- `email.tsx` — DEFERRED (task #11; tangled with OAuth/webhooks/PDF). Its only
+  /api/data read is emailTemplateRenderLog list → migrate opportunistically.
+- Then `git rm apps/web/src/routes/api/data/$.ts` (move its sibling pure helper
+  `-address-contact-lookup.ts` out first; `email-recipient-autocomplete.ts`
+  imports `formatAddressContactName` from it). KEEP `/api/admin/data/$.ts`.
+
+Verify reminder: `base` tenant id in CLAUDE.md is stale for the local docker DB —
+resolve by slug `base` (as capabilities.smoke.test.ts does) for in-process checks.

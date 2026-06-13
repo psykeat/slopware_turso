@@ -29,16 +29,13 @@ import { Route as ApiMetadataSplatRouteImport } from './routes/api/metadata/$'
 import { Route as ApiMeCompanyRouteImport } from './routes/api/me/company'
 import { Route as ApiFeedbackSubmitRouteImport } from './routes/api/feedback/submit'
 import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
-import { Route as ApiDeliveryAddressesSearchRouteImport } from './routes/api/delivery-addresses/search'
 import { Route as ApiDeliveryAddressesDeliveryAddressIdRouteImport } from './routes/api/delivery-addresses/$deliveryAddressId'
 import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
 import { Route as ApiCapabilitiesKeyRouteImport } from './routes/api/capabilities/$key'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as ApiArticlesSearchRouteImport } from './routes/api/articles/search'
 import { Route as ApiAiSplatRouteImport } from './routes/api/ai/$'
 import { Route as ApiAdminLlmConfigRouteImport } from './routes/api/admin/llm-config'
 import { Route as ApiAdminCyclesRouteImport } from './routes/api/admin/cycles'
-import { Route as ApiAddressesSearchRouteImport } from './routes/api/addresses/search'
 import { Route as AuthAppImportRouteImport } from './routes/_auth/app/import'
 import { Route as AuthAppEmailTemplatesRouteImport } from './routes/_auth/app/email-templates'
 import { Route as AuthAppEmailRouteImport } from './routes/_auth/app/email'
@@ -169,12 +166,6 @@ const ApiEmailSplatRoute = ApiEmailSplatRouteImport.update({
   path: '/api/email/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDeliveryAddressesSearchRoute =
-  ApiDeliveryAddressesSearchRouteImport.update({
-    id: '/api/delivery-addresses/search',
-    path: '/api/delivery-addresses/search',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiDeliveryAddressesDeliveryAddressIdRoute =
   ApiDeliveryAddressesDeliveryAddressIdRouteImport.update({
     id: '/api/delivery-addresses/$deliveryAddressId',
@@ -196,11 +187,6 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiArticlesSearchRoute = ApiArticlesSearchRouteImport.update({
-  id: '/api/articles/search',
-  path: '/api/articles/search',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiAiSplatRoute = ApiAiSplatRouteImport.update({
   id: '/api/ai/$',
   path: '/api/ai/$',
@@ -214,11 +200,6 @@ const ApiAdminLlmConfigRoute = ApiAdminLlmConfigRouteImport.update({
 const ApiAdminCyclesRoute = ApiAdminCyclesRouteImport.update({
   id: '/api/admin/cycles',
   path: '/api/admin/cycles',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAddressesSearchRoute = ApiAddressesSearchRouteImport.update({
-  id: '/api/addresses/search',
-  path: '/api/addresses/search',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthAppImportRoute = AuthAppImportRouteImport.update({
@@ -409,16 +390,13 @@ export interface FileRoutesByFullPath {
   '/app/email': typeof AuthAppEmailRoute
   '/app/email-templates': typeof AuthAppEmailTemplatesRoute
   '/app/import': typeof AuthAppImportRoute
-  '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
-  '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
   '/api/data/$': typeof ApiDataSplatRoute
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
-  '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/me/company': typeof ApiMeCompanyRoute
@@ -468,16 +446,13 @@ export interface FileRoutesByTo {
   '/app/email': typeof AuthAppEmailRoute
   '/app/email-templates': typeof AuthAppEmailTemplatesRoute
   '/app/import': typeof AuthAppImportRoute
-  '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
-  '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
   '/api/data/$': typeof ApiDataSplatRoute
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
-  '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/me/company': typeof ApiMeCompanyRoute
@@ -532,16 +507,13 @@ export interface FileRoutesById {
   '/_auth/app/email': typeof AuthAppEmailRoute
   '/_auth/app/email-templates': typeof AuthAppEmailTemplatesRoute
   '/_auth/app/import': typeof AuthAppImportRoute
-  '/api/addresses/search': typeof ApiAddressesSearchRoute
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
-  '/api/articles/search': typeof ApiArticlesSearchRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
   '/api/data/$': typeof ApiDataSplatRoute
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
-  '/api/delivery-addresses/search': typeof ApiDeliveryAddressesSearchRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
   '/api/me/company': typeof ApiMeCompanyRoute
@@ -595,16 +567,13 @@ export interface FileRouteTypes {
     | '/app/email'
     | '/app/email-templates'
     | '/app/import'
-    | '/api/addresses/search'
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
     | '/api/ai/$'
-    | '/api/articles/search'
     | '/api/auth/$'
     | '/api/capabilities/$key'
     | '/api/data/$'
     | '/api/delivery-addresses/$deliveryAddressId'
-    | '/api/delivery-addresses/search'
     | '/api/email/$'
     | '/api/feedback/submit'
     | '/api/me/company'
@@ -654,16 +623,13 @@ export interface FileRouteTypes {
     | '/app/email'
     | '/app/email-templates'
     | '/app/import'
-    | '/api/addresses/search'
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
     | '/api/ai/$'
-    | '/api/articles/search'
     | '/api/auth/$'
     | '/api/capabilities/$key'
     | '/api/data/$'
     | '/api/delivery-addresses/$deliveryAddressId'
-    | '/api/delivery-addresses/search'
     | '/api/email/$'
     | '/api/feedback/submit'
     | '/api/me/company'
@@ -717,16 +683,13 @@ export interface FileRouteTypes {
     | '/_auth/app/email'
     | '/_auth/app/email-templates'
     | '/_auth/app/import'
-    | '/api/addresses/search'
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
     | '/api/ai/$'
-    | '/api/articles/search'
     | '/api/auth/$'
     | '/api/capabilities/$key'
     | '/api/data/$'
     | '/api/delivery-addresses/$deliveryAddressId'
-    | '/api/delivery-addresses/search'
     | '/api/email/$'
     | '/api/feedback/submit'
     | '/api/me/company'
@@ -770,15 +733,12 @@ export interface RootRouteChildren {
   ApiCapabilitiesRoute: typeof ApiCapabilitiesRouteWithChildren
   ApiMeRoute: typeof ApiMeRouteWithChildren
   ApiTenantsRoute: typeof ApiTenantsRoute
-  ApiAddressesSearchRoute: typeof ApiAddressesSearchRoute
   ApiAdminCyclesRoute: typeof ApiAdminCyclesRoute
   ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRouteWithChildren
   ApiAiSplatRoute: typeof ApiAiSplatRoute
-  ApiArticlesSearchRoute: typeof ApiArticlesSearchRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDataSplatRoute: typeof ApiDataSplatRoute
   ApiDeliveryAddressesDeliveryAddressIdRoute: typeof ApiDeliveryAddressesDeliveryAddressIdRoute
-  ApiDeliveryAddressesSearchRoute: typeof ApiDeliveryAddressesSearchRoute
   ApiEmailSplatRoute: typeof ApiEmailSplatRoute
   ApiFeedbackSubmitRoute: typeof ApiFeedbackSubmitRoute
   ApiMetadataSplatRoute: typeof ApiMetadataSplatRoute
@@ -945,13 +905,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEmailSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/delivery-addresses/search': {
-      id: '/api/delivery-addresses/search'
-      path: '/api/delivery-addresses/search'
-      fullPath: '/api/delivery-addresses/search'
-      preLoaderRoute: typeof ApiDeliveryAddressesSearchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/delivery-addresses/$deliveryAddressId': {
       id: '/api/delivery-addresses/$deliveryAddressId'
       path: '/api/delivery-addresses/$deliveryAddressId'
@@ -980,13 +933,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/articles/search': {
-      id: '/api/articles/search'
-      path: '/api/articles/search'
-      fullPath: '/api/articles/search'
-      preLoaderRoute: typeof ApiArticlesSearchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/ai/$': {
       id: '/api/ai/$'
       path: '/api/ai/$'
@@ -1006,13 +952,6 @@ declare module '@tanstack/react-router' {
       path: '/api/admin/cycles'
       fullPath: '/api/admin/cycles'
       preLoaderRoute: typeof ApiAdminCyclesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/addresses/search': {
-      id: '/api/addresses/search'
-      path: '/api/addresses/search'
-      fullPath: '/api/addresses/search'
-      preLoaderRoute: typeof ApiAddressesSearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_auth/app/import': {
@@ -1376,16 +1315,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCapabilitiesRoute: ApiCapabilitiesRouteWithChildren,
   ApiMeRoute: ApiMeRouteWithChildren,
   ApiTenantsRoute: ApiTenantsRoute,
-  ApiAddressesSearchRoute: ApiAddressesSearchRoute,
   ApiAdminCyclesRoute: ApiAdminCyclesRoute,
   ApiAdminLlmConfigRoute: ApiAdminLlmConfigRouteWithChildren,
   ApiAiSplatRoute: ApiAiSplatRoute,
-  ApiArticlesSearchRoute: ApiArticlesSearchRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDataSplatRoute: ApiDataSplatRoute,
   ApiDeliveryAddressesDeliveryAddressIdRoute:
     ApiDeliveryAddressesDeliveryAddressIdRoute,
-  ApiDeliveryAddressesSearchRoute: ApiDeliveryAddressesSearchRoute,
   ApiEmailSplatRoute: ApiEmailSplatRoute,
   ApiFeedbackSubmitRoute: ApiFeedbackSubmitRoute,
   ApiMetadataSplatRoute: ApiMetadataSplatRoute,

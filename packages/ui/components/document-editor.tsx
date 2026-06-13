@@ -684,10 +684,11 @@ function ArticleSearchCell({
       placeholder: "Search articles",
       emptyLabel: "No articles found",
       search: async (query, options) => {
-        const params = new URLSearchParams({ q: query, limit: String(options?.limit ?? 20) });
-        const res = await fetch(`/api/articles/search?${params.toString()}`);
-        if (!res.ok) return [];
-        const rows = (await res.json()) as ArticleResult[];
+        const { data } = await executeCapability<{ items: ArticleResult[] }>(
+          "masterdata.article.search",
+          { q: query, limit: options?.limit ?? 20 },
+        );
+        const rows = data.items;
         return rows.map((row) => ({
           value: row.articleId,
           label: `${row.articleNo} — ${row.name}`,

@@ -20,6 +20,7 @@ import { deliveryAddressCapabilities } from "./modules/masterdata.delivery-addre
 import { paymentTermCapabilities } from "./modules/masterdata.payment-term";
 import { priceListCapabilities } from "./modules/masterdata.price-list";
 import { masterdataRemainingCapabilities } from "./modules/masterdata.remaining";
+import { searchCapabilities } from "./modules/masterdata.search";
 import { unitCapabilities } from "./modules/masterdata.unit";
 import { variantTemplateCapabilities } from "./modules/masterdata.variant-template";
 import { documentCapabilities } from "./modules/sales.document";
@@ -56,5 +57,6 @@ export const allCapabilities = [
   ...logisticsCapabilities,
   ...systemCapabilities,
   ...masterdataRemainingCapabilities,
+  ...searchCapabilities,
   ...unitCapabilities,
 ];

@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Plus, CornerDownRight } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
+import { executeCapability } from "../lib/capability-client";
+
 interface BomComponent {
   bomId: string;
   componentArticleId: string;
@@ -67,11 +69,12 @@ export function BomEditor({ articleId }: BomEditorProps) {
         setShowDropdown(false);
         return;
       }
-      const res = await fetch(`/api/articles/search?q=${encodeURIComponent(addSearch)}&limit=8`);
-      if (!res.ok) return;
-      const results = await res.json();
-      setSearchResults(results);
-      setShowDropdown(results.length > 0);
+      const { data } = await executeCapability<{ items: unknown[] }>(
+        "masterdata.article.search",
+        { q: addSearch, limit: 8 },
+      );
+      setSearchResults(data.items as never[]);
+      setShowDropdown(data.items.length > 0);
     }, 200);
     return () => clearTimeout(timer);
   }, [addSearch, selectedComponent]);

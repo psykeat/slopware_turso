@@ -3,6 +3,7 @@ import { Edit2Icon, SearchIcon, XIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { executeCapability } from "../lib/capability-client";
 import { cn } from "../lib/utils";
 
 interface AddressResult {
@@ -168,9 +169,11 @@ export function AddressPickerField({
   const { data: results = [] } = useQuery<AddressResult[]>({
     queryKey: ["address-search", query],
     queryFn: async () => {
-      const res = await fetch(`/api/addresses/search?q=${encodeURIComponent(query)}&limit=20`);
-      if (!res.ok) return [];
-      return res.json();
+      const { data } = await executeCapability<{ items: AddressResult[] }>(
+        "masterdata.address.search",
+        { q: query, limit: 20 },
+      );
+      return data.items;
     },
     enabled: isOpen && query.length >= 1,
   });

@@ -3,6 +3,7 @@ import { Edit2Icon, SearchIcon, XIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { executeCapability } from "../lib/capability-client";
 import { cn } from "../lib/utils";
 import type { AddressSnapshot } from "./address-picker-field";
 
@@ -99,14 +100,11 @@ export function DeliveryAddressPickerField({
     queryKey: ["delivery-address-search", addressId, query],
     queryFn: async () => {
       if (!addressId) return [];
-      const params = new URLSearchParams({
-        q: query,
-        limit: "20",
-        addressId,
-      });
-      const res = await fetch(`/api/delivery-addresses/search?${params.toString()}`);
-      if (!res.ok) return [];
-      return res.json();
+      const { data } = await executeCapability<{ items: DeliveryAddressResult[] }>(
+        "masterdata.deliveryAddress.search",
+        { q: query, limit: 20, addressId },
+      );
+      return data.items;
     },
     enabled: isOpen && query.length >= 1 && !!addressId,
   });

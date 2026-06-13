@@ -137,7 +137,13 @@ function GeneratorDialogBody({
 
   const { data: copyCandidates = [] } = useQuery<ArticleSearchRow[]>({
     queryKey: ["articles", "search", copySearch],
-    queryFn: () => fetchJson(`/api/articles/search?q=${encodeURIComponent(copySearch)}&limit=10`),
+    queryFn: async () => {
+      const { items } = await capability("masterdata.article.search")({
+        q: copySearch,
+        limit: 10,
+      });
+      return items as unknown as ArticleSearchRow[];
+    },
     enabled: showCopySearch && copySearch.trim().length > 0,
   });
 

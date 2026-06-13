@@ -30,7 +30,6 @@ import { Route as ApiMeCompanyRouteImport } from './routes/api/me/company'
 import { Route as ApiFeedbackSubmitRouteImport } from './routes/api/feedback/submit'
 import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
 import { Route as ApiDeliveryAddressesDeliveryAddressIdRouteImport } from './routes/api/delivery-addresses/$deliveryAddressId'
-import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
 import { Route as ApiCapabilitiesKeyRouteImport } from './routes/api/capabilities/$key'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAiSplatRouteImport } from './routes/api/ai/$'
@@ -172,11 +171,6 @@ const ApiDeliveryAddressesDeliveryAddressIdRoute =
     path: '/api/delivery-addresses/$deliveryAddressId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiDataSplatRoute = ApiDataSplatRouteImport.update({
-  id: '/api/data/$',
-  path: '/api/data/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiCapabilitiesKeyRoute = ApiCapabilitiesKeyRouteImport.update({
   id: '/$key',
   path: '/$key',
@@ -395,7 +389,6 @@ export interface FileRoutesByFullPath {
   '/api/ai/$': typeof ApiAiSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
-  '/api/data/$': typeof ApiDataSplatRoute
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
@@ -451,7 +444,6 @@ export interface FileRoutesByTo {
   '/api/ai/$': typeof ApiAiSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
-  '/api/data/$': typeof ApiDataSplatRoute
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
@@ -512,7 +504,6 @@ export interface FileRoutesById {
   '/api/ai/$': typeof ApiAiSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
-  '/api/data/$': typeof ApiDataSplatRoute
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/feedback/submit': typeof ApiFeedbackSubmitRoute
@@ -572,7 +563,6 @@ export interface FileRouteTypes {
     | '/api/ai/$'
     | '/api/auth/$'
     | '/api/capabilities/$key'
-    | '/api/data/$'
     | '/api/delivery-addresses/$deliveryAddressId'
     | '/api/email/$'
     | '/api/feedback/submit'
@@ -628,7 +618,6 @@ export interface FileRouteTypes {
     | '/api/ai/$'
     | '/api/auth/$'
     | '/api/capabilities/$key'
-    | '/api/data/$'
     | '/api/delivery-addresses/$deliveryAddressId'
     | '/api/email/$'
     | '/api/feedback/submit'
@@ -688,7 +677,6 @@ export interface FileRouteTypes {
     | '/api/ai/$'
     | '/api/auth/$'
     | '/api/capabilities/$key'
-    | '/api/data/$'
     | '/api/delivery-addresses/$deliveryAddressId'
     | '/api/email/$'
     | '/api/feedback/submit'
@@ -737,7 +725,6 @@ export interface RootRouteChildren {
   ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRouteWithChildren
   ApiAiSplatRoute: typeof ApiAiSplatRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
-  ApiDataSplatRoute: typeof ApiDataSplatRoute
   ApiDeliveryAddressesDeliveryAddressIdRoute: typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   ApiEmailSplatRoute: typeof ApiEmailSplatRoute
   ApiFeedbackSubmitRoute: typeof ApiFeedbackSubmitRoute
@@ -910,13 +897,6 @@ declare module '@tanstack/react-router' {
       path: '/api/delivery-addresses/$deliveryAddressId'
       fullPath: '/api/delivery-addresses/$deliveryAddressId'
       preLoaderRoute: typeof ApiDeliveryAddressesDeliveryAddressIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/data/$': {
-      id: '/api/data/$'
-      path: '/api/data/$'
-      fullPath: '/api/data/$'
-      preLoaderRoute: typeof ApiDataSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/capabilities/$key': {
@@ -1319,7 +1299,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminLlmConfigRoute: ApiAdminLlmConfigRouteWithChildren,
   ApiAiSplatRoute: ApiAiSplatRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
-  ApiDataSplatRoute: ApiDataSplatRoute,
   ApiDeliveryAddressesDeliveryAddressIdRoute:
     ApiDeliveryAddressesDeliveryAddressIdRoute,
   ApiEmailSplatRoute: ApiEmailSplatRoute,

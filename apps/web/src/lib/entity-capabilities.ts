@@ -1,8 +1,9 @@
-// Generic entity CRUD over the capability HTTP surface, for shared UI that used
-// to hit the introspective `/api/data/<entity>` route on a *dynamic* entityName.
-// Op resolution (which capability key + input for list/get/save/delete) is shared
-// with apps/web via @repo/db/capabilities/entity-ops; here we just supply the
-// HTTP transport. Tenant context is resolved server-side; never send tenantId.
+// Generic entity CRUD for apps/web, replacing the introspective
+// `/api/data/<entity>` route on a *dynamic* entityName. Op resolution is shared
+// with packages/ui via @repo/db/capabilities/entity-ops; here we dispatch
+// through the capability server fn ($executeCapability), the sanctioned apps/web
+// transport. Use the typed `capability(key)` factory directly for fixed,
+// non-generic ops; this helper is for the dynamic-entity call sites.
 import {
   resolveEntityDelete,
   resolveEntityGet,
@@ -10,10 +11,17 @@ import {
   resolveEntitySave,
   type EntityListOptions,
 } from "@repo/db/capabilities/entity-ops";
+import type { CapabilityResult } from "@repo/db/capabilities";
 
-import { executeCapability } from "./capability-client";
+import { $executeCapability, CapabilityClientError } from "#/server-fns/capabilities";
 
 export { UnsupportedEntityOperationError } from "@repo/db/capabilities/entity-ops";
+
+async function exec<T>(key: string, input: Record<string, unknown>): Promise<T> {
+  const result = (await $executeCapability({ data: { key, input } })) as CapabilityResult<T>;
+  if (!result.ok) throw new CapabilityClientError(result.error);
+  return result.data;
+}
 
 export async function entityList<T = Record<string, unknown>>(
   entityName: string,
@@ -21,8 +29,8 @@ export async function entityList<T = Record<string, unknown>>(
   opts?: EntityListOptions,
 ): Promise<T[]> {
   const { key, input } = resolveEntityList(entityName, filters, opts);
-  const { data } = await executeCapability<{ items: T[] }>(key, input);
-  return data.items;
+  const { items } = await exec<{ items: T[] }>(key, input);
+  return items;
 }
 
 export async function entityGet<T = Record<string, unknown>>(
@@ -30,8 +38,7 @@ export async function entityGet<T = Record<string, unknown>>(
   id: string,
 ): Promise<T> {
   const { key, input } = resolveEntityGet(entityName, id);
-  const { data } = await executeCapability<T>(key, input);
-  return data;
+  return exec<T>(key, input);
 }
 
 export async function entitySave<T = Record<string, unknown>>(
@@ -40,11 +47,10 @@ export async function entitySave<T = Record<string, unknown>>(
   values: Record<string, unknown>,
 ): Promise<T> {
   const { key, input } = resolveEntitySave(entityName, id, values);
-  const { data } = await executeCapability<T>(key, input);
-  return data;
+  return exec<T>(key, input);
 }
 
 export async function entityDelete(entityName: string, id: string): Promise<void> {
   const { key, input } = resolveEntityDelete(entityName, id);
-  await executeCapability(key, input);
+  await exec(key, input);
 }

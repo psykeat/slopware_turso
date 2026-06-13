@@ -8,6 +8,7 @@
     "./schema": "./src/schema/index.ts",
     "./capabilities": "./src/capabilities/index.ts",
     "./capabilities/manifest": "./src/capabilities/manifest.generated.ts",
+    "./capabilities/entity-ops": "./src/capabilities/entity-ops.ts",
     "./services/*": "./src/services/*.ts"
   },
   "scripts": {

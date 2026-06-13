@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { executeCapability } from "../lib/capability-client";
+import { entityGet, entityList } from "../lib/entity-capabilities";
 import { formatDate, formatMoney, StatusDot } from "../lib/formatters";
 import { cn } from "../lib/utils";
 import { useCommands } from "../platform/command-registry";
@@ -587,9 +588,11 @@ function lineFromPersistedRow(row: any): LineRow {
 }
 
 async function fetchArticleVariants(articleId: string): Promise<ArticleVariantRow[]> {
-  const res = await fetch(`/api/data/articleVariant?articleId=${articleId}&orderBy=sku:asc&limit=500`);
-  if (!res.ok) return EMPTY_VARIANT_ROWS;
-  return (await res.json()) as ArticleVariantRow[];
+  return entityList<ArticleVariantRow>(
+    "articleVariant",
+    { articleId },
+    { orderBy: "sku:asc", limit: 200 },
+  ).catch(() => EMPTY_VARIANT_ROWS);
 }
 
 // ─── DocLookupField ───────────────────────────────────────────────────────────
@@ -942,12 +945,8 @@ const DocumentLinesEditor = forwardRef<
   // Fetch company settings for displaying article images in line items
   const { data: companySettings } = useQuery({
     queryKey: ["data", "company", companyId],
-    queryFn: async () => {
-      if (!companyId) return null;
-      const res = await fetch(`/api/data/company/${companyId}`);
-      if (!res.ok) return null;
-      return res.json();
-    },
+    queryFn: () =>
+      companyId ? entityGet("company", companyId).catch(() => null) : Promise.resolve(null),
     enabled: !!companyId,
     staleTime: 5 * 60 * 1000,
   });
@@ -1038,22 +1037,19 @@ const DocumentLinesEditor = forwardRef<
 
   const { data: existingLines = EMPTY_DOC_LINES, isLoading } = useQuery({
     queryKey: ["data", "documentLine", documentId],
-    queryFn: async () => {
-      if (!documentId) return EMPTY_DOC_LINES;
-      const res = await fetch(`/api/data/documentLine?documentId=${documentId}&orderBy=lineNo:asc`);
-      if (!res.ok) return EMPTY_DOC_LINES;
-      return res.json();
-    },
+    queryFn: () =>
+      documentId
+        ? entityList("documentLine", { documentId }, { orderBy: "lineNo:asc" }).catch(
+            () => EMPTY_DOC_LINES,
+          )
+        : Promise.resolve(EMPTY_DOC_LINES),
     enabled: !!documentId,
   });
 
   const { data: taxCodes = EMPTY_TAX_CODES } = useQuery<TaxCodeRow[]>({
     queryKey: ["data", "taxCode"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/taxCode?limit=100");
-      if (!res.ok) return EMPTY_TAX_CODES;
-      return res.json();
-    },
+    queryFn: () =>
+      entityList<TaxCodeRow>("taxCode", {}, { limit: 100 }).catch(() => EMPTY_TAX_CODES),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -1079,11 +1075,7 @@ const DocumentLinesEditor = forwardRef<
   const articleQueries = useQueries({
     queries: articleIds.map((articleId) => ({
       queryKey: ["data", "article", articleId],
-      queryFn: async () => {
-        const res = await fetch(`/api/data/article/${articleId}`);
-        if (!res.ok) return null;
-        return res.json() as Promise<ArticleMetaRow>;
-      },
+      queryFn: () => entityGet<ArticleMetaRow>("article", articleId).catch(() => null),
       enabled: !!articleId,
       staleTime: 5 * 60 * 1000,
     })),
@@ -1112,11 +1104,7 @@ const DocumentLinesEditor = forwardRef<
   const variantQueries = useQueries({
     queries: variantIds.map((variantId) => ({
       queryKey: ["data", "articleVariant", variantId],
-      queryFn: async () => {
-        const res = await fetch(`/api/data/articleVariant/${variantId}`);
-        if (!res.ok) return null;
-        return res.json() as Promise<ArticleVariantRow>;
-      },
+      queryFn: () => entityGet<ArticleVariantRow>("articleVariant", variantId).catch(() => null),
       enabled: !!variantId,
       staleTime: 5 * 60 * 1000,
     })),
@@ -1685,20 +1673,12 @@ const DocumentLinesEditor = forwardRef<
   async function persistLineForTracking(line: LineRow): Promise<LineRow | null> {
     if (!documentId || line.documentLineId) return line;
 
-    const res = await fetch("/api/data/documentLine", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        documentId,
-        ...normalizeLineForSave(line),
-      }),
+    const { data } = await executeCapability<{ lines: unknown[] }>("sales.documentLine.create", {
+      documentId,
+      ...normalizeLineForSave(line),
     });
 
-    if (!res.ok) {
-      throw new Error(await res.text());
-    }
-
-    const persisted = (await res.json()) as unknown[];
+    const persisted = data.lines;
     const merged = mergePersistedDocumentLines(linesRef.current, persisted);
     replaceLines(merged);
 
@@ -2497,11 +2477,8 @@ export function DocumentEditor({
   // ── fetch existing document ──
   const { data: docData, isLoading: isDocLoading } = useQuery({
     queryKey: ["data", "document", documentId],
-    queryFn: async () => {
-      const res = await fetch(`/api/data/document/${documentId}`);
-      if (!res.ok) return null;
-      return res.json();
-    },
+    queryFn: () =>
+      documentId ? entityGet("document", documentId).catch(() => null) : Promise.resolve(null),
     enabled: !isNew,
   });
 
@@ -2509,81 +2486,59 @@ export function DocumentEditor({
   const groupId = documentGroupId ?? (docData as any)?.documentGroupId;
   const { data: groupData } = useQuery<DocGroup | null>({
     queryKey: ["data", "documentGroup", groupId],
-    queryFn: async () => {
-      if (!groupId) return null;
-      const res = await fetch(`/api/data/documentGroup/${groupId}`);
-      if (!res.ok) return null;
-      return res.json();
-    },
+    queryFn: () =>
+      groupId ? entityGet<DocGroup>("documentGroup", groupId).catch(() => null) : Promise.resolve(null),
     enabled: !!groupId,
   });
 
   const { data: companySettings } = useQuery({
     queryKey: ["data", "company", companyId],
-    queryFn: async () => {
-      if (!companyId) return null;
-      const res = await fetch(`/api/data/company/${companyId}`);
-      return res.ok ? res.json() : null;
-    },
+    queryFn: () =>
+      companyId ? entityGet("company", companyId).catch(() => null) : Promise.resolve(null),
     enabled: !!companyId,
   });
 
   // ── document type + group selectors (new documents only) ──
   const { data: allDocTypes = [] } = useQuery({
     queryKey: ["data", "documentType"],
-    queryFn: async () => {
-      const r = await fetch("/api/data/documentType?limit=100");
-      return r.ok ? r.json() : [];
-    },
+    queryFn: () => entityList("documentType", {}, { limit: 100 }).catch(() => []),
     enabled: isNew,
     staleTime: 5 * 60 * 1000,
   });
   const selectedDocType = header.documentType ?? null;
   const { data: docGroupsForType = [] } = useQuery({
     queryKey: ["data", "documentGroup", selectedDocType, companyId],
-    queryFn: async () => {
-      if (!selectedDocType) return [];
-      const params = new URLSearchParams({ documentType: selectedDocType, limit: "100" });
-      if (companyId) params.set("companyId", companyId);
-      const r = await fetch(`/api/data/documentGroup?${params}`);
-      return r.ok ? r.json() : [];
-    },
+    queryFn: () =>
+      selectedDocType
+        ? entityList(
+            "documentGroup",
+            { documentType: selectedDocType, ...(companyId ? { companyId } : {}) },
+            { limit: 100 },
+          ).catch(() => [])
+        : Promise.resolve([]),
     enabled: isNew && !!selectedDocType,
   });
 
   // ── lookup tables ──
   const { data: warehouses = [] } = useQuery({
     queryKey: ["data", "warehouse", companyId],
-    queryFn: async () => {
-      const params = new URLSearchParams({ limit: "200" });
-      if (companyId) params.set("companyId", companyId);
-      const r = await fetch(`/api/data/warehouse?${params}`);
-      return r.ok ? r.json() : [];
-    },
+    queryFn: () =>
+      entityList("warehouse", companyId ? { companyId } : {}, { limit: 200 }).catch(() => []),
     staleTime: 5 * 60 * 1000,
   });
   const { data: paymentTerms = [] } = useQuery({
     queryKey: ["data", "paymentTerm"],
-    queryFn: async () => {
-      const r = await fetch("/api/data/paymentTerm?limit=200");
-      return r.ok ? r.json() : [];
-    },
+    queryFn: () => entityList("paymentTerm", {}, { limit: 200 }).catch(() => []),
     staleTime: 5 * 60 * 1000,
   });
   const { data: shippingMethods = [] } = useQuery({
     queryKey: ["data", "shippingMethod"],
-    queryFn: async () => {
-      const r = await fetch("/api/data/shippingMethod?limit=200");
-      return r.ok ? r.json() : [];
-    },
+    queryFn: () => entityList("shippingMethod", {}, { limit: 200 }).catch(() => []),
     staleTime: 5 * 60 * 1000,
   });
   const { data: currencies = [] } = useQuery({
     queryKey: ["data", "currency"],
-    queryFn: async () => {
-      const r = await fetch("/api/data/currency?limit=200");
-      return r.ok ? r.json() : [];
-    },
+    queryFn: () => entityList("currency", {}, { limit: 200 }).catch(() => []),
     staleTime: 5 * 60 * 1000,
   });
   const { data: auditTrail, isLoading: isAuditLoading } = useQuery<DocumentAuditTrail>({
@@ -2600,12 +2555,10 @@ export function DocumentEditor({
 
   const { data: activeArticleMeta } = useQuery<ArticleMetaRow | null>({
     queryKey: ["data", "article", activeLine?.articleId],
-    queryFn: async () => {
+    queryFn: () => {
       const articleId = activeLine?.articleId;
-      if (!articleId) return null;
-      const res = await fetch(`/api/data/article/${articleId}`);
-      if (!res.ok) return null;
-      return res.json() as Promise<ArticleMetaRow>;
+      if (!articleId) return Promise.resolve(null);
+      return entityGet<ArticleMetaRow>("article", articleId).catch(() => null);
     },
     enabled: !!activeLine?.articleId,
     staleTime: 5 * 60 * 1000,

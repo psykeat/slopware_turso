@@ -84,16 +84,6 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
       exposure: { llm: "safe", http: true },
       schemaVersion: 1,
       handler: async (ctx, input) => {
-        // A document line is never a plain row insert: it must run through the
-        // document lifecycle (validate the parent, sequence/compute line fields),
-        // matching the /api/data POST special-case it replaces.
-        if (entityName === "documentLine") {
-          const [created] = await new DocumentService().createDocumentLine(
-            ctx.tenantId,
-            input as Parameters<DocumentService["createDocumentLine"]>[1],
-          );
-          return created as z.output<typeof looseRowSchema>;
-        }
         const [created] = await new DataService(ctx.tenantId).create(tableName, input);
         return created;
       },
@@ -125,6 +115,35 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
 const documentLine = makeCrud("documentLine", "documentLine", "lineNo:asc");
 const documentLineTracking = makeCrud("documentLineTracking", "documentLineTracking", "createdAt:asc");
 const documentLineAllocation = makeCrud("documentLineAllocation", "documentLineAllocation", "createdAt:asc");
+
+// A document line is never a plain row insert: it runs through the document
+// lifecycle (validate the parent, sequence/compute line fields, explode BOMs),
+// which can yield several rows. Delegates to DocumentService.createDocumentLine,
+// matching the /api/data POST special-case it replaces, and returns every
+// inserted row. Defined standalone (not via makeCrud) because of the array shape.
+export const documentLineCreate = defineCapability({
+  module: "sales",
+  entityName: "documentLine",
+  operation: "create",
+  kind: "create",
+  summary: { en: "Create a document line", de: "Belegzeile anlegen" },
+  input: z.record(z.string(), z.unknown()),
+  output: z.object({ lines: z.array(looseRowSchema) }),
+  writesTables: ["documentLine"],
+  sideEffects: ["recomputes document totals", "explodes BOM components"],
+  idempotent: false,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => {
+    const lines = await new DocumentService().createDocumentLine(
+      ctx.tenantId,
+      input as Parameters<DocumentService["createDocumentLine"]>[1],
+    );
+    return { lines: lines as z.output<typeof looseRowSchema>[] };
+  },
+});
 
 export const documentLineArchive = defineCapability({
   module: "sales",
@@ -307,7 +326,7 @@ export const documentLineDelta = defineCapability({
 export const documentLineCapabilities = [
   documentLine.list,
   documentLine.get,
-  documentLine.create,
+  documentLineCreate,
   documentLine.update,
   documentLineArchive,
   documentLineTracking.list,

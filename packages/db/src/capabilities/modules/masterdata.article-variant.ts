@@ -9,6 +9,7 @@ import {
 import { copyVariantAxesFromArticle } from "../../services/variant-template";
 import { DocumentService } from "../../services/document-service";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleVariantRecordSchema = z.looseObject({
@@ -43,11 +44,12 @@ export const articleVariantList = defineCapability({
   summary: { en: "List article variants", de: "Artikelvarianten auflisten" },
   input: z.object({
     articleId: z.uuid().optional(),
-    search: z.string().trim().min(1).optional(),
-    limit: z.number().int().min(1).max(200).default(50),
-    offset: z.number().int().min(0).default(0),
+    ...listControlsSchema,
   }),
-  output: z.object({ items: z.array(articleVariantRecordSchema) }),
+  output: z.object({
+    items: z.array(articleVariantRecordSchema),
+    total: z.number().int().optional(),
+  }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -58,13 +60,7 @@ export const articleVariantList = defineCapability({
   handler: async (ctx, input) => {
     const filters: Record<string, string> = {};
     if (input.articleId) filters.articleId = input.articleId;
-    const rows = await new DataService(ctx.tenantId).list("articleVariant", filters, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "sku:asc",
-    });
-    return { items: rows as z.output<typeof articleVariantRecordSchema>[] };
+    return runEntityList(ctx.tenantId, "articleVariant", filters, input, "sku:asc");
   },
 });
 

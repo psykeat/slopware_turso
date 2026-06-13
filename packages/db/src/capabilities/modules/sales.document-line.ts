@@ -3,6 +3,7 @@ import { z } from "zod";
 import { DataService } from "../../services/data";
 import { DocumentService } from "../../services/document-service";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, listOutputSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const looseRowSchema = z.looseObject({});
@@ -10,9 +11,7 @@ const looseRowSchema = z.looseObject({});
 const listInputSchema = z.object({
   documentId: z.uuid().optional(),
   variantId: z.uuid().optional(),
-  search: z.string().trim().min(1).optional(),
-  limit: z.number().int().min(1).max(200).default(50),
-  offset: z.number().int().min(0).default(0),
+  ...listControlsSchema,
 });
 
 const idInputSchema = z.object({ id: z.uuid() });
@@ -33,7 +32,7 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
       kind: "read",
       summary: { en: `List ${entityName}`, de: `${entityName} auflisten` },
       input: listInputSchema,
-      output: z.object({ items: z.array(looseRowSchema) }),
+      output: listOutputSchema,
       writesTables: [],
       sideEffects: [],
       idempotent: true,
@@ -45,13 +44,7 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
         const filters: Record<string, string> = {};
         if (input.documentId) filters.documentId = input.documentId;
         if (input.variantId) filters.variantId = input.variantId;
-        const rows = await new DataService(ctx.tenantId).list(tableName, filters, {
-          search: input.search,
-          limit: input.limit,
-          offset: input.offset,
-          orderBy,
-        });
-        return { items: rows as z.output<typeof looseRowSchema>[] };
+        return runEntityList(ctx.tenantId, tableName, filters, input, orderBy);
       },
     }),
     get: defineCapability({
@@ -91,6 +84,16 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
       exposure: { llm: "safe", http: true },
       schemaVersion: 1,
       handler: async (ctx, input) => {
+        // A document line is never a plain row insert: it must run through the
+        // document lifecycle (validate the parent, sequence/compute line fields),
+        // matching the /api/data POST special-case it replaces.
+        if (entityName === "documentLine") {
+          const [created] = await new DocumentService().createDocumentLine(
+            ctx.tenantId,
+            input as Parameters<DocumentService["createDocumentLine"]>[1],
+          );
+          return created as z.output<typeof looseRowSchema>;
+        }
         const [created] = await new DataService(ctx.tenantId).create(tableName, input);
         return created;
       },

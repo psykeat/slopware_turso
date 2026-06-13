@@ -51,7 +51,7 @@ Lint once at the very end of a phase: `vp lint` (never mid-phase).
 | 6 AI projection + /api/ai/execute | ✅ | `4df40639` 20 caps annotated (`exposure.ai`) + tool-name uniqueness test; `5aa71a15` `buildCapabilityTools` generator + tests; `26b33304` `/api/ai/execute` orchestrator; `be9347d1` deleted dead hand-written CRUD/mutation tools (kept bespoke mail-resolution scorers) |
 | 7 Idempotency enforcement | ✅ | `35f56de0` `capability_execution_log` table (unique tenant+key) + migration `20260613134402`; `executeCapability` claim-pending/replay/conflict for non-read writes; Idempotency-Key header wired; `capabilities.idempotency.test.ts` (5 cases) |
 | 8 RLS pilot | ✅ (dormant) | `76f91803` ALS db proxy + tx-local GUC in `executeCapability` behind `CAPABILITY_RLS=1`; `e7c50f3b` migration `20260613173607_rls_pilot` (app_runtime role + ENABLE RLS + NULLIF policies on 5 tables) + `capabilities.rls.test.ts`. **Connection cutover (DATABASE_URL → app_runtime) NOT done — see follow-ups.** |
-| 9 Cleanup + guardrails + docs | ⬜ | ESLint no-fetch rules, AI_TESTING.md, finalize plan docs |
+| 9 Cleanup + guardrails + docs | ✅ | `cd1d0052` schema docs regen; `b38e8c2f` `/api/data` fetch-regression guardrail test (runs in the tsx --test glob — chose a deterministic scan over an oxlint-native rule to avoid perturbing the vp lint baseline); AI_TESTING.md updated with `/api/ai/execute` + Idempotency-Key |
 | (deferred) email.tsx + doc email-compose | ⬜ | tangled w/ OAuth/webhooks/PDF render/job-queue; own phase; `/api/email/$` must survive |
 
 ## Key conventions / gotchas
@@ -283,8 +283,21 @@ RLS is **dormant**: the app still connects as the owner (bypasses RLS) and
 4. Flip `CAPABILITY_RLS=1` for the runtime and roll out gradually.
 Consider `FORCE ROW LEVEL SECURITY` only after the cutover is proven.
 
-## Phase 9 — next (cleanup + guardrails + docs)
-ESLint no-`fetch("/api/data")` / no-raw-`db`-in-routes guardrails; refresh
-`AI_TESTING.md`; regenerate `.agents/schema*` docs (a clean `pnpm run docs`
-housekeeping pass — note it also clears pre-existing drift in unrelated tables);
-finalize the plan docs.
+## Phase 9 — DONE (cleanup + guardrails + docs)
+- **Guardrail** (`b38e8c2f`): `capabilities.guardrails.test.ts` scans apps/web,
+  packages/ui and packages/agent and fails if a direct `fetch("/api/data…")`
+  reappears (the route deleted in Phase 5). Runs in the existing `tsx --test`
+  glob. Chose a deterministic scan over an oxlint `no-restricted-syntax` rule
+  because `vp lint` has no root `.oxlintrc.json` and adding one risks changing
+  the whole-repo lint baseline — a native rule can be layered in later if wanted.
+- **Docs** (`cd1d0052`): regenerated `.agents/schema*` / `.gemini/schema.md`
+  (adds `capability_execution_log`, clears pre-existing drift). `AI_TESTING.md`
+  now documents `/api/ai/execute` and the `Idempotency-Key` header.
+
+## Refactor status: Phases 0–9 complete.
+The capability runtime is the single execution path; the only deliberately kept
+exceptions are documented (`/api/admin/data`, binary/PDF/OAuth/webhook routes,
+the bespoke mail-resolution scorers). Remaining optional/risky work is captured
+above: the **RLS connection cutover** (Phase 8 follow-ups — keep RLS dormant
+until done), folding the legacy mail pipeline onto `/api/ai/execute`, a live LLM
+smoke of `/api/ai/execute`, and (if desired) an oxlint-native no-fetch rule.

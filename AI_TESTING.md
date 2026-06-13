@@ -21,11 +21,23 @@ infrastructure. Full spec: `.agents/07_api.md` (only if you need details).
 GET  /api/capabilities?module=&entityName=     discovery (self-describing, JSON Schema)
 GET  /api/capabilities/{key}                   one descriptor incl. outputSchema
 POST /api/capabilities/{key}/execute           {"input":{...},"dryRun":false}
+POST /api/ai/execute                           AI orchestrator: prompt|messages → capability tool loop
 ```
 
 Envelope: `{ok:true,data,meta}` or `{ok:false,error:{code,message,issues?}}`.
 HTTP status mirrors `error.code`: 422 validation · 403 forbidden · 404
 not_found/unknown · 409 conflict · 500 internal.
+
+**Idempotency**: send an `Idempotency-Key` header (or `idempotencyKey` in the
+body) to `/execute`. A repeated key replays the stored result of the first
+successful write (`meta.replayed:true`); reusing it with a different payload is
+a 409. Reads ignore it.
+
+**AI execute**: `POST /api/ai/execute` runs the model over the AI-projected
+capability toolset (`buildCapabilityTools`) — the model never sees raw services
+or a `tenantId`. Body: `{prompt|messages, group?, keys?, confirmMode?, stream?}`.
+Confirm-gated capabilities (post/storno/delete/send) are excluded unless you opt
+in with `confirmMode`. This is a curated projection, not a substitute path.
 
 ## Auth for tests
 

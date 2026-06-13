@@ -5,6 +5,7 @@ import { db } from "../../index";
 import { article } from "../../schema/app.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 // Output rows come straight from DataService; only the stable identity fields
@@ -83,12 +84,10 @@ export const articleList = defineCapability({
     de: "Archivierte Artikel sind immer ausgeschlossen. Die Freitextsuche umfasst Artikelnummer, Name und Textfelder.",
   },
   input: z.object({
-    search: z.string().trim().min(1).optional(),
     articleGroupId: z.uuid().optional(),
-    limit: z.number().int().min(1).max(200).default(50),
-    offset: z.number().int().min(0).default(0),
+    ...listControlsSchema,
   }),
-  output: z.object({ items: z.array(articleRecordSchema) }),
+  output: z.object({ items: z.array(articleRecordSchema), total: z.number().int().optional() }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -99,13 +98,7 @@ export const articleList = defineCapability({
   handler: async (ctx, input) => {
     const filters: Record<string, string> = {};
     if (input.articleGroupId) filters.articleGroupId = input.articleGroupId;
-    const rows = await new DataService(ctx.tenantId).list("article", filters, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "articleNo:asc",
-    });
-    return { items: rows as z.output<typeof articleRecordSchema>[] };
+    return runEntityList(ctx.tenantId, "article", filters, input, "articleNo:asc");
   },
 });
 

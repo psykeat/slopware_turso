@@ -4,6 +4,7 @@ import { DataService } from "../../services/data";
 import { DocumentService } from "../../services/document-service";
 import { LogisticsService } from "../../services/logistics-service";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, listOutputSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const looseRowSchema = z.looseObject({});
@@ -99,11 +100,9 @@ export const documentList = defineCapability({
     status: z.string().optional(),
     customerId: z.uuid().optional(),
     companyId: z.uuid().optional(),
-    search: z.string().trim().min(1).optional(),
-    limit: z.number().int().min(1).max(200).default(50),
-    offset: z.number().int().min(0).default(0),
+    ...listControlsSchema,
   }),
-  output: z.object({ items: z.array(looseRowSchema) }),
+  output: listOutputSchema,
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -118,13 +117,7 @@ export const documentList = defineCapability({
     if (input.status) filters.status = input.status;
     if (input.customerId) filters.customerId = input.customerId;
     if (input.companyId) filters.companyId = input.companyId;
-    const rows = await new DataService(ctx.tenantId).list("document", filters, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "documentDate:desc",
-    });
-    return { items: rows as z.output<typeof looseRowSchema>[] };
+    return runEntityList(ctx.tenantId, "document", filters, input, "documentDate:desc");
   },
 });
 

@@ -2,16 +2,8 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listInputSchema, listOutputSchema, looseRowSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
-
-const looseRowSchema = z.looseObject({});
-
-const listInputSchema = z.object({
-  filters: z.record(z.string(), z.string()).default({}),
-  search: z.string().trim().min(1).optional(),
-  limit: z.number().int().min(1).max(200).default(50),
-  offset: z.number().int().min(0).default(0),
-});
 
 const idInputSchema = z.object({ id: z.uuid() });
 
@@ -37,7 +29,7 @@ function makeSystemEntityCapabilities(spec: SystemEntitySpec) {
     kind: "read",
     summary: { en: `List ${spec.entityName}`, de: `${spec.entityName} auflisten` },
     input: listInputSchema,
-    output: z.object({ items: z.array(looseRowSchema) }),
+    output: listOutputSchema,
     writesTables: [],
     sideEffects: [],
     idempotent: true,
@@ -45,15 +37,8 @@ function makeSystemEntityCapabilities(spec: SystemEntitySpec) {
     minRole: "tenant_admin",
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
-    handler: async (ctx, input) => {
-      const rows = await new DataService(ctx.tenantId).list(spec.tableName, input.filters, {
-        search: input.search,
-        limit: input.limit,
-        offset: input.offset,
-        orderBy: spec.orderBy,
-      });
-      return { items: rows as z.output<typeof looseRowSchema>[] };
-    },
+    handler: async (ctx, input) =>
+      runEntityList(ctx.tenantId, spec.tableName, input.filters, input, spec.orderBy),
   });
 
   const get = defineCapability({

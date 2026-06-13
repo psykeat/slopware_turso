@@ -3,6 +3,7 @@ import { PlusIcon, CheckIcon, XIcon, PencilIcon, Trash2Icon } from "lucide-react
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { entityDelete, entityList, entitySave } from "../lib/entity-capabilities";
 import { cn } from "../lib/utils";
 
 export interface InlineColumnDef {
@@ -52,28 +53,14 @@ export function InlineEditGrid({
 
   const { data: rows = [] } = useQuery({
     queryKey: ["data", entityName, parentKeySignature, parentKey],
-    queryFn: async () => {
-      const params = Object.entries(parentKey)
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-        .join("&");
-      const res = await fetch(`/api/data/${entityName}?${params}`);
-      return res.ok ? res.json() : [];
-    },
+    queryFn: () => entityList<Record<string, any>>(entityName, parentKey),
     enabled: Object.values(parentKey).every(Boolean),
   });
 
   const saveMutation = useMutation({
-    mutationFn: async (data: Record<string, any>) => {
+    mutationFn: (data: Record<string, any>) => {
       const isNew = editingId === NEW_ROW_ID;
-      const url = isNew ? `/api/data/${entityName}` : `/api/data/${entityName}/${editingId}`;
-      const body = isNew ? { ...parentKey, ...data } : data;
-      const res = await fetch(url, {
-        method: isNew ? "POST" : "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
-      return res.json();
+      return entitySave(entityName, isNew ? null : editingId, isNew ? { ...parentKey, ...data } : data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", entityName] });
@@ -84,13 +71,7 @@ export function InlineEditGrid({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/data/${entityName}/${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-      return res.json();
-    },
+    mutationFn: (id: string) => entityDelete(entityName, id),
     onSuccess: (_result, deletedId) => {
       if (selectedIdRef.current === deletedId) {
         setSelectedId(null);

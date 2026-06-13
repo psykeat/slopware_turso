@@ -31,6 +31,8 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { capability } from "#/server-fns/capabilities";
+
 export const Route = createFileRoute("/_auth/app/settings/variant-templates")({
   component: VariantTemplatesPage,
 });
@@ -194,8 +196,10 @@ function VariantTemplatesView() {
   >({
     queryKey: ["variant-templates"],
     queryFn: async () => {
-      const res = await fetch("/api/variant-templates?includeArchived=true");
-      return res.ok ? res.json() : [];
+      const { items } = await capability("masterdata.articleVariantTemplate.list")({
+        includeArchived: true,
+      });
+      return items as unknown as VariantTemplateRecord[];
     },
   });
 
@@ -259,13 +263,9 @@ function VariantTemplatesView() {
     mutationFn: async () => {
       const payload = buildPayload();
       if (!payload) throw new Error("Vorlage ist unvollständig");
-      const res = await fetch("/api/variant-templates", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<VariantTemplateRecord>;
+      return (await capability("masterdata.articleVariantTemplate.create")(
+        payload as never,
+      )) as unknown as VariantTemplateRecord;
     },
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ["variant-templates"] });
@@ -279,13 +279,11 @@ function VariantTemplatesView() {
     mutationFn: async () => {
       const payload = buildPayload();
       if (!payload) throw new Error("Vorlage ist unvollständig");
-      const res = await fetch(`/api/variant-templates/${selectedTemplateId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...payload, archived: formArchived }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<VariantTemplateRecord>;
+      if (!selectedTemplateId) throw new Error("Keine Vorlage ausgewählt");
+      return (await capability("masterdata.articleVariantTemplate.update")({
+        templateId: selectedTemplateId,
+        patch: { ...payload, archived: formArchived } as never,
+      })) as unknown as VariantTemplateRecord;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["variant-templates"] });

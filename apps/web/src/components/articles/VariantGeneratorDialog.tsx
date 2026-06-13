@@ -14,6 +14,8 @@ import { ArrowLeftIcon, ArrowRightIcon, CopyIcon, SaveIcon, SparklesIcon, WandIc
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { capability } from "#/server-fns/capabilities";
+
 interface VariantTemplateSummary {
   templateId: string;
   slug: string;
@@ -127,7 +129,10 @@ function GeneratorDialogBody({
 
   const { data: templates = [] } = useQuery<VariantTemplateSummary[]>({
     queryKey: ["variant-templates"],
-    queryFn: () => fetchJson("/api/variant-templates"),
+    queryFn: async () => {
+      const { items } = await capability("masterdata.articleVariantTemplate.list")({});
+      return items as unknown as VariantTemplateSummary[];
+    },
   });
 
   const { data: copyCandidates = [] } = useQuery<ArticleSearchRow[]>({
@@ -145,10 +150,10 @@ function GeneratorDialogBody({
 
   const applyTemplateMutation = useMutation({
     mutationFn: () =>
-      postJson<{ createdOptions: number; createdValues: number }>(
-        `/api/articles/${articleId}/apply-variant-template`,
-        { templateId: selectedTemplateId },
-      ),
+      capability("masterdata.articleVariantTemplate.applyToArticle")({
+        articleId,
+        templateId: selectedTemplateId,
+      }),
     onSuccess: async (result) => {
       await invalidateAxes();
       toast.success(
@@ -160,10 +165,10 @@ function GeneratorDialogBody({
 
   const copyAxesMutation = useMutation({
     mutationFn: (sourceArticleId: string) =>
-      postJson<{ createdOptions: number; createdValues: number }>(
-        `/api/articles/${articleId}/copy-variant-axes`,
-        { sourceArticleId },
-      ),
+      capability("masterdata.articleVariant.copyVariantAxes")({
+        targetArticleId: articleId,
+        sourceArticleId,
+      }),
     onSuccess: async (result) => {
       await invalidateAxes();
       setShowCopySearch(false);
@@ -207,11 +212,11 @@ function GeneratorDialogBody({
         .normalize("NFKD")
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
-      return postJson<VariantTemplateSummary>("/api/variant-templates", {
+      return capability("masterdata.articleVariantTemplate.create")({
         slug: `${slugBase || "vorlage"}-${crypto.randomUUID().slice(0, 6)}`,
         label: `${pendingSuggestion.label} (KI-Vorschlag)`,
-        definition: pendingSuggestion.definition,
-      });
+        definition: pendingSuggestion.definition as never,
+      }) as unknown as Promise<VariantTemplateSummary>;
     },
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ["variant-templates"] });
@@ -225,9 +230,10 @@ function GeneratorDialogBody({
 
   const previewMutation = useMutation({
     mutationFn: () =>
-      postJson<PreviewResult>(`/api/articles/${articleId}/preview-variants`, {
+      capability("masterdata.articleVariant.previewVariants")({
+        articleId,
         templateId: source === "template" && selectedTemplateId ? selectedTemplateId : undefined,
-      }),
+      }) as unknown as Promise<PreviewResult>,
     onSuccess: (result) => {
       setPreview(result);
       setStep("preview");
@@ -237,11 +243,8 @@ function GeneratorDialogBody({
 
   const generateMutation = useMutation({
     mutationFn: () =>
-      postJson<{
-        createdVariants: number;
-        skippedVariants: number;
-        excludedVariants: number;
-      }>(`/api/articles/${articleId}/generate-variants`, {
+      capability("masterdata.articleVariant.generateVariants")({
+        articleId,
         templateId: source === "template" && selectedTemplateId ? selectedTemplateId : undefined,
       }),
     onSuccess: async (result) => {

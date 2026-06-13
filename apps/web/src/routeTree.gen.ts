@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as GuestRouteRouteImport } from './routes/_guest/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiVariantTemplatesRouteImport } from './routes/api/variant-templates'
 import { Route as ApiTenantsRouteImport } from './routes/api/tenants'
 import { Route as ApiMeRouteImport } from './routes/api/me'
 import { Route as ApiCapabilitiesRouteImport } from './routes/api/capabilities'
@@ -21,7 +20,6 @@ import { Route as GuestSignupRouteImport } from './routes/_guest/signup'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as AuthAppRouteRouteImport } from './routes/_auth/app/route'
 import { Route as AuthAppIndexRouteImport } from './routes/_auth/app/index'
-import { Route as ApiVariantTemplatesTemplateIdRouteImport } from './routes/api/variant-templates/$templateId'
 import { Route as ApiStatsDashboardRouteImport } from './routes/api/stats/dashboard'
 import { Route as ApiStatsArticlesRouteImport } from './routes/api/stats/articles'
 import { Route as ApiStatsAddressesRouteImport } from './routes/api/stats/addresses'
@@ -61,13 +59,9 @@ import { Route as ApiDataTenantLlmConfigTestRouteImport } from './routes/api/dat
 import { Route as ApiCapabilitiesKeyExecuteRouteImport } from './routes/api/capabilities/$key/execute'
 import { Route as ApiArticlesArticleIdSerialNumbersRouteImport } from './routes/api/articles/$articleId/serial-numbers'
 import { Route as ApiArticlesArticleIdPricingRouteImport } from './routes/api/articles/$articleId/pricing'
-import { Route as ApiArticlesArticleIdPreviewVariantsRouteImport } from './routes/api/articles/$articleId/preview-variants'
 import { Route as ApiArticlesArticleIdImagesRouteImport } from './routes/api/articles/$articleId/images'
-import { Route as ApiArticlesArticleIdGenerateVariantsRouteImport } from './routes/api/articles/$articleId/generate-variants'
-import { Route as ApiArticlesArticleIdCopyVariantAxesRouteImport } from './routes/api/articles/$articleId/copy-variant-axes'
 import { Route as ApiArticlesArticleIdBomRouteImport } from './routes/api/articles/$articleId/bom'
 import { Route as ApiArticlesArticleIdBatchesRouteImport } from './routes/api/articles/$articleId/batches'
-import { Route as ApiArticlesArticleIdApplyVariantTemplateRouteImport } from './routes/api/articles/$articleId/apply-variant-template'
 import { Route as ApiAdminLlmConfigTestRouteImport } from './routes/api/admin/llm-config.test'
 import { Route as ApiAdminDocumentGroupsIdRouteImport } from './routes/api/admin/document-groups/$id'
 import { Route as ApiAdminDataSplatRouteImport } from './routes/api/admin/data/$'
@@ -88,11 +82,6 @@ const AuthRouteRoute = AuthRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiVariantTemplatesRoute = ApiVariantTemplatesRouteImport.update({
-  id: '/api/variant-templates',
-  path: '/api/variant-templates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiTenantsRoute = ApiTenantsRouteImport.update({
@@ -135,12 +124,6 @@ const AuthAppIndexRoute = AuthAppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthAppRouteRoute,
 } as any)
-const ApiVariantTemplatesTemplateIdRoute =
-  ApiVariantTemplatesTemplateIdRouteImport.update({
-    id: '/$templateId',
-    path: '/$templateId',
-    getParentRoute: () => ApiVariantTemplatesRoute,
-  } as any)
 const ApiStatsDashboardRoute = ApiStatsDashboardRouteImport.update({
   id: '/api/stats/dashboard',
   path: '/api/stats/dashboard',
@@ -347,28 +330,10 @@ const ApiArticlesArticleIdPricingRoute =
     path: '/api/articles/$articleId/pricing',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiArticlesArticleIdPreviewVariantsRoute =
-  ApiArticlesArticleIdPreviewVariantsRouteImport.update({
-    id: '/api/articles/$articleId/preview-variants',
-    path: '/api/articles/$articleId/preview-variants',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiArticlesArticleIdImagesRoute =
   ApiArticlesArticleIdImagesRouteImport.update({
     id: '/api/articles/$articleId/images',
     path: '/api/articles/$articleId/images',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiArticlesArticleIdGenerateVariantsRoute =
-  ApiArticlesArticleIdGenerateVariantsRouteImport.update({
-    id: '/api/articles/$articleId/generate-variants',
-    path: '/api/articles/$articleId/generate-variants',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiArticlesArticleIdCopyVariantAxesRoute =
-  ApiArticlesArticleIdCopyVariantAxesRouteImport.update({
-    id: '/api/articles/$articleId/copy-variant-axes',
-    path: '/api/articles/$articleId/copy-variant-axes',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiArticlesArticleIdBomRoute = ApiArticlesArticleIdBomRouteImport.update({
@@ -380,12 +345,6 @@ const ApiArticlesArticleIdBatchesRoute =
   ApiArticlesArticleIdBatchesRouteImport.update({
     id: '/api/articles/$articleId/batches',
     path: '/api/articles/$articleId/batches',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiArticlesArticleIdApplyVariantTemplateRoute =
-  ApiArticlesArticleIdApplyVariantTemplateRouteImport.update({
-    id: '/api/articles/$articleId/apply-variant-template',
-    path: '/api/articles/$articleId/apply-variant-template',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiAdminLlmConfigTestRoute = ApiAdminLlmConfigTestRouteImport.update({
@@ -442,7 +401,6 @@ export interface FileRoutesByFullPath {
   '/api/capabilities': typeof ApiCapabilitiesRouteWithChildren
   '/api/me': typeof ApiMeRouteWithChildren
   '/api/tenants': typeof ApiTenantsRoute
-  '/api/variant-templates': typeof ApiVariantTemplatesRouteWithChildren
   '/app/admin': typeof AuthAppAdminRouteRouteWithChildren
   '/app/accounting': typeof AuthAppAccountingRoute
   '/app/addresses': typeof AuthAppAddressesRoute
@@ -470,7 +428,6 @@ export interface FileRoutesByFullPath {
   '/api/stats/addresses': typeof ApiStatsAddressesRoute
   '/api/stats/articles': typeof ApiStatsArticlesRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
-  '/api/variant-templates/$templateId': typeof ApiVariantTemplatesTemplateIdRoute
   '/app/': typeof AuthAppIndexRoute
   '/app/settings/account': typeof AuthAppSettingsAccountRoute
   '/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
@@ -479,13 +436,9 @@ export interface FileRoutesByFullPath {
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
-  '/api/articles/$articleId/apply-variant-template': typeof ApiArticlesArticleIdApplyVariantTemplateRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
-  '/api/articles/$articleId/copy-variant-axes': typeof ApiArticlesArticleIdCopyVariantAxesRoute
-  '/api/articles/$articleId/generate-variants': typeof ApiArticlesArticleIdGenerateVariantsRoute
   '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
-  '/api/articles/$articleId/preview-variants': typeof ApiArticlesArticleIdPreviewVariantsRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
@@ -508,7 +461,6 @@ export interface FileRoutesByTo {
   '/api/capabilities': typeof ApiCapabilitiesRouteWithChildren
   '/api/me': typeof ApiMeRouteWithChildren
   '/api/tenants': typeof ApiTenantsRoute
-  '/api/variant-templates': typeof ApiVariantTemplatesRouteWithChildren
   '/app/accounting': typeof AuthAppAccountingRoute
   '/app/addresses': typeof AuthAppAddressesRoute
   '/app/articles': typeof AuthAppArticlesRoute
@@ -535,7 +487,6 @@ export interface FileRoutesByTo {
   '/api/stats/addresses': typeof ApiStatsAddressesRoute
   '/api/stats/articles': typeof ApiStatsArticlesRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
-  '/api/variant-templates/$templateId': typeof ApiVariantTemplatesTemplateIdRoute
   '/app': typeof AuthAppIndexRoute
   '/app/settings/account': typeof AuthAppSettingsAccountRoute
   '/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
@@ -544,13 +495,9 @@ export interface FileRoutesByTo {
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
-  '/api/articles/$articleId/apply-variant-template': typeof ApiArticlesArticleIdApplyVariantTemplateRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
-  '/api/articles/$articleId/copy-variant-axes': typeof ApiArticlesArticleIdCopyVariantAxesRoute
-  '/api/articles/$articleId/generate-variants': typeof ApiArticlesArticleIdGenerateVariantsRoute
   '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
-  '/api/articles/$articleId/preview-variants': typeof ApiArticlesArticleIdPreviewVariantsRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
@@ -577,7 +524,6 @@ export interface FileRoutesById {
   '/api/capabilities': typeof ApiCapabilitiesRouteWithChildren
   '/api/me': typeof ApiMeRouteWithChildren
   '/api/tenants': typeof ApiTenantsRoute
-  '/api/variant-templates': typeof ApiVariantTemplatesRouteWithChildren
   '/_auth/app/admin': typeof AuthAppAdminRouteRouteWithChildren
   '/_auth/app/accounting': typeof AuthAppAccountingRoute
   '/_auth/app/addresses': typeof AuthAppAddressesRoute
@@ -605,7 +551,6 @@ export interface FileRoutesById {
   '/api/stats/addresses': typeof ApiStatsAddressesRoute
   '/api/stats/articles': typeof ApiStatsArticlesRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
-  '/api/variant-templates/$templateId': typeof ApiVariantTemplatesTemplateIdRoute
   '/_auth/app/': typeof AuthAppIndexRoute
   '/_auth/app/settings/account': typeof AuthAppSettingsAccountRoute
   '/_auth/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
@@ -614,13 +559,9 @@ export interface FileRoutesById {
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
   '/api/admin/llm-config/test': typeof ApiAdminLlmConfigTestRoute
-  '/api/articles/$articleId/apply-variant-template': typeof ApiArticlesArticleIdApplyVariantTemplateRoute
   '/api/articles/$articleId/batches': typeof ApiArticlesArticleIdBatchesRoute
   '/api/articles/$articleId/bom': typeof ApiArticlesArticleIdBomRouteWithChildren
-  '/api/articles/$articleId/copy-variant-axes': typeof ApiArticlesArticleIdCopyVariantAxesRoute
-  '/api/articles/$articleId/generate-variants': typeof ApiArticlesArticleIdGenerateVariantsRoute
   '/api/articles/$articleId/images': typeof ApiArticlesArticleIdImagesRoute
-  '/api/articles/$articleId/preview-variants': typeof ApiArticlesArticleIdPreviewVariantsRoute
   '/api/articles/$articleId/pricing': typeof ApiArticlesArticleIdPricingRoute
   '/api/articles/$articleId/serial-numbers': typeof ApiArticlesArticleIdSerialNumbersRoute
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
@@ -646,7 +587,6 @@ export interface FileRouteTypes {
     | '/api/capabilities'
     | '/api/me'
     | '/api/tenants'
-    | '/api/variant-templates'
     | '/app/admin'
     | '/app/accounting'
     | '/app/addresses'
@@ -674,7 +614,6 @@ export interface FileRouteTypes {
     | '/api/stats/addresses'
     | '/api/stats/articles'
     | '/api/stats/dashboard'
-    | '/api/variant-templates/$templateId'
     | '/app/'
     | '/app/settings/account'
     | '/app/settings/cycles'
@@ -683,13 +622,9 @@ export interface FileRouteTypes {
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
-    | '/api/articles/$articleId/apply-variant-template'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
-    | '/api/articles/$articleId/copy-variant-axes'
-    | '/api/articles/$articleId/generate-variants'
     | '/api/articles/$articleId/images'
-    | '/api/articles/$articleId/preview-variants'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
     | '/api/capabilities/$key/execute'
@@ -712,7 +647,6 @@ export interface FileRouteTypes {
     | '/api/capabilities'
     | '/api/me'
     | '/api/tenants'
-    | '/api/variant-templates'
     | '/app/accounting'
     | '/app/addresses'
     | '/app/articles'
@@ -739,7 +673,6 @@ export interface FileRouteTypes {
     | '/api/stats/addresses'
     | '/api/stats/articles'
     | '/api/stats/dashboard'
-    | '/api/variant-templates/$templateId'
     | '/app'
     | '/app/settings/account'
     | '/app/settings/cycles'
@@ -748,13 +681,9 @@ export interface FileRouteTypes {
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
-    | '/api/articles/$articleId/apply-variant-template'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
-    | '/api/articles/$articleId/copy-variant-axes'
-    | '/api/articles/$articleId/generate-variants'
     | '/api/articles/$articleId/images'
-    | '/api/articles/$articleId/preview-variants'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
     | '/api/capabilities/$key/execute'
@@ -780,7 +709,6 @@ export interface FileRouteTypes {
     | '/api/capabilities'
     | '/api/me'
     | '/api/tenants'
-    | '/api/variant-templates'
     | '/_auth/app/admin'
     | '/_auth/app/accounting'
     | '/_auth/app/addresses'
@@ -808,7 +736,6 @@ export interface FileRouteTypes {
     | '/api/stats/addresses'
     | '/api/stats/articles'
     | '/api/stats/dashboard'
-    | '/api/variant-templates/$templateId'
     | '/_auth/app/'
     | '/_auth/app/settings/account'
     | '/_auth/app/settings/cycles'
@@ -817,13 +744,9 @@ export interface FileRouteTypes {
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
     | '/api/admin/llm-config/test'
-    | '/api/articles/$articleId/apply-variant-template'
     | '/api/articles/$articleId/batches'
     | '/api/articles/$articleId/bom'
-    | '/api/articles/$articleId/copy-variant-axes'
-    | '/api/articles/$articleId/generate-variants'
     | '/api/articles/$articleId/images'
-    | '/api/articles/$articleId/preview-variants'
     | '/api/articles/$articleId/pricing'
     | '/api/articles/$articleId/serial-numbers'
     | '/api/capabilities/$key/execute'
@@ -847,7 +770,6 @@ export interface RootRouteChildren {
   ApiCapabilitiesRoute: typeof ApiCapabilitiesRouteWithChildren
   ApiMeRoute: typeof ApiMeRouteWithChildren
   ApiTenantsRoute: typeof ApiTenantsRoute
-  ApiVariantTemplatesRoute: typeof ApiVariantTemplatesRouteWithChildren
   ApiAddressesSearchRoute: typeof ApiAddressesSearchRoute
   ApiAdminCyclesRoute: typeof ApiAdminCyclesRoute
   ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRouteWithChildren
@@ -867,13 +789,9 @@ export interface RootRouteChildren {
   ApiStatsDashboardRoute: typeof ApiStatsDashboardRoute
   ApiAdminDataSplatRoute: typeof ApiAdminDataSplatRoute
   ApiAdminDocumentGroupsIdRoute: typeof ApiAdminDocumentGroupsIdRoute
-  ApiArticlesArticleIdApplyVariantTemplateRoute: typeof ApiArticlesArticleIdApplyVariantTemplateRoute
   ApiArticlesArticleIdBatchesRoute: typeof ApiArticlesArticleIdBatchesRoute
   ApiArticlesArticleIdBomRoute: typeof ApiArticlesArticleIdBomRouteWithChildren
-  ApiArticlesArticleIdCopyVariantAxesRoute: typeof ApiArticlesArticleIdCopyVariantAxesRoute
-  ApiArticlesArticleIdGenerateVariantsRoute: typeof ApiArticlesArticleIdGenerateVariantsRoute
   ApiArticlesArticleIdImagesRoute: typeof ApiArticlesArticleIdImagesRoute
-  ApiArticlesArticleIdPreviewVariantsRoute: typeof ApiArticlesArticleIdPreviewVariantsRoute
   ApiArticlesArticleIdPricingRoute: typeof ApiArticlesArticleIdPricingRoute
   ApiArticlesArticleIdSerialNumbersRoute: typeof ApiArticlesArticleIdSerialNumbersRoute
   ApiDataTenantLlmConfigTestRoute: typeof ApiDataTenantLlmConfigTestRoute
@@ -906,13 +824,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/variant-templates': {
-      id: '/api/variant-templates'
-      path: '/api/variant-templates'
-      fullPath: '/api/variant-templates'
-      preLoaderRoute: typeof ApiVariantTemplatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/tenants': {
@@ -970,13 +881,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/'
       preLoaderRoute: typeof AuthAppIndexRouteImport
       parentRoute: typeof AuthAppRouteRoute
-    }
-    '/api/variant-templates/$templateId': {
-      id: '/api/variant-templates/$templateId'
-      path: '/$templateId'
-      fullPath: '/api/variant-templates/$templateId'
-      preLoaderRoute: typeof ApiVariantTemplatesTemplateIdRouteImport
-      parentRoute: typeof ApiVariantTemplatesRoute
     }
     '/api/stats/dashboard': {
       id: '/api/stats/dashboard'
@@ -1251,32 +1155,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiArticlesArticleIdPricingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/articles/$articleId/preview-variants': {
-      id: '/api/articles/$articleId/preview-variants'
-      path: '/api/articles/$articleId/preview-variants'
-      fullPath: '/api/articles/$articleId/preview-variants'
-      preLoaderRoute: typeof ApiArticlesArticleIdPreviewVariantsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/articles/$articleId/images': {
       id: '/api/articles/$articleId/images'
       path: '/api/articles/$articleId/images'
       fullPath: '/api/articles/$articleId/images'
       preLoaderRoute: typeof ApiArticlesArticleIdImagesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/articles/$articleId/generate-variants': {
-      id: '/api/articles/$articleId/generate-variants'
-      path: '/api/articles/$articleId/generate-variants'
-      fullPath: '/api/articles/$articleId/generate-variants'
-      preLoaderRoute: typeof ApiArticlesArticleIdGenerateVariantsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/articles/$articleId/copy-variant-axes': {
-      id: '/api/articles/$articleId/copy-variant-axes'
-      path: '/api/articles/$articleId/copy-variant-axes'
-      fullPath: '/api/articles/$articleId/copy-variant-axes'
-      preLoaderRoute: typeof ApiArticlesArticleIdCopyVariantAxesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/articles/$articleId/bom': {
@@ -1291,13 +1174,6 @@ declare module '@tanstack/react-router' {
       path: '/api/articles/$articleId/batches'
       fullPath: '/api/articles/$articleId/batches'
       preLoaderRoute: typeof ApiArticlesArticleIdBatchesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/articles/$articleId/apply-variant-template': {
-      id: '/api/articles/$articleId/apply-variant-template'
-      path: '/api/articles/$articleId/apply-variant-template'
-      fullPath: '/api/articles/$articleId/apply-variant-template'
-      preLoaderRoute: typeof ApiArticlesArticleIdApplyVariantTemplateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/admin/llm-config/test': {
@@ -1467,17 +1343,6 @@ const ApiMeRouteChildren: ApiMeRouteChildren = {
 
 const ApiMeRouteWithChildren = ApiMeRoute._addFileChildren(ApiMeRouteChildren)
 
-interface ApiVariantTemplatesRouteChildren {
-  ApiVariantTemplatesTemplateIdRoute: typeof ApiVariantTemplatesTemplateIdRoute
-}
-
-const ApiVariantTemplatesRouteChildren: ApiVariantTemplatesRouteChildren = {
-  ApiVariantTemplatesTemplateIdRoute: ApiVariantTemplatesTemplateIdRoute,
-}
-
-const ApiVariantTemplatesRouteWithChildren =
-  ApiVariantTemplatesRoute._addFileChildren(ApiVariantTemplatesRouteChildren)
-
 interface ApiAdminLlmConfigRouteChildren {
   ApiAdminLlmConfigTestRoute: typeof ApiAdminLlmConfigTestRoute
 }
@@ -1511,7 +1376,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCapabilitiesRoute: ApiCapabilitiesRouteWithChildren,
   ApiMeRoute: ApiMeRouteWithChildren,
   ApiTenantsRoute: ApiTenantsRoute,
-  ApiVariantTemplatesRoute: ApiVariantTemplatesRouteWithChildren,
   ApiAddressesSearchRoute: ApiAddressesSearchRoute,
   ApiAdminCyclesRoute: ApiAdminCyclesRoute,
   ApiAdminLlmConfigRoute: ApiAdminLlmConfigRouteWithChildren,
@@ -1532,17 +1396,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiStatsDashboardRoute: ApiStatsDashboardRoute,
   ApiAdminDataSplatRoute: ApiAdminDataSplatRoute,
   ApiAdminDocumentGroupsIdRoute: ApiAdminDocumentGroupsIdRoute,
-  ApiArticlesArticleIdApplyVariantTemplateRoute:
-    ApiArticlesArticleIdApplyVariantTemplateRoute,
   ApiArticlesArticleIdBatchesRoute: ApiArticlesArticleIdBatchesRoute,
   ApiArticlesArticleIdBomRoute: ApiArticlesArticleIdBomRouteWithChildren,
-  ApiArticlesArticleIdCopyVariantAxesRoute:
-    ApiArticlesArticleIdCopyVariantAxesRoute,
-  ApiArticlesArticleIdGenerateVariantsRoute:
-    ApiArticlesArticleIdGenerateVariantsRoute,
   ApiArticlesArticleIdImagesRoute: ApiArticlesArticleIdImagesRoute,
-  ApiArticlesArticleIdPreviewVariantsRoute:
-    ApiArticlesArticleIdPreviewVariantsRoute,
   ApiArticlesArticleIdPricingRoute: ApiArticlesArticleIdPricingRoute,
   ApiArticlesArticleIdSerialNumbersRoute:
     ApiArticlesArticleIdSerialNumbersRoute,

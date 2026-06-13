@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { entityGet, entityList } from "../lib/entity-capabilities";
 import { cn } from "../lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 
@@ -537,20 +538,26 @@ function lookupRecordLabel<T extends Record<string, unknown>>(
   };
 }
 
-function applyLookupFilterParams(params: URLSearchParams, lookupFilter: unknown) {
-  if (!lookupFilter) return;
+// A lookupFilter is either structured filterRules (array) or a flat
+// column→value map; split it into the list-capability controls.
+function lookupFilterToControls(lookupFilter: unknown): {
+  filters: Record<string, string>;
+  filterRules?: Array<{ col: string; op: string; val: string }>;
+} {
+  if (!lookupFilter) return { filters: {} };
   if (Array.isArray(lookupFilter)) {
-    params.set("filters", JSON.stringify(lookupFilter));
-    return;
+    return { filters: {}, filterRules: lookupFilter as Array<{ col: string; op: string; val: string }> };
   }
+  const filters: Record<string, string> = {};
   if (isObject(lookupFilter)) {
     for (const [key, value] of Object.entries(lookupFilter)) {
       if (value == null) continue;
       if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-        params.set(key, String(value));
+        filters[key] = String(value);
       }
     }
   }
+  return { filters };
 }
 
 export function createRemoteLookupSource(
@@ -579,30 +586,37 @@ export function createRemoteLookupSource(
     placeholder: config.placeholder,
     emptyLabel: config.emptyLabel,
     search: async (query, options) => {
-      const params = new URLSearchParams();
-      params.set("limit", String(options?.limit ?? 20));
-      params.set("orderBy", `${sortColumn}:asc`);
-      if (query.trim()) params.set("search", query.trim());
-      applyLookupFilterParams(params, config.lookupFilter);
-
-      const res = await fetch(`/api/data/${entityName}?${params.toString()}`);
-      if (!res.ok) return [];
-      const rows = (await res.json()) as Record<string, unknown>[];
+      const { filters, filterRules } = lookupFilterToControls(config.lookupFilter);
+      const rows = await entityList<Record<string, unknown>>(entityName, filters, {
+        search: query.trim() || undefined,
+        orderBy: `${sortColumn}:asc`,
+        filterRules,
+        limit: options?.limit ?? 20,
+      }).catch(() => []);
       return rows.map((record) =>
         lookupRecordLabel(record, config, valueColumn, displayColumn, codeColumn),
       );
     },
     resolve: async (value) => {
       if (!value) return null;
-      const params = new URLSearchParams();
-      params.set(valueColumn, value);
-      params.set("limit", "1");
-      applyLookupFilterParams(params, config.lookupFilter);
-      const res = await fetch(`/api/data/${entityName}?${params.toString()}`);
-      if (!res.ok) return null;
-      const rows = (await res.json()) as Record<string, unknown>[];
-      const row = rows[0];
-      return row ? lookupRecordLabel(row, config, valueColumn, displayColumn, codeColumn) : null;
+      // Default lookups identify rows by the table PK, so a direct get resolves
+      // any entity (DataService.get keys on the real PK). A custom value column
+      // falls back to a filtered list, which the referenced entity supports.
+      const valueIsPk = !config.lookupValueColumn && !config.lookupPkColumn;
+      try {
+        const row = valueIsPk
+          ? await entityGet<Record<string, unknown>>(entityName, value)
+          : (
+              await entityList<Record<string, unknown>>(
+                entityName,
+                { ...lookupFilterToControls(config.lookupFilter).filters, [valueColumn]: value },
+                { limit: 1 },
+              )
+            )[0];
+        return row ? lookupRecordLabel(row, config, valueColumn, displayColumn, codeColumn) : null;
+      } catch {
+        return null;
+      }
     },
   };
 }

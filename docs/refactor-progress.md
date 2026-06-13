@@ -47,7 +47,7 @@ Lint once at the very end of a phase: `vp lint` (never mid-phase).
 | 2 Server-fn + query layer | ✅ | `b82d7c7f` `$executeCapability`, `capability(key)`, `queries/{keys,invalidate,capability}.ts`, `useCapabilityMutation` |
 | 3 Capability gaps | ✅ | `a39bf2af` communication.email, import.core, articleVariant.archiveBulk |
 | 4 UI write migration | ✅ | `eff85be5` documents, `167887d4` import+accounting, `d6e0cfbc` variant-templates. **All duplicate ad-hoc business-write routes deleted.** |
-| 5 Read migration + delete /api/data | 🟡 partial | `89aaac8f` search endpoints → caps done. Generic grid / `/api/data` deletion = next, see below |
+| 5 Read migration + delete /api/data | 🟡 in progress | search caps `89aaac8f`; manifest+helper+grid+gap-caps+by-id-write-caps landed (`7c901a9e`→`1df3de25`). **BLOCKED on list-capability surface gap** for paginated grids — see below |
 | 6 AI projection + /api/ai/execute | ⬜ | annotate ~20-25 caps with `exposure.ai`; `packages/agent` tool generator + orchestrator; delete hand-written tools |
 | 7 Idempotency enforcement | ⬜ | `capabilityExecutionLog` table; honor `ctx.idempotencyKey` replay |
 | 8 RLS pilot | ⬜ HIGH RISK | `runWithTenantContext` + AsyncLocalStorage db proxy in `executeCapability`; then RLS on 5 tables w/ `app_runtime` role |
@@ -126,3 +126,42 @@ fold into step 3 above once `entityList`/`entityGet` exist.
 > Recommended: do step 1-2 (manifest + helper) in one commit, then one
 > chokepoint per commit. A fresh session is ideal for this — read this doc,
 > `git log`, then start at step 1.
+
+### Phase 5 — progress + the surface gap (live)
+DONE (commits `7c901a9e` … `1df3de25`):
+- `manifest.generated.ts` (`@repo/db/capabilities/manifest`) + drift test; build
+  script `pnpm run generate:manifest`.
+- `@repo/db/capabilities/entity-ops` shared resolver. It introspects each input
+  schema at generation time and bakes per-op shape facts into the manifest:
+  `idParam` (entity-specific record-id key) and `filtersWrapped` (list FK filters
+  go under `{filters}` vs. flat fields). Two thin helpers consume it:
+  `packages/ui/lib/entity-capabilities.ts` (HTTP) and
+  `apps/web/src/lib/entity-capabilities.ts` (server fn `$executeCapability`).
+- Read-cap gaps filled: `masterdata.addressContact.search`,
+  `sales.documentType/documentGroup` (list/get), `communication.emailTemplate
+  /Binding/RenderLog` (list/get).
+- **By-id write caps** added for the natural-key entities (article, address,
+  currency, articleGroup, country, unit, priceList) — `create`+`update`
+  delegating to DataService, `llm:"hidden"` (AI write stays `upsert`). User-
+  approved: these are needed because the generic mask/langtext/grids edit those
+  by id, exactly as `/api/data` did.
+- Migrated to the runtime: `inline-edit-grid`, `langtext-record-panel`,
+  `customer-stats-section`, `inventory-balance-table`, `address-picker-field`,
+  `article-image-strip`, `article-images-tab`.
+
+⚠️ **BLOCKER — list-capability surface gap.** The paginated/sortable grids can't
+migrate yet: apps/web `{articles,addresses,documents}` main lists use
+`paginated/page/limit/orderBy/search/filters(JSON filterRules)` and expect
+`{ data, total }`; `data-grid` CSV export uses `orderBy`+`filterRules`;
+`lookup-field` uses `orderBy`. The capability `list` ops return only `{ items }`
+with a fixed `orderBy`, no `total`, no `filterRules`. Resolving this needs a
+decision on enhancing the shared list contract (add `orderBy`, pagination+`total`,
+`filterRules`) across the factory `list` caps + their output schema — paused for
+user input.
+
+STILL ON /api/data (pending the above): `lookup-field`, `data-grid` (export),
+`entity-mask`, `document-editor`, apps/web `{articles,addresses,documents}`,
+`email-templates`, `accounting`, `settings/index`, `settings/variant-templates`,
+`email.tsx` (deferred), `components/ai/hooks/useAiData`, `setup/SetupGuide`,
+email recipient autocomplete/suggest, `queries/keys.ts`. Delete `/api/data/$.ts`
+(keep `/api/admin/data/$.ts`) once all are migrated.

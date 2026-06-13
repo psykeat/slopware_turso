@@ -49,7 +49,7 @@ Lint once at the very end of a phase: `vp lint` (never mid-phase).
 | 4 UI write migration | ✅ | `eff85be5` documents, `167887d4` import+accounting, `d6e0cfbc` variant-templates. **All duplicate ad-hoc business-write routes deleted.** |
 | 5 Read migration + delete /api/data | ✅ | manifest+resolver+helpers, gap read-caps, by-id write-caps, enhanced list contract (orderBy/pagination/total/filterRules), all consumers migrated incl. document-editor + articles/addresses/documents/settings + email template reads; **`/api/data/$.ts` deleted** (`f9abe012`), `/api/admin/data` kept. `vp lint`: 0 errors, 7 pre-existing warnings |
 | 6 AI projection + /api/ai/execute | ✅ | `4df40639` 20 caps annotated (`exposure.ai`) + tool-name uniqueness test; `5aa71a15` `buildCapabilityTools` generator + tests; `26b33304` `/api/ai/execute` orchestrator; `be9347d1` deleted dead hand-written CRUD/mutation tools (kept bespoke mail-resolution scorers) |
-| 7 Idempotency enforcement | ⬜ | `capabilityExecutionLog` table; honor `ctx.idempotencyKey` replay |
+| 7 Idempotency enforcement | ✅ | `35f56de0` `capability_execution_log` table (unique tenant+key) + migration `20260613134402`; `executeCapability` claim-pending/replay/conflict for non-read writes; Idempotency-Key header wired; `capabilities.idempotency.test.ts` (5 cases) |
 | 8 RLS pilot | ⬜ HIGH RISK | `runWithTenantContext` + AsyncLocalStorage db proxy in `executeCapability`; then RLS on 5 tables w/ `app_runtime` role |
 | 9 Cleanup + guardrails + docs | ⬜ | ESLint no-fetch rules, AI_TESTING.md, finalize plan docs |
 | (deferred) email.tsx + doc email-compose | ⬜ | tangled w/ OAuth/webhooks/PDF render/job-queue; own phase; `/api/email/$` must survive |
@@ -221,6 +221,34 @@ Verify: 14 contract + 10 agent tests green; `pnpm run build:web` ✅; `vp lint`
 - The by-id `masterdata.editable` create/update caps stay `llm:"hidden"` — the AI
   write path is the natural-key `upsert`.
 
-## Phase 7 — next (idempotency enforcement)
-`capabilityExecutionLog` table; honor `ctx.idempotencyKey` replay. See the Phase
-status table for 7–9.
+## Phase 7 — DONE (idempotency enforcement)
+- **Table** (`35f56de0`): `capability_execution_log` (migration
+  `20260613134402_rich_may_parker`, applied locally) — `uuidv7` pk, `tenant_id`
+  FK, `idempotency_key`, `capability_key`, `input_hash` (sha256 of canonicalized
+  input), `status` (`pending`|`completed`), `result` jsonb (stored `{data,meta}`),
+  timestamps. Unique index `uq_capability_execution_log_key` on
+  (`tenant_id`,`idempotency_key`) is the concurrency guard.
+- **Enforcement** (`core/execute.ts`): when `ctx.idempotencyKey` is set and the
+  capability is a non-read, non-dryRun op, `runWithIdempotency` inserts a pending
+  claim (`onConflictDoNothing`). Owner runs the handler then completes the row
+  (or deletes it on failure — only successes are cached). A conflict means
+  replay (`meta.replayed = true`), in-flight (`conflict`), or key-reuse with a
+  different request (`conflict`, hash/key mismatch). Reads + dryRuns never touch
+  the log.
+- **Wiring**: HTTP `/api/capabilities/$key/execute` reads the standard
+  `Idempotency-Key` header (body field fallback); `$executeCapability` server fn
+  accepts an optional `idempotencyKey`. `ExecutionContext.idempotencyKey` +
+  `CapabilityMeta.replayed` added to the core types.
+
+Verify: 34 in-process capability tests green (incl. 5 new idempotency cases);
+`pnpm run build:web` ✅; `vp lint` 0 errors, 7 pre-existing warnings. NOTE: the
+generated `.agents/schema*` docs were deliberately NOT regenerated here (a
+`pnpm run docs` pass surfaces pre-existing drift in unrelated tables — keep that
+a separate housekeeping commit).
+
+## Phase 8 — next (RLS pilot) ⚠️ HIGH RISK
+Per the standing instruction: **pause and surface a summary before starting.**
+Plan: `runWithTenantContext` + an AsyncLocalStorage db proxy in
+`executeCapability` that sets a transaction-local tenant via `set_config`/`SET
+LOCAL` (critical under connection pooling), then RLS policies on ~5 tables with
+an `app_runtime` role. Then Phase 9 (ESLint no-fetch guardrails + docs).

@@ -108,7 +108,18 @@ export const documentList = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      activeByDefault: true,
+      useWhen: [
+        "The user wants to find or list documents (offers, orders, invoices, delivery notes), optionally filtered by type, status or customer.",
+      ],
+      resultShape: "{ items: document[], total? }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const filters: Record<string, string> = {};
@@ -134,7 +145,17 @@ export const documentGet = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      activeByDefault: true,
+      useWhen: ["You need the full detail of one document and already have its documentId."],
+      requiredContext: ["documentId"],
+      resultShape: "the full document record",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const row = await new DataService(ctx.tenantId).get("document", input.documentId);
@@ -156,7 +177,19 @@ export const documentUpdate = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      activeByDefault: true,
+      useWhen: [
+        "The user wants to change header fields of an existing document (e.g. note text, customer, status).",
+      ],
+      requiredContext: ["documentId"],
+      resultShape: "the updated document record",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const [updated] = await new DataService(ctx.tenantId).patch("document", input.documentId, input.patch);
@@ -184,7 +217,21 @@ export const documentCreate = defineCapability({
   idempotent: false,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      activeByDefault: true,
+      useWhen: [
+        "The user wants to create a new document and you already know the document group, type, direction, date and (usually) the customer id.",
+      ],
+      avoidWhen: [
+        "You only have a customer or article name — resolve them to ids with the lookup tools first.",
+      ],
+      resultShape: "the created document record incl. documentId and documentNo",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => new DocumentService().createDocument(ctx.tenantId, input),
 });
@@ -224,7 +271,19 @@ export const documentPost = defineCapability({
   idempotent: false,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "confirm", http: true },
+  exposure: {
+    llm: "confirm",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      activeByDefault: true,
+      useWhen: [
+        "The user explicitly wants to post/book a document, creating inventory and accounting postings.",
+      ],
+      requiredContext: ["documentId"],
+      resultShape: "{ success, document }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     if (!ctx.userId) throw new CapabilityError("forbidden", "User id required");
@@ -245,7 +304,18 @@ export const documentStorno = defineCapability({
   idempotent: false,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "confirm", http: true },
+  exposure: {
+    llm: "confirm",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      useWhen: [
+        "The user wants to reverse/cancel a posted document by creating a reversal document.",
+      ],
+      requiredContext: ["documentId"],
+      resultShape: "{ success, stornoDocumentId }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     if (!ctx.userId) throw new CapabilityError("forbidden", "User id required");
@@ -298,7 +368,19 @@ export const documentConvert = defineCapability({
   idempotent: false,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      activeByDefault: true,
+      useWhen: [
+        "The user wants to convert a document into another type, e.g. turn an offer into an order. Resolve the target group with sales_convertCandidates_document first.",
+      ],
+      requiredContext: ["documentId", "targetGroupId"],
+      resultShape: "{ success, newDocumentId }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     if (!ctx.userId) throw new CapabilityError("forbidden", "User id required");
@@ -361,7 +443,17 @@ export const documentConvertCandidates = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      activeByDefault: true,
+      useWhen: ["You need the valid target document groups before converting a document."],
+      requiredContext: ["documentId"],
+      resultShape: "{ candidates: { documentGroupId, name, documentType }[] }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => ({
     candidates: await new DocumentService().getConversionCandidates(
@@ -500,7 +592,18 @@ export const documentPricing = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      useWhen: [
+        "You need the resolved unit price and tax code for a variant before adding a document line.",
+      ],
+      requiredContext: ["variantId"],
+      resultShape: "{ unitPrice, taxCodeId }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) =>
     new DocumentService().resolveVariantPricing(

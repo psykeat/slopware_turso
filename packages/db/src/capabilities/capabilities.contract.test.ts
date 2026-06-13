@@ -199,6 +199,21 @@ test("ai projections are well-formed when present", () => {
   }
 });
 
+test("ai tool names are unique across the projected set", () => {
+  // The tool generator (packages/agent) keys tools by this name, so a collision
+  // would silently drop a capability from the LLM toolset. Mirror the default
+  // naming used there: ai.toolName ?? `${module}_${operation}_${entityName}`.
+  const byToolName = new Map<string, string>();
+  for (const capability of listCapabilities()) {
+    const ai = capability.exposure.ai;
+    if (!ai) continue;
+    const toolName = ai.toolName ?? `${capability.module}_${capability.operation}_${capability.entityName}`;
+    const existing = byToolName.get(toolName);
+    assert.ok(!existing, `tool name "${toolName}" is shared by ${existing} and ${capability.key}`);
+    byToolName.set(toolName, capability.key);
+  }
+});
+
 test("entity capability manifest is in sync with the registry", () => {
   // The generated manifest is imported by client bundles, so it must never
   // drift from the registry. Regenerate in-memory and compare byte-for-byte;

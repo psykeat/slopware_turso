@@ -45,7 +45,18 @@ export const articleSearch = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "catalog",
+      activeByDefault: true,
+      useWhen: [
+        "You have an article name or number fragment and need to resolve it to an articleId (e.g. before adding a document line).",
+      ],
+      resultShape: "{ items: { articleId, articleNo, name, ... }[] }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const rows = await db
@@ -91,7 +102,18 @@ export const addressSearch = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "catalog",
+      activeByDefault: true,
+      useWhen: [
+        "You have a company name, address number or city fragment and need to resolve it to an addressId (e.g. a customer for a document).",
+      ],
+      resultShape: "{ items: { addressId, addressNo, companyName, city, ... }[] }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const rows = await db
@@ -205,7 +227,18 @@ export const addressContactSearch = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "mail",
+      activeByDefault: true,
+      useWhen: [
+        "You have a sender name or email address from a mail and need to resolve it to the contact's parent addressId.",
+      ],
+      resultShape: "{ items: { contactId, addressId, name, email, ... }[] }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     if (input.q.length === 0) return { items: [] };

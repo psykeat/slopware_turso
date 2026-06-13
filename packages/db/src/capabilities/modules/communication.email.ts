@@ -51,7 +51,16 @@ export const emailThreadList = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "mail",
+      activeByDefault: true,
+      useWhen: ["The user wants to browse or search their email threads, optionally by account or folder."],
+      resultShape: "{ items: emailThread[] }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) =>
     withEmailAuthMapped(async () => {
@@ -80,7 +89,17 @@ export const emailThreadGet = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "mail",
+      activeByDefault: true,
+      useWhen: ["You need the full content of one email thread (subject + all messages) and have its threadId."],
+      requiredContext: ["threadId"],
+      resultShape: "the thread record with its messages",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) =>
     withEmailAuthMapped(async () => {
@@ -109,7 +128,16 @@ export const emailThreadArchive = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "mail",
+      useWhen: ["The user wants to archive an email thread (soft, reversible)."],
+      requiredContext: ["threadId"],
+      resultShape: "{ ok: true }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) =>
     withEmailAuthMapped(async () => {
@@ -137,7 +165,16 @@ export const emailThreadMarkRead = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "mail",
+      useWhen: ["The user wants to mark an email thread as read or unread."],
+      requiredContext: ["threadId"],
+      resultShape: "{ ok: true }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) =>
     withEmailAuthMapped(async () => {
@@ -178,7 +215,19 @@ export const emailThreadLink = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "mail",
+      activeByDefault: true,
+      useWhen: [
+        "The user wants to link (or unlink) an email thread to a customer address and/or a document. Resolve the address/document ids first.",
+      ],
+      requiredContext: ["threadId"],
+      resultShape: "the updated thread record",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) =>
     withEmailAuthMapped(async () => {

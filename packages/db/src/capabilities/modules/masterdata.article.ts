@@ -59,7 +59,17 @@ export const articleGet = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "catalog",
+      activeByDefault: true,
+      useWhen: ["You need the full detail of one article and already have its articleId."],
+      requiredContext: ["articleId"],
+      resultShape: "the full article record",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const row = await new DataService(ctx.tenantId).get("article", input.articleId);

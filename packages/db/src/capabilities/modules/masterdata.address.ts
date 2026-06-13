@@ -100,7 +100,17 @@ export const addressGet = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "catalog",
+      activeByDefault: true,
+      useWhen: ["You need the full detail of one address and already have its addressId."],
+      requiredContext: ["addressId"],
+      resultShape: "the full address record",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const row = await new DataService(ctx.tenantId).get("address", input.addressId);
@@ -129,7 +139,18 @@ export const addressUpsert = defineCapability({
   idempotent: true,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "catalog",
+      activeByDefault: true,
+      useWhen: [
+        "The user wants to create a new customer/supplier address or update an existing one. addressNo is the natural key — pass the same number to update.",
+      ],
+      resultShape: "{ address, created }",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const service = new DataService(ctx.tenantId);

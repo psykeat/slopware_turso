@@ -281,3 +281,4 @@ export type { StreamChunk };
 
 export * from "./tools";
 export * from "./mutations";
+export * from "./capability-tools";

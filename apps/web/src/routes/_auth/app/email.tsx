@@ -36,6 +36,7 @@ import {
   type EmailComposeAction,
   type EmailComposeSubmitValue,
 } from "#/components/email/EmailComposeDialog";
+import { entityList } from "#/lib/entity-capabilities";
 
 export const Route = createFileRoute("/_auth/app/email")({
   component: EmailWorkspace,
@@ -460,40 +461,38 @@ function EmailWorkspace() {
 
   const { data: templates = EMPTY } = useQuery<EmailTemplateRow[]>({
     queryKey: ["email", "templates"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/emailTemplate?limit=200&orderBy=updatedAt:desc");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () =>
+      entityList<EmailTemplateRow>("emailTemplate", {}, {
+        limit: 200,
+        orderBy: "updatedAt:desc",
+      }).catch(() => []),
     placeholderData: keepPreviousData,
   });
 
   const { data: bindings = EMPTY } = useQuery<EmailTemplateBindingRow[]>({
     queryKey: ["email", "template-bindings", selectedTemplateId],
-    queryFn: async () => {
-      if (!selectedTemplateId) return [];
-      const params = new URLSearchParams({ emailTemplateId: selectedTemplateId, limit: "200" });
-      const res = await fetch(`/api/data/emailTemplateBinding?${params.toString()}`);
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () =>
+      selectedTemplateId
+        ? entityList<EmailTemplateBindingRow>(
+            "emailTemplateBinding",
+            { emailTemplateId: selectedTemplateId },
+            { limit: 200 },
+          ).catch(() => [])
+        : Promise.resolve([]),
     enabled: Boolean(selectedTemplateId),
     placeholderData: keepPreviousData,
   });
 
   const { data: renderLogs = EMPTY } = useQuery<EmailTemplateRenderLogRow[]>({
     queryKey: ["email", "template-render-logs", selectedTemplateId],
-    queryFn: async () => {
-      if (!selectedTemplateId) return [];
-      const params = new URLSearchParams({
-        emailTemplateId: selectedTemplateId,
-        limit: "25",
-        orderBy: "createdAt:desc",
-      });
-      const res = await fetch(`/api/data/emailTemplateRenderLog?${params.toString()}`);
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () =>
+      selectedTemplateId
+        ? entityList<EmailTemplateRenderLogRow>(
+            "emailTemplateRenderLog",
+            { emailTemplateId: selectedTemplateId },
+            { limit: 25, orderBy: "createdAt:desc" },
+          ).catch(() => [])
+        : Promise.resolve([]),
     enabled: Boolean(selectedTemplateId),
     placeholderData: keepPreviousData,
   });

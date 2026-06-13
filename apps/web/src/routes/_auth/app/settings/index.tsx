@@ -17,6 +17,7 @@ import { LlmConfigForm } from "#/components/llm/LlmConfigForm";
 import { SetupGuide } from "#/components/setup/SetupGuide";
 import { YearEndAssistant } from "#/components/setup/YearEndAssistant";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
+import { entityDelete, entityList, entityListPage } from "#/lib/entity-capabilities";
 
 export const Route = createFileRoute("/_auth/app/settings/")({
   component: SettingsPage,
@@ -142,38 +143,22 @@ function SettingsView() {
 
   const { data: units = [] } = useQuery({
     queryKey: ["data", "unit"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/unit");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => entityList("unit").catch(() => []),
   });
 
   const { data: taxClasses = [] } = useQuery({
     queryKey: ["data", "taxClass"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/taxClass");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => entityList("taxClass").catch(() => []),
   });
 
   const { data: paymentTerms = [] } = useQuery({
     queryKey: ["data", "paymentTerm"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/paymentTerm");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => entityList("paymentTerm").catch(() => []),
   });
 
   const { data: currencies = [] } = useQuery({
     queryKey: ["data", "currency"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/currency");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => entityList("currency").catch(() => []),
   });
 
   const unitLabelMap = useMemo(
@@ -474,11 +459,8 @@ function SettingsView() {
 
   const { data: companyOptions = [], isLoading: areCompaniesLoading } = useQuery({
     queryKey: ["data", "company", "tenant-options"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/company?orderBy=companyNo:asc&limit=200");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () =>
+      entityList("company", {}, { orderBy: "companyNo:asc", limit: 200 }).catch(() => []),
   });
 
   useEffect(() => {
@@ -587,18 +569,20 @@ function SettingsView() {
       isCompanyScopedSetting ? selectedCompanyId : null,
     ],
     queryFn: async () => {
-      const p = new URLSearchParams({
-        paginated: "true",
-        page: String(queryParams.page),
-        limit: String(queryParams.limit),
-      });
-      if (queryParams.orderBy) p.set("orderBy", queryParams.orderBy);
-      if (queryParams.search) p.set("search", queryParams.search);
-      if (queryParams.filters) p.set("filters", JSON.stringify(queryParams.filters));
-      if (isCompanyScopedSetting && selectedCompanyId) p.set("companyId", selectedCompanyId);
-      const res = await fetch(`/api/data/${selectedKey}?${p}`);
-      if (!res.ok) return { data: [], total: 0 };
-      return res.json() as Promise<{ data: any[]; total: number }>;
+      const filters: Record<string, string> = {};
+      if (isCompanyScopedSetting && selectedCompanyId) filters.companyId = selectedCompanyId;
+      try {
+        const { items, total } = await entityListPage<any>(selectedKey, filters, {
+          limit: queryParams.limit,
+          offset: (queryParams.page - 1) * queryParams.limit,
+          orderBy: queryParams.orderBy || undefined,
+          search: queryParams.search || undefined,
+          filterRules: queryParams.filters || undefined,
+        });
+        return { data: items, total };
+      } catch {
+        return { data: [], total: 0 };
+      }
     },
     enabled:
       !!selectedKey &&
@@ -991,12 +975,12 @@ function SettingsView() {
                 className="h-8 rounded bg-destructive px-4 text-[13px] text-white hover:opacity-90"
                 onClick={async () => {
                   if (!deleteId) return;
-                  const res = await fetch(`/api/data/${selectedKey}/${deleteId}`, {
-                    method: "DELETE",
-                  });
-                  if (!res.ok) {
-                    const message = await res.text();
-                    toast.error(message || t("form.fkViolationError"));
+                  try {
+                    await entityDelete(selectedKey, deleteId);
+                  } catch (err) {
+                    toast.error(
+                      (err instanceof Error && err.message) || t("form.fkViolationError"),
+                    );
                     return;
                   }
                   setDeleteConfirm(false);

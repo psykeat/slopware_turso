@@ -6,11 +6,17 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { CapabilityHttpError } from "../lib/capability-client";
+import { entityGet, entityList, entitySave } from "../lib/entity-capabilities";
 import { cn } from "../lib/utils";
 import { useDesigner, type FieldDesignConfig } from "../platform/designer-context";
 import { useFocus } from "../platform/focus-manager";
 import { LookupField, buildLookupConfigFromField, createRemoteLookupSource } from "./lookup-field";
 import { Skeleton } from "./skeleton";
+
+// The system-admin introspection route stays on raw fetch; everything else runs
+// on the capability runtime via the entity helper.
+const ADMIN_DATA_BASE = "/api/admin/data";
 
 export interface FieldDef {
   key: string;
@@ -339,39 +345,67 @@ export function EntityMask({
     onSubmit: async ({ value, formApi }) => {
       setGlobalError(null);
       const isEdit = recordId && mode !== "create";
-      const url = isEdit ? `${apiBase}/${entityName}/${recordId}` : `${apiBase}/${entityName}`;
-      const method = isEdit ? "PATCH" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(value),
-      });
-      if (!res.ok) {
-        const errorText = await res.text();
-        let parsed: any;
-        try {
-          parsed = JSON.parse(errorText);
-        } catch {}
 
-        if (parsed && typeof parsed === "object" && parsed.error) {
-          throw new Error(parsed.error);
-        } else if (parsed && Array.isArray(parsed.issues)) {
-          parsed.issues.forEach((issue: any) => {
-            const path = issue.path?.join(".") || "";
-            if (path) {
-              formApi.setFieldMeta(path as any, (meta) => ({ ...meta, errors: [issue.message] }));
-            } else {
-              setGlobalError(issue.message);
+      let result: unknown;
+      if (apiBase === ADMIN_DATA_BASE) {
+        // System-admin introspection route — kept on raw fetch.
+        const url = isEdit
+          ? `${apiBase}/${entityName}/${recordId}`
+          : `${apiBase}/${entityName}`;
+        const res = await fetch(url, {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(value),
+        });
+        if (!res.ok) {
+          const errorText = await res.text();
+          let parsed: any;
+          try {
+            parsed = JSON.parse(errorText);
+          } catch {}
+          if (parsed && typeof parsed === "object" && parsed.error) {
+            throw new Error(parsed.error);
+          } else if (parsed && Array.isArray(parsed.issues)) {
+            parsed.issues.forEach((issue: any) => {
+              const path = issue.path?.join(".") || "";
+              if (path) {
+                formApi.setFieldMeta(path as any, (meta) => ({ ...meta, errors: [issue.message] }));
+              } else {
+                setGlobalError(issue.message);
+              }
+            });
+            throw new Error("Validation failed");
+          } else if (res.status === 400 || res.status === 409 || res.status === 422) {
+            throw new Error(errorText || `Constraint failed: ${res.status}`);
+          } else {
+            throw new Error(errorText || `Save failed: ${res.status}`);
+          }
+        }
+        result = await res.json();
+      } else {
+        try {
+          result = await entitySave(entityName, isEdit ? recordId : null, value);
+        } catch (err) {
+          if (err instanceof CapabilityHttpError) {
+            if (err.issues?.length) {
+              err.issues.forEach((issue) => {
+                if (issue.path) {
+                  formApi.setFieldMeta(issue.path as any, (meta) => ({
+                    ...meta,
+                    errors: [issue.message],
+                  }));
+                } else {
+                  setGlobalError(issue.message);
+                }
+              });
+              throw new Error("Validation failed");
             }
-          });
-          throw new Error("Validation failed");
-        } else if (res.status === 400 || res.status === 409 || res.status === 422) {
-          throw new Error(errorText || `Constraint failed: ${res.status}`);
-        } else {
-          throw new Error(errorText || `Save failed: ${res.status}`);
+            setGlobalError(err.message);
+          }
+          throw err;
         }
       }
-      const result = await res.json();
+
       toast.success(recordId ? t("form.updateSuccess") : t("form.createSuccess"));
       queryClient.invalidateQueries({ queryKey: ["data", entityName] });
       onSaved?.(result);
@@ -389,8 +423,11 @@ export function EntityMask({
       form.reset();
     }
     if (recordId && (mode === "edit" || !mode)) {
-      fetch(`${apiBase}/${entityName}/${recordId}`)
-        .then((res) => res.json())
+      const loaded =
+        apiBase === ADMIN_DATA_BASE
+          ? fetch(`${apiBase}/${entityName}/${recordId}`).then((res) => res.json())
+          : entityGet<Record<string, any>>(entityName, recordId);
+      Promise.resolve(loaded)
         .then((data) => {
           if (!active) return;
           if (Array.isArray(data)) {
@@ -1034,14 +1071,12 @@ export function EntityMask({
 
         if (postalCode && countryCode) {
           try {
-            const res = await fetch(
-              `/api/data/postalCode?countryCode=${countryCode}&plz=${postalCode}`,
-            );
-            if (res.ok) {
-              const data = await res.json();
-              if (Array.isArray(data) && data.length === 1) {
-                fieldApi.form.setFieldValue("city", data[0].city);
-              }
+            const rows = await entityList<{ city: string }>("postalCode", {
+              countryCode,
+              plz: postalCode,
+            });
+            if (rows.length === 1) {
+              fieldApi.form.setFieldValue("city", rows[0].city);
             }
           } catch (err) {
             console.warn("City lookup failed", err);

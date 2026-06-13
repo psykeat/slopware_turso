@@ -24,6 +24,7 @@ import { toast } from "sonner";
 
 import { VariantGeneratorDialog } from "#/components/articles/VariantGeneratorDialog";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
+import { entityDelete, entityGet, entityList, entityListPage, entitySave } from "#/lib/entity-capabilities";
 const DEFAULT_VARIANT_OPTION_VALUE_HASH =
   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 import { resolveArticleVariantMode } from "@repo/db/services/article-variant-mode";
@@ -112,22 +113,12 @@ function ArticleSalesBlock({
     trackingMode: String(articleRecord?.trackingMode ?? draft.trackingMode ?? ""),
   }));
 
-  const patchJson = useCallback(async (url: string, body: Record<string, unknown>) => {
-    const res = await fetch(url, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error((await res.text()) || `Request failed with status ${res.status}`);
-    return res.json();
-  }, []);
-
   const persistField = useCallback(
     async (field: keyof SalesDraft, value: string | boolean) => {
       const articleId = defaultVariant?.articleId;
       if (!articleId) return;
       if (field === "trackingMode") {
-        await patchJson(`/api/data/article/${articleId}`, { trackingMode: value || null });
+        await entitySave("article", articleId, { trackingMode: value || null });
         await queryClient.invalidateQueries({ queryKey: ["data", "article", articleId] });
         return;
       }
@@ -135,12 +126,12 @@ function ArticleSalesBlock({
       if (!variantId) return;
       const payload =
         field === "isActive" ? { isActive: Boolean(value) } : { [field]: value || null };
-      await patchJson(`/api/data/articleVariant/${variantId}`, payload);
+      await entitySave("articleVariant", variantId, payload);
       await queryClient.invalidateQueries({
         queryKey: ["data", "articleVariant", articleId],
       });
     },
-    [defaultVariant, patchJson, queryClient],
+    [defaultVariant, queryClient],
   );
 
   const handleChange = useCallback(
@@ -289,19 +280,13 @@ function ArticleVariantEditForm({
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/data/articleVariant/${variant.variantId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          sku: form.sku || null,
-          price: form.price || null,
-          ean: form.ean || null,
-          weight: form.weight || null,
-          isActive: form.isActive,
-        }),
+      const saved = await entitySave("articleVariant", variant.variantId, {
+        sku: form.sku || null,
+        price: form.price || null,
+        ean: form.ean || null,
+        weight: form.weight || null,
+        isActive: form.isActive,
       });
-      if (!res.ok) throw new Error((await res.text()) || `Request failed with status ${res.status}`);
-      const saved = await res.json();
       onSaved(saved);
     } catch (err) {
       toast.error(err instanceof Error && err.message ? err.message : "Failed to save variant");
@@ -454,22 +439,14 @@ function ArticleVariantsAndOptionsTab({
 
   const { data: optionRows = EMPTY_ARRAY, isLoading: isOptionsLoading } = useQuery({
     queryKey: ["data", "articleOption", articleId],
-    queryFn: async () => {
-      const res = await fetch(`/api/data/articleOption?articleId=${articleId}`);
-      if (!res.ok) throw new Error("Failed to fetch article options");
-      return res.json() as Promise<any[]>;
-    },
+    queryFn: () => entityList<any>("articleOption", { articleId }),
     enabled: !!articleId,
     placeholderData: keepPreviousData,
   });
 
   const { data: variantRows = EMPTY_ARRAY, isLoading: isVariantsLoading } = useQuery({
     queryKey: ["data", "articleVariant", articleId],
-    queryFn: async () => {
-      const res = await fetch(`/api/data/articleVariant?articleId=${articleId}`);
-      if (!res.ok) throw new Error("Failed to fetch article variants");
-      return res.json() as Promise<any[]>;
-    },
+    queryFn: () => entityList<any>("articleVariant", { articleId }),
     enabled: !!articleId,
     placeholderData: keepPreviousData,
   });
@@ -511,24 +488,10 @@ function ArticleVariantsAndOptionsTab({
     [variantRows],
   );
 
-  const fetchJson = useCallback(async (url: string, init?: RequestInit) => {
-    const res = await fetch(url, init);
-    if (!res.ok) {
-      throw new Error((await res.text()) || `Request failed with status ${res.status}`);
-    }
-    if (res.status === 204) return null;
-    return await res.json();
-  }, []);
-
   const patchEntity = useCallback(
-    async (entityName: string, id: string, body: Record<string, unknown>) => {
-      return await fetchJson(`/api/data/${entityName}/${id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    },
-    [fetchJson],
+    (entityName: string, id: string, body: Record<string, unknown>) =>
+      entitySave(entityName, id, body),
+    [],
   );
 
   const refreshVariants = useCallback(async () => {
@@ -537,14 +500,12 @@ function ArticleVariantsAndOptionsTab({
 
   const patchVariantInventorySku = useCallback(
     async (variantId: string, sku: string) => {
-      const items = await fetchJson(
-        `/api/data/inventoryItem?variantId=${encodeURIComponent(variantId)}&limit=1`,
-      );
-      const item = Array.isArray(items) ? items[0] : ((items as any)?.data?.[0] ?? null);
+      const items = await entityList<any>("inventoryItem", { variantId }, { limit: 1 });
+      const item = items[0] ?? null;
       if (!item?.itemId) return;
       await patchEntity("inventoryItem", item.itemId, { sku });
     },
-    [fetchJson, patchEntity],
+    [patchEntity],
   );
 
   const bulkVariantRows = useMemo(
@@ -664,9 +625,9 @@ function ArticleVariantsAndOptionsTab({
     queryFn: async () => {
       const valueLists = await Promise.all(
         optionRows.map(async (option: any) => {
-          const res = await fetch(`/api/data/articleOptionValue?optionId=${option.optionId}`);
-          if (!res.ok) return [];
-          const values = (await res.json()) as any[];
+          const values = await entityList<any>("articleOptionValue", {
+            optionId: option.optionId,
+          }).catch(() => []);
           return values.map((value) => ({
             valueId: value.valueId as string,
             label: `${option.name}: ${value.value}`,
@@ -687,9 +648,9 @@ function ArticleVariantsAndOptionsTab({
 
     setSurchargeSubmitting(true);
     try {
-      const junctionRows = (await fetchJson(
-        `/api/data/articleVariantOptionValue?valueId=${encodeURIComponent(surchargeValueId)}`,
-      )) as any[];
+      const junctionRows = await entityList<any>("articleVariantOptionValue", {
+        valueId: surchargeValueId,
+      });
       const matchingVariantIds = new Set(junctionRows.map((row) => row.variantId as string));
       const targets = surchargeVariantIds.filter((variantId) =>
         matchingVariantIds.has(variantId),
@@ -721,7 +682,6 @@ function ArticleVariantsAndOptionsTab({
       setSurchargeSubmitting(false);
     }
   }, [
-    fetchJson,
     patchEntity,
     refreshVariants,
     surchargeAmount,
@@ -1275,19 +1235,19 @@ function ArticlesModule() {
       gridState.queryParams.filters,
     ],
     queryFn: async () => {
-      const p = new URLSearchParams({
-        paginated: "true",
-        page: String(gridState.queryParams.page),
-        limit: String(gridState.queryParams.limit),
-      });
-      if (selectedGroupId) p.set("articleGroupId", selectedGroupId);
-      if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
-      if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
-      if (gridState.queryParams.filters)
-        p.set("filters", JSON.stringify(gridState.queryParams.filters));
-      const res = await fetch(`/api/data/article?${p}`);
-      if (!res.ok) throw new Error("Failed to fetch articles");
-      return res.json() as Promise<{ data: any[]; total: number }>;
+      const { page, limit, orderBy, search, filters } = gridState.queryParams;
+      const { items, total } = await entityListPage<any>(
+        "article",
+        selectedGroupId ? { articleGroupId: selectedGroupId } : {},
+        {
+          limit,
+          offset: (page - 1) * limit,
+          orderBy: orderBy || undefined,
+          search: search || undefined,
+          filterRules: filters || undefined,
+        },
+      );
+      return { data: items, total };
     },
   });
 
@@ -1296,11 +1256,7 @@ function ArticlesModule() {
   // Fetch variants for the active article (shared query key with context tabs)
   const { data: activeVariantRows = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "articleVariant", activeArticleId],
-    queryFn: async () => {
-      const res = await fetch(`/api/data/articleVariant?articleId=${activeArticleId}`);
-      if (!res.ok) throw new Error("Failed to fetch article variants");
-      return res.json() as Promise<any[]>;
-    },
+    queryFn: () => entityList<any>("articleVariant", { articleId: activeArticleId! }),
     enabled: !!activeArticleId,
     placeholderData: keepPreviousData,
   });
@@ -1318,11 +1274,7 @@ function ArticlesModule() {
   // Fetch article groups
   const { data: groups = EMPTY_ARRAY, isLoading: isTreeLoading } = useQuery({
     queryKey: ["data", "articleGroup"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/articleGroup");
-      if (!res.ok) throw new Error("Failed to fetch article groups");
-      return res.json();
-    },
+    queryFn: () => entityList<any>("articleGroup"),
     select: useCallback(
       (data: any[]) =>
         data.map(
@@ -1338,11 +1290,7 @@ function ArticlesModule() {
 
   const { data: units = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "unit"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/unit");
-      if (!res.ok) throw new Error("Failed to fetch units");
-      return res.json();
-    },
+    queryFn: () => entityList<any>("unit"),
     placeholderData: keepPreviousData,
   });
 
@@ -1364,11 +1312,7 @@ function ArticlesModule() {
   // Fetch inventory movements for selected article (server-side FK filter)
   const { data: movements = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "inventoryMovement", activeArticleId],
-    queryFn: async () => {
-      const res = await fetch(`/api/data/inventoryMovement?articleId=${activeArticleId}`);
-      if (!res.ok) throw new Error("Failed to fetch inventory movements");
-      return res.json();
-    },
+    queryFn: () => entityList<any>("inventoryMovement", { articleId: activeArticleId! }),
     enabled: !!activeArticleId,
     placeholderData: keepPreviousData,
   });
@@ -1439,14 +1383,12 @@ function ArticlesModule() {
       isEnabled: (s) => !!s.recordId && s.entity === "article",
       handler: async (s) => {
         if (!s.recordId) return;
-        const srcRes = await fetch(`/api/data/article/${s.recordId}`);
-        if (!srcRes.ok) return;
-        const { articleId: _id, ...copy } = await srcRes.json();
-        await fetch("/api/data/article", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(copy),
-        });
+        const source = await entityGet<Record<string, any>>("article", s.recordId).catch(
+          () => null,
+        );
+        if (!source) return;
+        const { articleId: _id, ...copy } = source;
+        await entitySave("article", null, copy);
         queryClient.invalidateQueries({ queryKey: ["data", "article"] });
       },
     });
@@ -1466,29 +1408,15 @@ function ArticlesModule() {
     selectedArticle?.name ?? t("nav.articles", { defaultValue: "Articles" });
   const modalOpen = showCreate || showEdit || deleteConfirm;
 
-  const fetchJson = useCallback(async (url: string, init?: RequestInit) => {
-    const res = await fetch(url, init);
-    if (!res.ok) {
-      throw new Error((await res.text()) || `Request failed with status ${res.status}`);
-    }
-    if (res.status === 204) return null;
-    return await res.json();
-  }, []);
-
   const patchEntity = useCallback(
-    async (entityName: string, id: string, body: Record<string, unknown>) => {
-      return await fetchJson(`/api/data/${entityName}/${id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    },
-    [fetchJson],
+    (entityName: string, id: string, body: Record<string, unknown>) =>
+      entitySave(entityName, id, body),
+    [],
   );
 
   const applyCreateSalesDraft = useCallback(
     async (articleId: string) => {
-      const variantRows = (await fetchJson(`/api/data/articleVariant?articleId=${articleId}`)) as any[];
+      const variantRows = await entityList<any>("articleVariant", { articleId });
       const defaultVariant =
         variantRows.find((row: any) => row.optionValueHash === DEFAULT_VARIANT_OPTION_VALUE_HASH) ??
         variantRows[0] ??
@@ -1512,7 +1440,7 @@ function ArticlesModule() {
         }
       }
     },
-    [createSalesDraft.ean, createSalesDraft.isActive, createSalesDraft.price, createSalesDraft.trackingMode, createSalesDraft.weight, fetchJson, patchEntity],
+    [createSalesDraft.ean, createSalesDraft.isActive, createSalesDraft.price, createSalesDraft.trackingMode, createSalesDraft.weight, patchEntity],
   );
 
   const selectTreeNode = useCallback(
@@ -1867,9 +1795,10 @@ function ArticlesModule() {
   const handleCreateFieldChange = useCallback(
     async (key: string, value: any, _formData: any, setFormData: any) => {
       if (key !== "articleGroupId" || !value) return;
-      const res = await fetch(`/api/data/articleGroup/${value}`);
-      if (!res.ok) return;
-      const groupData = await res.json();
+      const groupData = await entityGet<Record<string, any>>("articleGroup", value).catch(
+        () => null,
+      );
+      if (!groupData) return;
       const group = Array.isArray(groupData) ? (groupData[0] ?? {}) : (groupData ?? {});
       const isBlank = (next: unknown) => next === undefined || next === null || next === "";
       setFormData((curr: any) => {
@@ -1971,14 +1900,7 @@ function ArticlesModule() {
                 variant: "destructive" as const,
                 onClick: async (keys: string[]) => {
                   try {
-                    await Promise.all(
-                      keys.map(async (id) => {
-                        const res = await fetch(`/api/data/article/${id}`, {
-                          method: "DELETE",
-                        });
-                        if (!res.ok) throw new Error(await res.text());
-                      }),
-                    );
+                    await Promise.all(keys.map((id) => entityDelete("article", id)));
                     queryClient.invalidateQueries({ queryKey: ["data", "article"] });
                   } catch (err) {
                     toast.error(
@@ -2025,12 +1947,12 @@ function ArticlesModule() {
                 className="h-8 rounded bg-destructive px-4 text-[13px] text-white hover:opacity-90"
                 onClick={async () => {
                   if (!deleteId) return;
-                  const res = await fetch(`/api/data/article/${deleteId}`, {
-                    method: "DELETE",
-                  });
-                  if (!res.ok) {
-                    const message = await res.text();
-                    toast.error(message || t("form.fkViolationError"));
+                  try {
+                    await entityDelete("article", deleteId);
+                  } catch (err) {
+                    toast.error(
+                      (err instanceof Error && err.message) || t("form.fkViolationError"),
+                    );
                     return;
                   }
                   setDeleteConfirm(false);

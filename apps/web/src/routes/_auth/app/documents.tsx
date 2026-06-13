@@ -35,6 +35,7 @@ import {
   type EmailComposeValue,
 } from "#/components/email/EmailComposeDialog";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
+import { entityList, entityListPage } from "#/lib/entity-capabilities";
 import { invalidateAfterCapability } from "#/queries/invalidate";
 import { callCapability, capability, CapabilityClientError } from "#/server-fns/capabilities";
 
@@ -972,11 +973,8 @@ function DocumentsModule() {
 
   const { data: companies = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "company", "tenant-options"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/company?orderBy=companyNo:asc&limit=200");
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () =>
+      entityList("company", {}, { orderBy: "companyNo:asc", limit: 200 }).catch(() => []),
   });
 
   useEffect(() => {
@@ -1035,21 +1033,19 @@ function DocumentsModule() {
       selectedCompanyId,
     ],
     queryFn: async () => {
-      const p = new URLSearchParams({
-        paginated: "true",
-        page: String(gridState.queryParams.page),
-        limit: String(gridState.queryParams.limit),
+      const { page, limit, orderBy, search, filters } = gridState.queryParams;
+      const docFilters: Record<string, string> = {};
+      if (selection.kind === "group") docFilters.documentGroupId = selection.groupId;
+      else if (selection.kind === "type") docFilters.documentType = selection.documentType;
+      if (selectedCompanyId) docFilters.companyId = selectedCompanyId;
+      const { items, total } = await entityListPage<any>("document", docFilters, {
+        limit,
+        offset: (page - 1) * limit,
+        orderBy: orderBy || undefined,
+        search: search || undefined,
+        filterRules: filters || undefined,
       });
-      if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
-      if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
-      if (gridState.queryParams.filters)
-        p.set("filters", JSON.stringify(gridState.queryParams.filters));
-      if (selection.kind === "group") p.set("documentGroupId", selection.groupId);
-      else if (selection.kind === "type") p.set("documentType", selection.documentType);
-      if (selectedCompanyId) p.set("companyId", selectedCompanyId);
-      const res = await fetch(`/api/data/document?${p}`);
-      if (!res.ok) throw new Error("Failed to fetch documents");
-      return res.json() as Promise<{ data: any[]; total: number }>;
+      return { data: items, total };
     },
     enabled: !!selectedCompanyId,
   });
@@ -1086,36 +1082,22 @@ function DocumentsModule() {
   const { data: addresses = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "address", "all"],
     staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const res = await fetch("/api/data/address");
-      if (!res.ok) throw new Error("Failed to fetch addresses");
-      return res.json();
-    },
+    queryFn: () => entityList("address"),
   });
 
   const { data: documentGroups = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "documentGroup", "all", selectedCompanyId],
     staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const p = new URLSearchParams();
-      if (selectedCompanyId) p.set("companyId", selectedCompanyId);
-      const res = await fetch(`/api/data/documentGroup?${p}`);
-      if (!res.ok) throw new Error("Failed to fetch document groups");
-      return res.json();
-    },
+    queryFn: () =>
+      entityList("documentGroup", selectedCompanyId ? { companyId: selectedCompanyId } : {}),
     enabled: !!selectedCompanyId,
   });
 
   const { data: warehouses = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "warehouse", "all", selectedCompanyId],
     staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const p = new URLSearchParams();
-      if (selectedCompanyId) p.set("companyId", selectedCompanyId);
-      const res = await fetch(`/api/data/warehouse?${p}`);
-      if (!res.ok) throw new Error("Failed to fetch warehouses");
-      return res.json();
-    },
+    queryFn: () =>
+      entityList("warehouse", selectedCompanyId ? { companyId: selectedCompanyId } : {}),
     enabled: !!selectedCompanyId,
   });
 
@@ -1154,13 +1136,8 @@ function DocumentsModule() {
   // Fetch document lines for selected document (server-side FK filter)
   const { data: lines = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "documentLine", activeDocumentId],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/data/documentLine?documentId=${activeDocumentId}&orderBy=lineNo:asc`,
-      );
-      if (!res.ok) throw new Error("Failed to fetch document lines");
-      return res.json();
-    },
+    queryFn: () =>
+      entityList("documentLine", { documentId: activeDocumentId! }, { orderBy: "lineNo:asc" }),
     enabled: !!activeDocumentId,
     placeholderData: keepPreviousData,
   });

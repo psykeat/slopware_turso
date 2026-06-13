@@ -25,6 +25,18 @@ export async function entityList<T = Record<string, unknown>>(
   return data.items;
 }
 
+// Paginated variant returning the row count alongside the page; pass
+// `withTotal` (forced on here) when the grid renders page counts.
+export async function entityListPage<T = Record<string, unknown>>(
+  entityName: string,
+  filters: Record<string, string> = {},
+  opts?: EntityListOptions,
+): Promise<{ items: T[]; total: number }> {
+  const { key, input } = resolveEntityList(entityName, filters, { ...opts, withTotal: true });
+  const { data } = await executeCapability<{ items: T[]; total?: number }>(key, input);
+  return { items: data.items, total: data.total ?? data.items.length };
+}
+
 export async function entityGet<T = Record<string, unknown>>(
   entityName: string,
   id: string,

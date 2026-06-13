@@ -24,6 +24,10 @@ export interface EntityListOptions {
   search?: string;
   limit?: number;
   offset?: number;
+  orderBy?: string;
+  filterRules?: Array<{ col: string; op: string; val: string }>;
+  /** Request the matching row count; the list cap then returns `{ items, total }`. */
+  withTotal?: boolean;
 }
 
 function ops(entityName: string): Record<string, EntityCapabilityOp> {
@@ -46,14 +50,17 @@ export function resolveEntityList(
   opts: EntityListOptions = {},
 ): ResolvedEntityCall {
   const op = requireOp(entityName, "list");
-  const paging = {
+  const controls = {
     ...(opts.search ? { search: opts.search } : {}),
+    ...(opts.orderBy ? { orderBy: opts.orderBy } : {}),
+    ...(opts.filterRules ? { filterRules: opts.filterRules } : {}),
     limit: opts.limit ?? 200,
     ...(opts.offset ? { offset: opts.offset } : {}),
+    ...(opts.withTotal ? { withTotal: true } : {}),
   };
   return {
     key: op.key,
-    input: op.filtersWrapped ? { filters, ...paging } : { ...filters, ...paging },
+    input: op.filtersWrapped ? { filters, ...controls } : { ...filters, ...controls },
   };
 }
 

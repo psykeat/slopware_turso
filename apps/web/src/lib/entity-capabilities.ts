@@ -33,6 +33,17 @@ export async function entityList<T = Record<string, unknown>>(
   return items;
 }
 
+// Paginated variant returning the row count alongside the page.
+export async function entityListPage<T = Record<string, unknown>>(
+  entityName: string,
+  filters: Record<string, string> = {},
+  opts?: EntityListOptions,
+): Promise<{ items: T[]; total: number }> {
+  const { key, input } = resolveEntityList(entityName, filters, { ...opts, withTotal: true });
+  const data = await exec<{ items: T[]; total?: number }>(key, input);
+  return { items: data.items, total: data.total ?? data.items.length };
+}
+
 export async function entityGet<T = Record<string, unknown>>(
   entityName: string,
   id: string,

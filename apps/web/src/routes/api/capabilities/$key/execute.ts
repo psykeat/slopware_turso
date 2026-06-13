@@ -52,11 +52,14 @@ export const Route = createFileRoute("/api/capabilities/$key/execute")({
           });
         }
 
-        // idempotencyKey is accepted for forward compatibility; enforcement
-        // (execution log with per-tenant uniqueness) is deferred to phase 4.
+        // Replay token: the standard Idempotency-Key header wins, with the body
+        // field as a fallback. executeCapability enforces it per tenant.
+        const idempotencyKey =
+          request.headers.get("idempotency-key")?.trim() || body.idempotencyKey?.trim() || undefined;
+
         const result = await executeCapability(
           params.key,
-          { ...ctx, dryRun: Boolean(body.dryRun) },
+          { ...ctx, dryRun: Boolean(body.dryRun), idempotencyKey },
           body.input ?? {},
         );
         return envelopeResponse(result);

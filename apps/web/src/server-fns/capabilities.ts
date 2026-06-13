@@ -25,12 +25,17 @@ export const $executeCapability = createServerFn({ method: "POST" })
       key: z.string(),
       input: z.unknown().optional(),
       dryRun: z.boolean().optional(),
+      idempotencyKey: z.string().optional(),
     }),
   )
   .handler(async ({ data, context }) =>
     executeCapability(
       data.key,
-      data.dryRun ? { ...context.executionCtx, dryRun: true } : context.executionCtx,
+      {
+        ...context.executionCtx,
+        ...(data.dryRun ? { dryRun: true } : {}),
+        ...(data.idempotencyKey ? { idempotencyKey: data.idempotencyKey } : {}),
+      },
       data.input,
     ),
   );

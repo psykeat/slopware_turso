@@ -32,6 +32,13 @@ export interface ExecutionContext {
   role: CapabilityRole | "system";
   requestId?: string;
   dryRun?: boolean;
+  /**
+   * Client-supplied replay token. When set, a successful non-read execution is
+   * logged under (tenantId, idempotencyKey); a later call with the same key
+   * replays the stored result instead of running the handler again. Reads and
+   * dryRuns ignore it.
+   */
+  idempotencyKey?: string;
 }
 
 // AI projection of a capability: everything an LLM needs to pick the right
@@ -111,6 +118,8 @@ export interface CapabilityMeta {
   schemaVersion: number;
   dryRun: boolean;
   durationMs: number;
+  /** True when this envelope was replayed from the idempotency log, not freshly executed. */
+  replayed?: boolean;
 }
 
 export type CapabilityResult<T = unknown> =

@@ -3594,3 +3594,34 @@ export const inventoryLevel = pgTable(
     unique("uq_inv_level_loc").on(table.itemId, table.locationId),
   ],
 );
+
+// Idempotency log for the capability runtime. A successful non-read execution
+// is recorded under (tenant_id, idempotency_key); a later call with the same
+// key replays the stored result instead of re-running the handler. The unique
+// index is the concurrency guard: the first caller inserts a "pending" row and
+// owns execution, a concurrent caller sees the conflict.
+export const capabilityExecutionLog = pgTable(
+  "capability_execution_log",
+  {
+    capabilityExecutionLogId: uuid("capability_execution_log_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    idempotencyKey: text("idempotency_key").notNull(),
+    capabilityKey: text("capability_key").notNull(),
+    // sha256 hex of the canonicalized input — guards against reusing a key with
+    // a different request.
+    inputHash: char("input_hash", { length: 64 }).notNull(),
+    status: text("status").notNull(), // "pending" | "completed"
+    // Stored success envelope ({ data, meta }); null while pending.
+    result: jsonb("result"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("uq_capability_execution_log_key").on(table.tenantId, table.idempotencyKey),
+    index("idx_capability_execution_log_tenant").on(table.tenantId),
+  ],
+);

@@ -47,7 +47,7 @@ Lint once at the very end of a phase: `vp lint` (never mid-phase).
 | 2 Server-fn + query layer | ✅ | `b82d7c7f` `$executeCapability`, `capability(key)`, `queries/{keys,invalidate,capability}.ts`, `useCapabilityMutation` |
 | 3 Capability gaps | ✅ | `a39bf2af` communication.email, import.core, articleVariant.archiveBulk |
 | 4 UI write migration | ✅ | `eff85be5` documents, `167887d4` import+accounting, `d6e0cfbc` variant-templates. **All duplicate ad-hoc business-write routes deleted.** |
-| 5 Read migration + delete /api/data | 🟡 in progress | manifest+helper+grid+gap-caps+by-id-write-caps + enhanced list contract + ~13 consumers migrated (`7c901a9e`→`77a83645`). Remaining: document-editor, 3 TriView pages, settings/index, then delete route. email.tsx deferred. See below |
+| 5 Read migration + delete /api/data | ✅ | manifest+resolver+helpers, gap read-caps, by-id write-caps, enhanced list contract (orderBy/pagination/total/filterRules), all consumers migrated incl. document-editor + articles/addresses/documents/settings + email template reads; **`/api/data/$.ts` deleted** (`f9abe012`), `/api/admin/data` kept. `vp lint`: 0 errors, 7 pre-existing warnings |
 | 6 AI projection + /api/ai/execute | ⬜ | annotate ~20-25 caps with `exposure.ai`; `packages/agent` tool generator + orchestrator; delete hand-written tools |
 | 7 Idempotency enforcement | ⬜ | `capabilityExecutionLog` table; honor `ctx.idempotencyKey` replay |
 | 8 RLS pilot | ⬜ HIGH RISK | `runWithTenantContext` + AsyncLocalStorage db proxy in `executeCapability`; then RLS on 5 tables w/ `app_runtime` role |
@@ -165,23 +165,27 @@ entityGet for the PK / filtered list for custom column), entity-mask (caps for
 entityList), accounting, email-templates, settings/variant-templates,
 ai/useAiData, RecipientAutosuggest, setup/SetupGuide.
 
-STILL ON /api/data (remaining):
-- `packages/ui/components/document-editor.tsx` — ~17 reads + a documentLine
-  create. CARE: its `/api/data` POST documentLine hits DocumentService.create-
-  DocumentLine (special-case in the route); map to `sales.documentLine.create`
-  only after confirming that cap delegates to the same service. A couple of its
-  lists need controls too: `articleVariant.list` (limit 500 + orderBy sku — bump
-  past the 200 cap or page) and `documentLine.list` (orderBy lineNo); enhance
-  those two bespoke lists with the shared controls like article/address/document.
-- apps/web `articles.tsx` (~22 calls: paginated main grid via entityListPage +
-  many lookups/writes), `addresses.tsx` (~9), `documents.tsx` (~7: company/
-  address/documentGroup/warehouse/documentLine + /api/me — keep /api/me).
-- `settings/index.tsx`.
-- `email.tsx` — DEFERRED (task #11; tangled with OAuth/webhooks/PDF). Its only
-  /api/data read is emailTemplateRenderLog list → migrate opportunistically.
-- Then `git rm apps/web/src/routes/api/data/$.ts` (move its sibling pure helper
-  `-address-contact-lookup.ts` out first; `email-recipient-autocomplete.ts`
-  imports `formatAddressContactName` from it). KEEP `/api/admin/data/$.ts`.
+PHASE 5 COMPLETE. `/api/data/$.ts` is deleted; every consumer runs on the
+capability runtime. `documentLine` create routes through a standalone cap backed
+by `DocumentService.createDocumentLine` (returns `{ lines }`, incl. exploded BOM
+rows). `sales.documentLine.create` reverted to plain insert for tracking/
+allocation only. KEPT: `/api/admin/data/$.ts` (system-admin introspection; the
+entity-mask branches to raw fetch when `apiBase === "/api/admin/data"`), the
+`-address-contact-lookup` pure helper, `/api/me`, `/api/stats/*`, `/api/articles/*`
+(binary/pricing/bom), `/api/setup/initialize`, `/api/metadata/*`.
+
+Known follow-ups (not blocking): the `CapabilityKey` `no-redundant-type-
+constituents` lint warning is inherent to factories typing `entityName` as
+`string` (keys widen to `module.${string}.op`); harmless but could be tightened
+later. The new `masterdata.editable` by-id caps and the `documentLine.create`
+array shape mean generic `entitySave` is not used for documentLine.
 
 Verify reminder: `base` tenant id in CLAUDE.md is stale for the local docker DB —
 resolve by slug `base` (as capabilities.smoke.test.ts does) for in-process checks.
+
+## Phase 6 — next (AI projection + /api/ai/execute)
+Annotate ~20-25 caps with `exposure.ai`; build the `packages/agent` tool
+generator + orchestrator over `executeCapability`; delete hand-written tools.
+`exposure.ai.activeByDefault`/`group` already exist in the type. The by-id
+`masterdata.editable` create/update caps are `llm:"hidden"` on purpose — keep the
+AI write path on the natural-key `upsert`.

@@ -9,7 +9,7 @@
 | company_id | company_id | uuid | — |  |  |
 | warehouse_id | warehouse_id | uuid | — | NOT NULL |  |
 | inventory_item_id | inventory_item_id | uuid | — |  |  |
-| article_id | article_id | uuid | — | NOT NULL |  |
+| article_id | article_id | uuid | — |  |  |
 | on_hand_qty | on_hand_qty | numeric | — | NOT NULL, DEFAULT 0 |  |
 | reserved_qty | reserved_qty | numeric | — | NOT NULL, DEFAULT 0 |  |
 | as_of_at | as_of_at | timestamp with time zone | — |  |  |

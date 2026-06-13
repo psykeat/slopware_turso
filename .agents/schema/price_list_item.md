@@ -7,7 +7,7 @@
 | price_list_item_id | price_list_item_id | uuid | PK | NOT NULL, DEFAULT uuidv7() |  |
 | tenant_id | tenant_id | uuid | — | NOT NULL |  |
 | price_list_id | price_list_id | uuid | — | NOT NULL |  |
-| article_id | article_id | uuid | — | NOT NULL |  |
+| article_id | article_id | uuid | — |  |  |
 | variant_id | variant_id | uuid | — | NOT NULL |  |
 | price | price | numeric | — | NOT NULL |  |
 | valid_from | valid_from | date | — |  |  |

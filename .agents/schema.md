@@ -1,7 +1,7 @@
 # Slopware — Live Schema Index
 
-> Generated: 2026-06-10 17:42:30 UTC
-> Tables: 114
+> Generated: 2026-06-13 17:44:54 UTC
+> Tables: 118
 
 Here is the index of all database tables. Click on a table name to view its detailed columns, types, and business annotations.
 
@@ -39,7 +39,9 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [article_option_value](file:///home/ubuntu/slopware/.agents/schema/article_option_value.md) (_value_id_)
 - [article_variant](file:///home/ubuntu/slopware/.agents/schema/article_variant.md) (_variant_id_)
 - [article_variant_option_value](file:///home/ubuntu/slopware/.agents/schema/article_variant_option_value.md)
+- [article_variant_template](file:///home/ubuntu/slopware/.agents/schema/article_variant_template.md)
 - [bank_account](file:///home/ubuntu/slopware/.agents/schema/bank_account.md) (_bank_account_id_)
+- [capability_execution_log](file:///home/ubuntu/slopware/.agents/schema/capability_execution_log.md)
 - [category](file:///home/ubuntu/slopware/.agents/schema/category.md) (_category_id_)
 - [company](file:///home/ubuntu/slopware/.agents/schema/company.md) (_company_id_)
 - [connector_definition](file:///home/ubuntu/slopware/.agents/schema/connector_definition.md) (_connector_id_)
@@ -61,10 +63,12 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [email_account_user_grant](file:///home/ubuntu/slopware/.agents/schema/email_account_user_grant.md) (_email_account_user_grant_id_)
 - [email_attachment](file:///home/ubuntu/slopware/.agents/schema/email_attachment.md) (_email_attachment_id_)
 - [email_identity](file:///home/ubuntu/slopware/.agents/schema/email_identity.md) (_email_identity_id_)
+- [email_job](file:///home/ubuntu/slopware/.agents/schema/email_job.md) (_email_job_id_)
 - [email_label](file:///home/ubuntu/slopware/.agents/schema/email_label.md) (_email_label_id_)
 - [email_message](file:///home/ubuntu/slopware/.agents/schema/email_message.md) (_email_message_id_)
 - [email_message_label](file:///home/ubuntu/slopware/.agents/schema/email_message_label.md) (_email_message_label_id_)
 - [email_outbox](file:///home/ubuntu/slopware/.agents/schema/email_outbox.md) (_email_outbox_id_)
+- [email_subscription](file:///home/ubuntu/slopware/.agents/schema/email_subscription.md)
 - [email_sync_state](file:///home/ubuntu/slopware/.agents/schema/email_sync_state.md) (_email_sync_state_id_)
 - [email_template](file:///home/ubuntu/slopware/.agents/schema/email_template.md) (_email_template_id_)
 - [email_template_binding](file:///home/ubuntu/slopware/.agents/schema/email_template_binding.md) (_email_template_binding_id_)

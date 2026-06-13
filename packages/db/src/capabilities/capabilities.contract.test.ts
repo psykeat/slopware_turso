@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test, { after } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
 
 import "../scripts/load-env";
 import { closeDb } from "../index";
+import { allCapabilities } from "./all";
 import { executeCapability } from "./core/execute";
 import { defineCapability } from "./core/define";
 import { registerCapabilities } from "./core/registry";
 import type { ExecutionContext } from "./core/types";
+import {
+  buildEntityCapabilityManifest,
+  serializeEntityCapabilityManifest,
+} from "./manifest-build";
 import {
   capabilityIndex,
   capabilityInputJsonSchema,
@@ -190,6 +197,18 @@ test("ai projections are well-formed when present", () => {
       assert.match(ai.toolName, /^[a-z]+(_[a-z][a-zA-Z0-9]*)+$/);
     }
   }
+});
+
+test("entity capability manifest is in sync with the registry", () => {
+  // The generated manifest is imported by client bundles, so it must never
+  // drift from the registry. Regenerate in-memory and compare byte-for-byte;
+  // run `pnpm run generate:manifest` (packages/db) if this fails.
+  const expected = serializeEntityCapabilityManifest(
+    buildEntityCapabilityManifest(allCapabilities),
+  );
+  const actualPath = fileURLToPath(new URL("./manifest.generated.ts", import.meta.url));
+  const actual = readFileSync(actualPath, "utf8");
+  assert.equal(actual, expected, "manifest.generated.ts is stale — run pnpm run generate:manifest");
 });
 
 after(async () => {

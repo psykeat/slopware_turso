@@ -555,6 +555,9 @@ importers:
       '@lexical/utils':
         specifier: 'catalog:'
         version: 0.45.0
+      '@repo/db':
+        specifier: workspace:*
+        version: link:../db
       '@tanstack/react-form':
         specifier: 'catalog:'
         version: 1.33.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)

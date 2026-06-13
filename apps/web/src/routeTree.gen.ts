@@ -32,6 +32,7 @@ import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
 import { Route as ApiDeliveryAddressesDeliveryAddressIdRouteImport } from './routes/api/delivery-addresses/$deliveryAddressId'
 import { Route as ApiCapabilitiesKeyRouteImport } from './routes/api/capabilities/$key'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiAiExecuteRouteImport } from './routes/api/ai/execute'
 import { Route as ApiAiSplatRouteImport } from './routes/api/ai/$'
 import { Route as ApiAdminLlmConfigRouteImport } from './routes/api/admin/llm-config'
 import { Route as ApiAdminCyclesRouteImport } from './routes/api/admin/cycles'
@@ -179,6 +180,11 @@ const ApiCapabilitiesKeyRoute = ApiCapabilitiesKeyRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAiExecuteRoute = ApiAiExecuteRouteImport.update({
+  id: '/api/ai/execute',
+  path: '/api/ai/execute',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAiSplatRoute = ApiAiSplatRouteImport.update({
@@ -387,6 +393,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
+  '/api/ai/execute': typeof ApiAiExecuteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
@@ -442,6 +449,7 @@ export interface FileRoutesByTo {
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
+  '/api/ai/execute': typeof ApiAiExecuteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
@@ -502,6 +510,7 @@ export interface FileRoutesById {
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
+  '/api/ai/execute': typeof ApiAiExecuteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
   '/api/delivery-addresses/$deliveryAddressId': typeof ApiDeliveryAddressesDeliveryAddressIdRoute
@@ -561,6 +570,7 @@ export interface FileRouteTypes {
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
     | '/api/ai/$'
+    | '/api/ai/execute'
     | '/api/auth/$'
     | '/api/capabilities/$key'
     | '/api/delivery-addresses/$deliveryAddressId'
@@ -616,6 +626,7 @@ export interface FileRouteTypes {
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
     | '/api/ai/$'
+    | '/api/ai/execute'
     | '/api/auth/$'
     | '/api/capabilities/$key'
     | '/api/delivery-addresses/$deliveryAddressId'
@@ -675,6 +686,7 @@ export interface FileRouteTypes {
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
     | '/api/ai/$'
+    | '/api/ai/execute'
     | '/api/auth/$'
     | '/api/capabilities/$key'
     | '/api/delivery-addresses/$deliveryAddressId'
@@ -724,6 +736,7 @@ export interface RootRouteChildren {
   ApiAdminCyclesRoute: typeof ApiAdminCyclesRoute
   ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRouteWithChildren
   ApiAiSplatRoute: typeof ApiAiSplatRoute
+  ApiAiExecuteRoute: typeof ApiAiExecuteRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDeliveryAddressesDeliveryAddressIdRoute: typeof ApiDeliveryAddressesDeliveryAddressIdRoute
   ApiEmailSplatRoute: typeof ApiEmailSplatRoute
@@ -911,6 +924,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai/execute': {
+      id: '/api/ai/execute'
+      path: '/api/ai/execute'
+      fullPath: '/api/ai/execute'
+      preLoaderRoute: typeof ApiAiExecuteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/ai/$': {
@@ -1298,6 +1318,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminCyclesRoute: ApiAdminCyclesRoute,
   ApiAdminLlmConfigRoute: ApiAdminLlmConfigRouteWithChildren,
   ApiAiSplatRoute: ApiAiSplatRoute,
+  ApiAiExecuteRoute: ApiAiExecuteRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDeliveryAddressesDeliveryAddressIdRoute:
     ApiDeliveryAddressesDeliveryAddressIdRoute,

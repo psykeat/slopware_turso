@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
+import { entityDelete, entityGet, entityList, entityListPage, entitySave } from "#/lib/entity-capabilities";
 
 export const Route = createFileRoute("/_auth/app/addresses")({
   component: AddressesModule,
@@ -130,13 +131,7 @@ function AddressContactsSection({
 
   const { mutate: saveContactNote } = useMutation({
     mutationFn: async ({ contactId, notiztext }: { contactId: string; notiztext: string }) => {
-      const res = await fetch(`/api/data/addressContact/${contactId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notiztext }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<any[]>;
+      return entitySave("addressContact", contactId, { notiztext });
     },
     onMutate: async ({ contactId, notiztext }) => {
       await queryClient.cancelQueries({ queryKey: contactsQueryKey });
@@ -302,19 +297,21 @@ function AddressesModule() {
       gridState.queryParams.filters,
     ],
     queryFn: async () => {
-      const p = new URLSearchParams({
-        paginated: "true",
-        page: String(gridState.queryParams.page),
-        limit: String(gridState.queryParams.limit),
+      const { page, limit, orderBy, search, filters } = gridState.queryParams;
+      const filterRules = [
+        ...((filters as Array<{ col: string; op: string; val: string }>) ?? []),
+        ...(selectedCategoryId
+          ? [{ col: "addressCategoryId", op: "eq", val: selectedCategoryId }]
+          : []),
+      ];
+      const { items, total } = await entityListPage<any>("address", {}, {
+        limit,
+        offset: (page - 1) * limit,
+        orderBy: orderBy || undefined,
+        search: search || undefined,
+        filterRules: filterRules.length ? filterRules : undefined,
       });
-      if (selectedCategoryId) p.set("addressCategoryId", selectedCategoryId);
-      if (gridState.queryParams.orderBy) p.set("orderBy", gridState.queryParams.orderBy);
-      if (gridState.queryParams.search) p.set("search", gridState.queryParams.search);
-      if (gridState.queryParams.filters)
-        p.set("filters", JSON.stringify(gridState.queryParams.filters));
-      const res = await fetch(`/api/data/address?${p}`);
-      if (!res.ok) throw new Error("Failed to fetch addresses");
-      return res.json() as Promise<{ data: any[]; total: number }>;
+      return { data: items, total };
     },
   });
 
@@ -323,11 +320,7 @@ function AddressesModule() {
   // Fetch categories for tree
   const { data: categories = EMPTY_ARRAY, isLoading: isTreeLoading } = useQuery({
     queryKey: ["data", "addressCategory"],
-    queryFn: async () => {
-      const res = await fetch("/api/data/addressCategory");
-      if (!res.ok) throw new Error("Failed to fetch categories");
-      return res.json();
-    },
+    queryFn: () => entityList<any>("addressCategory"),
     select: useCallback(
       (data: any[]) =>
         data.map(
@@ -369,22 +362,14 @@ function AddressesModule() {
 
   const { data: contacts = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "addressContact", activeAddressId],
-    queryFn: async () => {
-      const res = await fetch(`/api/data/addressContact?addressId=${activeAddressId}`);
-      if (!res.ok) throw new Error("Failed to fetch contacts");
-      return res.json();
-    },
+    queryFn: () => entityList("addressContact", { addressId: activeAddressId! }),
     enabled: !!activeAddressId,
     placeholderData: keepPreviousData,
   });
 
   const { data: deliveryAddresses = EMPTY_ARRAY } = useQuery({
     queryKey: ["data", "deliveryAddress", activeAddressId],
-    queryFn: async () => {
-      const res = await fetch(`/api/data/deliveryAddress?addressId=${activeAddressId}`);
-      if (!res.ok) throw new Error("Failed to fetch delivery addresses");
-      return res.json();
-    },
+    queryFn: () => entityList("deliveryAddress", { addressId: activeAddressId! }),
     enabled: !!activeAddressId,
     placeholderData: keepPreviousData,
   });
@@ -431,14 +416,12 @@ function AddressesModule() {
       isEnabled: (s) => !!s.recordId && s.entity === "address",
       handler: async (s) => {
         if (!s.recordId) return;
-        const srcRes = await fetch(`/api/data/address/${s.recordId}`);
-        if (!srcRes.ok) return;
-        const { addressId: _id, ...copy } = await srcRes.json();
-        await fetch("/api/data/address", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(copy),
-        });
+        const source = await entityGet<Record<string, any>>("address", s.recordId).catch(
+          () => null,
+        );
+        if (!source) return;
+        const { addressId: _id, ...copy } = source;
+        await entitySave("address", null, copy);
         queryClient.invalidateQueries({ queryKey: ["data", "address"] });
       },
     });
@@ -884,14 +867,7 @@ function AddressesModule() {
                 variant: "destructive" as const,
                 onClick: async (keys: string[]) => {
                   try {
-                    await Promise.all(
-                      keys.map(async (id) => {
-                        const res = await fetch(`/api/data/address/${id}`, {
-                          method: "DELETE",
-                        });
-                        if (!res.ok) throw new Error(await res.text());
-                      }),
-                    );
+                    await Promise.all(keys.map((id) => entityDelete("address", id)));
                     queryClient.invalidateQueries({ queryKey: ["data", "address"] });
                   } catch (err) {
                     toast.error(
@@ -954,12 +930,12 @@ function AddressesModule() {
                 className="h-8 rounded bg-destructive px-4 text-[13px] text-white hover:opacity-90"
                 onClick={async () => {
                   if (!deleteId) return;
-                  const res = await fetch(`/api/data/address/${deleteId}`, {
-                    method: "DELETE",
-                  });
-                  if (!res.ok) {
-                    const message = await res.text();
-                    toast.error(message || t("form.fkViolationError"));
+                  try {
+                    await entityDelete("address", deleteId);
+                  } catch (err) {
+                    toast.error(
+                      (err instanceof Error && err.message) || t("form.fkViolationError"),
+                    );
                     return;
                   }
                   setDeleteConfirm(false);

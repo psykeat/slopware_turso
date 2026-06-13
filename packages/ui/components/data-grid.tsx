@@ -35,6 +35,7 @@ import React, {
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { entityListPage } from "../lib/entity-capabilities";
 import { cn } from "../lib/utils";
 import { useFocus } from "../platform/focus-manager";
 import type { FilterOp, FilterRule } from "../types/grid";
@@ -1247,8 +1248,6 @@ function DataGridInner<T>(
     setExporting(true);
 
     try {
-      const params = new URLSearchParams();
-
       const effectiveSort = onSortChange
         ? sort
           ? { key: sort.key, dir: sort.dir }
@@ -1256,23 +1255,21 @@ function DataGridInner<T>(
         : internalSorting.length > 0
           ? { key: internalSorting[0].id, dir: internalSorting[0].desc ? "desc" : "asc" }
           : null;
-      if (effectiveSort) {
-        params.set("orderBy", `${effectiveSort.key}:${effectiveSort.dir}`);
+      const listOpts = {
+        orderBy: effectiveSort ? `${effectiveSort.key}:${effectiveSort.dir}` : undefined,
+        search: localSearch || undefined,
+        filterRules: filtersProp && filtersProp.length > 0 ? filtersProp : undefined,
+        limit: 200,
+      };
+
+      // List caps cap each call at 200 rows; page through to the full result so
+      // export keeps the unbounded behaviour the /api/data route had.
+      const exportData: any[] = [];
+      for (let offset = 0; ; offset += 200) {
+        const { items, total } = await entityListPage<any>(entityName, {}, { ...listOpts, offset });
+        exportData.push(...items);
+        if (items.length === 0 || exportData.length >= total) break;
       }
-
-      if (localSearch) {
-        params.set("search", localSearch);
-      }
-
-      if (filtersProp && filtersProp.length > 0) {
-        params.set("filters", JSON.stringify(filtersProp));
-      }
-
-      const res = await fetch(`/api/data/${entityName}?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to fetch export data");
-
-      const fullData = await res.json();
-      const exportData = Array.isArray(fullData) ? fullData : fullData.data || [];
 
       if (!exportData || exportData.length === 0) {
         toast.warning("No records to export");

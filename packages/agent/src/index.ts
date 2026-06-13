@@ -279,6 +279,5 @@ export function createAnthropicProvider(config: AnthropicProviderConfig = {}): A
 export { normalizeModelForProvider, normalizeProvider, maxIterations };
 export type { StreamChunk };
 
-export * from "./tools";
-export * from "./mutations";
+export * from "./mail-resolution-tools";
 export * from "./capability-tools";

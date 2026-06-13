@@ -18,6 +18,7 @@ import { categoryCapabilities } from "./modules/masterdata.category";
 import { countryCapabilities } from "./modules/masterdata.country";
 import { currencyCapabilities } from "./modules/masterdata.currency";
 import { deliveryAddressCapabilities } from "./modules/masterdata.delivery-address";
+import { editableMasterdataCapabilities } from "./modules/masterdata.editable";
 import { paymentTermCapabilities } from "./modules/masterdata.payment-term";
 import { priceListCapabilities } from "./modules/masterdata.price-list";
 import { masterdataRemainingCapabilities } from "./modules/masterdata.remaining";
@@ -48,6 +49,7 @@ export const allCapabilities = [
   ...countryCapabilities,
   ...currencyCapabilities,
   ...deliveryAddressCapabilities,
+  ...editableMasterdataCapabilities,
   ...variantTemplateCapabilities,
   ...paymentTermCapabilities,
   ...priceListCapabilities,

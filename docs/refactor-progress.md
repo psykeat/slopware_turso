@@ -50,7 +50,7 @@ Lint once at the very end of a phase: `vp lint` (never mid-phase).
 | 5 Read migration + delete /api/data | ✅ | manifest+resolver+helpers, gap read-caps, by-id write-caps, enhanced list contract (orderBy/pagination/total/filterRules), all consumers migrated incl. document-editor + articles/addresses/documents/settings + email template reads; **`/api/data/$.ts` deleted** (`f9abe012`), `/api/admin/data` kept. `vp lint`: 0 errors, 7 pre-existing warnings |
 | 6 AI projection + /api/ai/execute | ✅ | `4df40639` 20 caps annotated (`exposure.ai`) + tool-name uniqueness test; `5aa71a15` `buildCapabilityTools` generator + tests; `26b33304` `/api/ai/execute` orchestrator; `be9347d1` deleted dead hand-written CRUD/mutation tools (kept bespoke mail-resolution scorers) |
 | 7 Idempotency enforcement | ✅ | `35f56de0` `capability_execution_log` table (unique tenant+key) + migration `20260613134402`; `executeCapability` claim-pending/replay/conflict for non-read writes; Idempotency-Key header wired; `capabilities.idempotency.test.ts` (5 cases) |
-| 8 RLS pilot | ⬜ HIGH RISK | `runWithTenantContext` + AsyncLocalStorage db proxy in `executeCapability`; then RLS on 5 tables w/ `app_runtime` role |
+| 8 RLS pilot | ✅ (dormant) | `76f91803` ALS db proxy + tx-local GUC in `executeCapability` behind `CAPABILITY_RLS=1`; `e7c50f3b` migration `20260613173607_rls_pilot` (app_runtime role + ENABLE RLS + NULLIF policies on 5 tables) + `capabilities.rls.test.ts`. **Connection cutover (DATABASE_URL → app_runtime) NOT done — see follow-ups.** |
 | 9 Cleanup + guardrails + docs | ⬜ | ESLint no-fetch rules, AI_TESTING.md, finalize plan docs |
 | (deferred) email.tsx + doc email-compose | ⬜ | tangled w/ OAuth/webhooks/PDF render/job-queue; own phase; `/api/email/$` must survive |
 
@@ -246,9 +246,45 @@ generated `.agents/schema*` docs were deliberately NOT regenerated here (a
 `pnpm run docs` pass surfaces pre-existing drift in unrelated tables — keep that
 a separate housekeeping commit).
 
-## Phase 8 — next (RLS pilot) ⚠️ HIGH RISK
-Per the standing instruction: **pause and surface a summary before starting.**
-Plan: `runWithTenantContext` + an AsyncLocalStorage db proxy in
-`executeCapability` that sets a transaction-local tenant via `set_config`/`SET
-LOCAL` (critical under connection pooling), then RLS policies on ~5 tables with
-an `app_runtime` role. Then Phase 9 (ESLint no-fetch guardrails + docs).
+## Phase 8 — DONE but DORMANT (RLS pilot) ⚠️
+- **Plumbing** (`76f91803`): `index.ts` exports an AsyncLocalStorage-bound Proxy
+  over drizzle — inside `runWithDbTx(tx, fn)` every global-`db` query routes to
+  `tx`; with no store it is identical to before. `dbTransaction` opens on the
+  base connection. `executeCapability`, behind `CAPABILITY_RLS=1` (default OFF),
+  wraps the whole execution in one tx that sets a transaction-local
+  `app.tenant_id` via `set_config(..., true)`. Nested service transactions
+  become savepoints and inherit the GUC.
+- **Migration + policies** (`e7c50f3b`): `20260613173607_rls_pilot` — NOLOGIN
+  `app_runtime` role (granted to owner for `SET ROLE`), `ENABLE` (not `FORCE`)
+  RLS on address/article/document/document_line/email_thread with policy
+  `tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid`. The
+  `NULLIF` empty-string guard is load-bearing: a pooled connection reports a
+  previously-set local GUC as `''` after the tx, so without it an unscoped query
+  would error on `''::uuid` instead of failing closed to zero rows.
+- **Proof** (`capabilities.rls.test.ts`, 5 cases via `SET ROLE app_runtime`):
+  own-tenant-only visibility, no-GUC→0 rows, `WITH CHECK` blocks cross-tenant
+  moves, owner bypasses RLS, proxy routes global `db`→active tx.
+
+Verify: 39 capability tests green flag-off (incl. 5 RLS); 13 write-heavy green
+with `CAPABILITY_RLS=1`; `build:web` ✅; `vp lint` 0 errors, 7 pre-existing warns.
+
+### Phase 8 follow-ups before this enforces in production (the risky cutover)
+RLS is **dormant**: the app still connects as the owner (bypasses RLS) and
+`CAPABILITY_RLS` is off. To actually enforce, all of the below must land first:
+1. **Audit every non-capability DB path** (jobs, seeds, scripts, `/api/me`,
+   `/api/stats`, `/api/admin/data`, `/api/articles`, auth, the email/AI mail
+   pipeline, `AIOrchestratorService`) — under `app_runtime` they'd hit RLS and
+   either need the GUC set or to keep using an owner/bypass connection.
+2. Grant `app_runtime` DML on **all** tables it must touch (only the 5 pilot
+   tables are granted today) and decide owner-vs-app_runtime per connection.
+3. Provision an `app_runtime` **LOGIN** role + secret and point a dedicated
+   runtime `DATABASE_URL` at it (the migration role stays owner so migrations
+   keep bypassing RLS).
+4. Flip `CAPABILITY_RLS=1` for the runtime and roll out gradually.
+Consider `FORCE ROW LEVEL SECURITY` only after the cutover is proven.
+
+## Phase 9 — next (cleanup + guardrails + docs)
+ESLint no-`fetch("/api/data")` / no-raw-`db`-in-routes guardrails; refresh
+`AI_TESTING.md`; regenerate `.agents/schema*` docs (a clean `pnpm run docs`
+housekeeping pass — note it also clears pre-existing drift in unrelated tables);
+finalize the plan docs.

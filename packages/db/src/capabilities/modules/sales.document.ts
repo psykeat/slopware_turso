@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { DataService } from "../../services/data";
+import { DocumentPdfService } from "../../services/document-pdf-service";
 import { DocumentService } from "../../services/document-service";
 import { LogisticsService } from "../../services/logistics-service";
 import { defineCapability } from "../core/define";
@@ -323,6 +324,44 @@ export const documentStorno = defineCapability({
   },
 });
 
+export const documentMaterializePdf = defineCapability({
+  module: "sales",
+  entityName: "document",
+  operation: "materializePdf",
+  // No database mutation: reads the document and writes a derived PDF artifact to
+  // object storage. It is automatic (never an approval/write-boundary) in the
+  // send chain, so it is a read in the registry's taxonomy.
+  kind: "read",
+  summary: { en: "Materialize a document PDF", de: "Beleg-PDF erzeugen" },
+  description: {
+    en: "Renders the document to a PDF and stores it so it can be attached to an email. Its own verb — prepareSend does not render implicitly. Re-running overwrites the same file.",
+    de: "Rendert den Beleg als PDF und speichert ihn, damit er an eine E-Mail angehängt werden kann. Eigenes Verb — prepareSend rendert nicht implizit. Erneutes Ausführen überschreibt dieselbe Datei.",
+  },
+  input: z.object({ documentId: z.uuid() }),
+  output: z.object({ fileId: z.string() }),
+  writesTables: [],
+  sideEffects: ["renders and stores the document PDF file"],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "sales-documents",
+      activeByDefault: true,
+      useWhen: [
+        "You need the document as a PDF file before attaching it to an email draft (e.g. before communication.emailOutbox.prepareSend).",
+      ],
+      requiredContext: ["documentId"],
+      resultShape: "{ fileId }",
+    },
+  },
+  schemaVersion: 1,
+  handler: async (ctx, input) =>
+    new DocumentPdfService().materialize(ctx.tenantId, input.documentId),
+});
+
 export const documentDuplicate = defineCapability({
   module: "sales",
   entityName: "document",
@@ -619,6 +658,7 @@ export const documentCapabilities = [
   documentGet,
   documentUpdate,
   documentCreate,
+  documentMaterializePdf,
   documentSaveDraft,
   documentPost,
   documentStorno,

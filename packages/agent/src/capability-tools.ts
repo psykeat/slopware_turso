@@ -83,17 +83,18 @@ export function capabilityToolDescription(capability: AnyCapability): string {
 }
 
 /**
- * Build the @tanstack/ai server tools for one request. The `ctx` is closed over
- * so the model can never set tenant/actor itself — exactly the factory pattern
- * the bespoke mail tools used.
+ * Turn a fixed set of capabilities into @tanstack/ai server tools. The `ctx` is
+ * closed over so the model can never set tenant/actor itself — exactly the
+ * factory pattern the bespoke mail tools used.
  */
-export function buildCapabilityTools(
+function capabilitiesToTools(
   ctx: ExecutionContext,
-  options: BuildCapabilityToolsOptions = {},
+  capabilities: AnyCapability[],
+  confirmMode: ConfirmMode,
 ) {
-  const requireApproval = (options.confirmMode ?? "approval") === "approval";
+  const requireApproval = confirmMode === "approval";
 
-  return listAiCapabilities(options).map((capability) => {
+  return capabilities.map((capability) => {
     const definition = toolDefinition({
       name: capabilityToolName(capability),
       description: capabilityToolDescription(capability),
@@ -113,4 +114,66 @@ export function buildCapabilityTools(
       return { ok: false, error: result.error };
     });
   });
+}
+
+/**
+ * Build the @tanstack/ai server tools for one request from a group/keys scope.
+ */
+export function buildCapabilityTools(
+  ctx: ExecutionContext,
+  options: BuildCapabilityToolsOptions = {},
+) {
+  return capabilitiesToTools(ctx, listAiCapabilities(options), options.confirmMode ?? "approval");
+}
+
+export interface OverlayToolsOptions {
+  /**
+   * The conversation's focused group(s), seeded from the Invocation Context.
+   * A single value or several (e.g. a mail thread about a quote naturally spans
+   * `["mail", "sales-documents"]`). Writes are curated to these groups.
+   */
+  focusGroups?: string | string[];
+  /** Confirm policy for write capabilities. Defaults to "approval". */
+  confirmMode?: ConfirmMode;
+}
+
+/**
+ * Select the overlay's capabilities under the **"reads global, writes scoped"**
+ * rule:
+ * - **Backbone** — every AI-exposed `kind: "read"` capability across *all*
+ *   groups. This is the Exploration backbone and never a thinking boundary, so
+ *   the model can look anything up regardless of the focused group.
+ * - **Focus group** — every AI-exposed capability (read *and* write) in the
+ *   group seeded from the Invocation Context. Writes are curated to this group;
+ *   switching focus widens the writable set.
+ */
+export function selectOverlayCapabilities(
+  focusGroups?: string | string[],
+): AnyCapability[] {
+  const focus = new Set(typeof focusGroups === "string" ? [focusGroups] : (focusGroups ?? []));
+  const exposed = listCapabilities({ llm: ["safe", "confirm"] }).filter(
+    (capability) => capability.exposure.ai,
+  );
+
+  const selected = new Map<string, AnyCapability>();
+  for (const capability of exposed) {
+    const isBackboneRead = capability.kind === "read";
+    const inFocusGroup = focus.has(capability.exposure.ai!.group);
+    if (isBackboneRead || inFocusGroup) {
+      selected.set(capability.key, capability);
+    }
+  }
+  return [...selected.values()];
+}
+
+/**
+ * Build the interactive overlay toolset (`/api/ai/chat`). Reads are global,
+ * writes are scoped to the focused group(s) and gated by the approval handshake.
+ */
+export function buildOverlayTools(ctx: ExecutionContext, options: OverlayToolsOptions = {}) {
+  return capabilitiesToTools(
+    ctx,
+    selectOverlayCapabilities(options.focusGroups),
+    options.confirmMode ?? "approval",
+  );
 }

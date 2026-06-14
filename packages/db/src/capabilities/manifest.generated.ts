@@ -279,6 +279,7 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
       "duplicateCandidates": { key: "sales.document.duplicateCandidates" },
       "get": { key: "sales.document.get", idParam: "documentId" },
       "list": { key: "sales.document.list", filtersWrapped: false },
+      "materializePdf": { key: "sales.document.materializePdf" },
       "post": { key: "sales.document.post" },
       "pricing": { key: "sales.document.pricing" },
       "saveDraft": { key: "sales.document.saveDraft" },

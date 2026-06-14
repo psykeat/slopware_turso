@@ -5,8 +5,10 @@ import { capabilityInputJsonSchema, type AnyCapability } from "@repo/db/capabili
 
 import {
   buildCapabilityTools,
+  buildOverlayTools,
   capabilityToolName,
   listAiCapabilities,
+  selectOverlayCapabilities,
 } from "./capability-tools";
 
 const ctx = {
@@ -110,6 +112,51 @@ test("buildCapabilityTools delegates to executeCapability for unknown ctx safely
   };
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "validation");
+});
+
+test("overlay selector: reads are global, writes are scoped to the focus group", () => {
+  const focusGroup = "mail";
+  const selected = selectOverlayCapabilities(focusGroup);
+  const keys = new Set(selected.map((c) => c.key));
+
+  // Backbone: every kind:read AI capability is present regardless of group.
+  for (const cap of listAiCapabilities({ activeByDefaultOnly: false })) {
+    if (cap.kind === "read") {
+      assert.ok(keys.has(cap.key), `read backbone must include ${cap.key}`);
+    }
+  }
+
+  // A read from a foreign group (sales-documents) is still available...
+  assert.ok(keys.has("sales.document.get"), "cross-group read must be in the backbone");
+
+  // ...but a foreign-group WRITE (confirm) is not writable from the mail focus.
+  assert.ok(
+    !keys.has("sales.document.post"),
+    "out-of-focus confirm write must not be selected",
+  );
+
+  // The focused group's own write IS available.
+  assert.ok(
+    keys.has("communication.emailOutbox.confirmSend"),
+    "focused-group write must be selected",
+  );
+});
+
+test("overlay selector: materializePdf is a global read backbone tool", () => {
+  const selected = selectOverlayCapabilities("mail");
+  assert.ok(
+    selected.some((c) => c.key === "sales.document.materializePdf"),
+    "materializePdf (kind:read) belongs to the exploration backbone",
+  );
+});
+
+test("buildOverlayTools marks focused-group confirm writes as needsApproval", () => {
+  const tools = buildOverlayTools(ctx, { focusGroups: "mail", confirmMode: "approval" });
+  const confirmSend = tools.find(
+    (t) => (t as { name?: string }).name === "communication_confirmSend_emailOutbox",
+  ) as { needsApproval?: boolean } | undefined;
+  assert.ok(confirmSend, "confirmSend tool present in mail focus");
+  assert.equal(confirmSend!.needsApproval, true);
 });
 
 function findCapability(key: string): AnyCapability {

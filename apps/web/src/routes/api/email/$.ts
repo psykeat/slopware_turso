@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { auth } from "@repo/auth/auth";
+import { DocumentPdfService } from "@repo/db/services/document-pdf-service";
 import { EmailAccountService } from "@repo/db/services/email/account-service";
 import { EmailDocumentService } from "@repo/db/services/email/document-service";
 import { EmailJobService } from "@repo/db/services/email/job-service";
@@ -216,38 +217,6 @@ function jsonError(status: number, message: string, details?: Record<string, unk
 
 function storageRoot() {
   return join(process.cwd(), "storage");
-}
-
-function documentPdfStorageKey(tenantId: string, documentId: string) {
-  return `tenant-${tenantId}/documents/${documentId}.pdf`;
-}
-
-function documentPdfStoragePath(storageKey: string) {
-  return join(storageRoot(), storageKey);
-}
-
-async function ensureDocumentPdfAttachment(request: Request, tenantId: string, documentId: string) {
-  const storageKey = documentPdfStorageKey(tenantId, documentId);
-  const path = documentPdfStoragePath(storageKey);
-  try {
-    await mkdir(join(storageRoot(), `tenant-${tenantId}`, "documents"), { recursive: true });
-    const existing = await fetchDocumentPdf(request, documentId);
-    await writeFile(path, new Uint8Array(await existing.arrayBuffer()));
-    return storageKey;
-  } catch (error) {
-    console.error("[email] failed to materialize document pdf", error);
-    throw error;
-  }
-}
-
-async function fetchDocumentPdf(request: Request, documentId: string) {
-  const url = new URL(request.url);
-  url.pathname = `/api/documents/${documentId}/print`;
-  const res = await fetch(url, { headers: new Headers(request.headers) });
-  if (!res.ok) {
-    throw new Error(`Failed to render document PDF: ${await res.text()}`);
-  }
-  return res;
 }
 
 function parseAddressList(value: unknown) {
@@ -592,7 +561,10 @@ async function handlePost(context: EmailContext) {
     if (typeof body.emailIdentityId !== "string" || !body.emailIdentityId) {
       return jsonError(400, "emailIdentityId is required");
     }
-    await ensureDocumentPdfAttachment(request, tenantId, segments[1]);
+    // Materialize the document PDF through the capability runtime's domain
+    // service (same path as sales.document.materializePdf) so prepareSend finds
+    // the attachment at the deterministic storage key.
+    await new DocumentPdfService().materialize(tenantId, segments[1]);
     const result = await new EmailDocumentService(tenantId, userId).prepareDocumentEmail({
       documentId: segments[1],
       emailIdentityId: String(body.emailIdentityId),

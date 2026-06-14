@@ -331,7 +331,19 @@ export const emailOutboxPrepareSend = defineCapability({
   idempotent: false,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
+  exposure: {
+    llm: "safe",
+    http: true,
+    ai: {
+      group: "mail",
+      activeByDefault: true,
+      useWhen: [
+        "You want to draft an email that sends a document (e.g. a quote or invoice) as a PDF. Materialize the PDF first with sales.document.materializePdf. This only creates a draft — it does not send.",
+      ],
+      requiredContext: ["documentId", "emailIdentityId"],
+      resultShape: "the prepared outbox draft incl. its outboxId and resolved recipients/attachments",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) =>
     withEmailAuthMapped(() =>
@@ -367,7 +379,18 @@ export const emailOutboxConfirmSend = defineCapability({
   idempotent: false,
   supportsDryRun: false,
   minRole: "tenant_user",
-  exposure: { llm: "confirm", http: true },
+  exposure: {
+    llm: "confirm",
+    http: true,
+    ai: {
+      group: "mail",
+      useWhen: [
+        "The user has approved sending a prepared email draft. This is the final, irreversible send — pass the outboxId returned by prepareSend.",
+      ],
+      requiredContext: ["outboxId"],
+      resultShape: "the sent outbox record",
+    },
+  },
   schemaVersion: 1,
   handler: async (ctx, input) =>
     withEmailAuthMapped(async () => {

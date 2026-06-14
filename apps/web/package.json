@@ -16,6 +16,8 @@
     "@repo/auth": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/ui": "workspace:*",
+    "@tanstack/ai": "catalog:",
+    "@tanstack/ai-client": "catalog:",
     "@tanstack/intent": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",

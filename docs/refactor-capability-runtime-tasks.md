@@ -1,0 +1,20 @@
+- [ ] Phase 1: Analyse & Vorbereitung
+    - [ ] `packages/db/src/capabilities/core/registry.ts` prüfen und anpassen
+    - [ ] DB-Migrationsstatus & Test-Datenbestand validieren
+- [ ] Phase 2: Domain Capabilities erweitern
+    - [ ] E-Mail-Klassifizierung als Capability implementieren (`communication.emailThread.classify`)
+    - [ ] Soft-Delete E-Mail-Thread Capability implementieren (`communication.emailThread.archive`)
+    - [ ] E-Mail-Thread Verknüpfung Capability implementieren (`communication.emailThread.link`)
+- [ ] Phase 3: AI Tool-Adapter Generator implementieren
+    - [ ] `createCapabilityTools(ctx)` in `packages/agent/src/tools.ts` implementieren
+    - [ ] Handgeschriebene Tools aus `packages/agent/src/tools.ts` und `mutations.ts` entfernen
+- [ ] Phase 4: API Routes & AI-Orchestrator refaktorieren
+    - [ ] Neuen Endpunkt `POST /api/ai/execute` in `apps/web/src/routes/api/ai/execute.ts` erstellen
+    - [ ] Catch-All Route `apps/web/src/routes/api/ai/$.ts` bereinigen
+- [ ] Phase 5: TanStack Start Server Functions einführen
+    - [ ] `executeServerCapability` Server Function in `apps/web/src/server-fns/capabilities.ts` implementieren
+    - [ ] UI-Queries und Mutations schrittweise auf Server Functions umstellen
+- [ ] Phase 6: Verifikation & Smoke-Tests
+    - [ ] In-process Unit- und Integrationstests ausführen
+    - [ ] HTTP-Smoke-Tests für Capabilities ausführen
+    - [ ] E2E-Smoke-Tests für den AI-Orchestrator-Durchlauf validieren

@@ -1,4 +1,11 @@
-import { chat, maxIterations, type StreamChunk } from "@tanstack/ai";
+import {
+  chat,
+  chatParamsFromRequest,
+  maxIterations,
+  mergeAgentTools,
+  toServerSentEventsResponse,
+  type StreamChunk,
+} from "@tanstack/ai";
 import type { AnthropicChatModel } from "@tanstack/ai-anthropic";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import { GeminiTextAdapter, createGeminiChat } from "@tanstack/ai-gemini";
@@ -276,7 +283,16 @@ export function createAnthropicProvider(config: AnthropicProviderConfig = {}): A
   return createAnthropicProviderImpl(config);
 }
 
-export { normalizeModelForProvider, normalizeProvider, maxIterations };
+export {
+  normalizeModelForProvider,
+  normalizeProvider,
+  maxIterations,
+  // AG-UI wire helpers for the interactive chat endpoint (re-exported so app
+  // routes depend on @repo/agent, not @tanstack/ai internals directly).
+  chatParamsFromRequest,
+  mergeAgentTools,
+  toServerSentEventsResponse,
+};
 export type { StreamChunk };
 
 export * from "./mail-resolution-tools";

@@ -33,6 +33,7 @@ import { Route as ApiDeliveryAddressesDeliveryAddressIdRouteImport } from './rou
 import { Route as ApiCapabilitiesKeyRouteImport } from './routes/api/capabilities/$key'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAiExecuteRouteImport } from './routes/api/ai/execute'
+import { Route as ApiAiChatRouteImport } from './routes/api/ai/chat'
 import { Route as ApiAiSplatRouteImport } from './routes/api/ai/$'
 import { Route as ApiAdminLlmConfigRouteImport } from './routes/api/admin/llm-config'
 import { Route as ApiAdminCyclesRouteImport } from './routes/api/admin/cycles'
@@ -185,6 +186,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 const ApiAiExecuteRoute = ApiAiExecuteRouteImport.update({
   id: '/api/ai/execute',
   path: '/api/ai/execute',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAiChatRoute = ApiAiChatRouteImport.update({
+  id: '/api/ai/chat',
+  path: '/api/ai/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAiSplatRoute = ApiAiSplatRouteImport.update({
@@ -393,6 +399,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
+  '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/execute': typeof ApiAiExecuteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
@@ -449,6 +456,7 @@ export interface FileRoutesByTo {
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
+  '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/execute': typeof ApiAiExecuteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
@@ -510,6 +518,7 @@ export interface FileRoutesById {
   '/api/admin/cycles': typeof ApiAdminCyclesRoute
   '/api/admin/llm-config': typeof ApiAdminLlmConfigRouteWithChildren
   '/api/ai/$': typeof ApiAiSplatRoute
+  '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/execute': typeof ApiAiExecuteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/capabilities/$key': typeof ApiCapabilitiesKeyRouteWithChildren
@@ -570,6 +579,7 @@ export interface FileRouteTypes {
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
     | '/api/ai/$'
+    | '/api/ai/chat'
     | '/api/ai/execute'
     | '/api/auth/$'
     | '/api/capabilities/$key'
@@ -626,6 +636,7 @@ export interface FileRouteTypes {
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
     | '/api/ai/$'
+    | '/api/ai/chat'
     | '/api/ai/execute'
     | '/api/auth/$'
     | '/api/capabilities/$key'
@@ -686,6 +697,7 @@ export interface FileRouteTypes {
     | '/api/admin/cycles'
     | '/api/admin/llm-config'
     | '/api/ai/$'
+    | '/api/ai/chat'
     | '/api/ai/execute'
     | '/api/auth/$'
     | '/api/capabilities/$key'
@@ -736,6 +748,7 @@ export interface RootRouteChildren {
   ApiAdminCyclesRoute: typeof ApiAdminCyclesRoute
   ApiAdminLlmConfigRoute: typeof ApiAdminLlmConfigRouteWithChildren
   ApiAiSplatRoute: typeof ApiAiSplatRoute
+  ApiAiChatRoute: typeof ApiAiChatRoute
   ApiAiExecuteRoute: typeof ApiAiExecuteRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDeliveryAddressesDeliveryAddressIdRoute: typeof ApiDeliveryAddressesDeliveryAddressIdRoute
@@ -931,6 +944,13 @@ declare module '@tanstack/react-router' {
       path: '/api/ai/execute'
       fullPath: '/api/ai/execute'
       preLoaderRoute: typeof ApiAiExecuteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai/chat': {
+      id: '/api/ai/chat'
+      path: '/api/ai/chat'
+      fullPath: '/api/ai/chat'
+      preLoaderRoute: typeof ApiAiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/ai/$': {
@@ -1318,6 +1338,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminCyclesRoute: ApiAdminCyclesRoute,
   ApiAdminLlmConfigRoute: ApiAdminLlmConfigRouteWithChildren,
   ApiAiSplatRoute: ApiAiSplatRoute,
+  ApiAiChatRoute: ApiAiChatRoute,
   ApiAiExecuteRoute: ApiAiExecuteRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDeliveryAddressesDeliveryAddressIdRoute:

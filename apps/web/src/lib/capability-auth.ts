@@ -3,6 +3,9 @@ import { toCapabilityRole, type ExecutionContext } from "@repo/db/capabilities";
 import { getUserTenantRole } from "@repo/db/services/tenant";
 
 import { resolveTenantContext } from "#/lib/resolve-tenant";
+// Side-effect import: registers the server-side document-PDF renderer into the
+// capability runtime's render port (see register-document-pdf for the why).
+import "#/pdf/register-document-pdf";
 
 // Single place where HTTP callers become an ExecutionContext. Phase 3 adds an
 // x-api-key branch here (actorMode "external", tenant/role from key metadata

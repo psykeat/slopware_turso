@@ -28,7 +28,7 @@ React 19 · TanStack Start/Router/Query · Drizzle ORM · Better Auth · Tailwin
 
 ## Rules
 
-- Never run linting multiple times or for intermediate small changes within a single turn. Run it once at the end of the task.
+- Never run linting multiple times or for intermediate small changes within a single turn. Run it once at the end of the task, and only if actual code files (e.g. `.ts`, `.tsx`) were modified (never for markdown or documentation-only changes).
 - No hard delete for business data. Archive with `PATCH archived true`.
 - Tenant isolation is server-side only. Never trust client payloads for `tenantId`.
 - All keyboard shortcuts go through `CommandProvider`. No ad hoc keydown business logic.

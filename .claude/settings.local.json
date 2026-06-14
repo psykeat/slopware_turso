@@ -10,7 +10,8 @@
       "Bash(openssl rand *)",
       "Bash(curl -s -X POST http://localhost:3000/api/auth/sign-up/email -H 'Content-Type: application/json' -d '{\"name\":\"Capability Test\",\"email\":\"capability-test@slopware.dev\",\"password\":\"cap-__CMDSUB_OUTPUT__\"}' -w '\\\\nHTTP %{http_code}\\\\n')",
       "Bash(echo \"CAPABILITY_TEST_EMAIL=capability-test@slopware.dev\")",
-      "Bash(echo CAPABILITY_TEST_PASSWORD=cap-__CMDSUB_OUTPUT__)"
+      "Bash(echo CAPABILITY_TEST_PASSWORD=cap-__CMDSUB_OUTPUT__)",
+      "Bash(rg -l \"useChat\" node_modules/.pnpm/@tanstack+ai*/node_modules/@tanstack/ai/dist)"
     ]
   }
 }

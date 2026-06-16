@@ -210,7 +210,11 @@ function isDesignerNodeKind(value: unknown): value is DesignerNodeKind {
   return typeof value === "string" && designerNodeKinds.has(value as DesignerNodeKind);
 }
 
-function resolveLookupTable(entityName: string, colName: string) {
+// Single source of truth for "which table does this FK-shaped column look
+// up". Also used by ai-discovery.ts (assistant metadata discovery) and
+// seed-metadata.ts (tenant field seeding) so all three stay in sync instead
+// of drifting as separate hand-maintained copies.
+export function resolveLookupTable(entityName: string, colName: string) {
   if (colName === "variantId") {
     return "articleVariant";
   }
@@ -239,11 +243,23 @@ function resolveLookupTable(entityName: string, colName: string) {
     return "unit";
   }
 
+  if (colName === "addressCategoryId") {
+    return "addressCategory";
+  }
+
   if (colName.endsWith("Id") && colName !== "tenantId") {
     const potentialEntity = colName.slice(0, -2);
     if ((schema as any)[potentialEntity] && potentialEntity !== entityName) {
       return potentialEntity;
     }
+  }
+
+  if (colName === "countryCode") {
+    return "country";
+  }
+
+  if (colName === "currencyId") {
+    return "currency";
   }
 
   return undefined;

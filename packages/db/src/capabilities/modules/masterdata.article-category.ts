@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleCategoryRecordSchema = z.looseObject({
@@ -36,11 +37,9 @@ export const articleCategoryList = defineCapability({
   input: z.object({
     articleId: z.uuid().optional(),
     categoryId: z.uuid().optional(),
-    search: z.string().trim().min(1).optional(),
-    limit: z.number().int().min(1).max(200).default(50),
-    offset: z.number().int().min(0).default(0),
+    ...listControlsSchema,
   }),
-  output: z.object({ items: z.array(articleCategoryRecordSchema) }),
+  output: z.object({ items: z.array(articleCategoryRecordSchema), total: z.number().int().optional() }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -52,13 +51,7 @@ export const articleCategoryList = defineCapability({
     const filters: Record<string, string> = {};
     if (input.articleId) filters.articleId = input.articleId;
     if (input.categoryId) filters.categoryId = input.categoryId;
-    const rows = await new DataService(ctx.tenantId).list("articleCategory", filters, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "sortOrder:asc",
-    });
-    return { items: rows as z.output<typeof articleCategoryRecordSchema>[] };
+    return runEntityList(ctx.tenantId, "articleCategory", filters, input, "sortOrder:asc");
   },
 });
 

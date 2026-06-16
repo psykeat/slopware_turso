@@ -5,6 +5,7 @@ import { db } from "../../index";
 import { currency } from "../../schema/app.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const localizedTextSchema = z.record(z.string(), z.string());
@@ -41,11 +42,11 @@ export const currencyList = defineCapability({
   kind: "read",
   summary: { en: "List currencies", de: "Währungen auflisten" },
   input: z.object({
-    search: z.string().trim().min(1).optional(),
+    code: z.string().optional(),
+    ...listControlsSchema,
     limit: z.number().int().min(1).max(200).default(200),
-    offset: z.number().int().min(0).default(0),
   }),
-  output: z.object({ items: z.array(currencyRecordSchema) }),
+  output: z.object({ items: z.array(currencyRecordSchema), total: z.number().int().optional() }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -54,13 +55,9 @@ export const currencyList = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const rows = await new DataService(ctx.tenantId).list("currency", {}, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "code:asc",
-    });
-    return { items: rows as z.output<typeof currencyRecordSchema>[] };
+    const filters: Record<string, string> = {};
+    if (input.code) filters.code = input.code;
+    return runEntityList(ctx.tenantId, "currency", filters, input, "code:asc");
   },
 });
 

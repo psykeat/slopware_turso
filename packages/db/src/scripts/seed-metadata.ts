@@ -5,6 +5,7 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import { db } from "../index";
 import { tenantFields, helperTableRegistry } from "../schema/app.schema";
 import * as schema from "../schema/index";
+import { resolveLookupTable } from "../services/metadata";
 
 type FieldLabel = { en: string; de: string };
 type EntityLabelMap = Record<string, FieldLabel>;
@@ -57,6 +58,7 @@ const entityLabelMap: EntityLabelMap = {
   articleOptionValue: { en: "Article Option Values", de: "Artikeloptionswerte" },
   inventoryItem: { en: "Inventory Items", de: "Lagerartikel" },
   document: { en: "Documents", de: "Belege" },
+  agent: { en: "Agents", de: "Vertreter" },
   tenantLlmConfig: { en: "Tenant LLM Config", de: "Mandanten-KI-Konfiguration" },
   tenantEmailSettings: { en: "Email Settings", de: "E-Mail Einstellungen" },
 };
@@ -96,6 +98,18 @@ const fieldLabelMap: EntityLabelMap = {
   endpointUrl: { en: "Endpoint URL", de: "Endpoint-URL" },
   model: { en: "LLM Model", de: "KI-Modell" },
   apiKey: { en: "API Key", de: "API-Key" },
+  agentNo: { en: "Agent No", de: "Vertreter-Nr." },
+  commissionRate: { en: "Commission %", de: "Provision %" },
+  active: { en: "Active", de: "Aktiv" },
+  salutation: { en: "Salutation", de: "Anrede" },
+  phoneFax: { en: "Fax", de: "Telefax" },
+  leitwegId: { en: "Leitweg-ID", de: "Leitweg-ID" },
+  peppolId: { en: "Peppol ID", de: "Peppol-ID" },
+  coordinates: { en: "Coordinates", de: "Koordinaten" },
+  creditRatingScore: { en: "Credit Rating", de: "Bonitäts-Rating" },
+  shopActive: { en: "Shop Active", de: "Shop aktiv" },
+  twitterHandle: { en: "Twitter/X", de: "Twitter/X" },
+  youtubeUrl: { en: "YouTube", de: "YouTube" },
 };
 
 const technicalFieldNames = new Set([
@@ -122,6 +136,7 @@ const groupedEntitySets = {
     "addressCategory",
     "documentGroup",
     "industry",
+    "agent",
   ]),
   lager_artikel: new Set(["unit", "articleGroup", "warehouse"]),
   finanzen: new Set(["taxClass", "taxCode", "costCenter", "glAccount", "currency"]),
@@ -170,46 +185,6 @@ function getColumnTypeLabel(columnType: string | undefined): string {
   if (columnType === "PgBoolean") return "boolean";
   if (columnType === "PgTimestamp" || columnType === "PgDate") return "timestamp";
   return "text";
-}
-
-function getLookupTableName(
-  colName: string,
-  key: string,
-  schemaRef: typeof schema,
-): string | undefined {
-  if (colName === "variantId") {
-    return "articleVariant";
-  }
-
-  if (colName === "optionId") {
-    return "articleOption";
-  }
-
-  if (colName === "valueId") {
-    return "articleOptionValue";
-  }
-
-  if (colName.endsWith(lookupSuffix)) {
-    const potentialEntity = colName.slice(0, -lookupSuffix.length);
-    if ((schemaRef as any)[potentialEntity] && potentialEntity !== key) {
-      return potentialEntity;
-    }
-
-    // This is a handwritten exception to the generic suffix rule above.
-    if (colName === "addressCategoryId") {
-      return "addressCategory";
-    }
-  }
-
-  if (colName === "countryCode") {
-    return "country";
-  }
-
-  if (colName === "currencyId") {
-    return "currency";
-  }
-
-  return undefined;
 }
 
 function getHelperTablePayload(key: string, columns: Record<string, unknown>) {
@@ -404,9 +379,9 @@ function buildExplicitHelperTableRegistrations(key: string): HelperTableRegistra
   return registrations;
 }
 
-function getTenantFieldPayload(key: string, colName: string, col: any, schemaRef: typeof schema) {
+function getTenantFieldPayload(key: string, colName: string, col: any) {
   const columnType = col.columnType;
-  const lookupTable = getLookupTableName(colName, key, schemaRef);
+  const lookupTable = resolveLookupTable(key, colName);
   const isPk = col.primary || false;
   const isUuid = columnType === "PgUUID" || col.dataType === "uuid";
   const isVisible =
@@ -452,7 +427,7 @@ function discoverSchemaMetadata(): {
     }
 
     for (const [colName, col] of Object.entries(columns)) {
-      const field = getTenantFieldPayload(key, colName, col, schema);
+      const field = getTenantFieldPayload(key, colName, col);
       discoveredFields.push({
         entityName: key,
         fieldName: colName,

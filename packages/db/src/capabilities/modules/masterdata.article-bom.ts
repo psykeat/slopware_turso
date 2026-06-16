@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleBomRecordSchema = z.looseObject({
@@ -42,11 +43,9 @@ export const articleBomList = defineCapability({
   input: z.object({
     headerArticleId: z.uuid().optional(),
     componentArticleId: z.uuid().optional(),
-    search: z.string().trim().min(1).optional(),
-    limit: z.number().int().min(1).max(200).default(50),
-    offset: z.number().int().min(0).default(0),
+    ...listControlsSchema,
   }),
-  output: z.object({ items: z.array(articleBomRecordSchema) }),
+  output: z.object({ items: z.array(articleBomRecordSchema), total: z.number().int().optional() }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -58,13 +57,7 @@ export const articleBomList = defineCapability({
     const filters: Record<string, string> = {};
     if (input.headerArticleId) filters.headerArticleId = input.headerArticleId;
     if (input.componentArticleId) filters.componentArticleId = input.componentArticleId;
-    const rows = await new DataService(ctx.tenantId).list("articleBom", filters, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "sortOrder:asc",
-    });
-    return { items: rows as z.output<typeof articleBomRecordSchema>[] };
+    return runEntityList(ctx.tenantId, "articleBom", filters, input, "sortOrder:asc");
   },
 });
 

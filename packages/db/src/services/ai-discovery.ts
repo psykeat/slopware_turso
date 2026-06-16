@@ -8,6 +8,7 @@ import {
   tenantFields,
 } from "../schema/app.schema";
 import * as schema from "../schema/index";
+import { resolveLookupTable } from "./metadata";
 
 export interface SemanticEntity {
   entityName: string;
@@ -117,23 +118,6 @@ const SEMANTIC_RELATIONSHIPS: SemanticRelationship[] = [
     businessDescription: "Verknüpft die Lagerposition mit dem operativen Lagerartikel.",
   },
 ];
-
-function inferLookupTableName(entityName: string, colName: string, schemaRef: typeof schema) {
-  if (colName === "variantId") return "articleVariant";
-  if (colName === "optionId") return "articleOption";
-  if (colName === "valueId") return "articleOptionValue";
-  if (entityName === "inventoryLevel" && colName === "itemId") return "inventoryItem";
-  if (entityName === "inventoryLevel" && colName === "locationId") return "warehouse";
-
-  if (colName.endsWith("Id")) {
-    const potentialEntity = colName.slice(0, -2);
-    if ((schemaRef as any)[potentialEntity] && potentialEntity !== entityName) {
-      return potentialEntity;
-    }
-  }
-
-  return undefined;
-}
 
 // Fallback seed commands when the database entity_commands table is empty
 const BOOTSTRAPPED_COMMANDS: Array<Omit<SemanticCommand, "entityName"> & { entityName: string }> = [
@@ -545,7 +529,7 @@ export class AIDiscoveryService {
       else if (colType === "PgBoolean") dataType = "boolean";
       else if (colType === "PgTimestamp" || colType === "PgDate") dataType = "timestamp";
 
-      const lookupTable = tf?.lookupTable || inferLookupTableName(entityName, colKey, schema);
+      const lookupTable = tf?.lookupTable || resolveLookupTable(entityName, colKey);
       const lookupRegistry = lookupTable
         ? registries.find((r) => r.tableName === lookupTable)
         : undefined;

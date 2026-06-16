@@ -5,6 +5,7 @@ import { db } from "../../index";
 import { priceList } from "../../schema/app.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const priceListRecordSchema = z.object({
@@ -38,11 +39,10 @@ export const priceListList = defineCapability({
   kind: "read",
   summary: { en: "List price lists", de: "Preislisten auflisten" },
   input: z.object({
-    search: z.string().trim().min(1).optional(),
+    ...listControlsSchema,
     limit: z.number().int().min(1).max(200).default(200),
-    offset: z.number().int().min(0).default(0),
   }),
-  output: z.object({ items: z.array(priceListRecordSchema) }),
+  output: z.object({ items: z.array(priceListRecordSchema), total: z.number().int().optional() }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -50,15 +50,7 @@ export const priceListList = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const rows = await new DataService(ctx.tenantId).list("priceList", {}, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "name:asc",
-    });
-    return { items: rows as z.output<typeof priceListRecordSchema>[] };
-  },
+  handler: async (ctx, input) => runEntityList(ctx.tenantId, "priceList", {}, input, "name:asc"),
 });
 
 export const priceListGet = defineCapability({

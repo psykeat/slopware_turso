@@ -24,7 +24,7 @@ import {
 } from "./index";
 
 const KEY_PATTERN =
-  /^(masterdata|sales|logistics|accounting|communication|import|system)\.[a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z][a-zA-Z0-9]*$/;
+  /^(masterdata|sales|logistics|accounting|communication|commerce|import|system)\.[a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z][a-zA-Z0-9]*$/;
 
 const ctx = (overrides: Partial<ExecutionContext> = {}): ExecutionContext => ({
   tenantId: "00000000-0000-7000-8000-000000000000",
@@ -185,6 +185,27 @@ test("capabilityIndex matches the registry", () => {
   }
   const registered = listCapabilities().filter((c) => !c.key.startsWith("system.test."));
   assert.equal(Object.keys(capabilityIndex).length, registered.length);
+});
+
+test("masterdata list capabilities expose the standard list controls", () => {
+  // filterRules/orderBy/withTotal (see core/list.ts's listControlsSchema) must
+  // be available on every masterdata list capability so filtering/sorting a
+  // reference table is a caller-side input, not a capability code change.
+  // Exempt: handlers with genuinely bespoke join/versioning logic that doesn't
+  // reduce to a flat table list.
+  const exempt = new Set(["articleVariantOptionValue", "articleVariantTemplate"]);
+  for (const capability of listCapabilities()) {
+    if (capability.module !== "masterdata" || capability.operation !== "list") continue;
+    if (exempt.has(capability.entityName)) continue;
+    const shape = (capability.input as unknown as { shape?: Record<string, unknown> }).shape;
+    assert.ok(shape, `${capability.key} input is not a zod object`);
+    for (const key of ["filterRules", "orderBy", "withTotal"]) {
+      assert.ok(
+        shape && key in shape,
+        `${capability.key} input is missing "${key}" from the standard list controls (core/list.ts)`,
+      );
+    }
+  }
 });
 
 test("ai projections are well-formed when present", () => {

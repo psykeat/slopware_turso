@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleMediaRecordSchema = z.looseObject({
@@ -43,11 +44,9 @@ export const articleMediaList = defineCapability({
     articleId: z.uuid().optional(),
     variantId: z.uuid().optional(),
     mediaAssetId: z.uuid().optional(),
-    search: z.string().trim().min(1).optional(),
-    limit: z.number().int().min(1).max(200).default(50),
-    offset: z.number().int().min(0).default(0),
+    ...listControlsSchema,
   }),
-  output: z.object({ items: z.array(articleMediaRecordSchema) }),
+  output: z.object({ items: z.array(articleMediaRecordSchema), total: z.number().int().optional() }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -60,13 +59,7 @@ export const articleMediaList = defineCapability({
     if (input.articleId) filters.articleId = input.articleId;
     if (input.variantId) filters.variantId = input.variantId;
     if (input.mediaAssetId) filters.mediaAssetId = input.mediaAssetId;
-    const rows = await new DataService(ctx.tenantId).list("articleMedia", filters, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "sortOrder:asc",
-    });
-    return { items: rows as z.output<typeof articleMediaRecordSchema>[] };
+    return runEntityList(ctx.tenantId, "articleMedia", filters, input, "sortOrder:asc");
   },
 });
 

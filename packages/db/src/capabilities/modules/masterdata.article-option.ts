@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleOptionRecordSchema = z.looseObject({
@@ -26,11 +27,9 @@ export const articleOptionList = defineCapability({
   summary: { en: "List article options", de: "Artikeloptionen auflisten" },
   input: z.object({
     articleId: z.uuid().optional(),
-    search: z.string().trim().min(1).optional(),
-    limit: z.number().int().min(1).max(200).default(50),
-    offset: z.number().int().min(0).default(0),
+    ...listControlsSchema,
   }),
-  output: z.object({ items: z.array(articleOptionRecordSchema) }),
+  output: z.object({ items: z.array(articleOptionRecordSchema), total: z.number().int().optional() }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -41,13 +40,7 @@ export const articleOptionList = defineCapability({
   handler: async (ctx, input) => {
     const filters: Record<string, string> = {};
     if (input.articleId) filters.articleId = input.articleId;
-    const rows = await new DataService(ctx.tenantId).list("articleOption", filters, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "sortOrder:asc",
-    });
-    return { items: rows as z.output<typeof articleOptionRecordSchema>[] };
+    return runEntityList(ctx.tenantId, "articleOption", filters, input, "sortOrder:asc");
   },
 });
 

@@ -5,6 +5,7 @@ import { db } from "../../index";
 import { articleGroup } from "../../schema/app.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleGroupRecordSchema = z.object({
@@ -51,12 +52,8 @@ export const articleGroupList = defineCapability({
     en: "List article groups",
     de: "Artikelgruppen auflisten",
   },
-  input: z.object({
-    search: z.string().trim().min(1).optional(),
-    limit: z.number().int().min(1).max(200).default(50),
-    offset: z.number().int().min(0).default(0),
-  }),
-  output: z.object({ items: z.array(articleGroupRecordSchema) }),
+  input: z.object({ ...listControlsSchema }),
+  output: z.object({ items: z.array(articleGroupRecordSchema), total: z.number().int().optional() }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -64,19 +61,7 @@ export const articleGroupList = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const rows = await new DataService(ctx.tenantId).list(
-      "articleGroup",
-      {},
-      {
-        search: input.search,
-        limit: input.limit,
-        offset: input.offset,
-        orderBy: "code:asc",
-      },
-    );
-    return { items: rows as z.output<typeof articleGroupRecordSchema>[] };
-  },
+  handler: async (ctx, input) => runEntityList(ctx.tenantId, "articleGroup", {}, input, "code:asc"),
 });
 
 export const articleGroupGet = defineCapability({

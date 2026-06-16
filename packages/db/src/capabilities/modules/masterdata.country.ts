@@ -5,6 +5,7 @@ import { db } from "../../index";
 import { country } from "../../schema/app.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
+import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const localizedTextSchema = z.record(z.string(), z.string());
@@ -41,11 +42,12 @@ export const countryList = defineCapability({
   kind: "read",
   summary: { en: "List countries", de: "Länder auflisten" },
   input: z.object({
-    search: z.string().trim().min(1).optional(),
+    iso2Code: z.string().optional(),
+    iso3Code: z.string().optional(),
+    ...listControlsSchema,
     limit: z.number().int().min(1).max(200).default(200),
-    offset: z.number().int().min(0).default(0),
   }),
-  output: z.object({ items: z.array(countryRecordSchema) }),
+  output: z.object({ items: z.array(countryRecordSchema), total: z.number().int().optional() }),
   writesTables: [],
   sideEffects: [],
   idempotent: true,
@@ -54,13 +56,10 @@ export const countryList = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const rows = await new DataService(ctx.tenantId).list("country", {}, {
-      search: input.search,
-      limit: input.limit,
-      offset: input.offset,
-      orderBy: "iso2Code:asc",
-    });
-    return { items: rows as z.output<typeof countryRecordSchema>[] };
+    const filters: Record<string, string> = {};
+    if (input.iso2Code) filters.iso2Code = input.iso2Code;
+    if (input.iso3Code) filters.iso3Code = input.iso3Code;
+    return runEntityList(ctx.tenantId, "country", filters, input, "iso2Code:asc");
   },
 });
 

@@ -24,7 +24,8 @@ import { toast } from "sonner";
 
 import { VariantGeneratorDialog } from "#/components/articles/VariantGeneratorDialog";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
-import { entityDelete, entityGet, entityList, entityListPage, entitySave } from "#/lib/entity-capabilities";
+import { entityDelete, entityGet, entityList, entitySave } from "#/lib/entity-capabilities";
+import { useCapabilityQuery } from "#/queries/capability";
 const DEFAULT_VARIANT_OPTION_VALUE_HASH =
   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 import { resolveArticleVariantMode } from "@repo/db/services/article-variant-mode";
@@ -437,19 +438,19 @@ function ArticleVariantsAndOptionsTab({
   const [surchargeAmount, setSurchargeAmount] = useState("");
   const [surchargeSubmitting, setSurchargeSubmitting] = useState(false);
 
-  const { data: optionRows = EMPTY_ARRAY, isLoading: isOptionsLoading } = useQuery({
-    queryKey: ["data", "articleOption", articleId],
-    queryFn: () => entityList<any>("articleOption", { articleId }),
-    enabled: !!articleId,
-    placeholderData: keepPreviousData,
-  });
+  const { data: optionData, isLoading: isOptionsLoading } = useCapabilityQuery(
+    "masterdata.articleOption.list",
+    { articleId: articleId! },
+    { enabled: !!articleId, placeholderData: keepPreviousData }
+  );
+  const optionRows = optionData?.items ?? EMPTY_ARRAY;
 
-  const { data: variantRows = EMPTY_ARRAY, isLoading: isVariantsLoading } = useQuery({
-    queryKey: ["data", "articleVariant", articleId],
-    queryFn: () => entityList<any>("articleVariant", { articleId }),
-    enabled: !!articleId,
-    placeholderData: keepPreviousData,
-  });
+  const { data: variantData, isLoading: isVariantsLoading } = useCapabilityQuery(
+    "masterdata.articleVariant.list",
+    { articleId: articleId! },
+    { enabled: !!articleId, placeholderData: keepPreviousData }
+  );
+  const variantRows = variantData?.items ?? EMPTY_ARRAY;
   const variantMode = resolveArticleVariantMode({
     optionCount: optionRows.length,
     variantCount: variantRows.length,
@@ -1223,43 +1224,31 @@ function ArticlesModule() {
   );
 
   // Fetch articles — paginated
-  const { data: articleData, isLoading: isDataLoading } = useQuery({
-    queryKey: [
-      "data",
-      "article",
-      selectedGroupId,
-      gridState.queryParams.page,
-      gridState.queryParams.limit,
-      gridState.queryParams.orderBy,
-      gridState.queryParams.search,
-      gridState.queryParams.filters,
-    ],
-    queryFn: async () => {
-      const { page, limit, orderBy, search, filters } = gridState.queryParams;
-      const { items, total } = await entityListPage<any>(
-        "article",
-        selectedGroupId ? { articleGroupId: selectedGroupId } : {},
-        {
-          limit,
-          offset: (page - 1) * limit,
-          orderBy: orderBy || undefined,
-          search: search || undefined,
-          filterRules: filters || undefined,
-        },
-      );
-      return { data: items, total };
+  const { data: articleData, isLoading: isDataLoading } = useCapabilityQuery(
+    "masterdata.article.list",
+    {
+      articleGroupId: selectedGroupId || undefined,
+      limit: gridState.queryParams.limit,
+      offset: (gridState.queryParams.page - 1) * gridState.queryParams.limit,
+      orderBy: gridState.queryParams.orderBy || undefined,
+      search: gridState.queryParams.search || undefined,
+      filterRules: gridState.queryParams.filters as Array<{ col: string; op: string; val: string }> | undefined,
+      withTotal: true,
     },
-  });
+    {
+      placeholderData: keepPreviousData,
+    },
+  );
 
-  const articles = useMemo(() => articleData?.data ?? EMPTY_ARRAY, [articleData]);
+  const articles = useMemo(() => articleData?.items ?? EMPTY_ARRAY, [articleData]);
 
   // Fetch variants for the active article (shared query key with context tabs)
-  const { data: activeVariantRows = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "articleVariant", activeArticleId],
-    queryFn: () => entityList<any>("articleVariant", { articleId: activeArticleId! }),
-    enabled: !!activeArticleId,
-    placeholderData: keepPreviousData,
-  });
+  const { data: activeVariantData } = useCapabilityQuery(
+    "masterdata.articleVariant.list",
+    { articleId: activeArticleId! },
+    { enabled: !!activeArticleId, placeholderData: keepPreviousData }
+  );
+  const activeVariantRows = activeVariantData?.items ?? EMPTY_ARRAY;
 
   const activeDefaultVariant = useMemo(
     () =>
@@ -1272,27 +1261,33 @@ function ArticlesModule() {
   );
 
   // Fetch article groups
-  const { data: groups = EMPTY_ARRAY, isLoading: isTreeLoading } = useQuery({
-    queryKey: ["data", "articleGroup"],
-    queryFn: () => entityList<any>("articleGroup"),
-    select: useCallback(
-      (data: any[]) =>
-        data.map(
-          (g: any): TreeNode => ({
-            id: g.articleGroupId,
-            label: g.name || "Unnamed Group",
-          }),
-        ),
-      [],
-    ),
-    placeholderData: keepPreviousData,
-  });
+  const { data: groupsData, isLoading: isTreeLoading } = useCapabilityQuery(
+    "masterdata.articleGroup.list",
+    {},
+    {
+      select: useCallback(
+        (data) =>
+          data.items.map(
+            (g: any): TreeNode => ({
+              id: g.articleGroupId,
+              label: g.name || "Unnamed Group",
+            }),
+          ),
+        [],
+      ),
+      placeholderData: keepPreviousData,
+    },
+  );
+  const groups = groupsData ?? EMPTY_ARRAY;
 
-  const { data: units = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "unit"],
-    queryFn: () => entityList<any>("unit"),
-    placeholderData: keepPreviousData,
-  });
+  const { data: unitData } = useCapabilityQuery(
+    "masterdata.unit.list",
+    {},
+    {
+      placeholderData: keepPreviousData,
+    },
+  );
+  const units = unitData?.items ?? EMPTY_ARRAY;
 
   const groupMap = useMemo(
     () => new Map<string, string>((groups || EMPTY_ARRAY).map((g: TreeNode) => [g.id, g.label])),
@@ -1310,12 +1305,15 @@ function ArticlesModule() {
   );
 
   // Fetch inventory movements for selected article (server-side FK filter)
-  const { data: movements = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "inventoryMovement", activeArticleId],
-    queryFn: () => entityList<any>("inventoryMovement", { articleId: activeArticleId! }),
-    enabled: !!activeArticleId,
-    placeholderData: keepPreviousData,
-  });
+  const { data: movementData } = useCapabilityQuery(
+    "logistics.inventoryMovement.list",
+    { filters: { articleId: activeArticleId! } },
+    {
+      enabled: !!activeArticleId,
+      placeholderData: keepPreviousData,
+    },
+  );
+  const movements = movementData?.items ?? EMPTY_ARRAY;
 
   // Fetch article stats when statistics tab is active
   const { data: articleStats } = useQuery<{

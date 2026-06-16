@@ -22,18 +22,20 @@ export async function seedE2eData() {
       throw new Error("E2E user not found. Ensure auth.setup.ts signs up the user before seeding.");
     }
 
-    // 2. Get the test user's tenant
-    const [userTenantLink] = await db
+    // 2. Get the base tenant. The E2E user now has two userTenant rows (its own
+    // empty sandbox from signup, plus the base link from auth.setup.ts), so
+    // resolving "the" tenant via userTenant would be non-deterministic.
+    const [baseTenant] = await db
       .select()
-      .from(schema.userTenant)
-      .where(eq(schema.userTenant.userId, testUser.id))
+      .from(schema.tenant)
+      .where(eq(schema.tenant.isBase, true))
       .limit(1);
 
-    if (!userTenantLink) {
-      throw new Error("E2E user has no tenant. initializeDefaultTenant might have failed.");
+    if (!baseTenant) {
+      throw new Error("No base tenant found. Ensure auth.setup.ts links the E2E user before seeding.");
     }
 
-    const tenantId = userTenantLink.tenantId;
+    const tenantId = baseTenant.tenantId;
 
     // 3. Get the test company
     const [testCompany] = await db

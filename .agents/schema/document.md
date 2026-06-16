@@ -66,6 +66,9 @@
 | is_paid | is_paid | boolean | — | NOT NULL |  |
 | paid_at | paid_at | timestamp with time zone | — |  |  |
 | paid_amount | paid_amount | numeric | — |  |  |
+| total_weight_kg | total_weight_kg | numeric | — |  |  |
+| agent_id | agent_id | uuid | — |  |  |
+| commission_rate | commission_rate | numeric(5, 2) | — |  |  |
 
 > INDEX `idx_document_company` (tenant_id, company_id) [btree]
 > INDEX `idx_document_customer` (tenant_id, customer_id) [btree]
@@ -80,6 +83,7 @@
 > INDEX `idx_document_transaction` (tenant_id, transaction_id) [btree]
 > INDEX `idx_document_type_status` (tenant_id, document_type, status) [btree]
 > INDEX `idx_document_warehouse` (warehouse_id) [btree]
+> INDEX `idx_document_agent` (tenant_id, agent_id) [btree]
 
 > CHECK `chk_document_type`: [object Object]
 

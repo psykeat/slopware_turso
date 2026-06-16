@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const localizedTextSchema = z.record(z.string(), z.string());
@@ -26,25 +26,13 @@ const paymentTermWritableFields = z.object({
   customAttributes: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
-export const paymentTermList = defineCapability({
+export const paymentTermList = defineListCapability({
   module: "masterdata",
   entityName: "paymentTerm",
-  operation: "list",
-  kind: "read",
   summary: { en: "List payment terms", de: "Zahlungsbedingungen auflisten" },
-  input: z.object({
-    ...listControlsSchema,
-    limit: z.number().int().min(1).max(200).default(200),
-  }),
-  output: z.object({ items: z.array(paymentTermRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => runEntityList(ctx.tenantId, "paymentTerm", {}, input, "createdAt:asc"),
+  recordSchema: paymentTermRecordSchema,
+  defaultOrderBy: "createdAt:asc",
+  defaultLimit: 200,
 });
 
 export const paymentTermGet = defineCapability({

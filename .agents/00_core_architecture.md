@@ -34,6 +34,23 @@ The domain layer is the primary server-side application core. It contains read s
 
 The application layer contains routes, layouts, SSR, middleware, loaders, pending and error UI, workspace orchestration, and generic business interface composition.[cite:2][cite:3] It renders and coordinates, but it must not become the home of business invariants, posting logic, or tenant authorization truth.[cite:2]
 
+### Maintenance Cost vs. Data Flow (Cognitive Map)
+
+Although a request flows through up to 8 logical layers from UI to database, developers only actively maintain **1 to 2 layers** per entity. The remaining layers are generic or automated:
+
+| # | Layer | Maintenance Type | Responsibility |
+|---|---|---|---|
+| 1 | **Database Schema** ([app.schema.ts](file:///home/ubuntu/slopware/packages/db/src/schema/app.schema.ts)) | **Active** (Per-Entity) | Table structure, constraints, RLS policies. |
+| 2 | **Data Service** ([data.ts](file:///home/ubuntu/slopware/packages/db/src/services/data.ts)) | **Generic** (Zero) | Shared tenant-scoped query generation, RLS injection. |
+| 3 | **Capability Definition** (e.g. [masterdata.article.ts](file:///home/ubuntu/slopware/packages/db/src/capabilities/modules/masterdata.article.ts)) | **Active / Factory** | Inputs/outputs, roles, LLM exposure. Factory-generated for simple CRUD (see the `crud` helper in [masterdata.remaining.ts](file:///home/ubuntu/slopware/packages/db/src/capabilities/modules/masterdata.remaining.ts)); customized only for complex business domain logic (e.g. `article`). |
+| 4 | **Generated Manifest** (`manifest.generated.ts`) | **Automated** (Zero) | Project-wide capabilities registry compiled via CLI. |
+| 5 | **HTTP-Router** ([execute.ts](file:///home/ubuntu/slopware/apps/web/src/routes/api/capabilities/$key/execute.ts)) | **Generic** (Zero) | Standard catch-all REST gateway (`/api/capabilities/*`). |
+| 6 | **Client-side Transport** ([entity-ops.ts](file:///home/ubuntu/slopware/packages/db/src/capabilities/entity-ops.ts)) | **Generic** (Zero) | Maps standard CRUD intents (List, Save, Delete) to capabilities. |
+| 7 | **Generic UI** (`DataGrid` / `EntityMask`) | **Generic** (Zero) | Renders dynamically from schema metadata. |
+
+- **For Simple CRUD Entities (e.g. Warehouse):** Only **1.05 layers** (Drizzle schema + 1 line in `masterdata.remaining.ts` calling the `crud()` factory).
+- **For Complex Domain Entities (e.g. Article):** Only **2 layers** (Drizzle schema + custom capability file for validation/conflict/side-effect logic).
+
 ## Multi-tenancy
 
 Multi-tenancy is mandatory and hard-enforced at database and server layers. Tenant context must always be resolved server-side from session, membership, and authorization state, and must never be trusted from arbitrary client payload, panel state, or query input except in explicitly protected administrative flows.[cite:1][cite:2]

@@ -9,7 +9,8 @@
     "./capabilities": "./src/capabilities/index.ts",
     "./capabilities/manifest": "./src/capabilities/manifest.generated.ts",
     "./capabilities/entity-ops": "./src/capabilities/entity-ops.ts",
-    "./services/*": "./src/services/*.ts"
+    "./services/*": "./src/services/*.ts",
+    "./test-support/*": "./src/test-support/*.ts"
   },
   "scripts": {
     "db": "drizzle-kit",
@@ -17,10 +18,14 @@
     "migrate": "drizzle-kit migrate && pnpm run docs && pnpm run seed:metadata && pnpm run sync:capabilities",
     "sync:capabilities": "tsx src/scripts/sync-capabilities.ts",
     "generate:manifest": "tsx src/scripts/generate-capability-manifest.ts",
+    "generate:sdk": "tsx src/scripts/generate-client-sdk.ts",
     "docs": "tsx src/scripts/generate-docs.ts",
     "sql": "tsx src/scripts/sql.ts",
     "psql": "tsx src/scripts/psql.ts",
+    "execute": "tsx src/scripts/execute.ts",
+    "dev-login": "tsx src/scripts/dev-login.ts",
     "seed": "tsx src/scripts/seed.ts",
+    "seed:full": "tsx src/scripts/seed-full-feature.ts",
     "backfill:default-variants": "tsx src/scripts/backfill-default-variants.ts",
     "seed:metadata": "tsx src/scripts/seed-metadata.ts",
     "import-postal-codes": "tsx src/scripts/import-austrian-postal-codes.ts",

@@ -6,7 +6,8 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | mapping_id | mapping_id | uuid | PK | NOT NULL, DEFAULT uuidv7() |  |
 | tenant_id | tenant_id | uuid | — | NOT NULL |  |
-| sales_channel_id | sales_channel_id | uuid | — | NOT NULL |  |
+| sales_channel_id | sales_channel_id | uuid | — |  |  |
+| source_system | source_system | text | — | NOT NULL, DEFAULT sales_channel |  |
 | entity_type | entity_type | external_sync_entity_type | — | NOT NULL |  |
 | internal_id | internal_id | uuid | — | NOT NULL |  |
 | external_id | external_id | text | — | NOT NULL |  |
@@ -21,4 +22,5 @@
 | external_deleted_at | external_deleted_at | timestamp with time zone | — |  |  |
 
 > INDEX `idx_ext_sync_tenant` (tenant_id) [btree]
+> INDEX `idx_ext_sync_tenant_lookup` (tenant_id, source_system, entity_type) [btree]
 

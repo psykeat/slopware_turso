@@ -106,7 +106,6 @@ async function main() {
             schema.numberSequence.fiscalYear,
           ],
           set: {
-            nextValue: sql`excluded.next_value`,
             padding: sql`excluded.padding`,
             archived: false,
           },
@@ -147,6 +146,7 @@ async function main() {
   }
 
   console.log("Document sequences & groups configured successfully!");
+  process.exit(0);
 }
 
 main().catch((error: unknown) => {

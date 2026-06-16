@@ -1,96 +1,45 @@
 import assert from "node:assert/strict";
-import crypto from "node:crypto";
 import test, { after } from "node:test";
 
 import { and, eq } from "drizzle-orm";
 
 import "../scripts/load-env";
 import { closeDb, db } from "../index";
-import { article, articleVariant, inventoryItem, organization, tenant } from "../schema/app.schema";
+import { articleVariant, inventoryItem } from "../schema/app.schema";
+import {
+  cleanupEphemeralTenants,
+  createEphemeralTenant,
+  seedArticleRow,
+  seedInventoryItemRow,
+  seedVariantRow,
+} from "../test-support/fixtures";
 import { backfillDefaultArticleVariants } from "./default-variant-backfill";
 import { createArticleVariantOptionValueHash } from "./ecommerce-variant";
 
 async function createBackfillFixture() {
-  const suffix = crypto.randomUUID().slice(0, 8);
-
-  const [org] = await db
-    .insert(organization)
-    .values({
-      name: `Backfill Test Org ${suffix}`,
-      slug: `backfill-test-org-${suffix}`,
-    })
-    .returning({ organizationId: organization.organizationId });
-
-  const [tenantRow] = await db
-    .insert(tenant)
-    .values({
-      organizationId: org.organizationId,
-      name: `Backfill Test Tenant ${suffix}`,
-      slug: `backfill-test-tenant-${suffix}`,
-    })
-    .returning({ tenantId: tenant.tenantId });
-
-  const [existingVariantArticle] = await db
-    .insert(article)
-    .values({
-      tenantId: tenantRow.tenantId,
-      articleNo: `BF-EXIST-${suffix}`,
-      name: `Backfill Existing Variant Article ${suffix}`,
-    })
-    .returning({
-      articleId: article.articleId,
-      articleNo: article.articleNo,
-    });
-
-  const [missingVariantArticle] = await db
-    .insert(article)
-    .values({
-      tenantId: tenantRow.tenantId,
-      articleNo: `BF-MISS-${suffix}`,
-      name: `Backfill Missing Variant Article ${suffix}`,
-    })
-    .returning({
-      articleId: article.articleId,
-      articleNo: article.articleNo,
-    });
-
-  const [secondMissingVariantArticle] = await db
-    .insert(article)
-    .values({
-      tenantId: tenantRow.tenantId,
-      articleNo: `BF-MISS-2-${suffix}`,
-      name: `Backfill Second Missing Variant Article ${suffix}`,
-    })
-    .returning({
-      articleId: article.articleId,
-      articleNo: article.articleNo,
-    });
-
+  const { tenantId, suffix } = await createEphemeralTenant("Backfill");
   const defaultVariantHash = createArticleVariantOptionValueHash([]);
 
-  const [existingVariant] = await db
-    .insert(articleVariant)
-    .values({
-      tenantId: tenantRow.tenantId,
-      articleId: existingVariantArticle.articleId,
-      sku: `CUSTOM-${suffix}`,
-      optionValueHash: defaultVariantHash,
-      isActive: true,
-    })
-    .returning({
-      variantId: articleVariant.variantId,
-      sku: articleVariant.sku,
-    });
-
-  await db.insert(inventoryItem).values({
-    tenantId: tenantRow.tenantId,
+  // Already has a (custom) variant + inventory → not a backfill candidate.
+  const existingVariantArticle = await seedArticleRow(tenantId, { articleNo: `BF-EXIST-${suffix}` });
+  const existingVariant = await seedVariantRow(tenantId, {
+    articleId: existingVariantArticle.articleId,
+    sku: `CUSTOM-${suffix}`,
+    optionValueHash: defaultVariantHash,
+  });
+  await seedInventoryItemRow(tenantId, {
     variantId: existingVariant.variantId,
     sku: existingVariant.sku,
-    tracked: true,
+  });
+
+  // Legacy articles WITHOUT a default variant → the two backfill candidates.
+  const missingVariantArticle = await seedArticleRow(tenantId, { articleNo: `BF-MISS-${suffix}` });
+  const secondMissingVariantArticle = await seedArticleRow(tenantId, {
+    articleNo: `BF-MISS-2-${suffix}`,
   });
 
   return {
-    tenantId: tenantRow.tenantId,
+    tenantId,
     existingVariantArticle,
     missingVariantArticle,
     secondMissingVariantArticle,
@@ -187,5 +136,6 @@ test("backfillDefaultArticleVariants creates one default variant per missing art
 });
 
 after(async () => {
+  await cleanupEphemeralTenants();
   await closeDb();
 });

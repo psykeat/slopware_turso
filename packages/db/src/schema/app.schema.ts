@@ -246,6 +246,34 @@ export const addressCategory = pgTable(
   ],
 );
 
+export const agent = pgTable(
+  "agent",
+  {
+    agentId: uuid("agent_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    agentNo: text("agent_no").notNull(),
+    name: text("name"),
+    addressId: uuid("address_id"),
+    userId: text("user_id").references(() => user.id),
+    commissionRate: numeric("commission_rate", { precision: 5, scale: 2 }),
+    active: boolean("active").notNull().default(true),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    customAttributes: jsonb("custom_attributes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("uq_agent_tenant_no").on(table.tenantId, table.agentNo),
+    index("idx_agent_tenant").on(table.tenantId),
+    index("idx_agent_address").on(table.addressId),
+    index("idx_agent_user").on(table.userId),
+  ],
+);
+
 export const address = pgTable(
   "address",
   {
@@ -296,6 +324,19 @@ export const address = pgTable(
     defaultDeliveryAddressId: uuid("default_delivery_address_id"),
     searchText: text("search_text"),
     addressCategoryId: uuid("address_category_id").references(() => addressCategory.categoryId),
+    salutation: text("salutation"),
+    phoneLandline: text("phone_landline"),
+    phoneFax: text("phone_fax"),
+    phoneMobile: text("phone_mobile"),
+    email: text("email"),
+    homepage: text("homepage"),
+    leitwegId: text("leitweg_id"),
+    peppolId: text("peppol_id"),
+    coordinates: jsonb("coordinates").$type<{ lat: number; lng: number }>(),
+    agentId: uuid("agent_id").references(() => agent.agentId),
+    commissionRate: numeric("commission_rate", { precision: 5, scale: 2 }),
+    creditRatingScore: text("credit_rating_score"),
+    shopActive: boolean("shop_active").notNull().default(false),
   },
   (table) => [
     unique("address_tenant_id_address_id_key").on(table.tenantId, table.addressId),
@@ -304,6 +345,7 @@ export const address = pgTable(
     index("idx_address_customer").on(table.tenantId, table.isCustomer),
     index("idx_address_supplier").on(table.tenantId, table.isSupplier),
     index("idx_address_tenant").on(table.tenantId),
+    index("idx_address_agent").on(table.tenantId, table.agentId),
   ],
 );
 
@@ -332,6 +374,10 @@ export const addressContact = pgTable(
     roleFunction: text("role_function"),
     isPrimary: boolean("is_primary").notNull().default(false),
     archived: boolean("archived").notNull().default(false),
+    salutation: text("salutation"),
+    phoneFax: text("phone_fax"),
+    twitterHandle: text("twitter_handle"),
+    youtubeUrl: text("youtube_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
@@ -950,6 +996,9 @@ export const document = pgTable(
     isPaid: boolean("is_paid").notNull().default(false),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     paidAmount: numeric("paid_amount"),
+    totalWeightKg: numeric("total_weight_kg"),
+    agentId: uuid("agent_id").references(() => agent.agentId),
+    commissionRate: numeric("commission_rate", { precision: 5, scale: 2 }),
   },
   (table) => [
     unique("document_tenant_id_company_id_document_no_unique").on(
@@ -971,6 +1020,7 @@ export const document = pgTable(
     index("idx_document_transaction").on(table.tenantId, table.transactionId),
     index("idx_document_type_status").on(table.tenantId, table.documentType, table.status),
     index("idx_document_warehouse").on(table.warehouseId),
+    index("idx_document_agent").on(table.tenantId, table.agentId),
     check(
       "chk_document_type",
       sql`document_type IN ('N', 'A', 'L', 'R', 'G', 'b', 'l', 'r', 'g', 'Z', 'E', 'V', 'q', 'p', 'U')`,
@@ -1014,6 +1064,7 @@ export const documentLine = pgTable(
     movementType: char("movement_type", { length: 1 }),
     lineType: varchar("line_type", { length: 20 }).notNull().default("article"),
     bomGroupId: uuid("bom_group_id"),
+    lineWeightKg: numeric("line_weight_kg"),
   },
   (table) => [
     unique("document_line_tenant_id_document_id_line_no_unique").on(
@@ -1262,20 +1313,26 @@ export const importBatch = pgTable(
     ),
     atomicityMode: text("atomicity_mode").notNull(),
     status: text("status").notNull().default("pending"),
+    isDryRun: boolean("is_dry_run").notNull().default(true),
     isRerun: boolean("is_rerun").notNull().default(false),
     sourceBatchId: uuid("source_batch_id"),
+    sourceFileName: text("source_file_name"),
     postedEntityCount: integer("posted_entity_count").notNull().default(0),
+    failedEntityCount: integer("failed_entity_count").notNull().default(0),
+    pendingReferenceCount: integer("pending_reference_count").notNull().default(0),
     errorSummary: jsonb("error_summary"),
+    filePath: text("file_path"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     processedAt: timestamp("processed_at", { withTimezone: true }),
     targetEntity: text("target_entity"),
     targetCommandKey: text("target_command_key"),
+    layoutId: uuid("layout_id").references(() => buerowareRecordLayout.layoutId),
   },
   (_table) => [
     check("import_batch_atomicity_mode_check", sql`atomicity_mode IN ('file', 'entity', 'run')`),
     check(
       "import_batch_status_check",
-      sql`status IN ('pending', 'validating', 'approved', 'posted', 'failed', 'rejected')`,
+      sql`status IN ('pending', 'queued', 'processing', 'validating', 'validated', 'approved', 'posted', 'failed', 'rejected')`,
     ),
   ],
 );
@@ -1295,10 +1352,17 @@ export const importRow = pgTable(
     targetEntity: text("target_entity").notNull(),
     payload: jsonb("payload").notNull(),
     status: text("status").notNull().default("pending"),
+    missingReferences: jsonb("missing_references"),
     errorDetail: jsonb("error_detail"),
     postedAt: timestamp("posted_at", { withTimezone: true }),
   },
-  (_table) => [check("import_row_status_check", sql`status IN ('pending', 'posted', 'failed')`)],
+  (table) => [
+    check(
+      "import_row_status_check",
+      sql`status IN ('pending', 'valid', 'posted', 'failed', 'pending_references')`,
+    ),
+    index("idx_import_row_batch_status").on(table.batchId, table.status),
+  ],
 );
 
 export const importProfile = pgTable(
@@ -1331,15 +1395,15 @@ export const importProfileMappingVersion = pgTable(
     versionId: uuid("version_id")
       .primaryKey()
       .default(sql`uuidv7()`),
-    tenantId: uuid("tenant_id")
-      .notNull()
-      .references(() => tenant.tenantId),
-    tenantConnectorId: uuid("tenant_connector_id")
-      .notNull()
-      .references(() => tenantConnector.tenantConnectorId),
-    profileId: uuid("profile_id")
-      .notNull()
-      .references(() => importProfile.profileId),
+    tenantId: uuid("tenant_id").references(() => tenant.tenantId),
+    tenantConnectorId: uuid("tenant_connector_id").references(
+      () => tenantConnector.tenantConnectorId,
+    ),
+    profileId: uuid("profile_id").references(() => importProfile.profileId),
+    sourceSystem: text("source_system"),
+    sourceFileName: text("source_file_name"),
+    targetEntity: text("target_entity"),
+    layoutId: uuid("layout_id").references(() => buerowareRecordLayout.layoutId),
     versionNo: integer("version_no").notNull().default(1),
     mappings: jsonb("mappings").notNull(),
     isActive: boolean("is_active").notNull().default(false),
@@ -1353,12 +1417,105 @@ export const importProfileMappingVersion = pgTable(
       table.profileId,
       table.versionNo,
     ),
+    unique("uq_import_mapping_source_version").on(
+      table.sourceSystem,
+      table.sourceFileName,
+      table.layoutId,
+      table.versionNo,
+    ),
     index("idx_import_mapping_version_lookup").on(
       table.tenantConnectorId,
       table.profileId,
       table.isActive,
     ),
+    index("idx_import_mapping_version_source_file").on(
+      table.sourceSystem,
+      table.sourceFileName,
+      table.isActive,
+    ),
   ],
+);
+
+export const importFieldMapping = pgTable(
+  "import_field_mapping",
+  {
+    mappingId: uuid("mapping_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id").references(() => tenant.tenantId),
+    versionId: uuid("version_id")
+      .notNull()
+      .references(() => importProfileMappingVersion.versionId),
+    position: integer("position"),
+    length: integer("length"),
+    qualifier: text("qualifier"),
+    formatting: text("formatting"),
+    sourceField: text("source_field"),
+    targetField: text("target_field").notNull(),
+    targetEntity: text("target_entity"),
+    referenceEntity: text("reference_entity"),
+    isRequired: boolean("is_required").notNull().default(false),
+    defaultValue: text("default_value"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_field_mapping_version").on(table.versionId),
+    index("idx_field_mapping_tenant").on(table.tenantId),
+  ],
+);
+
+// ─── Büroware Satzbeschreibung catalog (global reference data, not tenant-scoped) ───
+// One row per data area = (file, Satzkürzel/Datenbereich). A file may expose several
+// data areas (e.g. S_RART_R00.SEDB → Artikel `S`, Warengruppe `W`, Lager `l`).
+export const buerowareRecordLayout = pgTable(
+  "bueroware_record_layout",
+  {
+    layoutId: uuid("layout_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    fileName: text("file_name").notNull(), // normalized UPPERCASE, e.g. S_RART_R00.SEDB
+    dataArea: text("data_area").notNull(), // Datenbereich, e.g. "Artikel"
+    qualifier: text("qualifier"), // Satzkürzel ('S','W','l',...); '*' is stored as NULL (unqualified)
+    defaultTargetEntity: text("default_target_entity"), // suggested platform entity
+    catalogVersion: integer("catalog_version").notNull().default(1),
+    isActive: boolean("is_active").notNull().default(true),
+    fieldCount: integer("field_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("uq_bueroware_layout_file_qualifier_version").on(
+      table.fileName,
+      table.qualifier,
+      table.catalogVersion,
+    ),
+    index("idx_bueroware_layout_file_active").on(table.fileName, table.isActive),
+  ],
+);
+
+// One row per field definition from Satzbeschreibung.csv for a given layout.
+export const buerowareRecordField = pgTable(
+  "bueroware_record_field",
+  {
+    fieldId: uuid("field_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    layoutId: uuid("layout_id")
+      .notNull()
+      .references(() => buerowareRecordLayout.layoutId),
+    buerowareFieldId: text("bueroware_field_id").notNull(), // FeldId, e.g. ART_1_25
+    label: text("label"), // Bezeichnung
+    sampleValue: text("sample_value"), // Feldinhalt (example value for the hybrid UI)
+    position: integer("position"),
+    length: integer("length"),
+    formatting: text("formatting"), // Formatierung (L, R0, R2, AJN, ...)
+    refreshTable: text("refresh_table"), // Refreshtabelle (FK reference metadata)
+    importMarker: text("import_marker"), // Importkennzeichen
+    ordinal: integer("ordinal"), // Laufende Nummer
+    defaultTargetField: text("default_target_field"), // central default mapping target
+    defaultReferenceEntity: text("default_reference_entity"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("idx_bueroware_field_layout").on(table.layoutId)],
 );
 
 export const incoterm = pgTable(
@@ -3333,7 +3490,9 @@ export const aiMemory = pgTable(
 // E-Commerce Integrations
 
 export const externalSyncEntityType = pgEnum("external_sync_entity_type", [
+  "address",
   "article",
+  "article_group",
   "article_variant",
   "document",
   "document_line",
@@ -3360,6 +3519,40 @@ export const ecommercePlatform = pgEnum("ecommerce_platform", [
   "shopware6",
   "woocommerce",
   "prestashop",
+]);
+
+export const commerceSyncRunDirection = pgEnum("commerce_sync_run_direction", [
+  "push",
+  "pull",
+  "bidirectional",
+]);
+
+export const commerceSyncRunMode = pgEnum("commerce_sync_run_mode", ["single", "full"]);
+
+export const commerceSyncRunStatus = pgEnum("commerce_sync_run_status", [
+  "queued",
+  "running",
+  "success",
+  "partial_error",
+  "error",
+  "cancel_requested",
+  "cancelled",
+]);
+
+export const commerceSyncStepPhase = pgEnum("commerce_sync_step_phase", [
+  "plan",
+  "map",
+  "push",
+  "pull",
+  "finalize",
+]);
+
+export const commerceSyncStepStatus = pgEnum("commerce_sync_step_status", [
+  "pending",
+  "running",
+  "success",
+  "error",
+  "skipped",
 ]);
 
 export const salesChannel = pgTable(
@@ -3393,8 +3586,8 @@ export const externalSyncMapping = pgTable(
       .notNull()
       .references(() => tenant.tenantId),
     salesChannelId: uuid("sales_channel_id")
-      .notNull()
       .references(() => salesChannel.salesChannelId),
+    sourceSystem: text("source_system").notNull().default("sales_channel"),
     entityType: externalSyncEntityType("entity_type").notNull(),
     internalId: uuid("internal_id").notNull(),
     externalId: text("external_id").notNull(),
@@ -3410,6 +3603,7 @@ export const externalSyncMapping = pgTable(
   },
   (table) => [
     index("idx_ext_sync_tenant").on(table.tenantId),
+    index("idx_ext_sync_tenant_lookup").on(table.tenantId, table.sourceSystem, table.entityType),
     unique("uq_ext_sync_internal").on(
       table.tenantId,
       table.salesChannelId,
@@ -3421,6 +3615,129 @@ export const externalSyncMapping = pgTable(
       table.salesChannelId,
       table.entityType,
       table.externalId,
+    ),
+    unique("uq_ext_sync_external_key").on(
+      table.tenantId,
+      table.sourceSystem,
+      table.entityType,
+      table.externalId,
+    ),
+  ],
+);
+
+export const commerceSyncRun = pgTable(
+  "commerce_sync_run",
+  {
+    runId: uuid("run_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    salesChannelId: uuid("sales_channel_id")
+      .notNull()
+      .references(() => salesChannel.salesChannelId),
+    direction: commerceSyncRunDirection("direction").notNull(),
+    mode: commerceSyncRunMode("mode").notNull(),
+    status: commerceSyncRunStatus("status").notNull().default("queued"),
+    requestedEntities: jsonb("requested_entities").notNull(),
+    dryRun: boolean("dry_run").notNull().default(false),
+    totalItems: integer("total_items").notNull().default(0),
+    succeededItems: integer("succeeded_items").notNull().default(0),
+    failedItems: integer("failed_items").notNull().default(0),
+    errorSummary: text("error_summary"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+    createdByUserId: text("created_by_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_commerce_sync_run_tenant").on(table.tenantId),
+    index("idx_commerce_sync_run_sales_channel").on(table.tenantId, table.salesChannelId),
+    index("idx_commerce_sync_run_status").on(table.tenantId, table.status),
+  ],
+);
+
+export const commerceSyncRunStep = pgTable(
+  "commerce_sync_run_step",
+  {
+    stepId: uuid("step_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => commerceSyncRun.runId),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    salesChannelId: uuid("sales_channel_id")
+      .notNull()
+      .references(() => salesChannel.salesChannelId),
+    entityType: externalSyncEntityType("entity_type").notNull(),
+    phase: commerceSyncStepPhase("phase").notNull(),
+    status: commerceSyncStepStatus("status").notNull().default("pending"),
+    sequence: integer("sequence").notNull(),
+    batchNo: integer("batch_no").notNull().default(0),
+    cursor: text("cursor"),
+    plannedItems: integer("planned_items").notNull().default(0),
+    succeededItems: integer("succeeded_items").notNull().default(0),
+    failedItems: integer("failed_items").notNull().default(0),
+    payloadSummary: jsonb("payload_summary"),
+    errorSummary: text("error_summary"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_commerce_sync_step_run").on(table.runId),
+    index("idx_commerce_sync_step_tenant").on(table.tenantId),
+    unique("uq_commerce_sync_step_sequence").on(table.runId, table.sequence, table.batchNo),
+  ],
+);
+
+export const commerceSyncDlqStatus = pgEnum("commerce_sync_dlq_status", [
+  "pending",
+  "resolved",
+  "abandoned",
+]);
+
+export const commerceSyncDeadLetter = pgTable(
+  "commerce_sync_dead_letter",
+  {
+    itemId: uuid("item_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => commerceSyncRun.runId),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    salesChannelId: uuid("sales_channel_id")
+      .notNull()
+      .references(() => salesChannel.salesChannelId),
+    entityType: externalSyncEntityType("entity_type").notNull(),
+    internalId: uuid("internal_id").notNull(),
+    errorMessage: text("error_message").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(1),
+    lastAttemptedAt: timestamp("last_attempted_at", { withTimezone: true }).notNull(),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    status: commerceSyncDlqStatus("status").notNull().default("pending"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_commerce_sync_dlq_tenant").on(table.tenantId),
+    index("idx_commerce_sync_dlq_pending").on(table.tenantId, table.status, table.nextRetryAt),
+    index("idx_commerce_sync_dlq_item").on(
+      table.tenantId,
+      table.salesChannelId,
+      table.entityType,
+      table.internalId,
     ),
   ],
 );

@@ -407,8 +407,10 @@ export const documentConvert = defineCapability({
   idempotent: false,
   supportsDryRun: false,
   minRole: "tenant_user",
+  // Converting archives the source and creates a new document (e.g. quote → order):
+  // a business write that is its own approval boundary in the AI overlay.
   exposure: {
-    llm: "safe",
+    llm: "confirm",
     http: true,
     ai: {
       group: "sales-documents",

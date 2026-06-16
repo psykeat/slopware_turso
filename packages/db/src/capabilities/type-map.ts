@@ -13,7 +13,7 @@ export type CapabilityIndex = {
   [C in RegisteredCapability as C["key"]]: C;
 };
 
-export type CapabilityKey = keyof CapabilityIndex & string;
+export type CapabilityKey = keyof CapabilityIndex;
 
 export type CapabilityInput<K extends CapabilityKey> = z.input<CapabilityIndex[K]["input"]>;
 

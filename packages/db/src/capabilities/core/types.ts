@@ -8,6 +8,7 @@ export type CapabilityModule =
   | "logistics"
   | "accounting"
   | "communication"
+  | "commerce"
   | "import"
   | "system";
 

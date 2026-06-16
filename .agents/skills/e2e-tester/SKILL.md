@@ -27,6 +27,7 @@ Tests are run against the base tenant of the local development database.
 - The `setup` project in Playwright automatically runs `e2e/setup/auth.setup.ts`.
 - This setup script seeds the database with required fixtures (using Drizzle ORM upserts) and authenticates as the `E2E Tester` user (`e2e@slopware.test`), saving the session cookie to `e2e/.auth/user.json`.
 - All your specs will run completely authenticated without needing to navigate to the login screen.
+- Need the same base-tenant session outside Playwright (a manual `curl`, a browser devtools session, eyeballing a capability before writing a test)? Run `pnpm db:dev-login` instead of reinventing auth — see `AI_TESTING.md`. It signs in as this same `e2e@slopware.test` user.
 
 ## 3. Database Seeding & Upserts
 

@@ -47,9 +47,23 @@
 | default_delivery_address_id | default_delivery_address_id | uuid | — |  |  |
 | search_text | search_text | text | — |  |  |
 | address_category_id | address_category_id | uuid | — |  |  |
+| salutation | salutation | text | — |  |  |
+| phone_landline | phone_landline | text | — |  |  |
+| phone_fax | phone_fax | text | — |  |  |
+| phone_mobile | phone_mobile | text | — |  |  |
+| email | email | text | — |  |  |
+| homepage | homepage | text | — |  |  |
+| leitweg_id | leitweg_id | text | — |  |  |
+| peppol_id | peppol_id | text | — |  |  |
+| coordinates | coordinates | jsonb | — |  |  |
+| agent_id | agent_id | uuid | — |  |  |
+| commission_rate | commission_rate | numeric(5, 2) | — |  |  |
+| credit_rating_score | credit_rating_score | text | — |  |  |
+| shop_active | shop_active | boolean | — | NOT NULL |  |
 
 > INDEX `idx_address_category` (tenant_id, address_category_id) [btree]
 > INDEX `idx_address_customer` (tenant_id, is_customer) [btree]
 > INDEX `idx_address_supplier` (tenant_id, is_supplier) [btree]
 > INDEX `idx_address_tenant` (tenant_id) [btree]
+> INDEX `idx_address_agent` (tenant_id, agent_id) [btree]
 

@@ -110,6 +110,8 @@ catalog:
   "@tiptap/extension-text-align": ^2.23.0
   "@tiptap/extension-font-family": ^2.23.0
   "@tiptap/extension-underline": ^2.23.0
+  fflate: 0.8.2
+  fallow: 2.90.0
 catalogMode: prefer
 
 overrides:

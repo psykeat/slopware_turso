@@ -10,16 +10,19 @@ export function activityTierPriority(tier: string): number {
   return TIER_PRIORITY[tier] ?? 2;
 }
 
+export type EmailJobExecutor = (input: {
+  jobType: string;
+  emailAccountId: string;
+  payload: Record<string, unknown>;
+}) => Promise<unknown>;
+
 async function runJobInBackground(
-  tenantId: string,
   jobId: string,
   jobType: string,
   emailAccountId: string | null | undefined,
   payload: Record<string, unknown>,
+  executor: EmailJobExecutor,
 ) {
-  // Late import to avoid circular dependency at module init time
-  const { EmailSyncService } = await import("./sync-service");
-  const syncService = new EmailSyncService(tenantId, "system");
   const now = new Date();
 
   // Atomically claim: only proceed if we win the status='queued' race
@@ -32,7 +35,7 @@ async function runJobInBackground(
   if (!claimed) return; // another worker already claimed it
 
   try {
-    await syncService.executeJob(jobType, emailAccountId ?? "", payload);
+    await executor({ jobType, emailAccountId: emailAccountId ?? "", payload });
 
     // Guard by lockedBy so a reclaimed job isn't stomped if we ran long
     await db
@@ -77,7 +80,10 @@ async function runJobInBackground(
 }
 
 export class EmailJobService {
-  constructor(private tenantId: string) {}
+  constructor(
+    private tenantId: string,
+    private options: { executor?: EmailJobExecutor } = {},
+  ) {}
 
   async enqueue(input: {
     jobType: EmailJobType;
@@ -121,13 +127,13 @@ export class EmailJobService {
     }
 
     // For immediate jobs, fire off background execution so they run without waiting for a worker poll
-    if (runAfter <= new Date()) {
+    if (runAfter <= new Date() && this.options.executor) {
       void runJobInBackground(
-        this.tenantId,
         row.emailJobId,
         input.jobType,
         input.emailAccountId,
         input.payload ?? {},
+        this.options.executor,
       );
     }
 

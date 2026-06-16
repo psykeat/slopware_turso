@@ -18,6 +18,8 @@ Current active decisions only. Keep this file short.
 - Core specs define the intended platform contract; live code defines the current implementation shape.
 - Shared AI overlay runtime: one temporary, zero-footprint overlay host for all AI-assisted flows, opened through `CommandProvider` and driven by server-side interpret / resolve / review / validate / apply contracts over effective metadata and focus context.
 - Capability registry as the official mutation surface: code-first `defineCapability` registry in `@repo/db/capabilities`, one `executeCapability` path for UI/AI/tests/imports, `entity_commands` is only a projection synced on migrate, tenant context built server-side only (`07_api.md`).
+- Document email templates: tenant-scoped `email_template` + `email_template_binding`; binding resolution by specificity (documentType/company/language/identity); `{{placeholder}}` engine identical on server (`EmailTemplateService`) and client (`packages/ui/lib/template-preview.ts`); both send paths (Commandbar + AI) run through the same pipeline — see `email.md`.
+- Fluent integration test seeding: prefer using `TestScenarioBuilder` in `packages/db/src/test-support/fixtures.ts` over manual raw table inserts or manual ID linking to construct multi-entity test states.
 - Archived docs are historical only and stay out of the default reading path.
 
 ## When To Open What
@@ -27,4 +29,5 @@ Current active decisions only. Keep this file short.
 - Generic entity derivation and lookup behavior: `02`
 - Shell, navigation, design, and routing: `03`
 - Capability registry, execution API, capability testing: `07_api.md`
+- E-Mail Belegversand, Vorlagen, Bindings, Seed, Capabilities: `email.md`
 - Prior decisions or old handoffs: `.agents/archive/`

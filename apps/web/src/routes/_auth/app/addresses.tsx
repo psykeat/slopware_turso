@@ -9,6 +9,7 @@ import { LangTextRecordPanel } from "@repo/ui/components/langtext-record-panel";
 import { NavigationTree, type TreeNode } from "@repo/ui/components/navigation-tree";
 import { TriViewWorkspace } from "@repo/ui/components/triview-workspace";
 import { formatMoney, formatDate, StatusDot } from "@repo/ui/lib/formatters";
+import { isLocalizedText, resolveLocalizedText } from "@repo/ui/lib/localized-text";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useFocus } from "@repo/ui/platform/focus-manager";
@@ -19,7 +20,8 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
-import { entityDelete, entityGet, entityList, entityListPage, entitySave } from "#/lib/entity-capabilities";
+import { entityDelete, entityGet, entitySave } from "#/lib/entity-capabilities";
+import { useCapabilityQuery } from "#/queries/capability";
 
 export const Route = createFileRoute("/_auth/app/addresses")({
   component: AddressesModule,
@@ -240,7 +242,7 @@ function AddressesModule() {
   const { state: focusState } = useFocus();
   const { registerCommand } = useCommands();
   const { setSubCrumb } = useActionBar();
-  const { t } = useTranslation("ui");
+  const { t, i18n } = useTranslation("ui");
   const queryClient = useQueryClient();
   const addressLangtextFields = useMemo(
     () => [
@@ -285,55 +287,50 @@ function AddressesModule() {
   );
 
   // Fetch addresses — paginated
-  const { data: addressData, isLoading: isDataLoading } = useQuery({
-    queryKey: [
-      "data",
-      "address",
-      selectedCategoryId,
-      gridState.queryParams.page,
-      gridState.queryParams.limit,
-      gridState.queryParams.orderBy,
-      gridState.queryParams.search,
-      gridState.queryParams.filters,
-    ],
-    queryFn: async () => {
-      const { page, limit, orderBy, search, filters } = gridState.queryParams;
-      const filterRules = [
-        ...((filters as Array<{ col: string; op: string; val: string }>) ?? []),
+  const { data: addressData, isLoading: isDataLoading } = useCapabilityQuery(
+    "masterdata.address.list",
+    {
+      limit: gridState.queryParams.limit,
+      offset: (gridState.queryParams.page - 1) * gridState.queryParams.limit,
+      orderBy: gridState.queryParams.orderBy || undefined,
+      search: gridState.queryParams.search || undefined,
+      filterRules: [
+        ...((gridState.queryParams.filters as Array<{ col: string; op: string; val: string }>) ?? []),
         ...(selectedCategoryId
           ? [{ col: "addressCategoryId", op: "eq", val: selectedCategoryId }]
           : []),
-      ];
-      const { items, total } = await entityListPage<any>("address", {}, {
-        limit,
-        offset: (page - 1) * limit,
-        orderBy: orderBy || undefined,
-        search: search || undefined,
-        filterRules: filterRules.length ? filterRules : undefined,
-      });
-      return { data: items, total };
+      ],
+      withTotal: true,
     },
-  });
+    {
+      placeholderData: keepPreviousData,
+    },
+  );
 
-  const addresses = useMemo(() => addressData?.data ?? EMPTY_ARRAY, [addressData]);
+  const addresses = useMemo(() => addressData?.items ?? EMPTY_ARRAY, [addressData]);
 
   // Fetch categories for tree
-  const { data: categories = EMPTY_ARRAY, isLoading: isTreeLoading } = useQuery({
-    queryKey: ["data", "addressCategory"],
-    queryFn: () => entityList<any>("addressCategory"),
-    select: useCallback(
-      (data: any[]) =>
-        data.map(
-          (c: any): TreeNode => ({
-            id: c.categoryId,
-            label: c.name?.en || c.name?.de || c.name || "Unnamed Category",
-            count: undefined,
-          }),
-        ),
-      [],
-    ),
-    placeholderData: keepPreviousData,
-  });
+  const { data: categoriesData, isLoading: isTreeLoading } = useCapabilityQuery(
+    "masterdata.addressCategory.list",
+    {},
+    {
+      select: useCallback(
+        (data) =>
+          data.items.map(
+            (c: any): TreeNode => ({
+              id: c.categoryId,
+              label: isLocalizedText(c.name)
+                ? resolveLocalizedText(c.name, i18n.language)
+                : c.name || "Unnamed Category",
+              count: undefined,
+            }),
+          ),
+        [i18n.language],
+      ),
+      placeholderData: keepPreviousData,
+    },
+  );
+  const categories = categoriesData ?? EMPTY_ARRAY;
 
   const treeNodes = useMemo<TreeNode[]>(
     () => [{ id: "ALL", label: t("tree.all", { defaultValue: "All" }) }, ...categories],
@@ -360,19 +357,25 @@ function AddressesModule() {
     placeholderData: keepPreviousData,
   });
 
-  const { data: contacts = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "addressContact", activeAddressId],
-    queryFn: () => entityList("addressContact", { addressId: activeAddressId! }),
-    enabled: !!activeAddressId,
-    placeholderData: keepPreviousData,
-  });
+  const { data: contactData } = useCapabilityQuery(
+    "masterdata.addressContact.list",
+    { addressId: activeAddressId! },
+    {
+      enabled: !!activeAddressId,
+      placeholderData: keepPreviousData,
+    },
+  );
+  const contacts = contactData?.items ?? EMPTY_ARRAY;
 
-  const { data: deliveryAddresses = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "deliveryAddress", activeAddressId],
-    queryFn: () => entityList("deliveryAddress", { addressId: activeAddressId! }),
-    enabled: !!activeAddressId,
-    placeholderData: keepPreviousData,
-  });
+  const { data: deliveryAddressData } = useCapabilityQuery(
+    "masterdata.deliveryAddress.list",
+    { addressId: activeAddressId! },
+    {
+      enabled: !!activeAddressId,
+      placeholderData: keepPreviousData,
+    },
+  );
+  const deliveryAddresses = deliveryAddressData?.items ?? EMPTY_ARRAY;
 
   // Register context commands
   useEffect(() => {

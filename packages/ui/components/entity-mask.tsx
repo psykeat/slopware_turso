@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { CapabilityHttpError } from "../lib/capability-client";
 import { entityGet, entityList, entitySave } from "../lib/entity-capabilities";
+import { isLocalizedText, resolveLocalizedText } from "../lib/localized-text";
 import { cn } from "../lib/utils";
 import { useDesigner, type FieldDesignConfig } from "../platform/designer-context";
 import { useFocus } from "../platform/focus-manager";
@@ -187,10 +188,7 @@ function FieldInput({
   }, [originalField]);
   const { i18n } = useTranslation();
   const hasError = !!field.error;
-  const displayValue =
-    typeof value === "object" && value !== null && ("en" in value || "de" in value)
-      ? value[i18n.language] || value.en || value.de || ""
-      : (value ?? "");
+  const displayValue = isLocalizedText(value) ? resolveLocalizedText(value, i18n.language) : (value ?? "");
   const lookupSource = useMemo(() => {
     if (field.type !== "lookup") return null;
     const sourceConfig = buildLookupConfigFromField(field, field.label, undefined, "No results");

@@ -49,7 +49,8 @@ export function MailClassificationReview({
   validation,
   onPatch,
 }: MailClassificationReviewProps) {
-  const { data: allAddresses = [] } = useAddresses();
+  const { data: allAddressesData } = useAddresses();
+  const allAddresses = allAddressesData ?? [];
   const rawSteps = suggestionPayload.steps || [];
   const steps = rawSteps.map((s: any, idx: number) => ({
     ...s,

@@ -10,8 +10,11 @@
 | target_entity | target_entity | text | — | NOT NULL |  |
 | payload | payload | jsonb | — | NOT NULL |  |
 | status | status | text | — | NOT NULL, DEFAULT pending |  |
+| missing_references | missing_references | jsonb | — |  |  |
 | error_detail | error_detail | jsonb | — |  |  |
 | posted_at | posted_at | timestamp with time zone | — |  |  |
+
+> INDEX `idx_import_row_batch_status` (batch_id, status) [btree]
 
 > CHECK `import_row_status_check`: [object Object]
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleMediaRecordSchema = z.looseObject({
@@ -34,33 +34,17 @@ const articleMediaPatchSchema = z.object({
   archived: z.boolean().optional(),
 });
 
-export const articleMediaList = defineCapability({
+export const articleMediaList = defineListCapability({
   module: "masterdata",
   entityName: "articleMedia",
-  operation: "list",
-  kind: "read",
   summary: { en: "List article media links", de: "Artikelmedien-Verknüpfungen auflisten" },
-  input: z.object({
+  recordSchema: articleMediaRecordSchema,
+  extraFilters: {
     articleId: z.uuid().optional(),
     variantId: z.uuid().optional(),
     mediaAssetId: z.uuid().optional(),
-    ...listControlsSchema,
-  }),
-  output: z.object({ items: z.array(articleMediaRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const filters: Record<string, string> = {};
-    if (input.articleId) filters.articleId = input.articleId;
-    if (input.variantId) filters.variantId = input.variantId;
-    if (input.mediaAssetId) filters.mediaAssetId = input.mediaAssetId;
-    return runEntityList(ctx.tenantId, "articleMedia", filters, input, "sortOrder:asc");
   },
+  defaultOrderBy: "sortOrder:asc",
 });
 
 export const articleMediaGet = defineCapability({

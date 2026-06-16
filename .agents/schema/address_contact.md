@@ -22,6 +22,10 @@
 | role_function | role_function | text | — |  |  |
 | is_primary | is_primary | boolean | — | NOT NULL |  |
 | archived | archived | boolean | — | NOT NULL |  |
+| salutation | salutation | text | — |  |  |
+| phone_fax | phone_fax | text | — |  |  |
+| twitter_handle | twitter_handle | text | — |  |  |
+| youtube_url | youtube_url | text | — |  |  |
 | created_at | created_at | timestamp with time zone | — | NOT NULL, DEFAULT now() |  |
 | updated_at | updated_at | timestamp with time zone | — |  |  |
 

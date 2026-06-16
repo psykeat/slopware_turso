@@ -16,6 +16,7 @@ import {
   decryptEmailCredentials,
   encryptEmailCredentials,
 } from "@repo/db/services/email/credential-crypto";
+import { resolveLocalizedText } from "@repo/ui/lib/localized-text";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, desc } from "drizzle-orm";
 
@@ -1350,9 +1351,7 @@ export const Route = createFileRoute("/api/ai/$")({
               groupLabel =
                 typeof articleRow.groupName === "string"
                   ? articleRow.groupName
-                  : ((articleRow.groupName as any)?.de ??
-                    (articleRow.groupName as any)?.en ??
-                    groupLabel);
+                  : resolveLocalizedText(articleRow.groupName as any, "de") || groupLabel;
             }
 
             if (!articleName.trim()) {

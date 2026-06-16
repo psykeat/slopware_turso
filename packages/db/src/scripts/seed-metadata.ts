@@ -5,7 +5,7 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import { db } from "../index";
 import { tenantFields, helperTableRegistry } from "../schema/app.schema";
 import * as schema from "../schema/index";
-import { resolveLookupTable } from "../services/metadata";
+import { discoverTables, resolveLookupTable } from "../services/metadata";
 
 type FieldLabel = { en: string; de: string };
 type EntityLabelMap = Record<string, FieldLabel>;
@@ -144,22 +144,6 @@ const groupedEntitySets = {
 } as const;
 
 const lookupSuffix = "Id";
-
-function discoverTables() {
-  return Object.entries(schema)
-    .filter(([_, value]) => {
-      try {
-        if (value && typeof value === "object") {
-          getTableConfig(value as any);
-          return true;
-        }
-      } catch {
-        return false;
-      }
-      return false;
-    })
-    .map(([key, table]) => ({ key, table: table as any }));
-}
 
 function getEntityLabel(key: string): FieldLabel {
   return entityLabelMap[key] || { en: key, de: key };

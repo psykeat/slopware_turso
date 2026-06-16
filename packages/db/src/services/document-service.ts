@@ -25,9 +25,10 @@ import {
   journalLine,
   accountDeterminationRule,
   unit,
+  articleVariant,
 } from "../schema/app.schema";
 import { resolveFiscalPeriodId } from "./fiscal-period-generator";
-import { refreshStatisticsMVs } from "./statistics";
+import { queueStatisticsMVRefresh } from "./statistics";
 
 export interface TypeNode {
   documentType: string;
@@ -851,7 +852,8 @@ async function loadActiveDocumentLines(
       lang_text_source_id as "langTextSourceId",
       lang_text_source_field as "langTextSourceField",
       lang_text_linked_at as "langTextLinkedAt",
-      lang_text_overridden_at as "langTextOverriddenAt"
+      lang_text_overridden_at as "langTextOverriddenAt",
+      line_weight_kg as "lineWeightKg"
     from document_line
     where tenant_id = ${tenantId} and document_id = ${documentId} and archived_at is null
     order by line_no
@@ -862,12 +864,13 @@ async function recalculateDocumentTotals(
   tx: any,
   tenantId: string,
   documentId: string,
-): Promise<{ totalNet: string; totalTax: string; totalGross: string }> {
+): Promise<{ totalNet: string; totalTax: string; totalGross: string; totalWeightKg: string | null }> {
   const [totals] = await tx
     .select({
       totalNet: sql<string>`coalesce(sum(coalesce(${documentLine.lineTotalNet}, 0)), 0)`,
       totalTax: sql<string>`coalesce(sum(coalesce(${documentLine.taxAmount}, 0)), 0)`,
       totalGross: sql<string>`coalesce(sum(coalesce(${documentLine.lineTotalNet}, 0) + coalesce(${documentLine.taxAmount}, 0)), 0)`,
+      totalWeightKg: sql<string | null>`nullif(sum(${documentLine.lineWeightKg}), 0)`,
     })
     .from(documentLine)
     .where(
@@ -882,6 +885,7 @@ async function recalculateDocumentTotals(
     totalNet: totals?.totalNet ?? "0",
     totalTax: totals?.totalTax ?? "0",
     totalGross: totals?.totalGross ?? "0",
+    totalWeightKg: totals?.totalWeightKg ?? null,
   };
 }
 
@@ -898,10 +902,37 @@ async function persistDocumentTotals(
       totalNet: totals.totalNet,
       totalTax: totals.totalTax,
       totalGross: totals.totalGross,
+      totalWeightKg: totals.totalWeightKg,
       updatedAt,
     })
     .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
   return totals;
+}
+
+async function batchFetchVariantWeights(
+  tx: any,
+  variantIds: string[],
+): Promise<Map<string, string | null>> {
+  if (variantIds.length === 0) return new Map();
+  const rows = await tx
+    .select({ variantId: articleVariant.variantId, weight: articleVariant.weight })
+    .from(articleVariant)
+    .where(inArray(articleVariant.variantId, variantIds));
+  return new Map(rows.map((r: { variantId: string; weight: string | null }) => [r.variantId, r.weight]));
+}
+
+function computeLineWeightKg(
+  quantity: string,
+  variantId: string | null,
+  weightMap: Map<string, string | null>,
+): string | null {
+  if (!variantId) return null;
+  const w = weightMap.get(variantId);
+  if (w == null) return null;
+  const qty = Number(quantity);
+  const weight = Number(w);
+  if (!Number.isFinite(qty) || !Number.isFinite(weight)) return null;
+  return String(qty * weight);
 }
 
 async function applyTrackingForSingleRow(
@@ -2201,9 +2232,7 @@ export class DocumentService {
       return { success: true, document: updatedDoc };
     });
 
-    void refreshStatisticsMVs(tenantId).catch((error) => {
-      console.error("Failed to refresh statistics materialized views", error);
-    });
+    queueStatisticsMVRefresh(tenantId);
 
     return result;
   }
@@ -2353,6 +2382,7 @@ export class DocumentService {
             movementType: reversalType,
             lineType: l.lineType,
             bomGroupId: l.bomGroupId ?? null,
+            lineWeightKg: l.lineWeightKg ?? null,
             transactionId: doc.transactionId,
           })
           .returning({ documentLineId: documentLine.documentLineId });
@@ -2676,6 +2706,11 @@ export class DocumentService {
             movementType: targetGroup.documentType,
             lineType: line.lineType,
             bomGroupId: line.bomGroupId ?? null,
+            lineWeightKg: (() => {
+              if (line.lineWeightKg == null) return null;
+              if (shouldCopyAsIs || sourceQty === 0) return line.lineWeightKg;
+              return String((remainingQty / sourceQty) * Number(line.lineWeightKg));
+            })(),
             transactionId: doc.transactionId,
           })
           .returning({ documentLineId: documentLine.documentLineId });
@@ -3223,6 +3258,7 @@ export class DocumentService {
           movementType: string | null;
           lineType: string;
           bomGroupId: string | null;
+          lineWeightKg: string | null;
         }> = [];
 
         const insertValues: Array<{
@@ -3250,12 +3286,20 @@ export class DocumentService {
           lineType: string;
           bomGroupId: string | null;
           transactionId: string;
+          lineWeightKg: string | null;
         }> = [];
 
+        const activeVariantIds = activeLinePayload
+          .map((l) => l.variantId)
+          .filter((id): id is string => !!id);
+        const weightMap = await batchFetchVariantWeights(tx, activeVariantIds);
+
         for (const line of activeLinePayload) {
+          const variantId = line.variantId || null;
+          const quantity = String(line.quantity);
           const normalized = {
             lineNo: Number(line.lineNo),
-            variantId: line.variantId || null,
+            variantId,
             articleTextSnapshot: line.articleTextSnapshot ?? null,
             langText: line.langText ?? null,
             langTextSourceEntity: line.langTextSourceEntity ?? null,
@@ -3263,7 +3307,7 @@ export class DocumentService {
             langTextSourceField: line.langTextSourceField ?? null,
             langTextLinkedAt: toDateOrNull(line.langTextLinkedAt),
             langTextOverriddenAt: toDateOrNull(line.langTextOverriddenAt),
-            quantity: String(line.quantity),
+            quantity,
             unit: line.unit ?? null,
             netPrice: String(line.netPrice),
             discountPercentage:
@@ -3274,12 +3318,13 @@ export class DocumentService {
             warehouseId: line.warehouseId ?? null,
             costCenterId: line.costCenterId ?? null,
             movementType: line.movementType ?? docRecord.documentType,
-            lineType: line.variantId
+            lineType: variantId
               ? (line.lineType ?? "article")
               : line.lineType === "article" || !line.lineType
                 ? "comment"
                 : line.lineType,
             bomGroupId: line.bomGroupId ?? null,
+            lineWeightKg: computeLineWeightKg(quantity, variantId, weightMap),
           };
 
           if (line.documentLineId && existingLineById.has(line.documentLineId)) {
@@ -3319,6 +3364,7 @@ export class DocumentService {
               movementType: row.movementType,
               lineType: row.lineType,
               bomGroupId: row.bomGroupId,
+              lineWeightKg: row.lineWeightKg,
               archivedAt: null,
             })
             .where(
@@ -3521,8 +3567,14 @@ export class DocumentService {
 
       if (!newDoc) throw new Error("Document creation failed");
 
+      const activeNewLines = providedLines.filter((line) => !line.archived);
+      const newLineVariantIds = activeNewLines
+        .map((l) => l.variantId)
+        .filter((id): id is string => !!id);
+      const newWeightMap = await batchFetchVariantWeights(tx, newLineVariantIds);
+
       const insertValues: any[] = [];
-      for (const line of providedLines.filter((line) => !line.archived)) {
+      for (const line of activeNewLines) {
         const resolvedTruth = await resolveDocumentLineTruth(tx, tenantId, {
           documentLineId: line.documentLineId ?? null,
           lineNo: Number(line.lineNo),
@@ -3531,6 +3583,7 @@ export class DocumentService {
           lineType: line.lineType ?? "article",
         });
 
+        const qty = String(line.quantity);
         insertValues.push({
           tenantId,
           documentId: newDoc.documentId,
@@ -3544,7 +3597,7 @@ export class DocumentService {
           langTextSourceField: line.langTextSourceField ?? null,
           langTextLinkedAt: toDateOrNull(line.langTextLinkedAt),
           langTextOverriddenAt: toDateOrNull(line.langTextOverriddenAt),
-          quantity: String(line.quantity),
+          quantity: qty,
           unit: line.unit ?? null,
           netPrice: String(line.netPrice),
           discountPercentage:
@@ -3558,6 +3611,7 @@ export class DocumentService {
           lineType: line.lineType ?? "article",
           bomGroupId: line.bomGroupId ?? null,
           transactionId: newDoc.transactionId,
+          lineWeightKg: computeLineWeightKg(qty, resolvedTruth.variantId, newWeightMap),
         });
       }
 
@@ -3875,6 +3929,7 @@ export class DocumentService {
             warehouseId: l.warehouseId,
             costCenterId: l.costCenterId,
             movementType: targetGroup.documentType,
+            lineWeightKg: l.lineWeightKg ?? null,
           })),
         );
 
@@ -4175,11 +4230,7 @@ export class DocumentService {
         .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
     });
 
-    try {
-      await refreshStatisticsMVs(tenantId);
-    } catch (error) {
-      console.error("Failed to refresh statistics materialized views after delete", error);
-    }
+    queueStatisticsMVRefresh(tenantId);
 
     return { deleted: false, archived: false, cancelled: true };
   }

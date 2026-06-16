@@ -74,7 +74,10 @@ export class EmailSyncService {
     private userId: string,
   ) {
     this.accountService = new EmailAccountService(tenantId, userId);
-    this.jobService = new EmailJobService(tenantId);
+    this.jobService = new EmailJobService(tenantId, {
+      executor: ({ jobType, emailAccountId, payload }) =>
+        this.executeJob(jobType, emailAccountId, payload),
+    });
   }
 
   async markUserActivity(accountId: string) {

@@ -1,16 +1,13 @@
-import "dotenv/config";
+import "./load-env";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import dotenv from "dotenv";
 import { eq, sql } from "drizzle-orm";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables from apps/web/.env
-dotenv.config({ path: path.resolve(__dirname, "../../../../apps/web/.env") });
 
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
@@ -112,6 +109,7 @@ async function main() {
   console.log(
     `SKR03 chart of accounts successfully seeded! Upserted ${valuesToInsert.length} accounts.`,
   );
+  process.exit(0);
 }
 
 main().catch((error: unknown) => {

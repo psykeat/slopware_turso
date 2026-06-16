@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { and, db, eq } from "../../index";
 import { emailAccount } from "../../schema/app.schema";
 import { EmailJobService } from "./job-service";
+import { EmailSyncService } from "./sync-service";
 import type { EmailProvider } from "./types";
 
 const WEBHOOK_PRIORITY = 1; // webhooks are hot signals
@@ -134,7 +135,11 @@ export async function queueWebhookIncrementalSync(
   // Bucket into 30-second windows to deduplicate bursts of webhook signals
   // for the same account (e.g. Graph sends one notification per message change).
   const bucket = Math.floor(Date.now() / 30_000);
-  return await new EmailJobService(account.tenantId).enqueue({
+  const syncService = new EmailSyncService(account.tenantId, "system");
+  return await new EmailJobService(account.tenantId, {
+    executor: ({ jobType, emailAccountId, payload }) =>
+      syncService.executeJob(jobType, emailAccountId, payload),
+  }).enqueue({
     jobType: "incremental_sync",
     emailAccountId: account.emailAccountId,
     idempotencyKey: `webhook:${provider}:${account.emailAccountId}:${bucket}`,

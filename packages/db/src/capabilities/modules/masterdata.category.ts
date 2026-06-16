@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const categoryRecordSchema = z.looseObject({
@@ -29,22 +29,12 @@ const categoryWritableFields = z.object({
   archived: z.boolean().optional(),
 });
 
-export const categoryList = defineCapability({
+export const categoryList = defineListCapability({
   module: "masterdata",
   entityName: "category",
-  operation: "list",
-  kind: "read",
   summary: { en: "List categories", de: "Kategorien auflisten" },
-  input: z.object({ ...listControlsSchema }),
-  output: z.object({ items: z.array(categoryRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => runEntityList(ctx.tenantId, "category", {}, input, "sortOrder:asc"),
+  recordSchema: categoryRecordSchema,
+  defaultOrderBy: "sortOrder:asc",
 });
 
 export const categoryGet = defineCapability({

@@ -40,6 +40,7 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
     ops: {
       "archive": { key: "masterdata.address.archive", idParam: "addressId" },
       "create": { key: "masterdata.address.create" },
+      "geocode": { key: "masterdata.address.geocode" },
       "get": { key: "masterdata.address.get", idParam: "addressId" },
       "list": { key: "masterdata.address.list", filtersWrapped: false },
       "search": { key: "masterdata.address.search" },
@@ -66,6 +67,16 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
       "list": { key: "masterdata.addressContact.list", filtersWrapped: true },
       "search": { key: "masterdata.addressContact.search" },
       "update": { key: "masterdata.addressContact.update", idParam: "id" },
+    },
+  },
+  "agent": {
+    module: "masterdata",
+    ops: {
+      "archive": { key: "masterdata.agent.archive", idParam: "agentId" },
+      "get": { key: "masterdata.agent.get", idParam: "agentId" },
+      "linkAddresses": { key: "masterdata.agent.linkAddresses" },
+      "list": { key: "masterdata.agent.list", filtersWrapped: false },
+      "upsert": { key: "masterdata.agent.upsert" },
     },
   },
   "article": {
@@ -194,6 +205,21 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
       "update": { key: "masterdata.bankAccount.update", idParam: "id" },
     },
   },
+  "bueroware": {
+    module: "import",
+    ops: {
+      "bootstrap": { key: "import.bueroware.bootstrap" },
+      "getLayoutFields": { key: "import.bueroware.getLayoutFields" },
+      "listLayouts": { key: "import.bueroware.listLayouts" },
+      "listTemplates": { key: "import.bueroware.listTemplates" },
+      "loadCatalog": { key: "import.bueroware.loadCatalog" },
+      "queueFile": { key: "import.bueroware.queueFile" },
+      "reconcile": { key: "import.bueroware.reconcile" },
+      "runNextJob": { key: "import.bueroware.runNextJob" },
+      "saveTemplate": { key: "import.bueroware.saveTemplate" },
+      "selectLayout": { key: "import.bueroware.selectLayout" },
+    },
+  },
   "category": {
     module: "masterdata",
     ops: {
@@ -202,6 +228,21 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
       "get": { key: "masterdata.category.get", idParam: "categoryId" },
       "list": { key: "masterdata.category.list", filtersWrapped: false },
       "update": { key: "masterdata.category.update", idParam: "categoryId" },
+    },
+  },
+  "commerceSyncDeadLetter": {
+    module: "commerce",
+    ops: {
+      "list": { key: "commerce.commerceSyncDeadLetter.list", filtersWrapped: false },
+      "retry": { key: "commerce.commerceSyncDeadLetter.retry" },
+    },
+  },
+  "commerceSyncRun": {
+    module: "commerce",
+    ops: {
+      "cancel": { key: "commerce.commerceSyncRun.cancel" },
+      "get": { key: "commerce.commerceSyncRun.get", idParam: "runId" },
+      "start": { key: "commerce.commerceSyncRun.start" },
     },
   },
   "company": {
@@ -371,15 +412,21 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
   "emailTemplate": {
     module: "communication",
     ops: {
+      "archive": { key: "communication.emailTemplate.archive", idParam: "id" },
+      "create": { key: "communication.emailTemplate.create" },
       "get": { key: "communication.emailTemplate.get", idParam: "id" },
       "list": { key: "communication.emailTemplate.list", filtersWrapped: true },
+      "update": { key: "communication.emailTemplate.update", idParam: "id" },
     },
   },
   "emailTemplateBinding": {
     module: "communication",
     ops: {
+      "archive": { key: "communication.emailTemplateBinding.archive", idParam: "id" },
+      "create": { key: "communication.emailTemplateBinding.create" },
       "get": { key: "communication.emailTemplateBinding.get", idParam: "id" },
       "list": { key: "communication.emailTemplateBinding.list", filtersWrapped: true },
+      "update": { key: "communication.emailTemplateBinding.update", idParam: "id" },
     },
   },
   "emailTemplateRenderLog": {

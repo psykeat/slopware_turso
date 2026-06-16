@@ -1,20 +1,23 @@
-import { useQuery } from "@tanstack/react-query";
-
-import { entityList } from "#/lib/entity-capabilities";
+import { useCapabilityQuery } from "#/queries/capability";
 
 export function useAddresses() {
-  return useQuery({
-    queryKey: ["ai-all-addresses"],
-    queryFn: () => entityList("address").catch(() => []),
-    staleTime: 5 * 60 * 1000,
-  });
+  return useCapabilityQuery(
+    "masterdata.address.list",
+    {},
+    {
+      select: (data) => data.items,
+      staleTime: 5 * 60 * 1000,
+    },
+  );
 }
 
 export function useDocuments() {
-  return useQuery({
-    queryKey: ["ai-all-documents"],
-    queryFn: () =>
-      entityList("document", {}, { limit: 100, orderBy: "documentNo:asc" }).catch(() => []),
-    staleTime: 5 * 60 * 1000,
-  });
+  return useCapabilityQuery(
+    "sales.document.list",
+    { limit: 100, orderBy: "documentNo:asc" },
+    {
+      select: (data) => data.items,
+      staleTime: 5 * 60 * 1000,
+    },
+  );
 }

@@ -42,25 +42,28 @@ React 19 · TanStack Start/Router/Query · Drizzle ORM · Better Auth · Tailwin
 
 ## Dev Commands
 
-- Run dev: `npnm dev`
+- Run dev: `pnpm dev`
 - Validate changes: `vp lint`
-- Generate DB types/schema: `pnpm db generate`
-- Run DB migrations: `pnpm db migrate`
+- Generate DB types/schema: `pnpm db:generate`
+- Run DB migrations: `pnpm db:migrate`
+- Seed full feature database: `pnpm db:seed:full`
 - Add UI components: `pnpm ui add <component>`
+- Execute a capability: `pnpm db:execute <capabilityKey> <tenantSlugOrId> '<jsonInput>' [--dry-run]`
+- Get a real session bound to the base tenant: `pnpm db:dev-login` (prints a cookie; requires `pnpm dev` running — see `AI_TESTING.md`)
 
 
 ## Database Access
 
 - Local Postgres uses the `DATABASE_URL` in `apps/web/.env` and `apps/web/.env.example`.
-- Use `pnpm db psql` for an interactive psql session.
-- Use `pnpm db sql -- <query>` for one-off queries.
-- Use `cat query.sql | pnpm db sql` for longer statements.
+- Use `pnpm db:psql` for an interactive psql session.
+- Use `pnpm db:sql -- <query>` for one-off queries.
+- Use `cat query.sql | pnpm db:sql` for longer statements.
 
 ## Environment Constants
 
 - Organization slug: `base`
 - Tenant slug: `base`
-- Tenant ID: `019e2889-5cd7-714b-9922-08a75fdfbaac`
+- Tenant IDs are reseed-dependent — never hardcode one; resolve by slug (`"base"`) at runtime, same as `capabilities.smoke.test.ts` and `pnpm db:execute` already do.
 - Company: `1000`
 - For private local credentials, use the private project memory.
 

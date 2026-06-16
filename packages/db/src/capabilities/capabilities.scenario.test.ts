@@ -3,38 +3,16 @@ import crypto from "node:crypto";
 import test, { after } from "node:test";
 
 import "../scripts/load-env";
-import { closeDb, db } from "../index";
-import { organization, tenant } from "../schema/app.schema";
+import { closeDb } from "../index";
 import type { VariantTemplateDefinition } from "../services/variant-template-schema";
-import { executeCapability, type ExecutionContext } from "./index";
+import {
+  cleanupEphemeralTenants,
+  createEphemeralTenant,
+  useTestTenant,
+} from "../test-support/fixtures";
+import { executeCapability } from "./index";
 
-async function createTenantFixture() {
-  const suffix = crypto.randomUUID().slice(0, 8);
-
-  const [org] = await db
-    .insert(organization)
-    .values({ name: `Capability Org ${suffix}`, slug: `cap-org-${suffix}` })
-    .returning({ organizationId: organization.organizationId });
-
-  const [tenantRow] = await db
-    .insert(tenant)
-    .values({
-      organizationId: org.organizationId,
-      name: `Capability Tenant ${suffix}`,
-      slug: `cap-tenant-${suffix}`,
-    })
-    .returning({ tenantId: tenant.tenantId });
-
-  const ctx: ExecutionContext = {
-    tenantId: tenantRow.tenantId,
-    organizationId: org.organizationId,
-    userId: null,
-    actorMode: "test",
-    role: "system",
-  };
-
-  return { ctx, suffix };
-}
+const createTenantFixture = () => useTestTenant();
 
 function buildDefinition(): VariantTemplateDefinition {
   return {
@@ -141,7 +119,10 @@ test("article upsert → list → template apply → archive scenario", async ()
 });
 
 test("tenant isolation: foreign tenant cannot read another tenant's article", async () => {
-  const [a, b] = await Promise.all([createTenantFixture(), createTenantFixture()]);
+  const [a, b] = await Promise.all([
+    createEphemeralTenant("IsolationA"),
+    createEphemeralTenant("IsolationB"),
+  ]);
 
   const created = expectOk<{ article: { articleId: string } }>(
     await executeCapability("masterdata.article.upsert", a.ctx, {
@@ -191,5 +172,6 @@ test("missing records map to not_found", async () => {
 });
 
 after(async () => {
+  await cleanupEphemeralTenants();
   await closeDb();
 });

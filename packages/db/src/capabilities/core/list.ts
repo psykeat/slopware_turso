@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import { DataService } from "../../services/data";
+import { defineCapability } from "./define";
+import type { CapabilityModule, CapabilityRole, LocalizedText } from "./types";
 
 // Shared list contract for capability `list` ops. It mirrors what the legacy
 // introspective `/api/data` route offered so sortable/paginated/filterable grids
@@ -73,4 +75,67 @@ export async function runEntityList(
     return { items: data, total };
   }
   return { items: result as unknown[] };
+}
+
+// Factory for the common flat-filter list capability shape: a handful of
+// natural-key/FK filter fields plus the standard list controls, delegating
+// straight to runEntityList. Covers every masterdata list capability that
+// isn't using the wrapped-filters CRUD factory (crud() in
+// masterdata.remaining.ts, which has a different input contract and is out
+// of scope here).
+export function defineListCapability<
+  R extends z.ZodType,
+  M extends CapabilityModule,
+  E extends string,
+  F extends z.ZodRawShape = Record<string, never>,
+>(config: {
+  module: M;
+  entityName: E;
+  /** Defaults to entityName. */
+  tableName?: string;
+  summary: LocalizedText;
+  description?: LocalizedText;
+  recordSchema: R;
+  /** Flat natural-key/FK filter fields, merged before the standard list controls. */
+  extraFilters?: F;
+  defaultOrderBy: string;
+  /** Overrides listControlsSchema's default of 50. */
+  defaultLimit?: number;
+  minRole?: CapabilityRole;
+}) {
+  const tableName = config.tableName ?? config.entityName;
+  const filterKeys = Object.keys(config.extraFilters ?? {});
+
+  return defineCapability({
+    module: config.module,
+    entityName: config.entityName,
+    operation: "list",
+    kind: "read",
+    summary: config.summary,
+    description: config.description,
+    input: z.object({
+      ...((config.extraFilters ?? {}) as F),
+      ...listControlsSchema,
+      ...(config.defaultLimit
+        ? { limit: z.number().int().min(1).max(200).default(config.defaultLimit) }
+        : {}),
+    }),
+    output: z.object({ items: z.array(config.recordSchema), total: z.number().int().optional() }),
+    writesTables: [],
+    sideEffects: [],
+    idempotent: true,
+    supportsDryRun: false,
+    minRole: config.minRole ?? "tenant_user",
+    exposure: { llm: "safe", http: true },
+    schemaVersion: 1,
+    handler: async (ctx, input) => {
+      const raw = input as Record<string, string | number | boolean | undefined | null>;
+      const filters: Record<string, string> = {};
+      for (const key of filterKeys) {
+        const value = raw[key];
+        if (value !== undefined && value !== null && value !== "") filters[key] = String(value);
+      }
+      return runEntityList(ctx.tenantId, tableName, filters, input as ListControls, config.defaultOrderBy);
+    },
+  });
 }

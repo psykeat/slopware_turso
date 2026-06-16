@@ -16,6 +16,7 @@ import {
   buildEntityCapabilityManifest,
   serializeEntityCapabilityManifest,
 } from "./manifest-build";
+import { buildAndSerializeClientSdk } from "./sdk-build";
 import {
   capabilityIndex,
   capabilityInputJsonSchema,
@@ -245,6 +246,18 @@ test("entity capability manifest is in sync with the registry", () => {
   const actualPath = fileURLToPath(new URL("./manifest.generated.ts", import.meta.url));
   const actual = readFileSync(actualPath, "utf8");
   assert.equal(actual, expected, "manifest.generated.ts is stale — run pnpm run generate:manifest");
+});
+
+test("client SDK is in sync with the registry", () => {
+  // The generated Client SDK is imported by frontend code, so it must never
+  // drift from the registry. Regenerate in-memory and compare byte-for-byte;
+  // run `pnpm db:generate-client-sdk` if this fails.
+  const expected = buildAndSerializeClientSdk(allCapabilities);
+  const actualPath = fileURLToPath(
+    new URL("../../../../apps/web/src/lib/sdk.generated.ts", import.meta.url),
+  );
+  const actual = readFileSync(actualPath, "utf8");
+  assert.equal(actual, expected, "sdk.generated.ts is stale — run pnpm db:generate-client-sdk");
 });
 
 after(async () => {

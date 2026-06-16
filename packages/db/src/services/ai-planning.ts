@@ -75,6 +75,231 @@ function defaultModelForProvider(provider: string): string {
   }
 }
 
+type PlanningCatalogs = {
+  entities: any[];
+  fieldsMap: Record<string, any[]>;
+  commands: any[];
+};
+
+const AI_PLANNING_ENTITY_TOP_N = 6;
+const AI_PLANNING_FIELD_TOP_N = 24;
+const AI_PLANNING_COMMAND_TOP_N = 8;
+
+const AI_PLANNING_STOP_WORDS = new Set([
+  "about",
+  "already",
+  "also",
+  "and",
+  "any",
+  "are",
+  "aus",
+  "bei",
+  "bitte",
+  "can",
+  "das",
+  "der",
+  "die",
+  "ein",
+  "eine",
+  "for",
+  "from",
+  "has",
+  "ich",
+  "ist",
+  "mit",
+  "not",
+  "oder",
+  "the",
+  "this",
+  "und",
+  "use",
+  "was",
+  "wir",
+  "you",
+]);
+
+function collectPromptText(value: unknown, parts: string[] = []): string[] {
+  if (typeof value === "string") {
+    parts.push(value);
+  } else if (Array.isArray(value)) {
+    for (const item of value) collectPromptText(item, parts);
+  } else if (value && typeof value === "object") {
+    for (const [key, nested] of Object.entries(value)) {
+      parts.push(key);
+      collectPromptText(nested, parts);
+    }
+  }
+  return parts;
+}
+
+function tokenizeForPlanning(value: unknown): Set<string> {
+  const sourceParts =
+    typeof value === "string"
+      ? (() => {
+          try {
+            return collectPromptText(JSON.parse(value));
+          } catch {
+            return [value];
+          }
+        })()
+      : collectPromptText(value);
+
+  const normalized = sourceParts
+    .join(" ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_./:-]+/g, " ")
+    .toLowerCase();
+
+  const terms = new Set<string>();
+  for (const term of normalized.split(/[^a-z0-9äöüß]+/i)) {
+    if (term.length < 3 || AI_PLANNING_STOP_WORDS.has(term)) continue;
+    terms.add(term);
+  }
+  return terms;
+}
+
+function catalogText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(catalogText).join(" ");
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, nested]) => `${key} ${catalogText(nested)}`)
+      .join(" ");
+  }
+  return "";
+}
+
+function scorePlanningCatalogItem(item: unknown, promptTerms: Set<string>): number {
+  if (promptTerms.size === 0) return 0;
+  const text = catalogText(item)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_./:-]+/g, " ")
+    .toLowerCase();
+  const itemTerms = new Set(text.split(/[^a-z0-9äöüß]+/i).filter(Boolean));
+
+  let score = 0;
+  for (const term of promptTerms) {
+    if (itemTerms.has(term)) {
+      score += 3;
+    } else if (text.includes(term)) {
+      score += 1;
+    }
+  }
+  return score;
+}
+
+function selectTopScored<T extends Record<string, any>>(
+  items: T[],
+  promptTerms: Set<string>,
+  limit: number,
+): Array<T & { __planningScore?: number }> {
+  return items
+    .map((item) => ({
+      ...((item ?? {}) as T),
+      __planningScore: scorePlanningCatalogItem(item, promptTerms),
+    }))
+    .filter((item) => (item.__planningScore ?? 0) > 0)
+    .sort((a, b) => (b.__planningScore ?? 0) - (a.__planningScore ?? 0))
+    .slice(0, limit);
+}
+
+function withoutPlanningScore<T extends Record<string, any>>(item: T): Omit<T, "__planningScore"> {
+  const { __planningScore: _planningScore, ...rest } = item;
+  return rest;
+}
+
+function reduceAIPlanningCatalogsForPrompt(params: {
+  rawInput: string;
+  taskScope: string[];
+  entities: any[];
+  fieldsMap: Record<string, any[]>;
+  commands: any[];
+}): PlanningCatalogs {
+  const promptTerms = tokenizeForPlanning(params.rawInput);
+  const requiredEntityNames = new Set<string>();
+  const requiredCommandKeys = new Set<string>();
+
+  if (params.taskScope.includes("mail-classification")) {
+    requiredEntityNames.add("address");
+    requiredEntityNames.add("emailThread");
+    requiredCommandKeys.add("apply-ai-mail-classification");
+  }
+
+  if (params.taskScope.includes("mail-to-document-draft")) {
+    requiredEntityNames.add("address");
+    requiredEntityNames.add("article");
+    requiredEntityNames.add("document");
+    requiredEntityNames.add("documentLine");
+    requiredEntityNames.add("emailThread");
+    requiredCommandKeys.add("apply-ai-mail-classification");
+    requiredCommandKeys.add("convert-document-from-ai-plan");
+    requiredCommandKeys.add("create-document-draft-from-ai-plan");
+  }
+
+  if (promptTerms.size === 0 && requiredEntityNames.size === 0 && requiredCommandKeys.size === 0) {
+    return {
+      entities: params.entities,
+      fieldsMap: params.fieldsMap,
+      commands: params.commands,
+    };
+  }
+
+  const scoredEntities = selectTopScored(params.entities, promptTerms, AI_PLANNING_ENTITY_TOP_N);
+
+  const selectedEntityNames = new Set(scoredEntities.map((entity) => entity.entityName));
+  for (const entityName of requiredEntityNames) selectedEntityNames.add(entityName);
+
+  const scoredCommands = selectTopScored(params.commands, promptTerms, AI_PLANNING_COMMAND_TOP_N);
+  for (const command of scoredCommands) {
+    if (command.entityName) selectedEntityNames.add(command.entityName);
+    for (const table of command.writesTables ?? []) selectedEntityNames.add(table);
+  }
+
+  if (selectedEntityNames.size === 0) {
+    return {
+      entities: params.entities,
+      fieldsMap: params.fieldsMap,
+      commands: params.commands,
+    };
+  }
+
+  const selectedEntities = params.entities.filter((entity) =>
+    selectedEntityNames.has(entity.entityName),
+  );
+  if (selectedEntities.length === 0) {
+    return {
+      entities: params.entities,
+      fieldsMap: params.fieldsMap,
+      commands: params.commands,
+    };
+  }
+
+  const selectedFieldsMap: Record<string, any[]> = {};
+  for (const entity of selectedEntities) {
+    const fields = params.fieldsMap[entity.entityName] ?? [];
+    const scoredFields = selectTopScored(fields, promptTerms, AI_PLANNING_FIELD_TOP_N).map(
+      withoutPlanningScore,
+    );
+    selectedFieldsMap[entity.entityName] = scoredFields.length > 0 ? scoredFields : fields;
+  }
+
+  const entityCommands = params.commands.filter(
+    (command) =>
+      selectedEntityNames.has(command.entityName) || requiredCommandKeys.has(command.commandKey),
+  );
+  const selectedCommands = [...scoredCommands.map(withoutPlanningScore), ...entityCommands].filter(
+    (command, index, commands) =>
+      commands.findIndex((candidate) => candidate.commandKey === command.commandKey) === index,
+  );
+
+  return {
+    entities: selectedEntities,
+    fieldsMap: selectedFieldsMap,
+    commands: selectedCommands.length > 0 ? selectedCommands : params.commands,
+  };
+}
+
 export class AIPlanningService {
   /**
    * Generates a new staged plan from unstructured user input using the selected provider.
@@ -298,20 +523,28 @@ Response constraints:
       - Step 4: An "EXECUTE_COMMAND" action with 'commandKey' = "apply-ai-mail-classification" using "dependency:1" for 'relatedAddressId' and "dependency:3" for 'relatedDocumentId'.`;
     }
 
+    const promptCatalogs = reduceAIPlanningCatalogsForPrompt({
+      rawInput: params.rawInput,
+      taskScope: params.taskScope,
+      entities,
+      fieldsMap,
+      commands,
+    });
+
     const prompt = `${promptVer.systemPrompt}${customGuidelines}${threadContextSection}
 
 ### Dynamic Discovery Catalogs:
 1. Entities:
-${JSON.stringify(entities, null, 2)}
+${JSON.stringify(promptCatalogs.entities, null, 2)}
 
 2. Fields:
-${JSON.stringify(fieldsMap, null, 2)}
+${JSON.stringify(promptCatalogs.fieldsMap, null, 2)}
 
 3. Business Relationships & Defaults:
 ${JSON.stringify(relationships, null, 2)}
 
 4. Available Commands:
-${JSON.stringify(commands, null, 2)}
+${JSON.stringify(promptCatalogs.commands, null, 2)}
 
 ### Unstructured Raw Input Task:
 "${params.rawInput}"`;

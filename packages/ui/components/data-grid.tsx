@@ -36,6 +36,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { entityListPage } from "../lib/entity-capabilities";
+import { isLocalizedText, resolveLocalizedText } from "../lib/localized-text";
 import { cn } from "../lib/utils";
 import { useFocus } from "../platform/focus-manager";
 import type { FilterOp, FilterRule } from "../types/grid";
@@ -1939,10 +1940,8 @@ function DataGridInner<T>(
                         const value = (dataRow as Record<string, any>)[col.key];
                         const rendered = col.render
                           ? col.render(dataRow)
-                          : typeof value === "object" &&
-                              value !== null &&
-                              ("en" in value || "de" in value)
-                            ? value[i18n.language] || value.en || value.de
+                          : isLocalizedText(value)
+                            ? resolveLocalizedText(value, i18n.language)
                             : value;
                         const isCellFocused = isSelected && selectedColIndex === cellIdx;
                         return (
@@ -2060,10 +2059,8 @@ function DataGridInner<T>(
                         const value = (dataRow as Record<string, any>)[col.key];
                         const rendered = col.render
                           ? col.render(dataRow)
-                          : typeof value === "object" &&
-                              value !== null &&
-                              ("en" in value || "de" in value)
-                            ? value[i18n.language] || value.en || value.de
+                          : isLocalizedText(value)
+                            ? resolveLocalizedText(value, i18n.language)
                             : value;
                         const isCellFocused = isSelected && selectedColIndex === cellIdx;
                         return (

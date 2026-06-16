@@ -5,7 +5,7 @@ import { db } from "../../index";
 import { article } from "../../schema/app.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 // Output rows come straight from DataService; only the stable identity fields
@@ -80,11 +80,9 @@ export const articleGet = defineCapability({
   },
 });
 
-export const articleList = defineCapability({
+export const articleList = defineListCapability({
   module: "masterdata",
   entityName: "article",
-  operation: "list",
-  kind: "read",
   summary: {
     en: "List articles",
     de: "Artikel auflisten",
@@ -93,23 +91,9 @@ export const articleList = defineCapability({
     en: "Archived articles are always excluded. Free-text search covers article number, name and text fields.",
     de: "Archivierte Artikel sind immer ausgeschlossen. Die Freitextsuche umfasst Artikelnummer, Name und Textfelder.",
   },
-  input: z.object({
-    articleGroupId: z.uuid().optional(),
-    ...listControlsSchema,
-  }),
-  output: z.object({ items: z.array(articleRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const filters: Record<string, string> = {};
-    if (input.articleGroupId) filters.articleGroupId = input.articleGroupId;
-    return runEntityList(ctx.tenantId, "article", filters, input, "articleNo:asc");
-  },
+  recordSchema: articleRecordSchema,
+  extraFilters: { articleGroupId: z.uuid().optional() },
+  defaultOrderBy: "articleNo:asc",
 });
 
 export const articleUpsert = defineCapability({

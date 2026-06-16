@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleImageRecordSchema = z.looseObject({
@@ -46,29 +46,13 @@ const articleImagePatchSchema = z.object({
   archived: z.boolean().optional(),
 });
 
-export const articleImageList = defineCapability({
+export const articleImageList = defineListCapability({
   module: "masterdata",
   entityName: "articleImage",
-  operation: "list",
-  kind: "read",
   summary: { en: "List article images", de: "Artikelbilder auflisten" },
-  input: z.object({
-    articleId: z.uuid().optional(),
-    ...listControlsSchema,
-  }),
-  output: z.object({ items: z.array(articleImageRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const filters: Record<string, string> = {};
-    if (input.articleId) filters.articleId = input.articleId;
-    return runEntityList(ctx.tenantId, "articleImage", filters, input, "sortOrder:asc");
-  },
+  recordSchema: articleImageRecordSchema,
+  extraFilters: { articleId: z.uuid().optional() },
+  defaultOrderBy: "sortOrder:asc",
 });
 
 export const articleImageGet = defineCapability({

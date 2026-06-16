@@ -2,6 +2,7 @@ import { DataGrid, type DataGridHandle } from "@repo/ui/components/data-grid";
 import { Dialog, DialogContent } from "@repo/ui/components/dialog";
 import { EntityMask, type FieldDef } from "@repo/ui/components/entity-mask";
 import { Skeleton } from "@repo/ui/components/skeleton";
+import { isLocalizedText, resolveLocalizedText } from "@repo/ui/lib/localized-text";
 import { cn } from "@repo/ui/lib/utils";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
@@ -53,15 +54,12 @@ const COMPANY_SCOPED_SETTINGS = new Set([
 const COMPANY_FIELD_OVERRIDES: Partial<FieldDef>[] = [];
 
 function resolveSettingsLabel(label: SettingsRegistryEntry["label"], language: string) {
-  if (typeof label === "string") return label;
-  return label[language] || label.en || label.de || "";
+  return typeof label === "string" ? label : resolveLocalizedText(label, language);
 }
 
 function resolveLocalizedLabel(value: unknown, language: string) {
   if (typeof value === "string") return value;
-  if (!value || typeof value !== "object") return "";
-  const record = value as Record<string, unknown>;
-  return ((language === "de" ? record.de : record.en) ?? record.en ?? record.de ?? "") as string;
+  return isLocalizedText(value) ? resolveLocalizedText(value, language) : "";
 }
 
 function resolveGroupLabel(

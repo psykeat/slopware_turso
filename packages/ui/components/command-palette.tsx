@@ -3,7 +3,7 @@ import { SearchIcon } from "lucide-react";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useCommands } from "../platform/command-registry";
+import { useCommandList, useCommands } from "../platform/command-registry";
 import { useFocus } from "../platform/focus-manager";
 
 function Command({ children, ...props }: React.ComponentProps<"div">) {
@@ -67,7 +67,8 @@ export function CommandPalette() {
   const [debouncedQuery] = useDebouncedValue(query, { wait: 150 });
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { commands, executeCommand } = useCommands();
+  const commands = useCommandList();
+  const { executeCommand } = useCommands();
   const { state: focusState } = useFocus();
   const { i18n } = useTranslation("ui");
   const lang = i18n.language === "de" ? "de" : "en";

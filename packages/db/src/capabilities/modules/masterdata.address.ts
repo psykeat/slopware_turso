@@ -1,11 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../index";
 import { address } from "../../schema/app.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const addressRecordSchema = z.looseObject({
@@ -34,6 +34,19 @@ const addressRecordSchema = z.looseObject({
   defaultDeliveryAddressId: z.uuid().nullable().optional(),
   searchText: z.string().nullable().optional(),
   addressCategoryId: z.uuid().nullable().optional(),
+  salutation: z.string().nullable().optional(),
+  phoneLandline: z.string().nullable().optional(),
+  phoneFax: z.string().nullable().optional(),
+  phoneMobile: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  homepage: z.string().nullable().optional(),
+  leitwegId: z.string().nullable().optional(),
+  peppolId: z.string().nullable().optional(),
+  coordinates: z.object({ lat: z.number(), lng: z.number() }).nullable().optional(),
+  agentId: z.uuid().nullable().optional(),
+  commissionRate: z.string().nullable().optional(),
+  creditRatingScore: z.string().nullable().optional(),
+  shopActive: z.boolean().optional(),
 });
 
 const addressWritableFields = z.object({
@@ -58,6 +71,19 @@ const addressWritableFields = z.object({
   customAttributes: z.record(z.string(), z.unknown()).nullable().optional(),
   defaultDeliveryAddressId: z.uuid().nullable().optional(),
   addressCategoryId: z.uuid().nullable().optional(),
+  salutation: z.string().nullable().optional(),
+  phoneLandline: z.string().nullable().optional(),
+  phoneFax: z.string().nullable().optional(),
+  phoneMobile: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  homepage: z.string().nullable().optional(),
+  leitwegId: z.string().nullable().optional(),
+  peppolId: z.string().nullable().optional(),
+  coordinates: z.object({ lat: z.number(), lng: z.number() }).nullable().optional(),
+  agentId: z.uuid().nullable().optional(),
+  commissionRate: z.string().nullable().optional(),
+  creditRatingScore: z.string().nullable().optional(),
+  shopActive: z.boolean().optional(),
 });
 
 async function findAddressByNo(tenantId: string, addressNo: string) {
@@ -69,22 +95,12 @@ async function findAddressByNo(tenantId: string, addressNo: string) {
   return row ?? null;
 }
 
-export const addressList = defineCapability({
+export const addressList = defineListCapability({
   module: "masterdata",
   entityName: "address",
-  operation: "list",
-  kind: "read",
   summary: { en: "List addresses", de: "Adressen auflisten" },
-  input: z.object({ ...listControlsSchema }),
-  output: z.object({ items: z.array(addressRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => runEntityList(ctx.tenantId, "address", {}, input, "addressNo:asc"),
+  recordSchema: addressRecordSchema,
+  defaultOrderBy: "addressNo:asc",
 });
 
 export const addressGet = defineCapability({
@@ -220,4 +236,78 @@ export const addressArchive = defineCapability({
   },
 });
 
-export const addressCapabilities = [addressList, addressGet, addressUpsert, addressArchive];
+export const addressGeocode = defineCapability({
+  module: "masterdata",
+  entityName: "address",
+  operation: "geocode",
+  kind: "update",
+  summary: { en: "Geocode addresses without coordinates", de: "Adressen ohne Koordinaten geocodieren" },
+  description: {
+    en: "Calls OpenStreetMap Nominatim to fill coordinates for addresses that have none. Respects Nominatim's 1 req/s policy. Pass addressId to geocode one address, or omit to batch all missing.",
+    de: "Ruft OpenStreetMap Nominatim auf, um Koordinaten für Adressen ohne Koordinaten zu füllen. Ohne addressId werden alle fehlenden Adressen gecodiert.",
+  },
+  input: z.object({ addressId: z.uuid().optional() }),
+  output: z.object({ geocoded: z.number().int(), failed: z.number().int() }),
+  writesTables: ["address"],
+  sideEffects: ["nominatim_api"],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_admin",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => {
+    const rows = await db
+      .select({
+        addressId: address.addressId,
+        addressLine1: address.addressLine1,
+        postalCode: address.postalCode,
+        city: address.city,
+        countryCode: address.countryCode,
+      })
+      .from(address)
+      .where(
+        and(
+          eq(address.tenantId, ctx.tenantId),
+          isNull(address.coordinates),
+          isNull(address.archivedAt),
+          ...(input.addressId ? [eq(address.addressId, input.addressId)] : []),
+        ),
+      )
+      .limit(input.addressId ? 1 : 500);
+
+    let geocoded = 0;
+    let failed = 0;
+    for (const row of rows) {
+      const params = new URLSearchParams({
+        street: row.addressLine1,
+        postalcode: row.postalCode,
+        city: row.city,
+        countrycodes: row.countryCode.toLowerCase(),
+        format: "json",
+        limit: "1",
+      });
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+          headers: { "User-Agent": "slopware-geocoder/1.0" },
+        });
+        const data = (await res.json()) as Array<{ lat: string; lon: string }>;
+        if (data[0]) {
+          await db
+            .update(address)
+            .set({ coordinates: { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }, updatedAt: new Date() })
+            .where(and(eq(address.tenantId, ctx.tenantId), eq(address.addressId, row.addressId)));
+          geocoded++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+      // Nominatim policy: max 1 req/s
+      await new Promise((r) => setTimeout(r, 1100));
+    }
+    return { geocoded, failed };
+  },
+});
+
+export const addressCapabilities = [addressList, addressGet, addressUpsert, addressArchive, addressGeocode];

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleOptionValueRecordSchema = z.looseObject({
@@ -19,29 +19,13 @@ const articleOptionValueWritableFields = z.object({
   sortOrder: z.number().int().optional(),
 });
 
-export const articleOptionValueList = defineCapability({
+export const articleOptionValueList = defineListCapability({
   module: "masterdata",
   entityName: "articleOptionValue",
-  operation: "list",
-  kind: "read",
   summary: { en: "List article option values", de: "Artikeloptionswerte auflisten" },
-  input: z.object({
-    optionId: z.uuid().optional(),
-    ...listControlsSchema,
-  }),
-  output: z.object({ items: z.array(articleOptionValueRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const filters: Record<string, string> = {};
-    if (input.optionId) filters.optionId = input.optionId;
-    return runEntityList(ctx.tenantId, "articleOptionValue", filters, input, "sortOrder:asc");
-  },
+  recordSchema: articleOptionValueRecordSchema,
+  extraFilters: { optionId: z.uuid().optional() },
+  defaultOrderBy: "sortOrder:asc",
 });
 
 export const articleOptionValueGet = defineCapability({

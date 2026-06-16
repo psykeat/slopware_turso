@@ -1,37 +1,16 @@
 import assert from "node:assert/strict";
-import crypto from "node:crypto";
 import test, { after } from "node:test";
 
 import { and, eq } from "drizzle-orm";
 
 import "../scripts/load-env";
 import { closeDb, db } from "../index";
-import { articleVariant, inventoryItem, organization, tenant } from "../schema/app.schema";
+import { articleVariant, inventoryItem } from "../schema/app.schema";
+import { useTestTenant } from "../test-support/fixtures";
 import { DataService } from "./data";
 import { createArticleVariantOptionValueHash } from "./ecommerce-variant";
 
-async function createArticleFixture() {
-  const suffix = crypto.randomUUID().slice(0, 8);
-
-  const [org] = await db
-    .insert(organization)
-    .values({
-      name: `Article Default Variant Org ${suffix}`,
-      slug: `article-default-variant-org-${suffix}`,
-    })
-    .returning({ organizationId: organization.organizationId });
-
-  const [tenantRow] = await db
-    .insert(tenant)
-    .values({
-      organizationId: org.organizationId,
-      name: `Article Default Variant Tenant ${suffix}`,
-      slug: `article-default-variant-tenant-${suffix}`,
-    })
-    .returning({ tenantId: tenant.tenantId });
-
-  return { tenantId: tenantRow.tenantId, suffix };
-}
+const createArticleFixture = () => useTestTenant();
 
 test("article creation seeds one default variant and inventory item", async () => {
   const fixture = await createArticleFixture();

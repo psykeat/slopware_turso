@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const deliveryAddressRecordSchema = z.looseObject({
@@ -47,29 +47,13 @@ const deliveryAddressPatchSchema = z.object({
   customAttributes: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
-export const deliveryAddressList = defineCapability({
+export const deliveryAddressList = defineListCapability({
   module: "masterdata",
   entityName: "deliveryAddress",
-  operation: "list",
-  kind: "read",
   summary: { en: "List delivery addresses", de: "Lieferadressen auflisten" },
-  input: z.object({
-    addressId: z.uuid().optional(),
-    ...listControlsSchema,
-  }),
-  output: z.object({ items: z.array(deliveryAddressRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const filters: Record<string, string> = {};
-    if (input.addressId) filters.addressId = input.addressId;
-    return runEntityList(ctx.tenantId, "deliveryAddress", filters, input, "createdAt:desc");
-  },
+  recordSchema: deliveryAddressRecordSchema,
+  extraFilters: { addressId: z.uuid().optional() },
+  defaultOrderBy: "createdAt:desc",
 });
 
 export const deliveryAddressGet = defineCapability({

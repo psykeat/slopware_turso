@@ -93,8 +93,10 @@ export function MailOrderReview({
 }) {
   const [bundleOpen, setBundleOpen] = useState(true);
   const bundles = Array.isArray(suggestionPayload.bundles) ? suggestionPayload.bundles : [];
-  const { data: addresses = [] } = useAddresses();
-  const { data: documents = [] } = useDocuments();
+  const { data: addressesData } = useAddresses();
+  const addresses = addressesData ?? [];
+  const { data: documentsData } = useDocuments();
+  const documents = documentsData ?? [];
   const [manualLookupSlot, setManualLookupSlot] = useState<"customer" | "referenceDocument" | null>(
     null,
   );

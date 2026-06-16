@@ -1,4 +1,5 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@repo/ui/components/sheet";
+import { resolveLocalizedText } from "@repo/ui/lib/localized-text";
 import { useAiOverlay } from "@repo/ui/platform/ai-overlay";
 import { useCommands } from "@repo/ui/platform/command-registry";
 import { useFocus } from "@repo/ui/platform/focus-manager";
@@ -84,7 +85,6 @@ export function AiOverlayHost() {
   const { state: focusState, setFocus } = useFocus();
   const { registerCommand } = useCommands();
   const { i18n } = useTranslation("ui");
-  const isDe = i18n.language?.startsWith("de");
 
   const [state, setState] = useState<AiAssistantState>({ status: "idle" });
   const [pendingMemories, setPendingMemories] = useState<any[]>([]);
@@ -278,10 +278,7 @@ export function AiOverlayHost() {
                       <span className="text-[13px] font-medium text-ink">
                         {typeof task.label === "string"
                           ? task.label
-                          : task.label?.[isDe ? "de" : "en"] ||
-                            task.label?.de ||
-                            task.label?.en ||
-                            ""}
+                          : resolveLocalizedText(task.label, i18n.language)}
                       </span>
                     </div>
                     <ChevronRightIcon className="size-4 text-ink-mute transition-transform group-hover:translate-x-0.5" />

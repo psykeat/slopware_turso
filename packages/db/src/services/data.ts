@@ -26,6 +26,7 @@ import {
   articleVariantOptionValue,
   inventoryBalance,
   inventoryItem,
+  tenantFields,
 } from "../schema/app.schema";
 import { ensureDefaultVariantForArticleRow } from "./default-variant-backfill";
 import * as schema from "../schema";
@@ -84,6 +85,37 @@ export class DataService {
     if ("id" in columns) return "id";
     const entityId = Object.keys(columns).find((k) => k.toLowerCase().endsWith("id"));
     return entityId || Object.keys(columns)[0];
+  }
+
+  private isSearchEnabledMetadata(value: unknown): boolean {
+    if (!value || typeof value !== "object") return false;
+    const search = (value as { search?: unknown }).search;
+    if (!search || typeof search !== "object") return false;
+    return (search as { enabled?: unknown }).enabled === true;
+  }
+
+  private async getExplicitSearchColumns(entityName: string, table: any) {
+    const rows = await db
+      .select({
+        fieldName: tenantFields.fieldName,
+        customAttributes: tenantFields.customAttributes,
+      })
+      .from(tenantFields)
+      .where(
+        and(
+          eq(tenantFields.entityName, entityName),
+          or(
+            eq(tenantFields.scope, "global"),
+            and(eq(tenantFields.scope, "tenant"), eq(tenantFields.tenantId, this.tenantId)),
+          )!,
+        ),
+      );
+
+    const columns = getColumns(table);
+    return rows
+      .filter((row) => this.isSearchEnabledMetadata(row.customAttributes))
+      .map((row) => [row.fieldName, (table as any)[row.fieldName] ?? (columns as any)[row.fieldName]] as const)
+      .filter(([, col]) => col && (col as any).dataType === "string");
   }
 
   private normalizeLifecyclePayload(table: any, data: Record<string, any>) {
@@ -257,20 +289,23 @@ export class DataService {
       conditions.push(isNull((table as any).archivedAt));
     }
 
-    // Free-text search — skip id/UUID columns, search text-like and JSON columns.
+    // Free-text search — skip id/UUID and JSON columns. JSON-to-text casts force
+    // expensive full-row scans; searchable JSON content should be projected into
+    // explicit text/search columns instead.
     if (options.search?.trim()) {
       const term = `%${options.search.trim()}%`;
-      const searchableCols = Object.entries(getColumns(table)).filter(([name, col]) => {
-        if (name === "id" || name.endsWith("Id")) return false;
-        return (col as any).dataType === "string" || (col as any).dataType === "json";
-      });
+      const explicitSearchCols = await this.getExplicitSearchColumns(entityName, table);
+      const searchableCols =
+        explicitSearchCols.length > 0
+          ? explicitSearchCols
+          : Object.entries(getColumns(table)).filter(([name, col]) => {
+              if (name === "id" || name.endsWith("Id")) return false;
+              return (col as any).dataType === "string";
+            });
       if (searchableCols.length > 0) {
         conditions.push(
           or(
-            ...searchableCols.map(([, col]) => {
-              const expr = (col as any).dataType === "json" ? sql`${col}::text` : (col as any);
-              return ilike(expr as any, term);
-            }),
+            ...searchableCols.map(([, col]) => ilike(col as any, term)),
           )!,
         );
       }

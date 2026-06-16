@@ -32,10 +32,12 @@ import {
   type EmailComposeAttachment,
   type EmailComposeIdentity,
   type EmailComposeSubmitValue,
+  type EmailComposeTemplate,
   type EmailComposeValue,
 } from "#/components/email/EmailComposeDialog";
 import { useGridUrlState } from "#/hooks/use-grid-url-state";
-import { entityList, entityListPage } from "#/lib/entity-capabilities";
+import { entityList } from "#/lib/entity-capabilities";
+import { useCapabilityQuery } from "#/queries/capability";
 import { invalidateAfterCapability } from "#/queries/invalidate";
 import { callCapability, capability, CapabilityClientError } from "#/server-fns/capabilities";
 
@@ -955,6 +957,8 @@ function DocumentsModule() {
     [],
   );
   const [documentMailNotice, setDocumentMailNotice] = useState<string | null>(null);
+  const [documentMailTemplates, setDocumentMailTemplates] = useState<EmailComposeTemplate[]>([]);
+  const [documentMailTemplateId, setDocumentMailTemplateId] = useState<string | null>(null);
   const lastSyncIdRef = React.useRef<string | null>(activeDocumentId);
   const gridState = useGridUrlState({ defaultPageSize: 50 });
   const documentRestoreIdRef = React.useRef<string | null | undefined>(undefined);
@@ -971,11 +975,12 @@ function DocumentsModule() {
     },
   });
 
-  const { data: companies = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "company", "tenant-options"],
-    queryFn: () =>
-      entityList("company", {}, { orderBy: "companyNo:asc", limit: 200 }).catch(() => []),
-  });
+  const { data: companyData } = useCapabilityQuery(
+    "system.company.list",
+    { filters: {}, orderBy: "companyNo:asc", limit: 200 },
+    { placeholderData: keepPreviousData },
+  );
+  const companies = companyData?.items ?? EMPTY_ARRAY;
 
   useEffect(() => {
     let cancelled = false;
@@ -1020,37 +1025,26 @@ function DocumentsModule() {
   }, [editorDocId, activeDocumentId]);
 
   // Fetch documents — paginated, filtered by tree selection
-  const { data: documentData, isLoading: isDataLoading } = useQuery({
-    queryKey: [
-      "data",
-      "document",
-      selection,
-      gridState.queryParams.page,
-      gridState.queryParams.limit,
-      gridState.queryParams.orderBy,
-      gridState.queryParams.search,
-      gridState.queryParams.filters,
-      selectedCompanyId,
-    ],
-    queryFn: async () => {
-      const { page, limit, orderBy, search, filters } = gridState.queryParams;
-      const docFilters: Record<string, string> = {};
-      if (selection.kind === "group") docFilters.documentGroupId = selection.groupId;
-      else if (selection.kind === "type") docFilters.documentType = selection.documentType;
-      if (selectedCompanyId) docFilters.companyId = selectedCompanyId;
-      const { items, total } = await entityListPage<any>("document", docFilters, {
-        limit,
-        offset: (page - 1) * limit,
-        orderBy: orderBy || undefined,
-        search: search || undefined,
-        filterRules: filters || undefined,
-      });
-      return { data: items, total };
+  const { data: documentData, isLoading: isDataLoading } = useCapabilityQuery(
+    "sales.document.list",
+    {
+      documentGroupId: selection.kind === "group" ? selection.groupId : undefined,
+      documentType: selection.kind === "type" ? selection.documentType : undefined,
+      companyId: selectedCompanyId || undefined,
+      limit: gridState.queryParams.limit,
+      offset: (gridState.queryParams.page - 1) * gridState.queryParams.limit,
+      orderBy: gridState.queryParams.orderBy || undefined,
+      search: gridState.queryParams.search || undefined,
+      filterRules: gridState.queryParams.filters as Array<{ col: string; op: string; val: string }> | undefined,
+      withTotal: true,
     },
-    enabled: !!selectedCompanyId,
-  });
+    {
+      enabled: !!selectedCompanyId,
+      placeholderData: keepPreviousData,
+    },
+  );
 
-  const documents = useMemo(() => documentData?.data ?? EMPTY_ARRAY, [documentData]);
+  const documents = useMemo(() => documentData?.items ?? EMPTY_ARRAY, [documentData]);
 
   // Fetch document tree sections — always fresh, no stale cache
   const {
@@ -1079,27 +1073,37 @@ function DocumentsModule() {
 
   if (treeError) console.error("[Tree] query error", treeError);
 
-  const { data: addresses = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "address", "all"],
-    staleTime: 5 * 60 * 1000,
-    queryFn: () => entityList("address"),
-  });
+  const { data: addressData } = useCapabilityQuery(
+    "masterdata.address.list",
+    {},
+    {
+      staleTime: 5 * 60 * 1000,
+      placeholderData: keepPreviousData,
+    },
+  );
+  const addresses = addressData?.items ?? EMPTY_ARRAY;
 
-  const { data: documentGroups = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "documentGroup", "all", selectedCompanyId],
-    staleTime: 5 * 60 * 1000,
-    queryFn: () =>
-      entityList("documentGroup", selectedCompanyId ? { companyId: selectedCompanyId } : {}),
-    enabled: !!selectedCompanyId,
-  });
+  const { data: documentGroupData } = useCapabilityQuery(
+    "sales.documentGroup.list",
+    selectedCompanyId ? { filters: { companyId: selectedCompanyId } } : { filters: {} },
+    {
+      enabled: !!selectedCompanyId,
+      staleTime: 5 * 60 * 1000,
+      placeholderData: keepPreviousData,
+    },
+  );
+  const documentGroups = documentGroupData?.items ?? EMPTY_ARRAY;
 
-  const { data: warehouses = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "warehouse", "all", selectedCompanyId],
-    staleTime: 5 * 60 * 1000,
-    queryFn: () =>
-      entityList("warehouse", selectedCompanyId ? { companyId: selectedCompanyId } : {}),
-    enabled: !!selectedCompanyId,
-  });
+  const { data: warehouseData } = useCapabilityQuery(
+    "masterdata.warehouse.list",
+    selectedCompanyId ? { filters: { companyId: selectedCompanyId } } : { filters: {} },
+    {
+      enabled: !!selectedCompanyId,
+      staleTime: 5 * 60 * 1000,
+      placeholderData: keepPreviousData,
+    },
+  );
+  const warehouses = warehouseData?.items ?? EMPTY_ARRAY;
 
   const addressMap = useMemo(
     () => new Map<string, any>((addresses || EMPTY_ARRAY).map((a: any) => [a.addressId, a])),
@@ -1134,13 +1138,15 @@ function DocumentsModule() {
   }, [selectedCompanyId, setSubCrumb]);
 
   // Fetch document lines for selected document (server-side FK filter)
-  const { data: lines = EMPTY_ARRAY } = useQuery({
-    queryKey: ["data", "documentLine", activeDocumentId],
-    queryFn: () =>
-      entityList("documentLine", { documentId: activeDocumentId! }, { orderBy: "lineNo:asc" }),
-    enabled: !!activeDocumentId,
-    placeholderData: keepPreviousData,
-  });
+  const { data: lineData } = useCapabilityQuery(
+    "sales.documentLine.list",
+    { documentId: activeDocumentId!, orderBy: "lineNo:asc" },
+    {
+      enabled: !!activeDocumentId,
+      placeholderData: keepPreviousData,
+    },
+  );
+  const lines = lineData?.items ?? EMPTY_ARRAY;
 
   const handleSelectType = (
     documentType: string,
@@ -1208,6 +1214,12 @@ function DocumentsModule() {
       }
       if (!identity) throw new Error("No sending identity available");
 
+      const templates = await entityList<EmailComposeTemplate>(
+        "emailTemplate",
+        { category: "document" },
+        { limit: 200, orderBy: "name:asc" },
+      ).catch(() => [] as EmailComposeTemplate[]);
+
       const res = await fetch(`/api/email/documents/${activeDocumentId}/compose-defaults`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1223,6 +1235,8 @@ function DocumentsModule() {
         ? result.warnings.filter((item: unknown) => typeof item === "string")
         : [];
       setDocumentMailIdentities(identities.filter((item) => item.canSend !== false));
+      setDocumentMailTemplates(templates);
+      setDocumentMailTemplateId(result.templateId ?? null);
       setDocumentMailComposer({
         identityId: result.emailIdentityId ?? identity.emailIdentityId,
         to: formatEmailAddresses(result.to),
@@ -1249,6 +1263,38 @@ function DocumentsModule() {
     }
   }, [activeDocumentId]);
 
+  const changeDocumentMailTemplate = useCallback(
+    async (templateId: string | null) => {
+      if (!activeDocumentId) return;
+      setDocumentMailTemplateId(templateId);
+      setDocumentMailBusy(true);
+      try {
+        const res = await fetch(`/api/email/documents/${activeDocumentId}/compose-defaults`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            emailIdentityId: documentMailComposer.identityId,
+            templateId,
+            language: null,
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const result = await res.json();
+        setDocumentMailComposer((prev) => ({
+          ...prev,
+          subject: result.subject ?? "",
+          bodyText: result.bodyText ?? "",
+          bodyHtml: result.bodyHtml ?? "",
+        }));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        setDocumentMailBusy(false);
+      }
+    },
+    [activeDocumentId, documentMailComposer.identityId],
+  );
+
   const submitDocumentMail = useCallback(
     async (action: EmailComposeAction, value: EmailComposeSubmitValue) => {
       if (!activeDocumentId) return;
@@ -1259,6 +1305,7 @@ function DocumentsModule() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             emailIdentityId: value.identityId,
+            templateId: documentMailTemplateId,
             to: parseEmailAddresses(value.to),
             cc: parseEmailAddresses(value.cc),
             bcc: parseEmailAddresses(value.bcc),
@@ -1298,7 +1345,7 @@ function DocumentsModule() {
         setDocumentMailBusy(false);
       }
     },
-    [activeDocumentId, queryClient],
+    [activeDocumentId, documentMailTemplateId, queryClient],
   );
 
   const openDocumentFromAi = useCallback((event: Event) => {
@@ -1815,6 +1862,9 @@ function DocumentsModule() {
         attachments={documentMailAttachments}
         notice={documentMailNotice}
         busy={documentMailBusy}
+        templates={documentMailTemplates}
+        selectedTemplateId={documentMailTemplateId}
+        onTemplateChange={changeDocumentMailTemplate}
         onClose={() => setDocumentMailOpen(false)}
         onSubmit={submitDocumentMail}
       />

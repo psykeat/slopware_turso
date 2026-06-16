@@ -5,7 +5,7 @@ import { db } from "../../index";
 import { articleGroup } from "../../schema/app.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleGroupRecordSchema = z.object({
@@ -43,25 +43,12 @@ async function findArticleGroupByCode(tenantId: string, code: string) {
   return row ?? null;
 }
 
-export const articleGroupList = defineCapability({
+export const articleGroupList = defineListCapability({
   module: "masterdata",
   entityName: "articleGroup",
-  operation: "list",
-  kind: "read",
-  summary: {
-    en: "List article groups",
-    de: "Artikelgruppen auflisten",
-  },
-  input: z.object({ ...listControlsSchema }),
-  output: z.object({ items: z.array(articleGroupRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => runEntityList(ctx.tenantId, "articleGroup", {}, input, "code:asc"),
+  summary: { en: "List article groups", de: "Artikelgruppen auflisten" },
+  recordSchema: articleGroupRecordSchema,
+  defaultOrderBy: "code:asc",
 });
 
 export const articleGroupGet = defineCapability({

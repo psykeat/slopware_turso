@@ -6,34 +6,15 @@ import { and, eq } from "drizzle-orm";
 
 import "../scripts/load-env";
 import { closeDb, db } from "../index";
-import { articleVariantTemplate, capabilityExecutionLog, organization, tenant } from "../schema/app.schema";
+import { articleVariantTemplate, capabilityExecutionLog } from "../schema/app.schema";
+import { cleanupEphemeralTenants, createEphemeralTenant } from "../test-support/fixtures";
 import { executeCapability, type ExecutionContext } from "./index";
 
 const CREATE_KEY = "masterdata.articleVariantTemplate.create";
-const tenantIds: string[] = [];
 
 async function createTenantFixture(): Promise<ExecutionContext> {
-  const suffix = crypto.randomUUID().slice(0, 8);
-  const [org] = await db
-    .insert(organization)
-    .values({ name: `Idem Org ${suffix}`, slug: `idem-org-${suffix}` })
-    .returning({ organizationId: organization.organizationId });
-  const [tenantRow] = await db
-    .insert(tenant)
-    .values({
-      organizationId: org.organizationId,
-      name: `Idem Tenant ${suffix}`,
-      slug: `idem-tenant-${suffix}`,
-    })
-    .returning({ tenantId: tenant.tenantId });
-  tenantIds.push(tenantRow.tenantId);
-  return {
-    tenantId: tenantRow.tenantId,
-    organizationId: org.organizationId,
-    userId: null,
-    actorMode: "test",
-    role: "system",
-  };
+  const { ctx } = await createEphemeralTenant("Idem");
+  return ctx;
 }
 
 function createInput(slug: string) {
@@ -157,14 +138,6 @@ test("a failed write drops the claim so a retry can re-run", async () => {
 });
 
 after(async () => {
-  for (const tenantId of tenantIds) {
-    await db
-      .delete(capabilityExecutionLog)
-      .where(eq(capabilityExecutionLog.tenantId, tenantId));
-    await db
-      .delete(articleVariantTemplate)
-      .where(eq(articleVariantTemplate.tenantId, tenantId));
-    await db.delete(tenant).where(eq(tenant.tenantId, tenantId));
-  }
+  await cleanupEphemeralTenants();
   await closeDb();
 });

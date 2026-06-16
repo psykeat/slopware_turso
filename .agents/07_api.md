@@ -41,6 +41,8 @@ packages/db/src/capabilities/
   modules/masterdata.variant-template.ts   wraps services/variant-template.ts
   index.ts                 static module imports → registration; public exports
   sync-entity-commands.ts  registry → entity_commands projection
+  manifest-build.ts        manifest generation and serialization logic
+  sdk-build.ts             Client SDK generation and serialization logic
   capabilities.contract.test.ts   registry-wide invariants (no fixtures)
   capabilities.scenario.test.ts   real-DB scenarios with throwaway tenant fixtures
   capabilities.coverage.test.ts   coverage ratchet over audited services
@@ -49,11 +51,13 @@ packages/db/src/capabilities/
   http/article-capability.smoke.test.ts   HTTP surface smoke test (needs dev server)
 
 apps/web/src/lib/capability-auth.ts             resolveExecutionContext(request)
+apps/web/src/lib/sdk.generated.ts               generated E2E type-safe Client SDK
 apps/web/src/routes/api/capabilities.ts         GET  /api/capabilities
 apps/web/src/routes/api/capabilities/$key.ts    GET  /api/capabilities/{key}
 apps/web/src/routes/api/capabilities/$key/execute.ts  POST /api/capabilities/{key}/execute
 
 packages/db/src/scripts/sync-capabilities.ts    script entry; chained into `migrate`
+packages/db/src/scripts/generate-client-sdk.ts  Client SDK generation entry point
 ```
 
 Import path: `@repo/db/capabilities` (export added in `packages/db/package.json`).
@@ -307,6 +311,17 @@ Implementation constraints worth knowing:
 - **Order-insensitive change detection**: jsonb normalizes key order, so the sync compares via a recursive `stableStringify`, keeping reruns idempotent (`unchanged`, not `updated`).
 
 `AIDiscoveryService.getSemanticCommandCatalog` now reads tenant rows **plus** global rows (tenant rows win on `entityName::commandKey` clashes), skips `visibility: "hidden"`, and exposes `capabilityKey` on each `SemanticCommand`. A command with a `capabilityKey` is executable via the execute endpoint; `BOOTSTRAPPED_COMMANDS` still supplements the catalog until phase 4 retires it.
+
+## Type-Safe Client SDK
+
+To ensure compile-time type safety in the frontend when communicating with capabilities, we compile a nested Client SDK from the capability registry.
+
+- **Generation command**: `pnpm db:generate-client-sdk` (runs `packages/db/src/scripts/generate-client-sdk.ts`).
+- **Target File**: [apps/web/src/lib/sdk.generated.ts](file:///home/ubuntu/slopware/apps/web/src/lib/sdk.generated.ts).
+- **Structure**: It outputs a nested object `sdk` mapping to the dot-separated key hierarchy:
+  - `sdk.[module].[entity].[operation]`: Direct Promise-based execution.
+  - `sdk.[module].[entity].use[Operation]`: Integrated React Query hooks (which delegate to generic helpers `useCapabilityQuery` and `useCapabilityMutation` under `apps/web/src/queries/capability.ts`).
+- **Drift Safety**: A contract test inside `capabilities.contract.test.ts` regenerates the client SDK in-memory and compares it byte-for-byte against the generated file on disk, preventing any client-backend drift in CI.
 
 ## Testing
 

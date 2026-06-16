@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { executeCapability } from "../lib/capability-client";
 import { entityGet, entityList } from "../lib/entity-capabilities";
 import { formatDate, formatMoney, StatusDot } from "../lib/formatters";
+import { isLocalizedText, resolveLocalizedText } from "../lib/localized-text";
 import { cn } from "../lib/utils";
 import { useCommands } from "../platform/command-registry";
 import { useFocus } from "../platform/focus-manager";
@@ -2413,7 +2414,7 @@ export function DocumentEditor({
   onCreateNewDocument,
   onSaved,
 }: DocumentEditorProps) {
-  const { t } = useTranslation("ui");
+  const { t, i18n } = useTranslation("ui");
   const queryClient = useQueryClient();
   const { registerCommand } = useCommands();
   const { setFocus, resetFocus } = useFocus();
@@ -3174,25 +3175,25 @@ export function DocumentEditor({
     () =>
       (paymentTerms as any[]).map((p: any) => ({
         id: p.paymentTermId,
-        label: typeof p.name === "object" ? (p.name?.de ?? p.name?.en ?? "") : String(p.name ?? ""),
+        label: isLocalizedText(p.name) ? resolveLocalizedText(p.name, i18n.language) : String(p.name ?? ""),
       })),
-    [paymentTerms],
+    [paymentTerms, i18n.language],
   );
   const shippingItems = useMemo(
     () =>
       (shippingMethods as any[]).map((s: any) => ({
         id: s.shippingMethodId,
-        label: typeof s.name === "object" ? (s.name?.de ?? s.name?.en ?? "") : String(s.name ?? ""),
+        label: isLocalizedText(s.name) ? resolveLocalizedText(s.name, i18n.language) : String(s.name ?? ""),
       })),
-    [shippingMethods],
+    [shippingMethods, i18n.language],
   );
   const currencyItems = useMemo(
     () =>
       (currencies as any[]).map((c: any) => ({
         id: c.code,
-        label: `${c.code} – ${typeof c.name === "object" ? (c.name?.de ?? c.name?.en ?? "") : String(c.name ?? "")}`,
+        label: `${c.code} – ${isLocalizedText(c.name) ? resolveLocalizedText(c.name, i18n.language) : String(c.name ?? "")}`,
       })),
-    [currencies],
+    [currencies, i18n.language],
   );
   const headerTabOrder = {
     documentType: 1,

@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/select";
+import { resolveLocalizedText } from "@repo/ui/lib/localized-text";
 import { cn } from "@repo/ui/lib/utils";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -696,7 +697,7 @@ function VariantTemplatesView() {
                         <SelectItem key={group.articleGroupId} value={group.articleGroupId}>
                           {typeof group.name === "string"
                             ? group.name
-                            : (group.name?.de ?? group.name?.en ?? group.code ?? "—")}
+                            : resolveLocalizedText(group.name, "de") || group.code || "—"}
                         </SelectItem>
                       ))}
                     </SelectContent>

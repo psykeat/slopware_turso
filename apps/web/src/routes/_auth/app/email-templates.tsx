@@ -1,12 +1,17 @@
 import { DataGrid } from "@repo/ui/components/data-grid";
 import { EntityMask, type FieldDef } from "@repo/ui/components/entity-mask";
+import {
+  DOCUMENT_TEMPLATE_VARIABLES,
+  SAMPLE_TEMPLATE_DATA,
+  renderTemplatePreview,
+} from "@repo/ui/lib/template-preview";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
-import { entityList } from "#/lib/entity-capabilities";
+import { useCapabilityQuery } from "#/queries/capability";
 
 export const Route = createFileRoute("/_auth/app/email-templates")({
   component: EmailTemplatesRoute,
@@ -93,12 +98,54 @@ const TEMPLATE_FIELDS: FieldDef[] = [
 
 const TEMPLATE_BINDING_FIELDS: FieldDef[] = [
   { key: "emailTemplateId", label: "Template", type: "text", required: true, readonly: true },
-  { key: "documentType", label: "Document Type", type: "text" },
+  {
+    key: "documentType",
+    label: "Document Type",
+    type: "text",
+    helpText: "1-Zeichen-Belegart: N=Angebot, A=Auftrag, L=Lieferschein, R=Rechnung, G=Gutschrift.",
+  },
   { key: "companyId", label: "Company", type: "text" },
   { key: "language", label: "Language", type: "text" },
   { key: "emailIdentityId", label: "Identity", type: "text" },
   { key: "priority", label: "Priority", type: "number" },
 ];
+
+function TemplatePreviewPanel({ subject, bodyHtml }: { subject: string; bodyHtml: string }) {
+  const renderedSubject = renderTemplatePreview(subject, SAMPLE_TEMPLATE_DATA);
+  const renderedBody = renderTemplatePreview(bodyHtml, SAMPLE_TEMPLATE_DATA);
+  return (
+    <div className="mt-4 grid gap-4 md:grid-cols-2">
+      <div className="rounded border border-hairline bg-canvas-soft p-3">
+        <div className="mb-2 text-[12px] font-medium text-ink-secondary">
+          Vorschau (Beispieldaten)
+        </div>
+        <div className="mb-1 text-[11px] text-ink-muted">Betreff</div>
+        <div className="mb-3 rounded-sm bg-canvas px-2 py-1 text-[13px] text-ink">
+          {renderedSubject || <span className="text-ink-muted">—</span>}
+        </div>
+        <div className="mb-1 text-[11px] text-ink-muted">Text</div>
+        <div
+          className="prose prose-sm max-w-none rounded-sm bg-canvas px-2 py-1 text-[13px] text-ink"
+          // Preview only: rendered from the tenant's own template + sample data.
+          dangerouslySetInnerHTML={{ __html: renderedBody }}
+        />
+      </div>
+      <div className="rounded border border-hairline bg-canvas-soft p-3">
+        <div className="mb-2 text-[12px] font-medium text-ink-secondary">
+          Verfügbare Variablen
+        </div>
+        <ul className="flex flex-col gap-1">
+          {DOCUMENT_TEMPLATE_VARIABLES.map((variable) => (
+            <li key={variable.token} className="flex items-baseline gap-2 text-[12px]">
+              <code className="rounded-sm bg-canvas px-1 py-0.5 text-[11px] text-primary">{`{{${variable.token}}}`}</code>
+              <span className="text-ink-muted">{variable.description}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
 
 function EmailTemplatesRoute() {
   const queryClient = useQueryClient();
@@ -106,37 +153,45 @@ function EmailTemplatesRoute() {
   const { registerCommand } = useCommands();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedBindingId, setSelectedBindingId] = useState<string | null>(null);
+  const [previewSubject, setPreviewSubject] = useState("");
+  const [previewBodyHtml, setPreviewBodyHtml] = useState("");
 
   useEffect(() => {
     setSubCrumb("Email Templates");
     return () => setSubCrumb(undefined);
   }, [setSubCrumb]);
 
-  const { data: templates = EMPTY } = useQuery<EmailTemplateRow[]>({
-    queryKey: ["email-templates", "templates"],
-    queryFn: () =>
-      entityList<EmailTemplateRow>("emailTemplate", {}, { limit: 200, orderBy: "updatedAt:desc" }).catch(
-        () => [],
-      ),
-    placeholderData: keepPreviousData,
-  });
+  const { data: templateData } = useCapabilityQuery(
+    "communication.emailTemplate.list",
+    { filters: {}, limit: 200, orderBy: "updatedAt:desc" },
+    { placeholderData: keepPreviousData },
+  );
+  const templates = (templateData?.items ?? EMPTY) as EmailTemplateRow[];
 
-  const { data: bindings = EMPTY } = useQuery<EmailTemplateBindingRow[]>({
-    queryKey: ["email-templates", "bindings", selectedTemplateId],
-    queryFn: async () => {
-      if (!selectedTemplateId) return [];
-      return entityList<EmailTemplateBindingRow>(
-        "emailTemplateBinding",
-        { emailTemplateId: selectedTemplateId },
-        { limit: 200 },
-      ).catch(() => []);
-    },
-    enabled: Boolean(selectedTemplateId),
-    placeholderData: keepPreviousData,
-  });
+  const { data: bindingData } = useCapabilityQuery(
+    "communication.emailTemplateBinding.list",
+    { filters: { emailTemplateId: selectedTemplateId! }, limit: 200 },
+    { enabled: Boolean(selectedTemplateId), placeholderData: keepPreviousData },
+  );
+  const bindings = (bindingData?.items ?? EMPTY) as EmailTemplateBindingRow[];
 
   const selectedTemplate =
     templates.find((template) => template.emailTemplateId === selectedTemplateId) ?? null;
+
+  // Seed the live preview from the loaded template (edit) or the create defaults
+  // whenever the selection changes — adjusting state during render (React's
+  // blessed alternative to a sync effect). onFieldChange keeps it in sync as the
+  // user edits the subject/body fields.
+  const [previewSeedId, setPreviewSeedId] = useState<string | null>(selectedTemplateId);
+  if (previewSeedId !== selectedTemplateId) {
+    setPreviewSeedId(selectedTemplateId);
+    setPreviewSubject(
+      selectedTemplate?.subjectTemplate ?? EMPTY_CREATE_TEMPLATE_VALUES.subjectTemplate,
+    );
+    setPreviewBodyHtml(
+      selectedTemplate?.bodyHtmlTemplate ?? EMPTY_CREATE_TEMPLATE_VALUES.bodyHtmlTemplate,
+    );
+  }
   const createTemplateInitialValues = useMemo(
     () => (selectedTemplateId ? undefined : { ...EMPTY_CREATE_TEMPLATE_VALUES }),
     [selectedTemplateId],
@@ -225,6 +280,14 @@ function EmailTemplatesRoute() {
             title={selectedTemplate ? `Edit ${selectedTemplate.code}` : "Create template"}
             fields={TEMPLATE_FIELDS}
             initialValues={createTemplateInitialValues}
+            onFieldChange={(key, value) => {
+              if (key === "subjectTemplate") setPreviewSubject(typeof value === "string" ? value : "");
+              if (key === "bodyHtmlTemplate")
+                setPreviewBodyHtml(typeof value === "string" ? value : "");
+            }}
+            postFieldsSection={
+              <TemplatePreviewPanel subject={previewSubject} bodyHtml={previewBodyHtml} />
+            }
             onSaved={(record) => {
               const next = record as EmailTemplateRow;
               setSelectedTemplateId(next.emailTemplateId);

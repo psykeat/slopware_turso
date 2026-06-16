@@ -31,6 +31,7 @@
 | movement_type | movement_type | char(1) | — |  |  |
 | line_type | line_type | varchar(20) | — | NOT NULL, DEFAULT article |  |
 | bom_group_id | bom_group_id | uuid | — |  |  |
+| line_weight_kg | line_weight_kg | numeric | — |  |  |
 
 > INDEX `idx_document_line_article` (variant_id) [btree]
 > INDEX `idx_document_line_variant` (variant_id) [btree]

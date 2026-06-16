@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/utils";
-import { useCommands } from "../platform/command-registry";
+import { useCommandList, useCommands } from "../platform/command-registry";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 
 const GROUPS = [
@@ -71,7 +71,8 @@ function ShortcutRow({ label, shortcut }: { label: string; shortcut: string }) {
 export function ShortcutHelp() {
   const [open, setOpen] = useState(false);
   const { t, i18n } = useTranslation("ui");
-  const { registerCommand, commands } = useCommands();
+  const commands = useCommandList();
+  const { registerCommand } = useCommands();
 
   useEffect(() => {
     return registerCommand({

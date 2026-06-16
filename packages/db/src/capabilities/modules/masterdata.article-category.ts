@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleCategoryRecordSchema = z.looseObject({
@@ -28,31 +28,13 @@ const articleCategoryPatchSchema = z.object({
   archived: z.boolean().optional(),
 });
 
-export const articleCategoryList = defineCapability({
+export const articleCategoryList = defineListCapability({
   module: "masterdata",
   entityName: "articleCategory",
-  operation: "list",
-  kind: "read",
   summary: { en: "List article categories", de: "Artikelkategorien auflisten" },
-  input: z.object({
-    articleId: z.uuid().optional(),
-    categoryId: z.uuid().optional(),
-    ...listControlsSchema,
-  }),
-  output: z.object({ items: z.array(articleCategoryRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const filters: Record<string, string> = {};
-    if (input.articleId) filters.articleId = input.articleId;
-    if (input.categoryId) filters.categoryId = input.categoryId;
-    return runEntityList(ctx.tenantId, "articleCategory", filters, input, "sortOrder:asc");
-  },
+  recordSchema: articleCategoryRecordSchema,
+  extraFilters: { articleId: z.uuid().optional(), categoryId: z.uuid().optional() },
+  defaultOrderBy: "sortOrder:asc",
 });
 
 export const articleCategoryGet = defineCapability({

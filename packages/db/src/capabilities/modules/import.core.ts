@@ -169,6 +169,322 @@ export const importBatchUpload = defineCapability({
     }),
 });
 
+export const importBuerowareBootstrap = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "bootstrap",
+  kind: "create",
+  summary: {
+    en: "Bootstrap a Büroware mapping from Satzbeschreibung.csv",
+    de: "Büroware-Mapping aus Satzbeschreibung.csv erzeugen",
+  },
+  input: z.object({
+    profileId: z.uuid(),
+    tenantConnectorId: z.uuid(),
+    schemaCsvText: z.string().min(1),
+    targetFileName: z.string().min(1),
+    delimiter: z.string().length(1).optional(),
+  }),
+  output: z.object({
+    versionId: z.uuid(),
+    versionNo: z.number().int(),
+    fieldCount: z.number().int(),
+  }),
+  writesTables: ["importProfileMappingVersion", "importFieldMapping"],
+  sideEffects: [],
+  idempotent: false,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => service(ctx).bootstrapBuerowareMapping(input),
+});
+
+export const importBuerowareQueueFile = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "queueFile",
+  kind: "create",
+  summary: {
+    en: "Queue a Büroware SEDB file already stored on disk",
+    de: "Bereits gespeicherte Büroware-SEDB-Datei einreihen",
+  },
+  input: z.object({
+    layoutId: z.uuid().optional(),
+    profileId: z.uuid().optional(),
+    mappingVersionId: z.uuid().optional(),
+    sourceFileName: z.string().min(1).optional(),
+    filePath: z.string().min(1),
+    isDryRun: z.boolean().optional(),
+  }),
+  output: z.object({
+    batchId: z.uuid(),
+    status: z.string(),
+    needsLayoutSelection: z.boolean().optional(),
+  }),
+  writesTables: ["importBatch"],
+  sideEffects: ["queues a stored import file for asynchronous processing"],
+  idempotent: false,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "confirm", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => service(ctx).queueBuerowareFile(input),
+});
+
+export const importBuerowareSelectLayout = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "selectLayout",
+  kind: "update",
+  summary: {
+    en: "Select the data area (layout) for a pending Büroware batch",
+    de: "Datenbereich (Layout) für einen wartenden Büroware-Batch wählen",
+  },
+  input: z.object({
+    batchId: z.uuid(),
+    layoutId: z.uuid(),
+    profileId: z.uuid().optional(),
+    mappingVersionId: z.uuid().optional(),
+  }),
+  output: z.object({ batchId: z.uuid(), status: z.string() }),
+  writesTables: ["importBatch"],
+  sideEffects: ["binds a data area and mapping to a batch and queues it"],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "confirm", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => service(ctx).selectBuerowareLayout(input),
+});
+
+export const importBuerowareLoadCatalog = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "loadCatalog",
+  kind: "create",
+  summary: {
+    en: "Load the central Büroware Satzbeschreibung catalog",
+    de: "Zentralen Büroware-Satzbeschreibungskatalog laden",
+  },
+  description: {
+    en: "Parses the whole Satzbeschreibung.csv into the central record-layout/field catalog (one layout per data area) and generates the central default field mapping per layout.",
+    de: "Parst die komplette Satzbeschreibung.csv in den zentralen Layout-/Feldkatalog (ein Layout pro Datenbereich) und erzeugt je Layout die zentrale Default-Feldzuweisung.",
+  },
+  input: z.object({
+    schemaCsvText: z.string().min(1),
+    delimiter: z.string().length(1).optional(),
+  }),
+  output: z.object({
+    catalogVersion: z.number().int(),
+    layouts: z.array(
+      z.object({
+        layoutId: z.uuid(),
+        fileName: z.string(),
+        dataArea: z.string(),
+        qualifier: z.string().nullable(),
+        targetEntity: z.string().nullable(),
+        fieldCount: z.number().int(),
+        mappedFieldCount: z.number().int(),
+      }),
+    ),
+  }),
+  writesTables: [
+    "buerowareRecordLayout",
+    "buerowareRecordField",
+    "importProfileMappingVersion",
+    "importFieldMapping",
+  ],
+  sideEffects: ["replaces the active central Büroware catalog and default mappings"],
+  idempotent: false,
+  supportsDryRun: false,
+  minRole: "tenant_admin",
+  exposure: { llm: "hidden", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => service(ctx).loadBuerowareCatalog(input),
+});
+
+const layoutSchema = z.object({
+  layoutId: z.uuid(),
+  fileName: z.string(),
+  dataArea: z.string(),
+  qualifier: z.string().nullable(),
+  defaultTargetEntity: z.string().nullable(),
+  catalogVersion: z.number().int(),
+  isActive: z.boolean(),
+  fieldCount: z.number().int(),
+});
+
+export const importBuerowareListLayouts = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "listLayouts",
+  kind: "read",
+  summary: {
+    en: "List the data areas (layouts) for a Büroware file",
+    de: "Datenbereiche (Layouts) einer Büroware-Datei auflisten",
+  },
+  input: z.object({ fileName: z.string().min(1) }),
+  output: z.object({ items: z.array(layoutSchema) }),
+  writesTables: [],
+  sideEffects: [],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => ({
+    items: (await service(ctx).listLayoutsForFile(input.fileName)) as z.output<
+      typeof layoutSchema
+    >[],
+  }),
+});
+
+export const importBuerowareGetLayoutFields = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "getLayoutFields",
+  kind: "read",
+  summary: {
+    en: "Get catalog fields and resolved assignment for a layout",
+    de: "Katalogfelder und aufgelöste Zuweisung eines Layouts lesen",
+  },
+  input: z.object({
+    layoutId: z.uuid(),
+    mappingVersionId: z.uuid().optional(),
+    templateProfileId: z.uuid().optional(),
+  }),
+  output: looseRowSchema,
+  writesTables: [],
+  sideEffects: [],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) =>
+    (await service(ctx).getLayoutFields(input.layoutId, {
+      mappingVersionId: input.mappingVersionId,
+      templateProfileId: input.templateProfileId,
+    })) as z.output<typeof looseRowSchema>,
+});
+
+export const importBuerowareListTemplates = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "listTemplates",
+  kind: "read",
+  summary: {
+    en: "List tenant import templates for a layout",
+    de: "Tenant-Importvorlagen für ein Layout auflisten",
+  },
+  input: z.object({ layoutId: z.uuid() }),
+  output: z.object({ items: z.array(looseRowSchema) }),
+  writesTables: [],
+  sideEffects: [],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => ({
+    items: (await service(ctx).listBuerowareTemplates(input.layoutId)) as z.output<
+      typeof looseRowSchema
+    >[],
+  }),
+});
+
+export const importBuerowareSaveTemplate = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "saveTemplate",
+  kind: "create",
+  summary: {
+    en: "Save a tenant import template for a layout",
+    de: "Tenant-Importvorlage für ein Layout speichern",
+  },
+  input: z.object({
+    layoutId: z.uuid(),
+    label: z.string().min(1),
+    slug: z.string().min(1).optional(),
+    fields: z
+      .array(
+        z.object({
+          buerowareFieldId: z.string().min(1),
+          targetField: z.string().min(1),
+          targetEntity: z.string().min(1).optional(),
+          referenceEntity: z.string().min(1).nullable().optional(),
+        }),
+      )
+      .default([]),
+  }),
+  output: z.object({
+    profileId: z.uuid(),
+    versionId: z.uuid(),
+    fieldCount: z.number().int(),
+  }),
+  writesTables: ["importProfile", "importProfileMappingVersion", "importFieldMapping"],
+  sideEffects: ["creates or updates a tenant import template"],
+  idempotent: false,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => service(ctx).saveBuerowareTemplate(input),
+});
+
+export const importBuerowareRunNextJob = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "runNextJob",
+  kind: "process",
+  summary: {
+    en: "Run the next queued Büroware import job",
+    de: "Nächsten Büroware-Importjob ausführen",
+  },
+  input: z.object({}),
+  output: z.object({
+    batchId: z.uuid().optional(),
+    status: z.string(),
+  }),
+  writesTables: ["importBatch", "importRow"],
+  sideEffects: ["streams one queued import file into staging rows and validates it"],
+  idempotent: false,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "confirm", http: true },
+  schemaVersion: 1,
+  handler: async (ctx) => {
+    const result = await service(ctx).runNextBuerowareImportJob();
+    return result ?? { status: "idle" };
+  },
+});
+
+export const importBuerowareReconcile = defineCapability({
+  module: "import",
+  entityName: "bueroware",
+  operation: "reconcile",
+  kind: "process",
+  summary: {
+    en: "Reconcile pending Büroware import references",
+    de: "Offene Büroware-Importreferenzen erneut auflösen",
+  },
+  input: z.object({}),
+  output: z.object({
+    posted: z.number().int(),
+    failed: z.number().int(),
+    pendingReferences: z.number().int(),
+  }),
+  writesTables: ["importBatch", "importRow"],
+  sideEffects: ["posts rows whose missing references can now be resolved"],
+  idempotent: false,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "confirm", http: true },
+  schemaVersion: 1,
+  handler: async (ctx) => service(ctx).reconcilePendingRows(),
+});
+
 export const importProfileList = defineCapability({
   module: "import",
   entityName: "importProfile",
@@ -344,6 +660,16 @@ export const importCapabilities = [
   importBatchApprove,
   importBatchPost,
   importBatchUpload,
+  importBuerowareBootstrap,
+  importBuerowareQueueFile,
+  importBuerowareSelectLayout,
+  importBuerowareLoadCatalog,
+  importBuerowareListLayouts,
+  importBuerowareGetLayoutFields,
+  importBuerowareListTemplates,
+  importBuerowareSaveTemplate,
+  importBuerowareRunNextJob,
+  importBuerowareReconcile,
   importProfileList,
   importProfileCreate,
   importProfileUpdate,

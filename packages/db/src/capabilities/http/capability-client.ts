@@ -49,12 +49,17 @@ export class CapabilityClient {
     private readonly cookie: string,
   ) {}
 
-  /** Sign in as the dedicated capability test user and return a ready client. */
-  static async login(): Promise<CapabilityClient> {
+  /**
+   * Sign in and return a ready client. Defaults to the dedicated capability
+   * test user (its own isolated tenant); pass `{ email, password }` to sign in
+   * as a different user instead, e.g. the base-tenant-bound dev user (see
+   * `db:dev-login`).
+   */
+  static async login(credentials?: { email?: string; password?: string }): Promise<CapabilityClient> {
     const baseUrl =
       process.env.CAPABILITY_TEST_BASE_URL ?? process.env.VITE_BASE_URL ?? "http://localhost:3000";
-    const email = process.env.CAPABILITY_TEST_EMAIL;
-    const password = process.env.CAPABILITY_TEST_PASSWORD;
+    const email = credentials?.email ?? process.env.CAPABILITY_TEST_EMAIL;
+    const password = credentials?.password ?? process.env.CAPABILITY_TEST_PASSWORD;
     if (!email || !password) {
       throw new Error(
         "CAPABILITY_TEST_EMAIL / CAPABILITY_TEST_PASSWORD missing in apps/web/.env — see AI_TESTING.md",
@@ -84,6 +89,11 @@ export class CapabilityClient {
     if (!cookie) throw new Error("Test login returned no session cookie");
 
     return new CapabilityClient(baseUrl, cookie);
+  }
+
+  /** Raw `Cookie` header value for this session — for handing it to curl or a browser (see `db:dev-login`). */
+  get cookieHeader(): string {
+    return this.cookie;
   }
 
   private async request(path: string, init?: RequestInit): Promise<Response> {

@@ -11,12 +11,12 @@ import {
 } from "@repo/ui/components/select";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useCommands } from "@repo/ui/platform/command-registry";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
-import { entityList } from "#/lib/entity-capabilities";
+import { useCapabilityQuery } from "#/queries/capability";
 import { capability, CapabilityClientError } from "#/server-fns/capabilities";
 
 export const Route = createFileRoute("/_auth/app/accounting")({
@@ -31,20 +31,6 @@ interface ExportBatch {
   rowCount: number;
   createdAt: string;
   exportedAt: string | null;
-}
-
-interface FiscalPeriod {
-  fiscalPeriodId: string;
-  companyId: string;
-  fiscalYear: number;
-  periodNo: number;
-  startDate: string;
-  endDate: string;
-}
-
-interface Company {
-  companyId: string;
-  name: string;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -74,29 +60,24 @@ function AccountingModule() {
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
-  const { data: batches = [], isLoading } = useQuery<ExportBatch[]>({
-    queryKey: ["accounting", "batches"],
-    queryFn: async () => {
-      try {
-        const items = await capability("accounting.accountingExportBatch.list")({});
-        return items as unknown as ExportBatch[];
-      } catch {
-        return [];
-      }
-    },
-  });
+  const { data: batchData, isLoading } = useCapabilityQuery(
+    "accounting.accountingExportBatch.list",
+    {},
+  );
+  const batches = batchData?.items ?? [];
 
-  const { data: companies = [] } = useQuery<Company[]>({
-    queryKey: ["data", "company"],
-    queryFn: () => entityList<Company>("company").catch(() => []),
-  });
+  const { data: companyData } = useCapabilityQuery(
+    "system.company.list",
+    { filters: {} },
+  );
+  const companies = companyData?.items ?? [];
 
-  const { data: periods = [] } = useQuery<FiscalPeriod[]>({
-    queryKey: ["data", "fiscal_period", newCompanyId],
-    enabled: !!newCompanyId,
-    queryFn: () =>
-      entityList<FiscalPeriod>("fiscalPeriod", { companyId: newCompanyId! }).catch(() => []),
-  });
+  const { data: periodData } = useCapabilityQuery(
+    "masterdata.fiscalPeriod.list",
+    { filters: { companyId: newCompanyId! } },
+    { enabled: !!newCompanyId },
+  );
+  const periods = periodData?.items ?? [];
 
   const selectedBatch = batches.find((b) => b.batchId === selectedBatchId) ?? null;
 

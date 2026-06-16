@@ -1,7 +1,7 @@
 # Slopware — Live Schema Index
 
-> Generated: 2026-06-13 17:44:54 UTC
-> Tables: 118
+> Generated: 2026-06-16 18:35:13 UTC
+> Tables: 125
 
 Here is the index of all database tables. Click on a table name to view its detailed columns, types, and business annotations.
 
@@ -16,6 +16,7 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [address_contact](file:///home/ubuntu/slopware/.agents/schema/address_contact.md) (_contact_id_)
 - [address_contact_identity](file:///home/ubuntu/slopware/.agents/schema/address_contact_identity.md) (_identity_id_)
 - [address_seq](file:///home/ubuntu/slopware/.agents/schema/address_seq.md) (_tenant_id_)
+- [agent](file:///home/ubuntu/slopware/.agents/schema/agent.md) (_agent_id_)
 - [ai_apply_attempt](file:///home/ubuntu/slopware/.agents/schema/ai_apply_attempt.md) (_attempt_id_)
 - [ai_context_projection](file:///home/ubuntu/slopware/.agents/schema/ai_context_projection.md) (_projection_id_)
 - [ai_evidence](file:///home/ubuntu/slopware/.agents/schema/ai_evidence.md) (_evidence_id_)
@@ -39,10 +40,15 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [article_option_value](file:///home/ubuntu/slopware/.agents/schema/article_option_value.md) (_value_id_)
 - [article_variant](file:///home/ubuntu/slopware/.agents/schema/article_variant.md) (_variant_id_)
 - [article_variant_option_value](file:///home/ubuntu/slopware/.agents/schema/article_variant_option_value.md)
-- [article_variant_template](file:///home/ubuntu/slopware/.agents/schema/article_variant_template.md)
+- [article_variant_template](file:///home/ubuntu/slopware/.agents/schema/article_variant_template.md) (_template_id_)
 - [bank_account](file:///home/ubuntu/slopware/.agents/schema/bank_account.md) (_bank_account_id_)
-- [capability_execution_log](file:///home/ubuntu/slopware/.agents/schema/capability_execution_log.md)
+- [bueroware_record_field](file:///home/ubuntu/slopware/.agents/schema/bueroware_record_field.md) (_field_id_)
+- [bueroware_record_layout](file:///home/ubuntu/slopware/.agents/schema/bueroware_record_layout.md) (_layout_id_)
+- [capability_execution_log](file:///home/ubuntu/slopware/.agents/schema/capability_execution_log.md) (_capability_execution_log_id_)
 - [category](file:///home/ubuntu/slopware/.agents/schema/category.md) (_category_id_)
+- [commerce_sync_dead_letter](file:///home/ubuntu/slopware/.agents/schema/commerce_sync_dead_letter.md) (_item_id_)
+- [commerce_sync_run](file:///home/ubuntu/slopware/.agents/schema/commerce_sync_run.md) (_run_id_)
+- [commerce_sync_run_step](file:///home/ubuntu/slopware/.agents/schema/commerce_sync_run_step.md) (_step_id_)
 - [company](file:///home/ubuntu/slopware/.agents/schema/company.md) (_company_id_)
 - [connector_definition](file:///home/ubuntu/slopware/.agents/schema/connector_definition.md) (_connector_id_)
 - [cost_center](file:///home/ubuntu/slopware/.agents/schema/cost_center.md) (_cost_center_id_)
@@ -68,11 +74,11 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [email_message](file:///home/ubuntu/slopware/.agents/schema/email_message.md) (_email_message_id_)
 - [email_message_label](file:///home/ubuntu/slopware/.agents/schema/email_message_label.md) (_email_message_label_id_)
 - [email_outbox](file:///home/ubuntu/slopware/.agents/schema/email_outbox.md) (_email_outbox_id_)
-- [email_subscription](file:///home/ubuntu/slopware/.agents/schema/email_subscription.md)
+- [email_subscription](file:///home/ubuntu/slopware/.agents/schema/email_subscription.md) (_email_subscription_id_)
 - [email_sync_state](file:///home/ubuntu/slopware/.agents/schema/email_sync_state.md) (_email_sync_state_id_)
-- [email_template](file:///home/ubuntu/slopware/.agents/schema/email_template.md) (_email_template_id_)
-- [email_template_binding](file:///home/ubuntu/slopware/.agents/schema/email_template_binding.md) (_email_template_binding_id_)
-- [email_template_render_log](file:///home/ubuntu/slopware/.agents/schema/email_template_render_log.md) (_email_template_render_log_id_)
+- [email_template](file:///home/ubuntu/slopware/.agents/schema/email_template.md) (_ID_)
+- [email_template_binding](file:///home/ubuntu/slopware/.agents/schema/email_template_binding.md) (_ID_)
+- [email_template_render_log](file:///home/ubuntu/slopware/.agents/schema/email_template_render_log.md) (_ID_)
 - [email_thread](file:///home/ubuntu/slopware/.agents/schema/email_thread.md) (_email_thread_id_)
 - [entity_commands](file:///home/ubuntu/slopware/.agents/schema/entity_commands.md) (_command_id_)
 - [external_sync_mapping](file:///home/ubuntu/slopware/.agents/schema/external_sync_mapping.md) (_mapping_id_)
@@ -82,6 +88,7 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [gl_account](file:///home/ubuntu/slopware/.agents/schema/gl_account.md) (_gl_account_id_)
 - [helper_table_registry](file:///home/ubuntu/slopware/.agents/schema/helper_table_registry.md) (_id_)
 - [import_batch](file:///home/ubuntu/slopware/.agents/schema/import_batch.md) (_batch_id_)
+- [import_field_mapping](file:///home/ubuntu/slopware/.agents/schema/import_field_mapping.md) (_mapping_id_)
 - [import_profile](file:///home/ubuntu/slopware/.agents/schema/import_profile.md) (_profile_id_)
 - [import_profile_mapping_version](file:///home/ubuntu/slopware/.agents/schema/import_profile_mapping_version.md) (_version_id_)
 - [import_row](file:///home/ubuntu/slopware/.agents/schema/import_row.md) (_row_id_)

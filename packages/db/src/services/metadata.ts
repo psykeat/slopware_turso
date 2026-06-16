@@ -1,4 +1,5 @@
 import { and, desc, eq, getColumns } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 
 import { db } from "../index";
 import {
@@ -210,11 +211,31 @@ function isDesignerNodeKind(value: unknown): value is DesignerNodeKind {
   return typeof value === "string" && designerNodeKinds.has(value as DesignerNodeKind);
 }
 
-// Single source of truth for "which table does this FK-shaped column look
-// up". Also used by ai-discovery.ts (assistant metadata discovery) and
-// seed-metadata.ts (tenant field seeding) so all three stay in sync instead
-// of drifting as separate hand-maintained copies.
-export function resolveLookupTable(entityName: string, colName: string) {
+// Single source of truth for "which schema exports are real pg tables".
+// Also used by seed-metadata.ts (tenant field seeding) so both stay in sync.
+export function discoverTables() {
+  return Object.entries(schema)
+    .filter(([_, value]) => {
+      try {
+        if (value && typeof value === "object") {
+          getTableConfig(value as any);
+          return true;
+        }
+      } catch {
+        return false;
+      }
+      return false;
+    })
+    .map(([key, table]) => ({ key, table: table as any }));
+}
+
+// The curated, hand-written lookup mappings — deliberate decisions that
+// should always resolve to a real, type-compatible list capability. Kept
+// separate from the generic *Id-suffix fallback in resolveLookupTable so
+// integrity checks can hold these to a stricter contract than best-effort
+// heuristic matches (which also catch plenty of non-UI internal FKs, e.g.
+// `userId` -> `user`, that were never meant to back a dropdown).
+export function resolveExplicitLookupTable(entityName: string, colName: string) {
   if (colName === "variantId") {
     return "articleVariant";
   }
@@ -247,19 +268,30 @@ export function resolveLookupTable(entityName: string, colName: string) {
     return "addressCategory";
   }
 
-  if (colName.endsWith("Id") && colName !== "tenantId") {
-    const potentialEntity = colName.slice(0, -2);
-    if ((schema as any)[potentialEntity] && potentialEntity !== entityName) {
-      return potentialEntity;
-    }
-  }
-
   if (colName === "countryCode") {
     return "country";
   }
 
   if (colName === "currencyId") {
     return "currency";
+  }
+
+  return undefined;
+}
+
+// Single source of truth for "which table does this FK-shaped column look
+// up". Also used by ai-discovery.ts (assistant metadata discovery) and
+// seed-metadata.ts (tenant field seeding) so all three stay in sync instead
+// of drifting as separate hand-maintained copies.
+export function resolveLookupTable(entityName: string, colName: string) {
+  const explicit = resolveExplicitLookupTable(entityName, colName);
+  if (explicit) return explicit;
+
+  if (colName.endsWith("Id") && colName !== "tenantId") {
+    const potentialEntity = colName.slice(0, -2);
+    if ((schema as any)[potentialEntity] && potentialEntity !== entityName) {
+      return potentialEntity;
+    }
   }
 
   return undefined;

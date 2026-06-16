@@ -3,7 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { getTableConfig } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
+import { allCapabilities } from "../capabilities/all";
 import * as schema from "../schema/index";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,6 +14,10 @@ const PROJECT_ROOT = path.resolve(__dirname, "../../../../");
 const SCHEMA_MD_PATH_GEMINI = path.join(PROJECT_ROOT, ".gemini/schema.md");
 const SCHEMA_MD_PATH_AGENTS = path.join(PROJECT_ROOT, ".agents/schema.md");
 const SCHEMAS_DIR_AGENTS = path.join(PROJECT_ROOT, ".agents/schema");
+
+const CAPABILITIES_MD_PATH_GEMINI = path.join(PROJECT_ROOT, ".gemini/capabilities.md");
+const CAPABILITIES_MD_PATH_AGENTS = path.join(PROJECT_ROOT, ".agents/capabilities.md");
+const CAPABILITIES_DIR_AGENTS = path.join(PROJECT_ROOT, ".agents/capabilities");
 
 interface Annotation {
   businessName: string;
@@ -198,5 +204,142 @@ function generateMarkdown() {
   console.log(`Generated ${tables.length} individual table schemas in ${SCHEMAS_DIR_AGENTS}`);
 }
 
+function getZodTypeName(schema: any): string {
+  if (!schema) return "unknown";
+  if (schema instanceof z.ZodString) return "string";
+  if (schema instanceof z.ZodNumber) return "number";
+  if (schema instanceof z.ZodBoolean) return "boolean";
+  if (schema instanceof z.ZodUUID) return "uuid";
+  if (schema instanceof z.ZodArray) return `array of ${getZodTypeName(schema.element)}`;
+  if (schema instanceof z.ZodOptional) return `${getZodTypeName(schema.unwrap())} (optional)`;
+  if (schema instanceof z.ZodNullable) return `${getZodTypeName(schema.unwrap())} (nullable)`;
+  if (schema instanceof z.ZodObject) return "object";
+  if (schema instanceof z.ZodRecord) return "record/map";
+  if (schema instanceof z.ZodLiteral) return `literal: ${JSON.stringify(schema.value)}`;
+  
+  if (schema._def && schema._def.innerType) {
+    return getZodTypeName(schema._def.innerType);
+  }
+  if (schema._def && schema._def.typeName) {
+    const typeName = schema._def.typeName;
+    if (typeName === "ZodEnum") {
+      return `enum: [${schema._def.values.join(", ")}]`;
+    }
+    return typeName.replace(/^Zod/, "").toLowerCase();
+  }
+  return "unknown";
+}
+
+function getObjectFields(schema: any): Array<{ name: string; type: string; optional: boolean }> {
+  let current = schema;
+  while (current instanceof z.ZodOptional || current instanceof z.ZodNullable) {
+    current = current.unwrap();
+  }
+  if (current instanceof z.ZodObject) {
+    const shape = current.shape;
+    return Object.entries(shape).map(([name, fieldSchema]: [string, any]) => {
+      const typeStr = getZodTypeName(fieldSchema);
+      const isOptional = fieldSchema instanceof z.ZodOptional || typeStr.includes("(optional)");
+      return { name, type: typeStr.replace(" (optional)", ""), optional: isOptional };
+    });
+  }
+  return [];
+}
+
+function generateCapabilityMarkdown() {
+  // Ensure directory exists
+  if (!fs.existsSync(CAPABILITIES_DIR_AGENTS)) {
+    fs.mkdirSync(CAPABILITIES_DIR_AGENTS, { recursive: true });
+  }
+
+  // Group capabilities by module
+  const grouped: Record<string, typeof allCapabilities> = {};
+  for (const capability of allCapabilities) {
+    const mod = capability.module;
+    if (!grouped[mod]) grouped[mod] = [];
+    grouped[mod].push(capability);
+  }
+
+  // Sort modules and capabilities
+  const modules = Object.keys(grouped).sort();
+  for (const mod of modules) {
+    grouped[mod].sort((a, b) => a.key.localeCompare(b.key));
+  }
+
+  // Generate individual files
+  for (const capability of allCapabilities) {
+    const key = capability.key;
+    const file = path.join(CAPABILITIES_DIR_AGENTS, `${key}.md`);
+
+    let capMd = `# Capability: \`${key}\`\n\n`;
+    capMd += `> **Module**: ${capability.module} | **Entity**: ${capability.entityName} | **Operation**: ${capability.operation}\n`;
+    capMd += `> **Kind**: ${capability.kind} | **Min Role**: ${capability.minRole} | **Exposure (LLM)**: ${capability.exposure.llm}\n\n`;
+
+    capMd += `## Summary\n`;
+    capMd += `- **EN**: ${capability.summary.en}\n`;
+    capMd += `- **DE**: ${capability.summary.de}\n\n`;
+
+    if (capability.description) {
+      capMd += `## Description\n`;
+      capMd += `- **EN**: ${capability.description.en}\n`;
+      capMd += `- **DE**: ${capability.description.de}\n\n`;
+    }
+
+    capMd += `## Input Schema\n`;
+    const fields = getObjectFields(capability.input);
+    if (fields.length > 0) {
+      capMd += `| Field | Type | Optional | Description / Notes |\n`;
+      capMd += `| :--- | :--- | :--- | :--- |\n`;
+      for (const field of fields) {
+        capMd += `| ${field.name} | ${field.type} | ${field.optional ? "Yes" : "No"} | |\n`;
+      }
+    } else {
+      capMd += `No input required, or dynamic input object.\n`;
+    }
+    capMd += `\n`;
+
+    capMd += `## Output Schema\n`;
+    capMd += `- **Type**: \`${getZodTypeName(capability.output)}\`\n\n`;
+
+    capMd += `## Invariants & Side Effects\n`;
+    capMd += `- **Writes Tables**: ${capability.writesTables.length > 0 ? capability.writesTables.map(t => `\`${t}\``).join(", ") : "None"}\n`;
+    capMd += `- **Side Effects**: ${capability.sideEffects.length > 0 ? capability.sideEffects.map(s => `"${s}"`).join(", ") : "None"}\n`;
+    capMd += `- **Idempotent**: ${capability.idempotent ? "Yes" : "No"}\n`;
+    capMd += `- **Supports Dry Run**: ${capability.supportsDryRun ? "Yes" : "No"}\n`;
+
+    fs.writeFileSync(file, capMd);
+  }
+
+  // Generate index capabilities.md
+  let md = `# Slopware — Live Capabilities Index\n\n`;
+  md += `> Generated: ${new Date().toISOString().replace("T", " ").split(".")[0]} UTC\n`;
+  md += `> Total Capabilities: ${allCapabilities.length}\n\n`;
+  md += `Here is the index of all system operations. Click on a capability name to view its detailed inputs, outputs, and AI/LLM settings.\n\n`;
+
+  for (const mod of modules) {
+    md += `## Module: ${mod}\n\n`;
+    for (const cap of grouped[mod]) {
+      md += `- [${cap.key}](file:///home/ubuntu/slopware/.agents/capabilities/${cap.key}.md) — ${cap.summary.en}\n`;
+    }
+    md += `\n`;
+  }
+
+  // Ensure .gemini and .agents directory exist
+  const geminiDir = path.dirname(CAPABILITIES_MD_PATH_GEMINI);
+  if (!fs.existsSync(geminiDir)) {
+    fs.mkdirSync(geminiDir, { recursive: true });
+  }
+  const agentsDir = path.dirname(CAPABILITIES_MD_PATH_AGENTS);
+  if (!fs.existsSync(agentsDir)) {
+    fs.mkdirSync(agentsDir, { recursive: true });
+  }
+
+  fs.writeFileSync(CAPABILITIES_MD_PATH_GEMINI, md);
+  fs.writeFileSync(CAPABILITIES_MD_PATH_AGENTS, md);
+  console.log(`Generated capability index at ${CAPABILITIES_MD_PATH_GEMINI} and ${CAPABILITIES_MD_PATH_AGENTS}`);
+  console.log(`Generated ${allCapabilities.length} individual capability docs in ${CAPABILITIES_DIR_AGENTS}`);
+}
+
 parseExistingSchema();
 generateMarkdown();
+generateCapabilityMarkdown();

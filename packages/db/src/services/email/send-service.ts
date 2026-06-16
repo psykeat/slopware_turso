@@ -26,7 +26,20 @@ export class EmailSendService {
     private userId: string,
   ) {
     this.accountService = new EmailAccountService(tenantId, userId);
-    this.jobService = new EmailJobService(tenantId);
+    this.jobService = new EmailJobService(tenantId, {
+      executor: async ({ jobType, payload }) => {
+        if (jobType !== "send") return;
+        const outboxId = typeof payload.outboxId === "string" ? payload.outboxId : null;
+        if (!outboxId) throw new Error("send job missing outboxId");
+        try {
+          await this.markSending(outboxId);
+          await this.sendDraft(outboxId);
+        } catch (error) {
+          await this.markFailed(outboxId, error);
+          throw error;
+        }
+      },
+    });
   }
 
   async saveDraft(input: EmailDraftInput) {

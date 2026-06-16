@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleBomRecordSchema = z.looseObject({
@@ -34,31 +34,13 @@ const articleBomPatchSchema = z.object({
   archived: z.boolean().optional(),
 });
 
-export const articleBomList = defineCapability({
+export const articleBomList = defineListCapability({
   module: "masterdata",
   entityName: "articleBom",
-  operation: "list",
-  kind: "read",
   summary: { en: "List article BOM rows", de: "Stücklistenpositionen auflisten" },
-  input: z.object({
-    headerArticleId: z.uuid().optional(),
-    componentArticleId: z.uuid().optional(),
-    ...listControlsSchema,
-  }),
-  output: z.object({ items: z.array(articleBomRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const filters: Record<string, string> = {};
-    if (input.headerArticleId) filters.headerArticleId = input.headerArticleId;
-    if (input.componentArticleId) filters.componentArticleId = input.componentArticleId;
-    return runEntityList(ctx.tenantId, "articleBom", filters, input, "sortOrder:asc");
-  },
+  recordSchema: articleBomRecordSchema,
+  extraFilters: { headerArticleId: z.uuid().optional(), componentArticleId: z.uuid().optional() },
+  defaultOrderBy: "sortOrder:asc",
 });
 
 export const articleBomGet = defineCapability({

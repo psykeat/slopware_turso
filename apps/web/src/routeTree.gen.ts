@@ -52,6 +52,7 @@ import { Route as ApiStoragePreviewSplatRouteImport } from './routes/api/storage
 import { Route as ApiStorageArticleImagesImageIdRouteImport } from './routes/api/storage/article-images/$imageId'
 import { Route as ApiStatsArticleArticleIdRouteImport } from './routes/api/stats/article/$articleId'
 import { Route as ApiStatsAddressAddressIdRouteImport } from './routes/api/stats/address/$addressId'
+import { Route as ApiImportBuerowareUploadRouteImport } from './routes/api/import/bueroware/upload'
 import { Route as ApiDocumentsDocumentIdPrintRouteImport } from './routes/api/documents/$documentId/print'
 import { Route as ApiDataTenantLlmConfigTestRouteImport } from './routes/api/data/tenantLlmConfig.test'
 import { Route as ApiCapabilitiesKeyExecuteRouteImport } from './routes/api/capabilities/$key/execute'
@@ -67,6 +68,7 @@ import { Route as AuthAppSettingsVariantTemplatesRouteImport } from './routes/_a
 import { Route as AuthAppSettingsImportProfilesRouteImport } from './routes/_auth/app/settings/import-profiles'
 import { Route as AuthAppSettingsCyclesRouteImport } from './routes/_auth/app/settings/cycles'
 import { Route as AuthAppSettingsAccountRouteImport } from './routes/_auth/app/settings/account'
+import { Route as ApiImportProfilesProfileIdBootstrapRouteImport } from './routes/api/import/profiles/$profileId/bootstrap'
 import { Route as ApiArticlesArticleIdBomBomIdRouteImport } from './routes/api/articles/$articleId/bom/$bomId'
 
 const GuestRouteRoute = GuestRouteRouteImport.update({
@@ -287,6 +289,12 @@ const ApiStatsAddressAddressIdRoute =
     path: '/api/stats/address/$addressId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiImportBuerowareUploadRoute =
+  ApiImportBuerowareUploadRouteImport.update({
+    id: '/api/import/bueroware/upload',
+    path: '/api/import/bueroware/upload',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiDocumentsDocumentIdPrintRoute =
   ApiDocumentsDocumentIdPrintRouteImport.update({
     id: '/api/documents/$documentId/print',
@@ -372,6 +380,12 @@ const AuthAppSettingsAccountRoute = AuthAppSettingsAccountRouteImport.update({
   path: '/settings/account',
   getParentRoute: () => AuthAppRouteRoute,
 } as any)
+const ApiImportProfilesProfileIdBootstrapRoute =
+  ApiImportProfilesProfileIdBootstrapRouteImport.update({
+    id: '/api/import/profiles/$profileId/bootstrap',
+    path: '/api/import/profiles/$profileId/bootstrap',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiArticlesArticleIdBomBomIdRoute =
   ApiArticlesArticleIdBomBomIdRouteImport.update({
     id: '/$bomId',
@@ -429,6 +443,7 @@ export interface FileRoutesByFullPath {
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
   '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
+  '/api/import/bueroware/upload': typeof ApiImportBuerowareUploadRoute
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
@@ -437,6 +452,7 @@ export interface FileRoutesByFullPath {
   '/app/settings/': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
   '/api/articles/$articleId/bom/$bomId': typeof ApiArticlesArticleIdBomBomIdRoute
+  '/api/import/profiles/$profileId/bootstrap': typeof ApiImportProfilesProfileIdBootstrapRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -486,6 +502,7 @@ export interface FileRoutesByTo {
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
   '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
+  '/api/import/bueroware/upload': typeof ApiImportBuerowareUploadRoute
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
@@ -494,6 +511,7 @@ export interface FileRoutesByTo {
   '/app/settings': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups': typeof ApiAdminDocumentGroupsIndexRoute
   '/api/articles/$articleId/bom/$bomId': typeof ApiArticlesArticleIdBomBomIdRoute
+  '/api/import/profiles/$profileId/bootstrap': typeof ApiImportProfilesProfileIdBootstrapRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -548,6 +566,7 @@ export interface FileRoutesById {
   '/api/capabilities/$key/execute': typeof ApiCapabilitiesKeyExecuteRoute
   '/api/data/tenantLlmConfig/test': typeof ApiDataTenantLlmConfigTestRoute
   '/api/documents/$documentId/print': typeof ApiDocumentsDocumentIdPrintRoute
+  '/api/import/bueroware/upload': typeof ApiImportBuerowareUploadRoute
   '/api/stats/address/$addressId': typeof ApiStatsAddressAddressIdRoute
   '/api/stats/article/$articleId': typeof ApiStatsArticleArticleIdRoute
   '/api/storage/article-images/$imageId': typeof ApiStorageArticleImagesImageIdRoute
@@ -556,6 +575,7 @@ export interface FileRoutesById {
   '/_auth/app/settings/': typeof AuthAppSettingsIndexRoute
   '/api/admin/document-groups/': typeof ApiAdminDocumentGroupsIndexRoute
   '/api/articles/$articleId/bom/$bomId': typeof ApiArticlesArticleIdBomBomIdRoute
+  '/api/import/profiles/$profileId/bootstrap': typeof ApiImportProfilesProfileIdBootstrapRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -609,6 +629,7 @@ export interface FileRouteTypes {
     | '/api/capabilities/$key/execute'
     | '/api/data/tenantLlmConfig/test'
     | '/api/documents/$documentId/print'
+    | '/api/import/bueroware/upload'
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
     | '/api/storage/article-images/$imageId'
@@ -617,6 +638,7 @@ export interface FileRouteTypes {
     | '/app/settings/'
     | '/api/admin/document-groups/'
     | '/api/articles/$articleId/bom/$bomId'
+    | '/api/import/profiles/$profileId/bootstrap'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -666,6 +688,7 @@ export interface FileRouteTypes {
     | '/api/capabilities/$key/execute'
     | '/api/data/tenantLlmConfig/test'
     | '/api/documents/$documentId/print'
+    | '/api/import/bueroware/upload'
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
     | '/api/storage/article-images/$imageId'
@@ -674,6 +697,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/api/admin/document-groups'
     | '/api/articles/$articleId/bom/$bomId'
+    | '/api/import/profiles/$profileId/bootstrap'
   id:
     | '__root__'
     | '/'
@@ -727,6 +751,7 @@ export interface FileRouteTypes {
     | '/api/capabilities/$key/execute'
     | '/api/data/tenantLlmConfig/test'
     | '/api/documents/$documentId/print'
+    | '/api/import/bueroware/upload'
     | '/api/stats/address/$addressId'
     | '/api/stats/article/$articleId'
     | '/api/storage/article-images/$imageId'
@@ -735,6 +760,7 @@ export interface FileRouteTypes {
     | '/_auth/app/settings/'
     | '/api/admin/document-groups/'
     | '/api/articles/$articleId/bom/$bomId'
+    | '/api/import/profiles/$profileId/bootstrap'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -769,11 +795,13 @@ export interface RootRouteChildren {
   ApiArticlesArticleIdSerialNumbersRoute: typeof ApiArticlesArticleIdSerialNumbersRoute
   ApiDataTenantLlmConfigTestRoute: typeof ApiDataTenantLlmConfigTestRoute
   ApiDocumentsDocumentIdPrintRoute: typeof ApiDocumentsDocumentIdPrintRoute
+  ApiImportBuerowareUploadRoute: typeof ApiImportBuerowareUploadRoute
   ApiStatsAddressAddressIdRoute: typeof ApiStatsAddressAddressIdRoute
   ApiStatsArticleArticleIdRoute: typeof ApiStatsArticleArticleIdRoute
   ApiStorageArticleImagesImageIdRoute: typeof ApiStorageArticleImagesImageIdRoute
   ApiStoragePreviewSplatRoute: typeof ApiStoragePreviewSplatRoute
   ApiAdminDocumentGroupsIndexRoute: typeof ApiAdminDocumentGroupsIndexRoute
+  ApiImportProfilesProfileIdBootstrapRoute: typeof ApiImportProfilesProfileIdBootstrapRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1079,6 +1107,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStatsAddressAddressIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/import/bueroware/upload': {
+      id: '/api/import/bueroware/upload'
+      path: '/api/import/bueroware/upload'
+      fullPath: '/api/import/bueroware/upload'
+      preLoaderRoute: typeof ApiImportBuerowareUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/documents/$documentId/print': {
       id: '/api/documents/$documentId/print'
       path: '/api/documents/$documentId/print'
@@ -1183,6 +1218,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/settings/account'
       preLoaderRoute: typeof AuthAppSettingsAccountRouteImport
       parentRoute: typeof AuthAppRouteRoute
+    }
+    '/api/import/profiles/$profileId/bootstrap': {
+      id: '/api/import/profiles/$profileId/bootstrap'
+      path: '/api/import/profiles/$profileId/bootstrap'
+      fullPath: '/api/import/profiles/$profileId/bootstrap'
+      preLoaderRoute: typeof ApiImportProfilesProfileIdBootstrapRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/articles/$articleId/bom/$bomId': {
       id: '/api/articles/$articleId/bom/$bomId'
@@ -1361,11 +1403,14 @@ const rootRouteChildren: RootRouteChildren = {
     ApiArticlesArticleIdSerialNumbersRoute,
   ApiDataTenantLlmConfigTestRoute: ApiDataTenantLlmConfigTestRoute,
   ApiDocumentsDocumentIdPrintRoute: ApiDocumentsDocumentIdPrintRoute,
+  ApiImportBuerowareUploadRoute: ApiImportBuerowareUploadRoute,
   ApiStatsAddressAddressIdRoute: ApiStatsAddressAddressIdRoute,
   ApiStatsArticleArticleIdRoute: ApiStatsArticleArticleIdRoute,
   ApiStorageArticleImagesImageIdRoute: ApiStorageArticleImagesImageIdRoute,
   ApiStoragePreviewSplatRoute: ApiStoragePreviewSplatRoute,
   ApiAdminDocumentGroupsIndexRoute: ApiAdminDocumentGroupsIndexRoute,
+  ApiImportProfilesProfileIdBootstrapRoute:
+    ApiImportProfilesProfileIdBootstrapRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

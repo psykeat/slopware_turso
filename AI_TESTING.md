@@ -51,6 +51,40 @@ CAPABILITY_TEST_EMAIL / CAPABILITY_TEST_PASSWORD
 `CapabilityClient.login()` handles sign-in and cookies — you never write
 auth code yourself. Requires the dev server: `pnpm dev` (port 3000).
 
+This user's tenant stays deliberately isolated and empty — it exists so write
+tests can never touch base-tenant data. For anything that needs the rich,
+`db:seed:full`-populated **base** tenant instead (manual HTTP calls, a
+browser session, eyeballing a capability before writing a test), use
+`pnpm db:dev-login` below rather than pointing `CapabilityClient.login()` at
+this user.
+
+## Ad-hoc dev/agent login (base tenant)
+
+```bash
+pnpm db:dev-login
+```
+
+Signs in as the dedicated E2E user (`e2e@slopware.test`, created if needed),
+links it to the base tenant if it isn't already, and prints the session
+cookie. Requires the dev server: `pnpm dev` (port 3000). Use it to:
+
+- run manual `curl` calls against `/api/...` with a real session,
+- paste the cookie into a browser's devtools for manual UI testing,
+- or check a capability's behavior against real base-tenant data without
+  writing a test file first.
+
+```bash
+$ pnpm db:dev-login
+Signed in as e2e@slopware.test, bound to the base tenant.
+curl -H 'cookie: better-auth.session_token=...' http://localhost:3000/api/me
+(Or paste the cookie below into your browser's devtools for manual UI testing.)
+better-auth.session_token=...
+```
+
+The same user backs the Playwright E2E suite (`apps/web/e2e/setup/auth.setup.ts`)
+— it's also bound to the base tenant there, so this is the same identity, not
+a new mechanism.
+
 ## The client (use it, don't rebuild it)
 
 `packages/db/src/capabilities/http/capability-client.ts`
@@ -105,10 +139,46 @@ pnpm exec tsx --test src/capabilities/http/*.test.ts
 - **HTTP smoke** (this file's subject): proves the surface end to end against
   the live dev server. Use for "does the API work" checks.
 - **In-process scenario** (`capabilities.scenario.test.ts`): deterministic
-  feature tests. Throwaway tenant fixture + hand-built `ExecutionContext`
-  (`actorMode: "test"`, `role: "system"`) + `executeCapability` directly — no
-  HTTP, no login. Use for testing business behavior. Run:
+  feature tests. Use `getContextForTenant(tenantSlugOrId)` from `fixtures.ts` to
+  obtain a real ExecutionContext for existing tenants (e.g. `"base"`), or use
+  `useTestTenant()` for a throwaway sandbox tenant. Call `executeCapability` directly
+  — no HTTP, no login. Run:
   `pnpm exec tsx --test src/capabilities/*.test.ts`
+
+  **Test Seeding**: For complex, multi-entity setups (e.g., articles with variants, stock levels, and document headers/lines), use the fluent `TestScenarioBuilder` defined in [fixtures.ts](file:///home/ubuntu/slopware/packages/db/src/test-support/fixtures.ts) instead of writing raw table inserts:
+  ```ts
+  const scenario = await new TestScenarioBuilder()
+    .withTenant() // uses useTestTenant() internally if no tenantSlugOrId is passed
+    .withArticle({ articleNo: "ART-01", name: "Laptop" })
+    .withVariant({ sku: "LAP-8GB", stock: 10 })
+    .withDocument({ type: "order", lineItems: [{ sku: "LAP-8GB", qty: 2 }] })
+    .build();
+  // scenario.tenantId, scenario.articleId, scenario.variantId, scenario.documentId, etc., are immediately available
+  ```
+
+## Local CLI Capability Runner
+
+To test capability logic manually without setting up testing files or server sessions, run the execution script directly from the workspace root:
+
+```bash
+pnpm db:execute <capabilityKey> <tenantSlugOrId> '<jsonInput>' [--dry-run]
+```
+
+Example:
+```bash
+pnpm db:execute masterdata.article.list base '{"limit":2}'
+```
+
+## Full Feature Database Seeding
+
+To populate the base tenant (`"base"`) with a comprehensive set of real-world master data, variants, chart of accounts (SKR03), taxes, and sample sales documents (draft and posted orders/invoices), run:
+
+```bash
+pnpm db:seed:full
+```
+
+This runs the baseline seeds and then uses the application's capabilities to dynamically establish a complete and consistent state.
+
 
 ## Current capability keys (v1)
 

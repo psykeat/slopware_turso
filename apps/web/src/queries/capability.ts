@@ -1,4 +1,5 @@
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import type { UseQueryOptions, UseSuspenseQueryOptions } from "@tanstack/react-query";
 
 import type { CapabilityInput, CapabilityKey, CapabilityOutput } from "@repo/db/capabilities";
 
@@ -43,5 +44,41 @@ export function useCapabilityMutation<K extends CapabilityKey>(
       options?.onSuccess?.(result.data);
     },
     onError: options?.onError,
+  });
+}
+
+// Type-safe hook for capability read queries.
+export function useCapabilityQuery<
+  K extends CapabilityKey,
+  TData = CapabilityOutput<K>,
+>(
+  key: K,
+  input: CapabilityInput<K>,
+  options?: Omit<
+    UseQueryOptions<CapabilityOutput<K>, Error, TData>,
+    "queryKey" | "queryFn"
+  >,
+) {
+  return useQuery({
+    ...capabilityQueryOptions(key, input),
+    ...options,
+  });
+}
+
+// Type-safe hook for React Suspense read queries.
+export function useCapabilitySuspenseQuery<
+  K extends CapabilityKey,
+  TData = CapabilityOutput<K>,
+>(
+  key: K,
+  input: CapabilityInput<K>,
+  options?: Omit<
+    UseSuspenseQueryOptions<CapabilityOutput<K>, Error, TData>,
+    "queryKey" | "queryFn"
+  >,
+) {
+  return useSuspenseQuery({
+    ...capabilityQueryOptions(key, input),
+    ...options,
   });
 }

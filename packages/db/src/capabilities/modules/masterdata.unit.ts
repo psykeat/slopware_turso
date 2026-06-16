@@ -5,7 +5,7 @@ import { db } from "../../index";
 import { unit } from "../../schema/app.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
-import { listControlsSchema, runEntityList } from "../core/list";
+import { defineListCapability } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const localizedTextSchema = z.record(z.string(), z.string());
@@ -33,25 +33,12 @@ async function findUnitByCode(tenantId: string, code: string) {
   return row ?? null;
 }
 
-export const unitList = defineCapability({
+export const unitList = defineListCapability({
   module: "masterdata",
   entityName: "unit",
-  operation: "list",
-  kind: "read",
-  summary: {
-    en: "List units",
-    de: "Einheiten auflisten",
-  },
-  input: z.object({ ...listControlsSchema }),
-  output: z.object({ items: z.array(unitRecordSchema), total: z.number().int().optional() }),
-  writesTables: [],
-  sideEffects: [],
-  idempotent: true,
-  supportsDryRun: false,
-  minRole: "tenant_user",
-  exposure: { llm: "safe", http: true },
-  schemaVersion: 1,
-  handler: async (ctx, input) => runEntityList(ctx.tenantId, "unit", {}, input, "code:asc"),
+  summary: { en: "List units", de: "Einheiten auflisten" },
+  recordSchema: unitRecordSchema,
+  defaultOrderBy: "code:asc",
 });
 
 export const unitGet = defineCapability({

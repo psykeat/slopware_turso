@@ -1,9 +1,11 @@
 import { accountingCapabilities } from "./modules/accounting.core";
 import { communicationEmailCapabilities } from "./modules/communication.email";
 import { emailTemplateCapabilities } from "./modules/communication.email-template";
+import { commerceSyncCapabilities } from "./modules/commerce.sync";
 import { importCapabilities } from "./modules/import.core";
 import { logisticsCapabilities } from "./modules/logistics.core";
 import { addressCapabilities } from "./modules/masterdata.address";
+import { agentCapabilities } from "./modules/masterdata.agent";
 import { articleCapabilities } from "./modules/masterdata.article";
 import { articleBomCapabilities } from "./modules/masterdata.article-bom";
 import { articleCategoryCapabilities } from "./modules/masterdata.article-category";
@@ -44,6 +46,7 @@ export const allCapabilities = [
   ...articleVariantCapabilities,
   ...articleVariantOptionValueCapabilities,
   ...addressCapabilities,
+  ...agentCapabilities,
   ...articleGroupCapabilities,
   ...categoryCapabilities,
   ...countryCapabilities,
@@ -56,6 +59,7 @@ export const allCapabilities = [
   ...accountingCapabilities,
   ...communicationEmailCapabilities,
   ...emailTemplateCapabilities,
+  ...commerceSyncCapabilities,
   ...importCapabilities,
   ...documentLineCapabilities,
   ...documentCapabilities,

@@ -2,7 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/utils";
-import { useCommands } from "../platform/command-registry";
+import { useCommandList, useCommands } from "../platform/command-registry";
 import { useFocus } from "../platform/focus-manager";
 
 export interface ActionBarProps {
@@ -13,7 +13,8 @@ export interface ActionBarProps {
 
 export function ActionBar({ className, scope, subCrumb }: ActionBarProps) {
   const { state: focusState } = useFocus();
-  const { commands, executeCommand } = useCommands();
+  const commands = useCommandList();
+  const { executeCommand } = useCommands();
   const { t, i18n } = useTranslation("ui");
 
   // Show context/local commands only (not global nav commands)

@@ -15,6 +15,12 @@ export type EmailComposeIdentity = {
   canSend?: boolean;
 };
 
+export type EmailComposeTemplate = {
+  emailTemplateId: string;
+  name: string;
+  code: string;
+};
+
 export type EmailComposeAttachment = {
   fileName: string;
   contentType: string;
@@ -49,6 +55,9 @@ type EmailComposeDialogProps = {
   attachments?: EmailComposeAttachment[];
   notice?: string | null;
   busy?: boolean;
+  templates?: EmailComposeTemplate[];
+  selectedTemplateId?: string | null;
+  onTemplateChange?: (templateId: string | null) => void;
   onClose: () => void;
   onSubmit: (action: EmailComposeAction, value: EmailComposeSubmitValue) => Promise<void> | void;
 };
@@ -64,6 +73,9 @@ export function EmailComposeDialog({
   attachments,
   notice,
   busy,
+  templates,
+  selectedTemplateId,
+  onTemplateChange,
   onClose,
   onSubmit,
 }: EmailComposeDialogProps) {
@@ -139,6 +151,28 @@ export function EmailComposeDialog({
         {notice && (
           <div className="bg-amber-50 px-4 py-2 text-sm text-amber-900 border-b">
             {notice}
+          </div>
+        )}
+
+        {templates && templates.length > 0 && onTemplateChange && (
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <label htmlFor="email-compose-template" className="text-xs text-muted-foreground">
+              Vorlage
+            </label>
+            <select
+              id="email-compose-template"
+              value={selectedTemplateId ?? ""}
+              disabled={busy}
+              onChange={(event) => onTemplateChange(event.target.value || null)}
+              className="h-7 rounded border border-border bg-background px-2 text-xs outline-none disabled:opacity-50"
+            >
+              <option value="">Automatisch (Belegart)</option>
+              {templates.map((template) => (
+                <option key={template.emailTemplateId} value={template.emailTemplateId}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 

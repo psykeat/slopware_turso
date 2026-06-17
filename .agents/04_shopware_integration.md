@@ -8,13 +8,18 @@
 - **Docker Service Name:** `shopware` in der Haupt `docker-compose.yml`
 
 ## API Zugangsdaten
-Um mit der Shopware API (z.B. der Sync API oder Admin API) zu kommunizieren, wurde eine Integration angelegt. 
-Die entsprechenden Zugangsdaten sind in der `apps/web/.env` hinterlegt:
+Um mit der Shopware API (z.B. der Sync API oder Admin API) zu kommunizieren, wurde im
+lokalen dockware-Container eine Integration angelegt. Die Zugangsdaten werden **nicht**
+mehr aus der `.env` gelesen — sie gehoeren pro Verkaufskanal in die DB-Tabelle
+`sales_channel` und werden ueber die Sales-Channel-UI (`/app/settings/sales-channels`)
+eingetragen. Der Sync-Service liest ausschliesslich aus dieser Tabelle (`getSalesChannel()`).
 
-```env
-SHOPWARE_API_URL="http://localhost:8080"
-SHOPWARE_CLIENT_ID="SWIAEWDGCE9QSHHMQKL0UUD4RG"
-SHOPWARE_CLIENT_SECRET="dHJ0UXlreXRSOXJuUXc2a3JUT2JYQW9sTFFnaHpGUHRrNVU3eDc"
+Bootstrap-Werte fuer den lokalen Container (zum Eintippen in die UI):
+
+```text
+API URL:       http://localhost:8080
+Client ID:     SWIAEWDGCE9QSHHMQKL0UUD4RG
+Client Secret: dHJ0UXlreXRSOXJuUXc2a3JUT2JYQW9sTFFnaHpGUHRrNVU3eDc
 ```
 
 ## Nächste Schritte

@@ -18,7 +18,9 @@
       "Bash(echo \"exit=$?\")",
       "Read(//tmp/**)",
       "Read(//home/ubuntu/.claude/**)",
-      "Bash(find / -path /proc -prune -o -iname \"SKILL.md\" -path \"*e2e*\" -print)"
+      "Bash(find / -path /proc -prune -o -iname \"SKILL.md\" -path \"*e2e*\" -print)",
+      "Bash(rg -rn \"price_list\" packages/db/src/schema/ --include=\"*.ts\")",
+      "Bash(pnpm db:sql *)"
     ]
   }
 }

@@ -538,7 +538,6 @@ export class TestScenarioBuilder {
         let lineNo = 1;
         for (const item of input.lineItems) {
           let variantId = state.lastVariantId;
-          let sku = item.sku ?? state.lastVariantSku;
 
           if (item.sku) {
             const [found] = await db

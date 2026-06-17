@@ -15,7 +15,6 @@ DROP INDEX IF EXISTS "idx_inventory_movement_batch_balance";--> statement-breakp
 CREATE INDEX IF NOT EXISTS "idx_inventory_movement_batch_balance" ON "inventory_movement" ("tenant_id","warehouse_id","variant_id","batch_no");--> statement-breakpoint
 DROP INDEX IF EXISTS "idx_price_list_item_lookup";--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_price_list_item_variant" ON "price_list_item" ("price_list_id","variant_id","valid_from");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_fact_sales_variant" ON "fact_sales_event" ("tenant_id","variant_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_inv_balance_article" ON "inventory_balance" ("tenant_id","warehouse_id","article_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_inv_movement_inventory_item_anchor" ON "inventory_movement" ("tenant_id","warehouse_id","inventory_item_id","variant_id","movement_date");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_inv_movement_inventory_item" ON "inventory_movement" ("tenant_id","inventory_item_id","movement_date");--> statement-breakpoint

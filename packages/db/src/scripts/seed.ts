@@ -9,6 +9,7 @@ import { importCountriesCsv } from "./import-countries-csv";
 import { importGermanPostalCodes } from "./import-german-postal-codes";
 import { seedCurrencies } from "./seed-currencies";
 import { seedMetadata } from "./seed-metadata";
+import { backfillDefaultArticleVariants } from "../services/default-variant-backfill";
 
 const CANONICAL_DOC_TYPES: Array<{ movementType: string; name: string }> = [
   { movementType: "N", name: "Angebot" },
@@ -54,6 +55,232 @@ async function seedCanonicalDocumentGroups(tenantId: string, companyId: string) 
         },
       });
   }
+}
+
+/**
+ * Tenant-agnostic master data: address categories, article groups, document
+ * types, canonical document groups, year-2026 number sequences, sample
+ * addresses (Acme / TechCorp / Global Supplies), sample articles (ART-001..003)
+ * and units. Idempotent. Reused by the base seed (below) and by the isolated
+ * test tenant reseed (seed-test-tenant.ts) so both share one structural shape.
+ *
+ * Reference data (countries/currencies/postal codes) and dynamic metadata are
+ * global and seeded once by the base seed; callers for a secondary tenant must
+ * ensure those already exist.
+ */
+export async function seedTenantStructure(args: {
+  tenantId: string;
+  companyId: string;
+}): Promise<void> {
+  const { tenantId, companyId } = args;
+
+  // ── Address categories ───────────────────────────────────────────────────
+  const cats = [
+    { name: { en: "Customers", de: "Kunden" } },
+    { name: { en: "Suppliers", de: "Lieferanten" } },
+    { name: { en: "Prospects", de: "Interessenten" } },
+    { name: { en: "Partners", de: "Partner" } },
+  ];
+  for (const cat of cats) {
+    await db
+      .insert(schema.addressCategory)
+      .values({ tenantId, name: cat.name })
+      .onConflictDoNothing();
+  }
+
+  // ── Article groups ───────────────────────────────────────────────────────
+  const groups = [
+    { code: "PRD", name: "Products" },
+    { code: "SVC", name: "Services" },
+    { code: "RAW", name: "Raw Materials" },
+    { code: "PKG", name: "Packaging" },
+  ];
+  for (const g of groups) {
+    await db
+      .insert(schema.articleGroup)
+      .values({ tenantId, code: g.code, name: g.name })
+      .onConflictDoNothing();
+  }
+
+  // ── Document types ───────────────────────────────────────────────────────
+  const docTypes = [
+    { code: "N", name: "Angebot", movementType: "N", sortOrder: 10 },
+    { code: "A", name: "Auftrag", movementType: "A", sortOrder: 20 },
+    { code: "L", name: "Lieferschein", movementType: "L", sortOrder: 30 },
+    { code: "R", name: "Rechnung", movementType: "R", sortOrder: 40 },
+    { code: "G", name: "Gutschrift", movementType: "G", sortOrder: 50 },
+    { code: "b", name: "Bestellung", movementType: "b", sortOrder: 60 },
+    { code: "l", name: "WE-Lieferschein", movementType: "l", sortOrder: 70 },
+    { code: "r", name: "WE-Rechnung", movementType: "r", sortOrder: 80 },
+    { code: "g", name: "WE-Gutschrift", movementType: "g", sortOrder: 90 },
+    { code: "V", name: "Inventurbuchung", movementType: "V", sortOrder: 100 },
+    { code: "Z", name: "Zubuchung", movementType: "Z", sortOrder: 110 },
+    { code: "E", name: "Entnahme", movementType: "E", sortOrder: 120 },
+    { code: "U", name: "Umlagerung", movementType: "U", sortOrder: 130 },
+  ];
+  for (const dt of docTypes) {
+    await db
+      .insert(schema.documentType)
+      .values({ tenantId, ...dt })
+      .onConflictDoUpdate({
+        target: [schema.documentType.tenantId, schema.documentType.code],
+        set: {
+          name: sql`excluded.name`,
+          movementType: sql`excluded.movement_type`,
+          sortOrder: sql`excluded.sort_order`,
+        },
+      });
+  }
+
+  // ── Canonical document groups (groupNumber=0, protected from delete) ──────
+  await seedCanonicalDocumentGroups(tenantId, companyId);
+
+  // ── Number sequences — one per movement type, linked to canonical groups ──
+  const NUMBER_SEQUENCES: Array<{ movementType: string; prefix: string }> = [
+    { movementType: "N", prefix: "ANG-" },
+    { movementType: "A", prefix: "AUF-" },
+    { movementType: "L", prefix: "LIS-" },
+    { movementType: "R", prefix: "RE-" },
+    { movementType: "G", prefix: "GU-" },
+    { movementType: "b", prefix: "BES-" },
+    { movementType: "l", prefix: "WEL-" },
+    { movementType: "r", prefix: "WER-" },
+    { movementType: "g", prefix: "WEG-" },
+    { movementType: "V", prefix: "INV-" },
+    { movementType: "Z", prefix: "ZUB-" },
+    { movementType: "E", prefix: "ENT-" },
+    { movementType: "U", prefix: "UMB-" },
+  ];
+  const currentYear = new Date().getFullYear();
+  for (const seq of NUMBER_SEQUENCES) {
+    const [inserted] = await db
+      .insert(schema.numberSequence)
+      .values({
+        tenantId,
+        companyId,
+        prefix: seq.prefix,
+        fiscalYear: currentYear,
+        nextValue: 1,
+        padding: 6,
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.numberSequence.tenantId,
+          schema.numberSequence.companyId,
+          schema.numberSequence.prefix,
+          schema.numberSequence.fiscalYear,
+        ],
+        set: { padding: 6 },
+      })
+      .returning();
+
+    await db
+      .update(schema.documentGroup)
+      .set({ numberSequenceId: inserted.numberSequenceId })
+      .where(
+        and(
+          eq(schema.documentGroup.tenantId, tenantId),
+          eq(schema.documentGroup.documentType, seq.movementType),
+          eq(schema.documentGroup.groupNumber, 0),
+        ),
+      );
+  }
+
+  // ── Sample addresses ─────────────────────────────────────────────────────
+  const [customerCat] = await db
+    .select()
+    .from(schema.addressCategory)
+    .where(sql`tenant_id = ${tenantId} AND name->>'en' = 'Customers'`)
+    .limit(1);
+
+  const sampleAddresses = [
+    {
+      tenantId,
+      addressNo: "10000",
+      isCustomer: true,
+      companyName: "Acme GmbH",
+      addressLine1: "Hauptstraße 1",
+      postalCode: "10115",
+      city: "Berlin",
+      countryCode: "DE",
+      addressCategoryId: customerCat?.categoryId,
+    },
+    {
+      tenantId,
+      addressNo: "10001",
+      isCustomer: true,
+      companyName: "TechCorp AG",
+      addressLine1: "Innovationspark 5",
+      postalCode: "80339",
+      city: "München",
+      countryCode: "DE",
+      addressCategoryId: customerCat?.categoryId,
+    },
+    {
+      tenantId,
+      addressNo: "20000",
+      isSupplier: true,
+      companyName: "Global Supplies GmbH",
+      addressLine1: "Industrieweg 22",
+      postalCode: "20095",
+      city: "Hamburg",
+      countryCode: "DE",
+    },
+  ];
+  for (const addr of sampleAddresses) {
+    await db.insert(schema.address).values(addr).onConflictDoNothing();
+  }
+
+  // ── Units + sample articles ──────────────────────────────────────────────
+  await ensureUnit(tenantId, "license", { en: "License", de: "Lizenz" });
+  await ensureUnit(tenantId, "day", { en: "Day", de: "Tag" });
+  await ensureUnit(tenantId, "pcs", { en: "Pieces", de: "Stück" });
+
+  const [prdGroup] = await db
+    .select()
+    .from(schema.articleGroup)
+    .where(eq(schema.articleGroup.tenantId, tenantId))
+    .limit(1);
+
+  const unitRows = await db
+    .select({ unitId: schema.unit.unitId, code: schema.unit.code })
+    .from(schema.unit)
+    .where(eq(schema.unit.tenantId, tenantId));
+  const unitMap = new Map(unitRows.map((u) => [u.code, u.unitId]));
+
+  const sampleArticles = [
+    {
+      tenantId,
+      articleNo: "ART-001",
+      name: "Enterprise Software License",
+      description: "Annual license for enterprise software suite",
+      baseUnitId: unitMap.get("license") ?? null,
+      salesUnitId: unitMap.get("license") ?? null,
+      articleGroupId: prdGroup?.articleGroupId,
+    },
+    {
+      tenantId,
+      articleNo: "ART-002",
+      name: "Professional Services Day",
+      description: "One day of professional consulting services",
+      baseUnitId: unitMap.get("day") ?? null,
+      salesUnitId: unitMap.get("day") ?? null,
+      articleGroupId: prdGroup?.articleGroupId,
+    },
+    {
+      tenantId,
+      articleNo: "ART-003",
+      name: "Hardware Module",
+      description: "Industrial hardware expansion module",
+      baseUnitId: unitMap.get("pcs") ?? null,
+      salesUnitId: unitMap.get("pcs") ?? null,
+      articleGroupId: prdGroup?.articleGroupId,
+    },
+  ];
+  for (const art of sampleArticles) {
+    await db.insert(schema.article).values(art).onConflictDoNothing();
+  }
+  await backfillDefaultArticleVariants(tenantId);
 }
 
 async function ensureUnit(tenantId: string, code: string, name: { en: string; de: string }) {
@@ -223,228 +450,14 @@ async function seed() {
     );
   }
 
-  // ── 6. Address categories ──────────────────────────────────────────────
-  const cats = [
-    { name: { en: "Customers", de: "Kunden" } },
-    { name: { en: "Suppliers", de: "Lieferanten" } },
-    { name: { en: "Prospects", de: "Interessenten" } },
-    { name: { en: "Partners", de: "Partner" } },
-  ];
-  for (const cat of cats) {
-    await db
-      .insert(schema.addressCategory)
-      .values({ tenantId: baseTenant.tenantId, name: cat.name })
-      .onConflictDoNothing();
-  }
-  console.log("Address categories seeded.");
-
-  // ── 7. Article groups ──────────────────────────────────────────────────
-  const groups = [
-    { code: "PRD", name: "Products" },
-    { code: "SVC", name: "Services" },
-    { code: "RAW", name: "Raw Materials" },
-    { code: "PKG", name: "Packaging" },
-  ];
-  for (const g of groups) {
-    await db
-      .insert(schema.articleGroup)
-      .values({ tenantId: baseTenant.tenantId, code: g.code, name: g.name })
-      .onConflictDoNothing();
-  }
-  console.log("Article groups seeded.");
-
-  // ── 8. Document types ──────────────────────────────────────────────────
-  const docTypes = [
-    { code: "N", name: "Angebot", movementType: "N", sortOrder: 10 },
-    { code: "A", name: "Auftrag", movementType: "A", sortOrder: 20 },
-    { code: "L", name: "Lieferschein", movementType: "L", sortOrder: 30 },
-    { code: "R", name: "Rechnung", movementType: "R", sortOrder: 40 },
-    { code: "G", name: "Gutschrift", movementType: "G", sortOrder: 50 },
-    { code: "b", name: "Bestellung", movementType: "b", sortOrder: 60 },
-    { code: "l", name: "WE-Lieferschein", movementType: "l", sortOrder: 70 },
-    { code: "r", name: "WE-Rechnung", movementType: "r", sortOrder: 80 },
-    { code: "g", name: "WE-Gutschrift", movementType: "g", sortOrder: 90 },
-    { code: "V", name: "Inventurbuchung", movementType: "V", sortOrder: 100 },
-    { code: "Z", name: "Zubuchung", movementType: "Z", sortOrder: 110 },
-    { code: "E", name: "Entnahme", movementType: "E", sortOrder: 120 },
-    { code: "U", name: "Umlagerung", movementType: "U", sortOrder: 130 },
-  ];
-  const insertedDocTypes: Array<typeof schema.documentType.$inferSelect> = [];
-  for (const dt of docTypes) {
-    const [inserted] = await db
-      .insert(schema.documentType)
-      .values({ tenantId: baseTenant.tenantId, ...dt })
-      .onConflictDoUpdate({
-        target: [schema.documentType.tenantId, schema.documentType.code],
-        set: {
-          name: sql`excluded.name`,
-          movementType: sql`excluded.movement_type`,
-          sortOrder: sql`excluded.sort_order`,
-        },
-      })
-      .returning();
-    if (inserted) insertedDocTypes.push(inserted);
-  }
-  console.log("Document types seeded.");
-
-  // ── 9. Document groups — canonical groups (groupNumber=0, protected from delete) ──
-  await seedCanonicalDocumentGroups(baseTenant.tenantId, baseCompany.companyId);
-  console.log("Document groups seeded.");
-
-  // ── 9b. Number sequences — one per movement type, linked to canonical groups ──
-  const NUMBER_SEQUENCES: Array<{ movementType: string; prefix: string }> = [
-    { movementType: "N", prefix: "ANG-" },
-    { movementType: "A", prefix: "AUF-" },
-    { movementType: "L", prefix: "LIS-" },
-    { movementType: "R", prefix: "RE-" },
-    { movementType: "G", prefix: "GU-" },
-    { movementType: "b", prefix: "BES-" },
-    { movementType: "l", prefix: "WEL-" },
-    { movementType: "r", prefix: "WER-" },
-    { movementType: "g", prefix: "WEG-" },
-    { movementType: "V", prefix: "INV-" },
-    { movementType: "Z", prefix: "ZUB-" },
-    { movementType: "E", prefix: "ENT-" },
-    { movementType: "U", prefix: "UMB-" },
-  ];
-
-  const currentYear = new Date().getFullYear();
-
-  for (const seq of NUMBER_SEQUENCES) {
-    // Upsert the number sequence (conflict on tenantId + companyId + prefix + fiscalYear)
-    const [inserted] = await db
-      .insert(schema.numberSequence)
-      .values({
-        tenantId: baseTenant.tenantId,
-        companyId: baseCompany.companyId,
-        prefix: seq.prefix,
-        fiscalYear: currentYear,
-        nextValue: 1,
-        padding: 6,
-      })
-      .onConflictDoUpdate({
-        target: [
-          schema.numberSequence.tenantId,
-          schema.numberSequence.companyId,
-          schema.numberSequence.prefix,
-          schema.numberSequence.fiscalYear,
-        ],
-        set: { padding: 6 },
-      })
-      .returning();
-
-    // Link the canonical document group (groupNumber=0) to this sequence
-    await db
-      .update(schema.documentGroup)
-      .set({ numberSequenceId: inserted.numberSequenceId })
-      .where(
-        and(
-          eq(schema.documentGroup.tenantId, baseTenant.tenantId),
-          eq(schema.documentGroup.documentType, seq.movementType),
-          eq(schema.documentGroup.groupNumber, 0),
-        ),
-      );
-  }
-  console.log("Number sequences seeded and linked to document groups.");
-
-  // ── 10. Sample addresses ───────────────────────────────────────────────
-  const [customerCat] = await db
-    .select()
-    .from(schema.addressCategory)
-    .where(sql`tenant_id = ${baseTenant.tenantId} AND name->>'en' = 'Customers'`)
-    .limit(1);
-
-  const sampleAddresses = [
-    {
-      tenantId: baseTenant.tenantId,
-      addressNo: "10000",
-      isCustomer: true,
-      companyName: "Acme GmbH",
-      addressLine1: "Hauptstraße 1",
-      postalCode: "10115",
-      city: "Berlin",
-      countryCode: "DE",
-      addressCategoryId: customerCat?.categoryId,
-    },
-    {
-      tenantId: baseTenant.tenantId,
-      addressNo: "10001",
-      isCustomer: true,
-      companyName: "TechCorp AG",
-      addressLine1: "Innovationspark 5",
-      postalCode: "80339",
-      city: "München",
-      countryCode: "DE",
-      addressCategoryId: customerCat?.categoryId,
-    },
-    {
-      tenantId: baseTenant.tenantId,
-      addressNo: "20000",
-      isSupplier: true,
-      companyName: "Global Supplies GmbH",
-      addressLine1: "Industrieweg 22",
-      postalCode: "20095",
-      city: "Hamburg",
-      countryCode: "DE",
-    },
-  ];
-
-  for (const addr of sampleAddresses) {
-    await db.insert(schema.address).values(addr).onConflictDoNothing();
-  }
-  console.log("Sample addresses seeded.");
-
-  // ── 11. Sample articles ────────────────────────────────────────────────
-  const [prdGroup] = await db
-    .select()
-    .from(schema.articleGroup)
-    .where(eq(schema.articleGroup.tenantId, baseTenant.tenantId))
-    .limit(1);
-
-  await ensureUnit(baseTenant.tenantId, "license", { en: "License", de: "Lizenz" });
-  await ensureUnit(baseTenant.tenantId, "day", { en: "Day", de: "Tag" });
-  await ensureUnit(baseTenant.tenantId, "pcs", { en: "Pieces", de: "Stück" });
-
-  const unitRows = await db
-    .select({ unitId: schema.unit.unitId, code: schema.unit.code })
-    .from(schema.unit)
-    .where(eq(schema.unit.tenantId, baseTenant.tenantId));
-  const unitMap = new Map(unitRows.map((u) => [u.code, u.unitId]));
-
-  const sampleArticles = [
-    {
-      tenantId: baseTenant.tenantId,
-      articleNo: "ART-001",
-      name: "Enterprise Software License",
-      description: "Annual license for enterprise software suite",
-      baseUnitId: unitMap.get("license") ?? null,
-      salesUnitId: unitMap.get("license") ?? null,
-      articleGroupId: prdGroup?.articleGroupId,
-    },
-    {
-      tenantId: baseTenant.tenantId,
-      articleNo: "ART-002",
-      name: "Professional Services Day",
-      description: "One day of professional consulting services",
-      baseUnitId: unitMap.get("day") ?? null,
-      salesUnitId: unitMap.get("day") ?? null,
-      articleGroupId: prdGroup?.articleGroupId,
-    },
-    {
-      tenantId: baseTenant.tenantId,
-      articleNo: "ART-003",
-      name: "Hardware Module",
-      description: "Industrial hardware expansion module",
-      baseUnitId: unitMap.get("pcs") ?? null,
-      salesUnitId: unitMap.get("pcs") ?? null,
-      articleGroupId: prdGroup?.articleGroupId,
-    },
-  ];
-
-  for (const art of sampleArticles) {
-    await db.insert(schema.article).values(art).onConflictDoNothing();
-  }
-  console.log("Sample articles seeded.");
+  // ── 6.–11. Tenant master data (shared with the test tenant reseed) ──────
+  await seedTenantStructure({
+    tenantId: baseTenant.tenantId,
+    companyId: baseCompany.companyId,
+  });
+  console.log(
+    "Tenant structure seeded (address categories, article groups, document types/groups, number sequences, sample addresses & articles, units).",
+  );
 
   // ── 12. (reserved) ────────────────────────────────────────────────────
   // Demo tenant seeding was removed. seed.ts only touches the base tenant.

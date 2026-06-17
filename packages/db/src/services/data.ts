@@ -612,7 +612,7 @@ export class DataService {
         .returning({ id: pkColumn });
       return { deleted: result.length > 0, fkViolation: false };
     } catch (err: any) {
-      if (err.code === "23503") return { deleted: false, fkViolation: true };
+      if (err.code === "23503" || err.cause?.code === "23503") return { deleted: false, fkViolation: true };
       throw err;
     }
   }

@@ -3,7 +3,7 @@ import { db } from "@repo/db";
 import * as schema from "@repo/db/schema";
 import { DataService } from "@repo/db/services/data";
 import { createFileRoute } from "@tanstack/react-router";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export const Route = createFileRoute("/api/admin/data/$")({
   server: {
@@ -166,6 +166,32 @@ export const Route = createFileRoute("/api/admin/data/$")({
 
         if (!entityName || !id) return new Response("Bad Request", { status: 400 });
 
+        if (entityName === "tenant") {
+          try {
+            await db.transaction(async (tx) => {
+              await tx.execute(sql`set local session_replication_role = replica`);
+              const rows = (await tx.execute(
+                sql`select table_name from information_schema.columns
+                    where table_schema = 'public' and column_name = 'tenant_id' and table_name <> 'tenant'`,
+              )) as unknown as Array<{ table_name: string }>;
+              const tables = rows
+                .map((r) => r.table_name)
+                .filter((t) => /^[a-z_][a-z0-9_]*$/.test(t));
+              for (const tbl of tables) {
+                await tx.execute(
+                  sql`delete from ${sql.identifier(tbl)} where tenant_id = ${id}::uuid`,
+                );
+              }
+              await tx.execute(sql`delete from "tenant" where tenant_id = ${id}::uuid`);
+            });
+            return new Response(JSON.stringify({ deleted: true }), {
+              headers: { "content-type": "application/json" },
+            });
+          } catch (err: any) {
+            return new Response(err.message, { status: 500 });
+          }
+        }
+
         const table = (schema as any)[entityName];
         if (!table) return new Response("Not Found", { status: 404 });
 
@@ -177,7 +203,7 @@ export const Route = createFileRoute("/api/admin/data/$")({
             headers: { "content-type": "application/json" },
           });
         } catch (err: any) {
-          if (err.code === "23503") {
+          if (err.code === "23503" || err.cause?.code === "23503") {
             return new Response(JSON.stringify({ fkViolation: true }), {
               status: 409,
               headers: { "content-type": "application/json" },

@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
+import { isScriptEntry } from "./script-main";
 
 interface RawAccount {
   id: string;
@@ -32,38 +33,14 @@ const TYPE_MAPPING: Record<string, string> = {
   Eigenkapital: "equity",
 };
 
-async function main() {
-  console.log("Resolving base tenant from database...");
-  const [baseTenant] = await db
-    .select()
-    .from(schema.tenant)
-    .where(eq(schema.tenant.isBase, true))
-    .limit(1);
-
-  if (!baseTenant) {
-    throw new Error("Base tenant (isBase = true) not found in the database.");
-  }
-
-  const baseTenantId = baseTenant.tenantId;
-  console.log(`Found base tenant: "${baseTenant.name}" (${baseTenantId})`);
-
-  console.log(`Resolving company for base tenant: ${baseTenantId}`);
-  const [baseCompany] = await db
-    .select()
-    .from(schema.company)
-    .where(eq(schema.company.tenantId, baseTenantId))
-    .limit(1);
-
-  if (!baseCompany) {
-    throw new Error(`Base company not found for tenant: ${baseTenantId}`);
-  }
-
-  const companyId = baseCompany.companyId;
-  console.log(`Found base company: "${baseCompany.name}" (${companyId})`);
-
+/**
+ * Seed the SKR03 chart of accounts into one tenant. Idempotent upsert on
+ * (tenantId, accountNo). Reused by the base seed (main below) and the test
+ * tenant reseed (seed-test-tenant.ts).
+ */
+export async function seedSkr03ForTenant(tenantId: string, companyId: string): Promise<number> {
   // Read SKR03 accounts from the JSON file
   const jsonPath = path.resolve(__dirname, "skr03.json");
-  console.log(`Reading SKR03 accounts from: ${jsonPath}`);
   const rawData = fs.readFileSync(jsonPath, "utf8");
   const accounts: RawAccount[] = JSON.parse(rawData);
 
@@ -71,8 +48,6 @@ async function main() {
   const leafAccounts = accounts.filter(
     (acc) => acc.leaf && typeof acc.code === "string" && acc.code.length === 4,
   );
-
-  console.log(`Parsed ${leafAccounts.length} SKR03 leaf accounts. Preparing insert...`);
 
   const valuesToInsert = leafAccounts.map((acc) => {
     const mappedType = TYPE_MAPPING[acc.type];
@@ -83,8 +58,8 @@ async function main() {
     }
 
     return {
-      tenantId: baseTenantId,
-      companyId: companyId,
+      tenantId,
+      companyId,
       accountNo: acc.code as string,
       name: acc.name,
       accountType: mappedType || "expense",
@@ -106,14 +81,44 @@ async function main() {
       },
     });
 
-  console.log(
-    `SKR03 chart of accounts successfully seeded! Upserted ${valuesToInsert.length} accounts.`,
-  );
+  return valuesToInsert.length;
+}
+
+async function main() {
+  console.log("Resolving base tenant from database...");
+  const [baseTenant] = await db
+    .select()
+    .from(schema.tenant)
+    .where(eq(schema.tenant.isBase, true))
+    .limit(1);
+
+  if (!baseTenant) {
+    throw new Error("Base tenant (isBase = true) not found in the database.");
+  }
+
+  const baseTenantId = baseTenant.tenantId;
+  console.log(`Found base tenant: "${baseTenant.name}" (${baseTenantId})`);
+
+  const [baseCompany] = await db
+    .select()
+    .from(schema.company)
+    .where(eq(schema.company.tenantId, baseTenantId))
+    .limit(1);
+
+  if (!baseCompany) {
+    throw new Error(`Base company not found for tenant: ${baseTenantId}`);
+  }
+  console.log(`Found base company: "${baseCompany.name}" (${baseCompany.companyId})`);
+
+  const count = await seedSkr03ForTenant(baseTenantId, baseCompany.companyId);
+  console.log(`SKR03 chart of accounts successfully seeded! Upserted ${count} accounts.`);
   process.exit(0);
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  console.error("SKR03 seeding failed:", message);
-  process.exit(1);
-});
+if (isScriptEntry(import.meta.url)) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    console.error("SKR03 seeding failed:", message);
+    process.exit(1);
+  });
+}

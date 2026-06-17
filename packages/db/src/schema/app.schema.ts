@@ -22,6 +22,12 @@ import { user } from "./auth.schema";
 
 // Core Infrastructure
 
+export const sellerTaxRegistrationType = pgEnum("seller_tax_registration_type", [
+  "domestic",
+  "oss",
+  "foreign_vat",
+]);
+
 export const organization = pgTable(
   "organization",
   {
@@ -117,6 +123,36 @@ export const company = pgTable(
       "company_fiscal_year_start_month_check",
       sql`fiscal_year_start_month >= 1 AND fiscal_year_start_month <= 12`,
     ),
+  ],
+);
+
+export const sellerTaxRegistration = pgTable(
+  "seller_tax_registration",
+  {
+    sellerTaxRegistrationId: uuid("seller_tax_registration_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    companyId: uuid("company_id").references(() => company.companyId),
+    countryCode: char("country_code", { length: 2 }).notNull(),
+    vatId: text("vat_id"),
+    registrationType: sellerTaxRegistrationType("registration_type").notNull(),
+    validFrom: date("valid_from").notNull(),
+    validTo: date("valid_to"),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_seller_tax_registration_lookup").on(
+      table.tenantId,
+      table.companyId,
+      table.countryCode,
+      table.registrationType,
+      table.validFrom,
+    ),
+    index("idx_seller_tax_registration_tenant").on(table.tenantId),
   ],
 );
 
@@ -1054,6 +1090,10 @@ export const documentLine = pgTable(
     netPrice: numeric("net_price").notNull(),
     discountPercentage: numeric("discount_percentage"),
     taxCodeId: uuid("tax_code_id"),
+    taxReason: text("tax_reason"),
+    taxRuleId: uuid("tax_rule_id").references(() => taxRule.taxRuleId),
+    taxCountryCodeUsed: varchar("tax_country_code_used", { length: 2 }),
+    taxRateSnapshot: numeric("tax_rate_snapshot"),
     taxAmount: numeric("tax_amount"),
     lineTotalNet: numeric("line_total_net"),
     warehouseId: uuid("warehouse_id"),
@@ -3738,6 +3778,59 @@ export const commerceSyncDeadLetter = pgTable(
       table.salesChannelId,
       table.entityType,
       table.internalId,
+    ),
+  ],
+);
+
+export const commerceWebhookEventStatus = pgEnum("commerce_webhook_event_status", [
+  "pending",
+  "processing",
+  "processed",
+  "ignored",
+  "failed",
+]);
+
+// Inbound shop webhook events (e.g. Shopware App-System): the durable, idempotent
+// landing zone for signed event deliveries. Ingestion only persists; a processor
+// drains pending rows (order.placed -> order import, etc.). Redeliveries are
+// deduplicated on the request signature.
+export const commerceWebhookEvent = pgTable(
+  "commerce_webhook_event",
+  {
+    eventId: uuid("event_id")
+      .primaryKey()
+      .default(sql`uuidv7()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenant.tenantId),
+    salesChannelId: uuid("sales_channel_id")
+      .notNull()
+      .references(() => salesChannel.salesChannelId),
+    eventName: text("event_name").notNull(),
+    // Shopware signs each delivery (shopware-shop-signature); reused as the dedup key.
+    dedupeKey: text("dedupe_key").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: commerceWebhookEventStatus("status").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    errorMessage: text("error_message"),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_commerce_webhook_event_tenant").on(table.tenantId),
+    index("idx_commerce_webhook_event_pending").on(
+      table.tenantId,
+      table.salesChannelId,
+      table.status,
+      table.nextRetryAt,
+    ),
+    unique("uq_commerce_webhook_event_dedupe").on(
+      table.tenantId,
+      table.salesChannelId,
+      table.dedupeKey,
     ),
   ],
 );

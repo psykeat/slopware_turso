@@ -13,6 +13,7 @@ dotenv.config({ path: path.resolve(__dirname, "../../../../apps/web/.env") });
 
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
+import { isScriptEntry } from "./script-main";
 
 // Default tenant email templates for document mail. Document reference goes into
 // the subject (header); the body is static German prose with a few placeholders.
@@ -145,8 +146,23 @@ async function ensureBinding(
   return true;
 }
 
+/**
+ * Seed document email templates + bindings into one tenant. Idempotent. Reused
+ * by the base seed (main below) and the test tenant reseed (seed-test-tenant.ts).
+ * Returns the number of newly created bindings.
+ */
+export async function seedEmailTemplatesForTenant(tenantId: string): Promise<number> {
+  let createdBindings = 0;
+  for (const seed of TEMPLATES) {
+    const templateId = await ensureTemplate(tenantId, seed);
+    const created = await ensureBinding(tenantId, templateId, seed.documentType);
+    if (created) createdBindings += 1;
+  }
+  return createdBindings;
+}
+
 async function main() {
-  const tenants = await db.select().from(schema.tenant);
+  const tenants = await db.select().from(schema.tenant).where(eq(schema.tenant.isBase, true));
   if (tenants.length === 0) {
     throw new Error("No tenants found in the database. Run seed first.");
   }
@@ -154,12 +170,7 @@ async function main() {
   console.log(`Seeding document email templates for ${tenants.length} tenant(s)...`);
 
   for (const tenant of tenants) {
-    let createdBindings = 0;
-    for (const seed of TEMPLATES) {
-      const templateId = await ensureTemplate(tenant.tenantId, seed);
-      const created = await ensureBinding(tenant.tenantId, templateId, seed.documentType);
-      if (created) createdBindings += 1;
-    }
+    const createdBindings = await seedEmailTemplatesForTenant(tenant.tenantId);
     console.log(
       `  ${tenant.slug ?? tenant.tenantId}: ${TEMPLATES.length} templates ensured, ${createdBindings} binding(s) created`,
     );
@@ -169,7 +180,9 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (isScriptEntry(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

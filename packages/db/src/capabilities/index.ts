@@ -1,9 +1,12 @@
 import { allCapabilities } from "./all";
-import { registerCapabilities } from "./core/registry";
+import { replaceCapabilities } from "./core/registry";
 
 // Static registration: a capability exists exactly when its module is part of
 // the aggregation in all.ts, so the registry can never drift from the code.
-registerCapabilities(...allCapabilities);
+// Dev SSR can re-evaluate this module while keeping registry.ts cached; replace
+// the static set so hot reloads are idempotent without masking duplicates in
+// the incoming capability list.
+replaceCapabilities(...allCapabilities);
 
 export { allCapabilities } from "./all";
 export { executeCapability } from "./core/execute";

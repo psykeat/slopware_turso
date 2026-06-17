@@ -1,9 +1,11 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   CornerDownRightIcon,
   PlusIcon,
+  RefreshCwIcon,
   SlidersHorizontalIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -128,6 +130,11 @@ interface LineRow {
   discountPercentage: number | null;
   taxCodeId: string | null;
   taxRate: number | null;
+  taxReason?: string | null;
+  taxRuleId?: string | null;
+  taxCountryCodeUsed?: string | null;
+  taxRateSnapshot?: string | null;
+  taxContextStale?: boolean;
   isNew?: boolean;
   isDeleted?: boolean;
 }
@@ -155,6 +162,15 @@ interface ArticleVariantRow {
 interface TaxCodeRow {
   taxCodeId: string;
   taxRate: string;
+}
+
+interface PricingResult {
+  unitPrice?: string | number | null;
+  taxCodeId?: string | null;
+  taxReason?: string | null;
+  taxRuleId?: string | null;
+  taxCountryCodeUsed?: string | null;
+  taxRate?: string | number | null;
 }
 
 interface ArticleMetaRow {
@@ -359,6 +375,10 @@ export function normalizeLineForSave(line: LineRow) {
     netPrice: String(line.netPrice),
     discountPercentage: line.discountPercentage != null ? String(line.discountPercentage) : null,
     taxCodeId: line.taxCodeId,
+    taxReason: line.taxReason ?? null,
+    taxRuleId: line.taxRuleId ?? null,
+    taxCountryCodeUsed: line.taxCountryCodeUsed ?? null,
+    taxRateSnapshot: line.taxRateSnapshot ?? null,
   };
 }
 
@@ -370,6 +390,25 @@ function serializeLines(lines: LineRow[]) {
 
 function getPersistableLines(lines: LineRow[]) {
   return lines.filter((line) => !line.isDeleted && !isBlankDraftLine(line));
+}
+
+export function buildArticlePricingUrl(
+  articleOrVariantId: string,
+  context: {
+    customerId?: string | null;
+    documentDate?: string | null;
+    deliveryAddressId?: string | null;
+    deliveryCountryCode?: string | null;
+    billingCountryCode?: string | null;
+  },
+) {
+  const params = new URLSearchParams({ articleId: articleOrVariantId });
+  if (context.customerId) params.set("customerId", context.customerId);
+  if (context.documentDate) params.set("documentDate", context.documentDate);
+  if (context.deliveryAddressId) params.set("deliveryAddressId", context.deliveryAddressId);
+  if (context.deliveryCountryCode) params.set("deliveryCountryCode", context.deliveryCountryCode);
+  if (context.billingCountryCode) params.set("billingCountryCode", context.billingCountryCode);
+  return `/api/articles/${articleOrVariantId}/pricing?${params}`;
 }
 
 function normalizeHeaderForSave(header: DocHeader, hidePartyFields: boolean) {
@@ -560,6 +599,12 @@ function resolveTrackingMode(articleMeta?: ArticleMetaRow | null): "serial" | "b
   return null;
 }
 
+function extractCountryCode(snapshot: AddressSnapshot | null | undefined): string | null {
+  const value = snapshot?.countryCode ?? snapshot?.country ?? null;
+  const normalized = value?.trim().toUpperCase();
+  return normalized || null;
+}
+
 function lineFromPersistedRow(row: any): LineRow {
   return {
     _id: row.documentLineId ?? row._id ?? `saved-${row.lineNo ?? Date.now()}`,
@@ -583,6 +628,10 @@ function lineFromPersistedRow(row: any): LineRow {
     discountPercentage: row.discountPercentage != null ? Number(row.discountPercentage) : null,
     taxCodeId: row.taxCodeId ?? null,
     taxRate: row.taxRate ?? null,
+    taxReason: row.taxReason ?? null,
+    taxRuleId: row.taxRuleId ?? null,
+    taxCountryCodeUsed: row.taxCountryCodeUsed ?? null,
+    taxRateSnapshot: row.taxRateSnapshot ?? null,
     isNew: false,
     isDeleted: false,
   };
@@ -897,6 +946,8 @@ interface DocumentLinesEditorHandle {
   commitCurrentEdit: () => Promise<LineRow | null>;
   deleteCurrentLine: () => void;
   duplicateCurrentLine: () => void;
+  markTaxContextStale: () => void;
+  refreshStaleTaxContexts: () => Promise<number>;
   setActiveLineLangText: (html: string) => void;
   getLines: () => LineRow[];
   getDraftLines: () => LineRow[];
@@ -914,6 +965,9 @@ const DocumentLinesEditor = forwardRef<
     warehouseId?: string | null;
     customerId: string | null;
     documentDate: string | null;
+    billingCountryCode?: string | null;
+    deliveryCountryCode?: string | null;
+    deliveryAddressId?: string | null;
     status?: string;
     companyId?: string | null;
     onLinesChange?: (lines: LineRow[]) => void;
@@ -928,6 +982,9 @@ const DocumentLinesEditor = forwardRef<
     warehouseId,
     customerId,
     documentDate,
+    billingCountryCode,
+    deliveryCountryCode,
+    deliveryAddressId,
     status,
     companyId,
     onLinesChange,
@@ -1241,6 +1298,10 @@ const DocumentLinesEditor = forwardRef<
         discountPercentage: l.discountPercentage != null ? Number(l.discountPercentage) : null,
         taxCodeId: l.taxCodeId ?? null,
         taxRate: l.taxCodeId ? (taxRateMap[l.taxCodeId] ?? null) : null,
+        taxReason: l.taxReason ?? null,
+        taxRuleId: l.taxRuleId ?? null,
+        taxCountryCodeUsed: l.taxCountryCodeUsed ?? null,
+        taxRateSnapshot: l.taxRateSnapshot ?? null,
       })),
     );
     // Hydrate the editable line draft from async query data.
@@ -1360,6 +1421,21 @@ const DocumentLinesEditor = forwardRef<
     duplicateCurrentLine: () => {
       duplicateLine();
     },
+    markTaxContextStale: () => {
+      replaceLines(
+        linesRef.current.map((line) =>
+          line.taxCodeId && line.lineType !== "comment" && line.lineType !== "bom_component"
+            ? { ...line, taxContextStale: true }
+            : line,
+        ),
+      );
+      setEditVals((prev) =>
+        prev.taxCodeId && prev.lineType !== "comment" && prev.lineType !== "bom_component"
+          ? { ...prev, taxContextStale: true }
+          : prev,
+      );
+    },
+    refreshStaleTaxContexts,
     setActiveLineLangText: (html: string) => {
       if (!editingId) return;
       setEditVals((prev) => applyLineTextOverride(prev, html));
@@ -1779,6 +1855,73 @@ const DocumentLinesEditor = forwardRef<
     }
   }
 
+  async function refreshStaleTaxContexts() {
+    const current = linesRef.current;
+    const staleLines = current.filter(
+      (line) =>
+        line.taxContextStale &&
+        line.lineType !== "comment" &&
+        line.lineType !== "bom_component" &&
+        (line.variantId || line.articleId),
+    );
+
+    if (staleLines.length === 0) return 0;
+
+    const resolvedByLineId = new Map<string, PricingResult>();
+    for (const line of staleLines) {
+      const pricingTargetId = line.variantId ?? line.articleId;
+      if (!pricingTargetId) continue;
+      const res = await fetch(
+        buildArticlePricingUrl(pricingTargetId, {
+          customerId,
+          documentDate,
+          deliveryAddressId,
+          deliveryCountryCode,
+          billingCountryCode,
+        }),
+      );
+      if (!res.ok) continue;
+      resolvedByLineId.set(line._id, (await res.json()) as PricingResult);
+    }
+
+    if (resolvedByLineId.size === 0) return 0;
+
+    replaceLines(
+      current.map((line) => {
+        const resolvedTax = resolvedByLineId.get(line._id);
+        if (!resolvedTax) return line;
+        return {
+          ...line,
+          taxCodeId: resolvedTax.taxCodeId ?? null,
+          taxRate: resolvedTax.taxRate != null ? Number(resolvedTax.taxRate) : null,
+          taxReason: resolvedTax.taxReason ?? null,
+          taxRuleId: resolvedTax.taxRuleId ?? null,
+          taxCountryCodeUsed: resolvedTax.taxCountryCodeUsed ?? null,
+          taxRateSnapshot: resolvedTax.taxRate != null ? String(resolvedTax.taxRate) : null,
+          taxContextStale: false,
+        };
+      }),
+    );
+
+    setEditVals((prev) => {
+      if (!editingId) return prev;
+      const resolvedTax = resolvedByLineId.get(editingId);
+      if (!resolvedTax) return prev;
+      return {
+        ...prev,
+        taxCodeId: resolvedTax.taxCodeId ?? null,
+        taxRate: resolvedTax.taxRate != null ? Number(resolvedTax.taxRate) : null,
+        taxReason: resolvedTax.taxReason ?? null,
+        taxRuleId: resolvedTax.taxRuleId ?? null,
+        taxCountryCodeUsed: resolvedTax.taxCountryCodeUsed ?? null,
+        taxRateSnapshot: resolvedTax.taxRate != null ? String(resolvedTax.taxRate) : null,
+        taxContextStale: false,
+      };
+    });
+
+    return resolvedByLineId.size;
+  }
+
   async function handleArticleSelect(article: ArticleResult, rowIndex: number) {
     isSelectingRef.current = true;
     try {
@@ -1788,16 +1931,21 @@ const DocumentLinesEditor = forwardRef<
       });
       // Fetch pricing
       let price = 0;
-      let taxCodeId: string | null = null;
+      let resolvedTax: PricingResult = {};
       try {
-        const params = new URLSearchParams({ articleId: article.articleId });
-        if (customerId) params.set("customerId", customerId);
-        if (documentDate) params.set("documentDate", documentDate);
-        const res = await fetch(`/api/articles/${article.articleId}/pricing?${params}`);
+        const res = await fetch(
+          buildArticlePricingUrl(article.articleId, {
+            customerId,
+            documentDate,
+            deliveryAddressId,
+            deliveryCountryCode,
+            billingCountryCode,
+          }),
+        );
         if (res.ok) {
-          const data = await res.json();
+          const data = (await res.json()) as PricingResult;
           price = Number(data.unitPrice ?? 0);
-          taxCodeId = data.taxCodeId ?? null;
+          resolvedTax = data;
         }
       } catch {
         /* pricing optional */
@@ -1823,7 +1971,13 @@ const DocumentLinesEditor = forwardRef<
         articleTextSnapshot: article.name,
         unit: article.baseUnit ?? null,
         netPrice: price,
-        taxCodeId,
+        taxCodeId: resolvedTax.taxCodeId ?? null,
+        taxRate: resolvedTax.taxRate != null ? Number(resolvedTax.taxRate) : null,
+        taxReason: resolvedTax.taxReason ?? null,
+        taxRuleId: resolvedTax.taxRuleId ?? null,
+        taxCountryCodeUsed: resolvedTax.taxCountryCodeUsed ?? null,
+        taxRateSnapshot: resolvedTax.taxRate != null ? String(resolvedTax.taxRate) : null,
+        taxContextStale: false,
         lineType: resolvedLineType,
         bomGroupId: shouldExpandBom(articleMeta, documentType)
           ? (prev.bomGroupId ?? prev.documentLineId ?? prev._id ?? null)
@@ -1940,6 +2094,9 @@ const DocumentLinesEditor = forwardRef<
 
   const visibleLines = lines.filter((l) => !l.isDeleted);
   const visibleDraftLines = effectiveLines.filter((l) => !l.isDeleted);
+  const staleTaxLineCount = visibleDraftLines.filter(
+    (line) => line.taxContextStale && line.lineType !== "comment" && line.lineType !== "bom_component",
+  ).length;
 
   const totals = useMemo(() => {
     let net = 0,
@@ -2233,13 +2390,38 @@ const DocumentLinesEditor = forwardRef<
 
                   {/* Tax rate */}
                   <div className="self-center px-2 py-1.5 text-right text-[12px] text-ink-mute tabular-nums">
-                    {isEditing
-                      ? ev.taxCodeId
-                        ? `${taxRateMap[ev.taxCodeId as string] ?? 0}%`
-                        : "—"
-                      : line.taxRate != null
-                        ? `${line.taxRate}%`
-                        : "—"}
+                    <span
+                      className="inline-flex items-center justify-end gap-1"
+                      title={[
+                        (isEditing ? ev.taxReason : line.taxReason) ?? null,
+                        (isEditing ? ev.taxCountryCodeUsed : line.taxCountryCodeUsed)
+                          ? `Country: ${isEditing ? ev.taxCountryCodeUsed : line.taxCountryCodeUsed}`
+                          : null,
+                        (isEditing ? ev.taxRuleId : line.taxRuleId)
+                          ? `Rule: ${isEditing ? ev.taxRuleId : line.taxRuleId}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join("\n")}
+                    >
+                      {(isEditing ? ev.taxContextStale : line.taxContextStale) && (
+                        <AlertTriangleIcon
+                          className="size-3 text-amber-600"
+                          aria-label={t("documentEditor.taxContextStale", {
+                            defaultValue: "Steuerkontext veraltet",
+                          })}
+                        />
+                      )}
+                      <span>
+                        {isEditing
+                          ? ev.taxCodeId
+                            ? `${taxRateMap[ev.taxCodeId as string] ?? 0}%`
+                            : "—"
+                          : line.taxRate != null
+                            ? `${line.taxRate}%`
+                            : "—"}
+                      </span>
+                    </span>
                   </div>
 
                   {/* Line net */}
@@ -2382,6 +2564,25 @@ const DocumentLinesEditor = forwardRef<
           <PlusIcon className="size-3.5" />
           {t("documentEditor.addLine", { defaultValue: "Position hinzufügen" })}
         </button>
+        {staleTaxLineCount > 0 && (
+          <button
+            className="flex h-7 items-center gap-1.5 rounded border border-amber-300 px-3 text-[13px] text-amber-700 transition-colors hover:border-amber-500 hover:text-amber-800 disabled:opacity-50"
+            onClick={async () => {
+              const refreshed = await refreshStaleTaxContexts();
+              toast.success(
+                t("documentEditor.taxContextRefreshed", {
+                  defaultValue: "{{count}} Steuerkontexte aktualisiert",
+                  count: refreshed,
+                }),
+              );
+            }}
+          >
+            <RefreshCwIcon className="size-3.5" />
+            {t("documentEditor.refreshTaxContext", {
+              defaultValue: "Steuern neu berechnen",
+            })}
+          </button>
+        )}
         <div className="flex-1" />
         <div className="flex items-center gap-6 text-[13px] tabular-nums">
           <span className="text-ink-mute">
@@ -2568,6 +2769,8 @@ export function DocumentEditor({
   const activeDocumentType =
     header.documentType ?? groupData?.documentType ?? (docData as any)?.documentType ?? null;
   const hidePartyFields = !!activeDocumentType && MOVEMENT_DOCUMENT_TYPES.has(activeDocumentType);
+  const billingCountryCode = extractCountryCode(header.billingAddress);
+  const deliveryCountryCode = extractCountryCode(header.deliveryAddress);
   const requireSerialTracking = !!groupData?.requireSerialTracking;
   const requireBatchTracking = !!groupData?.requireBatchTracking;
   const requiresGroupTracking = requireSerialTracking || requireBatchTracking;
@@ -2868,6 +3071,17 @@ export function DocumentEditor({
     setPrintAfterSave(true);
     saveDocMutate();
   }, [saveDocMutate]);
+  const handleRefreshTaxContext = useCallback(async () => {
+    const refreshed = (await linesEditorRef.current?.refreshStaleTaxContexts()) ?? 0;
+    if (refreshed > 0) {
+      toast.success(
+        t("documentEditor.taxContextRefreshed", {
+          defaultValue: "{{count}} Steuerkontexte aktualisiert",
+          count: refreshed,
+        }),
+      );
+    }
+  }, [t]);
   const handleOpenDuplicateDialog = useCallback(async () => {
     let candidates: DocumentTargetGroupCandidate[];
     try {
@@ -2904,6 +3118,10 @@ export function DocumentEditor({
   const stornoDocumentId = (header as any).stornoDocumentId ?? null;
   const activeConvertCandidates = convertCandidates ?? [];
   const isDocumentDirty = isHeaderDirty || isLinesDirty;
+  const staleTaxLineCount = pendingLines.filter(
+    (line) =>
+      line.taxContextStale && line.lineType !== "comment" && line.lineType !== "bom_component",
+  ).length;
   const printOptions = useMemo(
     () =>
       getDocumentPrintOptions(header.customAttributes, {
@@ -2974,6 +3192,7 @@ export function DocumentEditor({
     handleClose: () => {},
     handleConvert: () => {},
     handlePrint: () => {},
+    handleRefreshTaxContext: async () => {},
     handleOpenDuplicateDialog: async () => {},
     handleCreateNewDocument: () => {},
     docStatus: "draft",
@@ -2981,6 +3200,7 @@ export function DocumentEditor({
     stornoDocumentId: null as string | null,
     isNew,
     isDocumentDirty: false,
+    staleTaxLineCount: 0,
     isCloseDialogOpen: false,
     isPrintDialogOpen: false,
     isSavePending: false,
@@ -2999,6 +3219,7 @@ export function DocumentEditor({
     commandRefs.current.handleClose = handleClose;
     commandRefs.current.handleConvert = handleConvert;
     commandRefs.current.handlePrint = handlePrint;
+    commandRefs.current.handleRefreshTaxContext = handleRefreshTaxContext;
     commandRefs.current.handleOpenDuplicateDialog = handleOpenDuplicateDialog;
     commandRefs.current.handleCreateNewDocument = handleCreateNewDocument;
     commandRefs.current.docStatus = docStatus;
@@ -3006,6 +3227,7 @@ export function DocumentEditor({
     commandRefs.current.stornoDocumentId = stornoDocumentId;
     commandRefs.current.isNew = isNew;
     commandRefs.current.isDocumentDirty = isDocumentDirty;
+    commandRefs.current.staleTaxLineCount = staleTaxLineCount;
     commandRefs.current.isCloseDialogOpen = closeDialogOpen;
     commandRefs.current.isPrintDialogOpen = printDialogOpen;
     commandRefs.current.isSavePending = saveMutation.isPending;
@@ -3022,6 +3244,7 @@ export function DocumentEditor({
     handleClose,
     handleConvert,
     handlePrint,
+    handleRefreshTaxContext,
     handleOpenDuplicateDialog,
     handleCreateNewDocument,
     docStatus,
@@ -3029,6 +3252,7 @@ export function DocumentEditor({
     stornoDocumentId,
     isNew,
     isDocumentDirty,
+    staleTaxLineCount,
     closeDialogOpen,
     printDialogOpen,
     saveMutation.isPending,
@@ -3115,6 +3339,17 @@ export function DocumentEditor({
       handler: () => commandRefs.current.handlePrint(),
     });
 
+    const unregRefreshTaxContext = registerCommand({
+      id: "doc-refresh-tax-context",
+      label: { en: "Refresh Tax Context", de: "Steuern neu berechnen" },
+      group: "document",
+      scope: "local",
+      isEnabled: () => commandRefs.current.staleTaxLineCount > 0,
+      handler: () => {
+        void commandRefs.current.handleRefreshTaxContext();
+      },
+    });
+
     const unregPost = registerCommand({
       id: "doc-post",
       label: { en: "Post Document", de: "Beleg buchen" },
@@ -3160,6 +3395,7 @@ export function DocumentEditor({
       unregDuplicate();
       unregConvert();
       unregPrint();
+      unregRefreshTaxContext();
       unregPost();
       unregStorno();
       unregClose();
@@ -3328,6 +3564,7 @@ export function DocumentEditor({
                       // Auto-fill delivery address from address default
                       if (raw?.defaultDeliveryAddressId && !header.deliveryAddressId) {
                         update.deliveryAddressId = raw.defaultDeliveryAddressId;
+                        linesEditorRef.current?.markTaxContextStale();
                       }
                       patchHeader(update);
                       const addressTextSource = (json ?? raw ?? {}) as AddressSnapshot & {
@@ -3378,6 +3615,15 @@ export function DocumentEditor({
                     addressData={header.deliveryAddress ?? null}
                     locked={false}
                     onChange={(id, json) => {
+                      const previousDeliveryAddressId = header.deliveryAddressId ?? null;
+                      const previousDeliveryCountryCode = extractCountryCode(header.deliveryAddress);
+                      const nextDeliveryCountryCode = extractCountryCode(json);
+                      if (
+                        previousDeliveryAddressId !== id ||
+                        previousDeliveryCountryCode !== nextDeliveryCountryCode
+                      ) {
+                        linesEditorRef.current?.markTaxContextStale();
+                      }
                       patchHeader({ deliveryAddressId: id, deliveryAddress: json });
                     }}
                   />
@@ -3544,6 +3790,9 @@ export function DocumentEditor({
               warehouseId={header.warehouseId ?? null}
               customerId={header.customerId ?? null}
               documentDate={header.documentDate ?? null}
+              billingCountryCode={billingCountryCode}
+              deliveryCountryCode={deliveryCountryCode}
+              deliveryAddressId={header.deliveryAddressId ?? null}
               status={docStatus}
               companyId={companyId ?? null}
               onLinesChange={setPendingLines}

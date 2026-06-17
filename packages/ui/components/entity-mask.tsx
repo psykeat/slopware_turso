@@ -18,6 +18,7 @@ import { Skeleton } from "./skeleton";
 // The system-admin introspection route stays on raw fetch; everything else runs
 // on the capability runtime via the entity helper.
 const ADMIN_DATA_BASE = "/api/admin/data";
+const EMPTY_INITIAL_VALUES: Record<string, any> = {};
 
 export interface FieldDef {
   key: string;
@@ -333,13 +334,15 @@ export function EntityMask({
 
   const [metaFields, setMetaFields] = useState<FieldDef[]>([]);
   const [loading, setLoading] = useState(!propFields && !!entityName);
+  const createInitialData = mode === "create" ? (initialValues ?? EMPTY_INITIAL_VALUES) : null;
   const [initialData, setInitialData] = useState<Record<string, any>>(
-    mode === "create" ? (initialValues ?? {}) : {},
+    createInitialData ?? EMPTY_INITIAL_VALUES,
   );
+  const currentInitialData = createInitialData ?? initialData;
   const [globalError, setGlobalError] = useState<string | null>(null);
 
   const form = useForm({
-    defaultValues: initialData,
+    defaultValues: currentInitialData,
     onSubmit: async ({ value, formApi }) => {
       setGlobalError(null);
       const isEdit = recordId && mode !== "create";
@@ -415,10 +418,8 @@ export function EntityMask({
   // Reset form and fetch data when record changes
   useLayoutEffect(() => {
     let active = true;
-    const initial = mode === "create" ? (initialValues ?? {}) : {};
     if (mode === "create") {
-      setInitialData(initial);
-      form.reset();
+      form.reset(initialValues ?? EMPTY_INITIAL_VALUES);
     }
     if (recordId && (mode === "edit" || !mode)) {
       const loaded =
@@ -821,7 +822,7 @@ export function EntityMask({
     i18n.language === "de" && field.helpTextDe ? field.helpTextDe : field.helpText;
 
   const showCancel = !inline && !!onCancel;
-  const hasChildContent = !!childSection && !loading && Object.keys(initialData).length > 0; // We show it if we loaded data
+  const hasChildContent = !!childSection && !loading && Object.keys(currentInitialData).length > 0; // We show it if we loaded data
   const fieldGridClass = _layout === "single" ? "grid-cols-1" : "grid-cols-2";
 
   useLayoutEffect(() => {

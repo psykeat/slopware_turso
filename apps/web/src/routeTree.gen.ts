@@ -23,6 +23,7 @@ import { Route as AuthAppIndexRouteImport } from './routes/_auth/app/index'
 import { Route as ApiStatsDashboardRouteImport } from './routes/api/stats/dashboard'
 import { Route as ApiStatsArticlesRouteImport } from './routes/api/stats/articles'
 import { Route as ApiStatsAddressesRouteImport } from './routes/api/stats/addresses'
+import { Route as ApiShopwareWebhookRouteImport } from './routes/api/shopware/webhook'
 import { Route as ApiSetupYearEndRouteImport } from './routes/api/setup/year-end'
 import { Route as ApiSetupInitializeRouteImport } from './routes/api/setup/initialize'
 import { Route as ApiMetadataSplatRouteImport } from './routes/api/metadata/$'
@@ -65,8 +66,10 @@ import { Route as ApiAdminLlmConfigTestRouteImport } from './routes/api/admin/ll
 import { Route as ApiAdminDocumentGroupsIdRouteImport } from './routes/api/admin/document-groups/$id'
 import { Route as ApiAdminDataSplatRouteImport } from './routes/api/admin/data/$'
 import { Route as AuthAppSettingsVariantTemplatesRouteImport } from './routes/_auth/app/settings/variant-templates'
+import { Route as AuthAppSettingsSalesChannelsRouteImport } from './routes/_auth/app/settings/sales-channels'
 import { Route as AuthAppSettingsImportProfilesRouteImport } from './routes/_auth/app/settings/import-profiles'
 import { Route as AuthAppSettingsCyclesRouteImport } from './routes/_auth/app/settings/cycles'
+import { Route as AuthAppSettingsCommerceSyncRouteImport } from './routes/_auth/app/settings/commerce-sync'
 import { Route as AuthAppSettingsAccountRouteImport } from './routes/_auth/app/settings/account'
 import { Route as ApiImportProfilesProfileIdBootstrapRouteImport } from './routes/api/import/profiles/$profileId/bootstrap'
 import { Route as ApiArticlesArticleIdBomBomIdRouteImport } from './routes/api/articles/$articleId/bom/$bomId'
@@ -137,6 +140,11 @@ const ApiStatsArticlesRoute = ApiStatsArticlesRouteImport.update({
 const ApiStatsAddressesRoute = ApiStatsAddressesRouteImport.update({
   id: '/api/stats/addresses',
   path: '/api/stats/addresses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiShopwareWebhookRoute = ApiShopwareWebhookRouteImport.update({
+  id: '/api/shopware/webhook',
+  path: '/api/shopware/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSetupYearEndRoute = ApiSetupYearEndRouteImport.update({
@@ -364,6 +372,12 @@ const AuthAppSettingsVariantTemplatesRoute =
     path: '/settings/variant-templates',
     getParentRoute: () => AuthAppRouteRoute,
   } as any)
+const AuthAppSettingsSalesChannelsRoute =
+  AuthAppSettingsSalesChannelsRouteImport.update({
+    id: '/settings/sales-channels',
+    path: '/settings/sales-channels',
+    getParentRoute: () => AuthAppRouteRoute,
+  } as any)
 const AuthAppSettingsImportProfilesRoute =
   AuthAppSettingsImportProfilesRouteImport.update({
     id: '/settings/import-profiles',
@@ -375,6 +389,12 @@ const AuthAppSettingsCyclesRoute = AuthAppSettingsCyclesRouteImport.update({
   path: '/settings/cycles',
   getParentRoute: () => AuthAppRouteRoute,
 } as any)
+const AuthAppSettingsCommerceSyncRoute =
+  AuthAppSettingsCommerceSyncRouteImport.update({
+    id: '/settings/commerce-sync',
+    path: '/settings/commerce-sync',
+    getParentRoute: () => AuthAppRouteRoute,
+  } as any)
 const AuthAppSettingsAccountRoute = AuthAppSettingsAccountRouteImport.update({
   id: '/settings/account',
   path: '/settings/account',
@@ -424,13 +444,16 @@ export interface FileRoutesByFullPath {
   '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/api/setup/initialize': typeof ApiSetupInitializeRoute
   '/api/setup/year-end': typeof ApiSetupYearEndRoute
+  '/api/shopware/webhook': typeof ApiShopwareWebhookRoute
   '/api/stats/addresses': typeof ApiStatsAddressesRoute
   '/api/stats/articles': typeof ApiStatsArticlesRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
   '/app/': typeof AuthAppIndexRoute
   '/app/settings/account': typeof AuthAppSettingsAccountRoute
+  '/app/settings/commerce-sync': typeof AuthAppSettingsCommerceSyncRoute
   '/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
   '/app/settings/import-profiles': typeof AuthAppSettingsImportProfilesRoute
+  '/app/settings/sales-channels': typeof AuthAppSettingsSalesChannelsRoute
   '/app/settings/variant-templates': typeof AuthAppSettingsVariantTemplatesRoute
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
@@ -483,13 +506,16 @@ export interface FileRoutesByTo {
   '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/api/setup/initialize': typeof ApiSetupInitializeRoute
   '/api/setup/year-end': typeof ApiSetupYearEndRoute
+  '/api/shopware/webhook': typeof ApiShopwareWebhookRoute
   '/api/stats/addresses': typeof ApiStatsAddressesRoute
   '/api/stats/articles': typeof ApiStatsArticlesRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
   '/app': typeof AuthAppIndexRoute
   '/app/settings/account': typeof AuthAppSettingsAccountRoute
+  '/app/settings/commerce-sync': typeof AuthAppSettingsCommerceSyncRoute
   '/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
   '/app/settings/import-profiles': typeof AuthAppSettingsImportProfilesRoute
+  '/app/settings/sales-channels': typeof AuthAppSettingsSalesChannelsRoute
   '/app/settings/variant-templates': typeof AuthAppSettingsVariantTemplatesRoute
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
@@ -547,13 +573,16 @@ export interface FileRoutesById {
   '/api/metadata/$': typeof ApiMetadataSplatRoute
   '/api/setup/initialize': typeof ApiSetupInitializeRoute
   '/api/setup/year-end': typeof ApiSetupYearEndRoute
+  '/api/shopware/webhook': typeof ApiShopwareWebhookRoute
   '/api/stats/addresses': typeof ApiStatsAddressesRoute
   '/api/stats/articles': typeof ApiStatsArticlesRoute
   '/api/stats/dashboard': typeof ApiStatsDashboardRoute
   '/_auth/app/': typeof AuthAppIndexRoute
   '/_auth/app/settings/account': typeof AuthAppSettingsAccountRoute
+  '/_auth/app/settings/commerce-sync': typeof AuthAppSettingsCommerceSyncRoute
   '/_auth/app/settings/cycles': typeof AuthAppSettingsCyclesRoute
   '/_auth/app/settings/import-profiles': typeof AuthAppSettingsImportProfilesRoute
+  '/_auth/app/settings/sales-channels': typeof AuthAppSettingsSalesChannelsRoute
   '/_auth/app/settings/variant-templates': typeof AuthAppSettingsVariantTemplatesRoute
   '/api/admin/data/$': typeof ApiAdminDataSplatRoute
   '/api/admin/document-groups/$id': typeof ApiAdminDocumentGroupsIdRoute
@@ -610,13 +639,16 @@ export interface FileRouteTypes {
     | '/api/metadata/$'
     | '/api/setup/initialize'
     | '/api/setup/year-end'
+    | '/api/shopware/webhook'
     | '/api/stats/addresses'
     | '/api/stats/articles'
     | '/api/stats/dashboard'
     | '/app/'
     | '/app/settings/account'
+    | '/app/settings/commerce-sync'
     | '/app/settings/cycles'
     | '/app/settings/import-profiles'
+    | '/app/settings/sales-channels'
     | '/app/settings/variant-templates'
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
@@ -669,13 +701,16 @@ export interface FileRouteTypes {
     | '/api/metadata/$'
     | '/api/setup/initialize'
     | '/api/setup/year-end'
+    | '/api/shopware/webhook'
     | '/api/stats/addresses'
     | '/api/stats/articles'
     | '/api/stats/dashboard'
     | '/app'
     | '/app/settings/account'
+    | '/app/settings/commerce-sync'
     | '/app/settings/cycles'
     | '/app/settings/import-profiles'
+    | '/app/settings/sales-channels'
     | '/app/settings/variant-templates'
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
@@ -732,13 +767,16 @@ export interface FileRouteTypes {
     | '/api/metadata/$'
     | '/api/setup/initialize'
     | '/api/setup/year-end'
+    | '/api/shopware/webhook'
     | '/api/stats/addresses'
     | '/api/stats/articles'
     | '/api/stats/dashboard'
     | '/_auth/app/'
     | '/_auth/app/settings/account'
+    | '/_auth/app/settings/commerce-sync'
     | '/_auth/app/settings/cycles'
     | '/_auth/app/settings/import-profiles'
+    | '/_auth/app/settings/sales-channels'
     | '/_auth/app/settings/variant-templates'
     | '/api/admin/data/$'
     | '/api/admin/document-groups/$id'
@@ -783,6 +821,7 @@ export interface RootRouteChildren {
   ApiMetadataSplatRoute: typeof ApiMetadataSplatRoute
   ApiSetupInitializeRoute: typeof ApiSetupInitializeRoute
   ApiSetupYearEndRoute: typeof ApiSetupYearEndRoute
+  ApiShopwareWebhookRoute: typeof ApiShopwareWebhookRoute
   ApiStatsAddressesRoute: typeof ApiStatsAddressesRoute
   ApiStatsArticlesRoute: typeof ApiStatsArticlesRoute
   ApiStatsDashboardRoute: typeof ApiStatsDashboardRoute
@@ -902,6 +941,13 @@ declare module '@tanstack/react-router' {
       path: '/api/stats/addresses'
       fullPath: '/api/stats/addresses'
       preLoaderRoute: typeof ApiStatsAddressesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/shopware/webhook': {
+      id: '/api/shopware/webhook'
+      path: '/api/shopware/webhook'
+      fullPath: '/api/shopware/webhook'
+      preLoaderRoute: typeof ApiShopwareWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/setup/year-end': {
@@ -1198,6 +1244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAppSettingsVariantTemplatesRouteImport
       parentRoute: typeof AuthAppRouteRoute
     }
+    '/_auth/app/settings/sales-channels': {
+      id: '/_auth/app/settings/sales-channels'
+      path: '/settings/sales-channels'
+      fullPath: '/app/settings/sales-channels'
+      preLoaderRoute: typeof AuthAppSettingsSalesChannelsRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
     '/_auth/app/settings/import-profiles': {
       id: '/_auth/app/settings/import-profiles'
       path: '/settings/import-profiles'
@@ -1210,6 +1263,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/cycles'
       fullPath: '/app/settings/cycles'
       preLoaderRoute: typeof AuthAppSettingsCyclesRouteImport
+      parentRoute: typeof AuthAppRouteRoute
+    }
+    '/_auth/app/settings/commerce-sync': {
+      id: '/_auth/app/settings/commerce-sync'
+      path: '/settings/commerce-sync'
+      fullPath: '/app/settings/commerce-sync'
+      preLoaderRoute: typeof AuthAppSettingsCommerceSyncRouteImport
       parentRoute: typeof AuthAppRouteRoute
     }
     '/_auth/app/settings/account': {
@@ -1258,8 +1318,10 @@ interface AuthAppRouteRouteChildren {
   AuthAppImportRoute: typeof AuthAppImportRoute
   AuthAppIndexRoute: typeof AuthAppIndexRoute
   AuthAppSettingsAccountRoute: typeof AuthAppSettingsAccountRoute
+  AuthAppSettingsCommerceSyncRoute: typeof AuthAppSettingsCommerceSyncRoute
   AuthAppSettingsCyclesRoute: typeof AuthAppSettingsCyclesRoute
   AuthAppSettingsImportProfilesRoute: typeof AuthAppSettingsImportProfilesRoute
+  AuthAppSettingsSalesChannelsRoute: typeof AuthAppSettingsSalesChannelsRoute
   AuthAppSettingsVariantTemplatesRoute: typeof AuthAppSettingsVariantTemplatesRoute
   AuthAppSettingsIndexRoute: typeof AuthAppSettingsIndexRoute
 }
@@ -1275,8 +1337,10 @@ const AuthAppRouteRouteChildren: AuthAppRouteRouteChildren = {
   AuthAppImportRoute: AuthAppImportRoute,
   AuthAppIndexRoute: AuthAppIndexRoute,
   AuthAppSettingsAccountRoute: AuthAppSettingsAccountRoute,
+  AuthAppSettingsCommerceSyncRoute: AuthAppSettingsCommerceSyncRoute,
   AuthAppSettingsCyclesRoute: AuthAppSettingsCyclesRoute,
   AuthAppSettingsImportProfilesRoute: AuthAppSettingsImportProfilesRoute,
+  AuthAppSettingsSalesChannelsRoute: AuthAppSettingsSalesChannelsRoute,
   AuthAppSettingsVariantTemplatesRoute: AuthAppSettingsVariantTemplatesRoute,
   AuthAppSettingsIndexRoute: AuthAppSettingsIndexRoute,
 }
@@ -1390,6 +1454,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMetadataSplatRoute: ApiMetadataSplatRoute,
   ApiSetupInitializeRoute: ApiSetupInitializeRoute,
   ApiSetupYearEndRoute: ApiSetupYearEndRoute,
+  ApiShopwareWebhookRoute: ApiShopwareWebhookRoute,
   ApiStatsAddressesRoute: ApiStatsAddressesRoute,
   ApiStatsArticlesRoute: ApiStatsArticlesRoute,
   ApiStatsDashboardRoute: ApiStatsDashboardRoute,

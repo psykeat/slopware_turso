@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeLineForSave } from "./document-editor";
+import { buildArticlePricingUrl, normalizeLineForSave } from "./document-editor";
 
 test("normalizeLineForSave preserves variantId for article lines", () => {
   const payload = normalizeLineForSave({
@@ -24,4 +24,19 @@ test("normalizeLineForSave preserves variantId for article lines", () => {
 
   assert.equal(payload.variantId, "ART-001-5efa1b49");
   assert.equal(payload.lineType, "article");
+});
+
+test("buildArticlePricingUrl includes delivery tax context", () => {
+  const url = buildArticlePricingUrl("variant-1", {
+    customerId: "customer-1",
+    documentDate: "2026-06-17",
+    deliveryAddressId: "delivery-1",
+    deliveryCountryCode: "DE",
+    billingCountryCode: "AT",
+  });
+
+  assert.equal(
+    url,
+    "/api/articles/variant-1/pricing?articleId=variant-1&customerId=customer-1&documentDate=2026-06-17&deliveryAddressId=delivery-1&deliveryCountryCode=DE&billingCountryCode=AT",
+  );
 });

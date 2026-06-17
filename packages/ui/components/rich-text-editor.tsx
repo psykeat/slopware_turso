@@ -3,6 +3,10 @@ import React from "react";
 import { cn } from "../lib/utils";
 import Editor from "./editor";
 
+const subscribeToClientSnapshot = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
+
 export interface RichTextEditorProps {
   initialValue?: string;
   onChange?: (value: string, mode: "plain" | "html") => void;
@@ -22,11 +26,11 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   // Convert standard HTML string to Novel/Tiptap format or pass directly
   // Tiptap can usually parse HTML strings directly as initialContent
-  const [isClient, setIsClient] = React.useState(false);
-
-  React.useLayoutEffect(() => {
-    setIsClient(true);
-  }, []);
+  const isClient = React.useSyncExternalStore(
+    subscribeToClientSnapshot,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
 
   if (!isClient) {
     return (

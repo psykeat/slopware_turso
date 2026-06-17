@@ -13,6 +13,7 @@ dotenv.config({ path: path.resolve(__dirname, "../../../../apps/web/.env") });
 
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
+import { isScriptEntry } from "./script-main";
 
 const TAX_CLASSES = [
   // Article Tax Classes
@@ -100,9 +101,103 @@ const RULES_CONFIG = [
   { cust: "AT_EXPORT", art: "AT_EXEMPT", country: null, code: "AT-EXP" },
 ];
 
+/**
+ * Seed Austrian tax classes, codes and rules into one tenant. Idempotent
+ * (upserts classes/codes, replaces this seed's rules). Reused by the base seed
+ * (main below) and the test tenant reseed (seed-test-tenant.ts).
+ */
+export async function seedAustrianTaxesForTenant(tenantId: string): Promise<void> {
+  // 1. Seed Tax Classes
+  const taxClassIdMap = new Map<string, string>();
+  for (const tc of TAX_CLASSES) {
+    const [inserted] = await db
+      .insert(schema.taxClass)
+      .values({
+        tenantId,
+        code: tc.code,
+        name: tc.name,
+        archived: false,
+      })
+      .onConflictDoUpdate({
+        target: [schema.taxClass.tenantId, schema.taxClass.code],
+        set: {
+          name: sql`excluded.name`,
+          archived: false,
+        },
+      })
+      .returning();
+
+    if (inserted) {
+      taxClassIdMap.set(inserted.code, inserted.taxClassId);
+    }
+  }
+
+  // 2. Seed Tax Codes
+  const taxCodeIdMap = new Map<string, string>();
+  for (const code of TAX_CODES) {
+    const [inserted] = await db
+      .insert(schema.taxCode)
+      .values({
+        tenantId,
+        code: code.code,
+        description: code.description,
+        taxRate: code.taxRate,
+        archived: false,
+      })
+      .onConflictDoUpdate({
+        target: [schema.taxCode.tenantId, schema.taxCode.code],
+        set: {
+          description: sql`excluded.description`,
+          taxRate: sql`excluded.tax_rate`,
+          archived: false,
+        },
+      })
+      .returning();
+
+    if (inserted) {
+      taxCodeIdMap.set(inserted.code, inserted.taxCodeId);
+    }
+  }
+
+  // 3. Clear existing rules for seeded classes to keep seeding idempotent
+  const classIds = Array.from(taxClassIdMap.values());
+  if (classIds.length > 0) {
+    await db
+      .delete(schema.taxRule)
+      .where(
+        and(
+          eq(schema.taxRule.tenantId, tenantId),
+          sql`${schema.taxRule.customerTaxClassId} IN ${classIds} OR ${schema.taxRule.articleTaxClassId} IN ${classIds}`,
+        ),
+      );
+  }
+
+  // 4. Seed Tax Rules
+  const rulesToInsert = RULES_CONFIG.map((rule) => {
+    const customerTaxClassId = rule.cust ? taxClassIdMap.get(rule.cust) : null;
+    const articleTaxClassId = rule.art ? taxClassIdMap.get(rule.art) : null;
+    const taxCodeId = taxCodeIdMap.get(rule.code);
+
+    if (!taxCodeId) {
+      throw new Error(`Tax Code ID not found for code: ${rule.code}`);
+    }
+
+    return {
+      tenantId,
+      customerTaxClassId: customerTaxClassId ?? null,
+      articleTaxClassId: articleTaxClassId ?? null,
+      countryCode: rule.country ?? null,
+      taxCodeId,
+      validFrom: "2020-01-01",
+    };
+  });
+
+  await db.insert(schema.taxRule).values(rulesToInsert);
+}
+
 async function main() {
   console.log("Resolving tenants in database...");
-  const tenants = await db.select().from(schema.tenant);
+  const tenants = await db.select().from(schema.tenant).where(eq(schema.tenant.isBase, true));
 
   if (tenants.length === 0) {
     throw new Error("No tenants found in the database. Run seed first.");
@@ -111,106 +206,21 @@ async function main() {
   console.log(`Found ${tenants.length} tenants. Seeding Austrian taxes...`);
 
   for (const tenant of tenants) {
-    const tenantId = tenant.tenantId;
-    console.log(`Processing tenant: "${tenant.name}" (${tenantId})`);
-
-    // 1. Seed Tax Classes
-    const taxClassIdMap = new Map<string, string>();
-    for (const tc of TAX_CLASSES) {
-      const [inserted] = await db
-        .insert(schema.taxClass)
-        .values({
-          tenantId,
-          code: tc.code,
-          name: tc.name,
-          archived: false,
-        })
-        .onConflictDoUpdate({
-          target: [schema.taxClass.tenantId, schema.taxClass.code],
-          set: {
-            name: sql`excluded.name`,
-            archived: false,
-          },
-        })
-        .returning();
-
-      if (inserted) {
-        taxClassIdMap.set(inserted.code, inserted.taxClassId);
-      }
-    }
-    console.log(`  Upserted ${TAX_CLASSES.length} tax classes.`);
-
-    // 2. Seed Tax Codes
-    const taxCodeIdMap = new Map<string, string>();
-    for (const code of TAX_CODES) {
-      const [inserted] = await db
-        .insert(schema.taxCode)
-        .values({
-          tenantId,
-          code: code.code,
-          description: code.description,
-          taxRate: code.taxRate,
-          archived: false,
-        })
-        .onConflictDoUpdate({
-          target: [schema.taxCode.tenantId, schema.taxCode.code],
-          set: {
-            description: sql`excluded.description`,
-            taxRate: sql`excluded.tax_rate`,
-            archived: false,
-          },
-        })
-        .returning();
-
-      if (inserted) {
-        taxCodeIdMap.set(inserted.code, inserted.taxCodeId);
-      }
-    }
-    console.log(`  Upserted ${TAX_CODES.length} tax codes.`);
-
-    // 3. Clear existing rules for seeded classes to keep seeding idempotent
-    const classIds = Array.from(taxClassIdMap.values());
-    if (classIds.length > 0) {
-      await db
-        .delete(schema.taxRule)
-        .where(
-          and(
-            eq(schema.taxRule.tenantId, tenantId),
-            sql`${schema.taxRule.customerTaxClassId} IN ${classIds} OR ${schema.taxRule.articleTaxClassId} IN ${classIds}`,
-          ),
-        );
-    }
-
-    // 4. Seed Tax Rules
-    const rulesToInsert = RULES_CONFIG.map((rule) => {
-      const customerTaxClassId = rule.cust ? taxClassIdMap.get(rule.cust) : null;
-      const articleTaxClassId = rule.art ? taxClassIdMap.get(rule.art) : null;
-      const taxCodeId = taxCodeIdMap.get(rule.code);
-
-      if (!taxCodeId) {
-        throw new Error(`Tax Code ID not found for code: ${rule.code}`);
-      }
-
-      return {
-        tenantId,
-        customerTaxClassId: customerTaxClassId ?? null,
-        articleTaxClassId: articleTaxClassId ?? null,
-        countryCode: rule.country ?? null,
-        taxCodeId,
-        validFrom: "2020-01-01",
-      };
-    });
-
-    await db.insert(schema.taxRule).values(rulesToInsert);
-    console.log(`  Seeded ${rulesToInsert.length} tax rules.`);
+    console.log(`Processing tenant: "${tenant.name}" (${tenant.tenantId})`);
+    await seedAustrianTaxesForTenant(tenant.tenantId);
+    console.log(
+      `  Upserted ${TAX_CLASSES.length} tax classes, ${TAX_CODES.length} tax codes, ${RULES_CONFIG.length} tax rules.`,
+    );
   }
 
   console.log("Austrian taxes successfully configured!");
   process.exit(0);
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  console.error("Austrian tax seeding failed:", message);
-  process.exit(1);
-});
+if (isScriptEntry(import.meta.url)) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    console.error("Austrian tax seeding failed:", message);
+    process.exit(1);
+  });
+}

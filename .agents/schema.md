@@ -1,7 +1,7 @@
 # Slopware — Live Schema Index
 
-> Generated: 2026-06-16 18:35:13 UTC
-> Tables: 125
+> Generated: 2026-06-17 22:22:44 UTC
+> Tables: 126
 
 Here is the index of all database tables. Click on a table name to view its detailed columns, types, and business annotations.
 
@@ -49,6 +49,7 @@ Here is the index of all database tables. Click on a table name to view its deta
 - [commerce_sync_dead_letter](file:///home/ubuntu/slopware/.agents/schema/commerce_sync_dead_letter.md) (_item_id_)
 - [commerce_sync_run](file:///home/ubuntu/slopware/.agents/schema/commerce_sync_run.md) (_run_id_)
 - [commerce_sync_run_step](file:///home/ubuntu/slopware/.agents/schema/commerce_sync_run_step.md) (_step_id_)
+- [commerce_webhook_event](file:///home/ubuntu/slopware/.agents/schema/commerce_webhook_event.md)
 - [company](file:///home/ubuntu/slopware/.agents/schema/company.md) (_company_id_)
 - [connector_definition](file:///home/ubuntu/slopware/.agents/schema/connector_definition.md) (_connector_id_)
 - [cost_center](file:///home/ubuntu/slopware/.agents/schema/cost_center.md) (_cost_center_id_)

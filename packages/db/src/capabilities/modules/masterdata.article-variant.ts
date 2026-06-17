@@ -256,10 +256,19 @@ export const articleVariantPricing = defineCapability({
     variantId: z.uuid(),
     customerId: z.uuid().nullable().optional(),
     documentDate: z.string().optional(),
+    deliveryAddressId: z.uuid().nullable().optional(),
+    deliveryCountryCode: z.string().nullable().optional(),
+    billingCountryCode: z.string().nullable().optional(),
   }),
   output: z.object({
     unitPrice: z.string(),
     taxCodeId: z.uuid().nullable(),
+    taxReason: z.string(),
+    taxRuleId: z.uuid().nullable(),
+    taxCountryCodeUsed: z.string().nullable(),
+    taxRate: z.string().nullable(),
+    articleTaxClassId: z.uuid().nullable(),
+    customerTaxClassId: z.uuid().nullable(),
   }),
   writesTables: [],
   sideEffects: [],
@@ -275,6 +284,11 @@ export const articleVariantPricing = defineCapability({
       input.customerId ?? null,
       input.documentDate ?? new Date().toISOString().slice(0, 10),
       ctx.tenantId,
+      {
+        deliveryAddressId: input.deliveryAddressId ?? null,
+        deliveryCountryCode: input.deliveryCountryCode ?? null,
+        billingCountryCode: input.billingCountryCode ?? null,
+      },
     );
   },
 });

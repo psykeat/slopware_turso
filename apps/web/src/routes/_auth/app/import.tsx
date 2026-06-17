@@ -251,9 +251,12 @@ function FieldAssignmentMask({
 }) {
   const queryClient = useQueryClient();
   const [templateProfileId, setTemplateProfileId] = useState<string>("");
-  const [edits, setEdits] = useState<Record<string, { included: boolean; targetField: string }>>(
-    {},
-  );
+  const assignmentSourceKey = `${layout.layoutId}:${templateProfileId}`;
+  const [editsState, setEditsState] = useState<{
+    sourceKey: string;
+    edits: Record<string, { included: boolean; targetField: string }>;
+  }>(() => ({ sourceKey: assignmentSourceKey, edits: {} }));
+  const edits = editsState.sourceKey === assignmentSourceKey ? editsState.edits : {};
   const [filter, setFilter] = useState("");
   const [onlyMapped, setOnlyMapped] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -277,11 +280,6 @@ function FieldAssignmentMask({
       })) as unknown as LayoutFieldsResult,
   });
 
-  // Reset local edits whenever a fresh assignment source is loaded.
-  useEffect(() => {
-    setEdits({});
-  }, [layout.layoutId, templateProfileId]);
-
   const targetFields = fieldsData?.targetFields ?? [];
   const fields = fieldsData?.fields ?? [];
 
@@ -294,12 +292,16 @@ function FieldAssignmentMask({
   };
 
   const setRow = (id: string, patch: Partial<{ included: boolean; targetField: string }>) => {
-    setEdits((prev) => {
+    setEditsState((prevState) => {
+      const prev = prevState.sourceKey === assignmentSourceKey ? prevState.edits : {};
       const base = prev[id] ?? {
         included: fields.find((f) => f.buerowareFieldId === id)?.included ?? false,
         targetField: fields.find((f) => f.buerowareFieldId === id)?.targetField ?? "",
       };
-      return { ...prev, [id]: { ...base, ...patch } };
+      return {
+        sourceKey: assignmentSourceKey,
+        edits: { ...prev, [id]: { ...base, ...patch } },
+      };
     });
   };
 
@@ -322,7 +324,7 @@ function FieldAssignmentMask({
       await queryClient.invalidateQueries({ queryKey: ["import", "bw-templates", layout.layoutId] });
       setTemplateProfileId(res.profileId);
       setTemplateName("");
-      setEdits({});
+      setEditsState({ sourceKey: `${layout.layoutId}:${res.profileId}`, edits: {} });
       toast.success(`Vorlage gespeichert (${res.fieldCount} Felder)`);
     },
     onError: (e: Error) => toast.error(e.message),

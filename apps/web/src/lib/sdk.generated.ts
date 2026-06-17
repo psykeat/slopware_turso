@@ -234,6 +234,11 @@ export const sdk = {
         input: CapabilityInput<"commerce.commerceSyncRun.get">,
         options?: Omit<UseQueryOptions<CapabilityOutput<"commerce.commerceSyncRun.get">, Error, CapabilityOutput<"commerce.commerceSyncRun.get">>, "queryKey" | "queryFn">
       ) => useCapabilityQuery("commerce.commerceSyncRun.get", input, options),
+      list: capability("commerce.commerceSyncRun.list"),
+      useList: (
+        input: CapabilityInput<"commerce.commerceSyncRun.list">,
+        options?: Omit<UseQueryOptions<CapabilityOutput<"commerce.commerceSyncRun.list">, Error, CapabilityOutput<"commerce.commerceSyncRun.list">>, "queryKey" | "queryFn">
+      ) => useCapabilityQuery("commerce.commerceSyncRun.list", input, options),
       start: capability("commerce.commerceSyncRun.start"),
       useStart: (
         options?: {
@@ -242,6 +247,62 @@ export const sdk = {
           onError?: (error: unknown) => void;
         }
       ) => useCapabilityMutation("commerce.commerceSyncRun.start", options),
+    },
+    commerceWebhookEvent: {
+      list: capability("commerce.commerceWebhookEvent.list"),
+      useList: (
+        input: CapabilityInput<"commerce.commerceWebhookEvent.list">,
+        options?: Omit<UseQueryOptions<CapabilityOutput<"commerce.commerceWebhookEvent.list">, Error, CapabilityOutput<"commerce.commerceWebhookEvent.list">>, "queryKey" | "queryFn">
+      ) => useCapabilityQuery("commerce.commerceWebhookEvent.list", input, options),
+      process: capability("commerce.commerceWebhookEvent.process"),
+      useProcess: (
+        options?: {
+          dryRun?: boolean;
+          onSuccess?: (data: CapabilityOutput<"commerce.commerceWebhookEvent.process">) => void;
+          onError?: (error: unknown) => void;
+        }
+      ) => useCapabilityMutation("commerce.commerceWebhookEvent.process", options),
+    },
+    salesChannel: {
+      archive: capability("commerce.salesChannel.archive"),
+      useArchive: (
+        options?: {
+          dryRun?: boolean;
+          onSuccess?: (data: CapabilityOutput<"commerce.salesChannel.archive">) => void;
+          onError?: (error: unknown) => void;
+        }
+      ) => useCapabilityMutation("commerce.salesChannel.archive", options),
+      create: capability("commerce.salesChannel.create"),
+      useCreate: (
+        options?: {
+          dryRun?: boolean;
+          onSuccess?: (data: CapabilityOutput<"commerce.salesChannel.create">) => void;
+          onError?: (error: unknown) => void;
+        }
+      ) => useCapabilityMutation("commerce.salesChannel.create", options),
+      get: capability("commerce.salesChannel.get"),
+      useGet: (
+        input: CapabilityInput<"commerce.salesChannel.get">,
+        options?: Omit<UseQueryOptions<CapabilityOutput<"commerce.salesChannel.get">, Error, CapabilityOutput<"commerce.salesChannel.get">>, "queryKey" | "queryFn">
+      ) => useCapabilityQuery("commerce.salesChannel.get", input, options),
+      list: capability("commerce.salesChannel.list"),
+      useList: (
+        input: CapabilityInput<"commerce.salesChannel.list">,
+        options?: Omit<UseQueryOptions<CapabilityOutput<"commerce.salesChannel.list">, Error, CapabilityOutput<"commerce.salesChannel.list">>, "queryKey" | "queryFn">
+      ) => useCapabilityQuery("commerce.salesChannel.list", input, options),
+      testConnection: capability("commerce.salesChannel.testConnection"),
+      useTestConnection: (
+        input: CapabilityInput<"commerce.salesChannel.testConnection">,
+        options?: Omit<UseQueryOptions<CapabilityOutput<"commerce.salesChannel.testConnection">, Error, CapabilityOutput<"commerce.salesChannel.testConnection">>, "queryKey" | "queryFn">
+      ) => useCapabilityQuery("commerce.salesChannel.testConnection", input, options),
+      update: capability("commerce.salesChannel.update"),
+      useUpdate: (
+        options?: {
+          dryRun?: boolean;
+          onSuccess?: (data: CapabilityOutput<"commerce.salesChannel.update">) => void;
+          onError?: (error: unknown) => void;
+        }
+      ) => useCapabilityMutation("commerce.salesChannel.update", options),
     },
   },
   communication: {

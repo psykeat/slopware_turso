@@ -2,11 +2,30 @@ import type { AnyCapability, CapabilityModule, LlmExposure } from "./types";
 
 const capabilities = new Map<string, AnyCapability>();
 
+function assertUniqueCapabilities(definitions: AnyCapability[]) {
+  const incoming = new Set<string>();
+  for (const definition of definitions) {
+    if (incoming.has(definition.key)) {
+      throw new Error(`Duplicate capability key "${definition.key}"`);
+    }
+    incoming.add(definition.key);
+  }
+}
+
 export function registerCapabilities(...definitions: AnyCapability[]) {
+  assertUniqueCapabilities(definitions);
   for (const definition of definitions) {
     if (capabilities.has(definition.key)) {
       throw new Error(`Duplicate capability key "${definition.key}"`);
     }
+    capabilities.set(definition.key, definition);
+  }
+}
+
+export function replaceCapabilities(...definitions: AnyCapability[]) {
+  assertUniqueCapabilities(definitions);
+  capabilities.clear();
+  for (const definition of definitions) {
     capabilities.set(definition.key, definition);
   }
 }

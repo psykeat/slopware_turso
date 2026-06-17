@@ -1,5 +1,7 @@
 import "./load-env";
 import { execSync } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { eq, and } from "drizzle-orm";
@@ -8,8 +10,9 @@ import crypto from "node:crypto";
 import { db, closeDb } from "../index";
 import * as schema from "../schema/app.schema";
 import { user } from "../schema/auth.schema";
-import { executeCapability } from "../capabilities/index";
+import { executeCapability, type ExecutionContext } from "../capabilities/index";
 import { getContextForTenant } from "../test-support/fixtures";
+import { isScriptEntry } from "./script-main";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,10 +40,31 @@ async function main() {
 
   console.log("\nCore seeding finished. Enriched capability seeding starting...");
 
-  // 2. Resolve base tenant and context
+  // 2. Resolve base tenant and context, then enrich
   const ctx = await getContextForTenant("base");
   console.log(`Resolved base tenant: ${ctx.tenantId}`);
 
+  await enrichTenant(ctx);
+
+  console.log("=========================================");
+  console.log("Full Feature Seeding Complete!");
+  console.log("=========================================");
+}
+
+/**
+ * Enrich one tenant with the full feature dataset on top of seedTenantStructure
+ * and the sub-seed cores (taxes, document sequences, email templates, SKR03):
+ * cost centers, agents, discount/price/shipping/payment data, a variant template
+ * with T-Shirt variants + images, a serial/batch goods receipt, a BOM + production
+ * order, a sales order & posted invoice, an email inbox, product categories and
+ * e-commerce sync rows. Idempotent. Reused by the base seed (main above) and the
+ * isolated test tenant reseed (seed-test-tenant.ts).
+ *
+ * Prerequisites for `ctx`'s tenant: seedTenantStructure + the four sub-seed
+ * cores must already have run (units, PRD article group, company, doc groups
+ * A/R/r, customer + supplier addresses, taxes, sequences).
+ */
+export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   // Resolve units
   const units = await db.select().from(schema.unit).where(eq(schema.unit.tenantId, ctx.tenantId));
   const unitMap = new Map(units.map(u => [u.code, u.unitId]));
@@ -71,16 +95,17 @@ async function main() {
 
   // 4. Seed Agents
   console.log("Seeding Agents...");
+  const [adminUser] = await db.select({ id: user.id }).from(user).limit(1);
+  const adminUserId = adminUser?.id ?? null;
   if (!ctx.userId) {
-    const [adminUser] = await db.select({ id: user.id }).from(user).limit(1);
-    ctx.userId = adminUser?.id ?? "system";
+    ctx.userId = adminUserId ?? "system";
   }
   await db.insert(schema.agent).values({
     tenantId: ctx.tenantId,
     agentNo: "AG-001",
     name: "Agent Alice Smith",
     commissionRate: "5.00",
-    userId: ctx.userId ?? null,
+    userId: adminUserId,
   }).onConflictDoNothing();
 
   // 5. Seed Discount Groups
@@ -321,6 +346,80 @@ async function main() {
       )
     );
   console.log(`Found ${variants.length} total variants for ART-TSHIRT in DB.`);
+
+  // 12b. Seed Price List Items for T-Shirt variants
+  console.log("Seeding Price List Items for ART-TSHIRT variants...");
+  const [wholesalePl] = await db
+    .select({ priceListId: schema.priceList.priceListId })
+    .from(schema.priceList)
+    .where(and(eq(schema.priceList.tenantId, ctx.tenantId), eq(schema.priceList.name, "Wholesale Prices")))
+    .limit(1);
+  if (wholesalePl && variants.length > 0) {
+    await db
+      .insert(schema.priceListItem)
+      .values(
+        variants
+          .filter((v) => !v.sku.endsWith("-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"))
+          .map((v) => ({
+            tenantId: ctx.tenantId,
+            priceListId: wholesalePl.priceListId,
+            articleId: articleId,
+            variantId: v.variantId,
+            price: "18.50",
+          })),
+      )
+      .onConflictDoNothing();
+    console.log(`Seeded ${variants.length} price list items for Wholesale Prices.`);
+  }
+
+  // 12c. Seed article images for ART-TSHIRT (commerce media sync reads from article_image)
+  console.log("Seeding article images for ART-TSHIRT...");
+  // 1x1 transparent PNG — enough to exercise the full upload pipeline against Shopware.
+  const PNG_1X1 = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+    "base64",
+  );
+  const storageRoot = process.env.STORAGE_PATH || path.join(homedir(), "slopware/storage");
+  const imageDir = path.join(storageRoot, `tenant-${ctx.tenantId}`, "articles", articleId);
+  await mkdir(imageDir, { recursive: true });
+
+  const imageSeeds = [
+    { id: crypto.randomUUID(), file: "tshirt-cover.png", alt: "T-Shirt Hauptbild", cover: true, sortOrder: 0 },
+    { id: crypto.randomUUID(), file: "tshirt-gallery.png", alt: "T-Shirt Detailbild", cover: false, sortOrder: 1 },
+  ];
+
+  for (const img of imageSeeds) {
+    const safeFileName = `${img.id}-${img.file}`;
+    const storageKey = `tenant-${ctx.tenantId}/articles/${articleId}/${safeFileName}`;
+    await writeFile(path.join(storageRoot, storageKey), PNG_1X1);
+
+    const [inserted] = await db
+      .insert(schema.articleImage)
+      .values({
+        articleImageId: img.id,
+        tenantId: ctx.tenantId,
+        articleId,
+        storageKey,
+        fileName: img.file,
+        mimeType: "image/png",
+        fileSize: PNG_1X1.length,
+        width: 1,
+        height: 1,
+        altText: img.alt,
+        sortOrder: img.sortOrder,
+      })
+      .onConflictDoNothing()
+      .returning({ articleImageId: schema.articleImage.articleImageId });
+
+    // The cover image becomes the article's primaryImageId (→ Shopware coverId).
+    if (inserted && img.cover) {
+      await db
+        .update(schema.article)
+        .set({ primaryImageId: inserted.articleImageId })
+        .where(and(eq(schema.article.tenantId, ctx.tenantId), eq(schema.article.articleId, articleId)));
+    }
+  }
+  console.log(`Seeded ${imageSeeds.length} article images for ART-TSHIRT.`);
 
   // 13. Seed Serial and Batch Tracked Articles + Goods Receipt (WE-Rechnung)
   console.log("Creating Serial and Batch Tracked Articles...");
@@ -720,14 +819,16 @@ async function main() {
       .returning();
 
     if (emailAcc) {
-      await db.insert(schema.emailAccountUserGrant).values({
-        tenantId: ctx.tenantId,
-        emailAccountId: emailAcc.emailAccountId,
-        userId: ctx.userId ?? "system",
-        canRead: true,
-        canSend: true,
-        canManage: true,
-      });
+      if (adminUserId) {
+        await db.insert(schema.emailAccountUserGrant).values({
+          tenantId: ctx.tenantId,
+          emailAccountId: emailAcc.emailAccountId,
+          userId: adminUserId,
+          canRead: true,
+          canSend: true,
+          canManage: true,
+        });
+      }
 
       await db.insert(schema.emailIdentity).values({
         tenantId: ctx.tenantId,
@@ -772,7 +873,97 @@ async function main() {
     console.log("Email account info@slopware.dev already exists.");
   }
 
-  // 17. Seed E-Commerce Sync tables (idempotently)
+  // 17. Seed Product Categories (hierarchical)
+  console.log("Seeding Product Categories...");
+  const [existingCat] = await db
+    .select()
+    .from(schema.category)
+    .where(and(eq(schema.category.tenantId, ctx.tenantId), eq(schema.category.code, "ROOT")))
+    .limit(1);
+
+  if (!existingCat) {
+    const [rootCat] = await db.insert(schema.category).values({
+      tenantId: ctx.tenantId,
+      code: "ROOT",
+      name: "Alle Produkte",
+      slug: "alle-produkte",
+      description: "Stammkategorie fuer alle Produkte",
+      sortOrder: 0,
+    }).returning();
+
+    const [softwareCat, hardwareCat, textilCat] = await db.insert(schema.category).values([
+      {
+        tenantId: ctx.tenantId,
+        parentCategoryId: rootCat.categoryId,
+        code: "SW",
+        name: "Software & Lizenzen",
+        slug: "software-lizenzen",
+        description: "Software-Produkte und Lizenzmodelle",
+        sortOrder: 1,
+      },
+      {
+        tenantId: ctx.tenantId,
+        parentCategoryId: rootCat.categoryId,
+        code: "HW",
+        name: "Hardware & Technik",
+        slug: "hardware-technik",
+        description: "Hardware-Module und technische Produkte",
+        sortOrder: 2,
+      },
+      {
+        tenantId: ctx.tenantId,
+        parentCategoryId: rootCat.categoryId,
+        code: "TXT",
+        name: "Textilien & Merchandise",
+        slug: "textilien-merchandise",
+        description: "T-Shirts, Kleidung und Merchandise",
+        sortOrder: 3,
+      },
+    ]).returning();
+
+    const [dienstleistungCat] = await db.insert(schema.category).values({
+      tenantId: ctx.tenantId,
+      parentCategoryId: softwareCat.categoryId,
+      code: "SVC",
+      name: "Dienstleistungen",
+      slug: "dienstleistungen",
+      description: "Beratung und professionelle Dienstleistungen",
+      sortOrder: 1,
+    }).returning();
+
+    // Resolve existing articles by articleNo for category assignment
+    const existingArticles = await db
+      .select({ articleId: schema.article.articleId, articleNo: schema.article.articleNo })
+      .from(schema.article)
+      .where(eq(schema.article.tenantId, ctx.tenantId));
+    const artByNo = new Map(existingArticles.map(a => [a.articleNo, a.articleId]));
+
+    const categoryAssignments: Array<{ articleNo: string; categoryId: string }> = [
+      { articleNo: "ART-001", categoryId: softwareCat.categoryId },
+      { articleNo: "ART-002", categoryId: dienstleistungCat.categoryId },
+      { articleNo: "ART-003", categoryId: hardwareCat.categoryId },
+      { articleNo: "ART-SERIAL", categoryId: hardwareCat.categoryId },
+      { articleNo: "ART-TSHIRT", categoryId: textilCat.categoryId },
+      { articleNo: "ART-BOM-SHIRT", categoryId: textilCat.categoryId },
+    ];
+
+    const validAssignments = categoryAssignments
+      .filter(a => artByNo.has(a.articleNo))
+      .map(a => ({
+        tenantId: ctx.tenantId,
+        articleId: artByNo.get(a.articleNo)!,
+        categoryId: a.categoryId,
+      }));
+
+    if (validAssignments.length > 0) {
+      await db.insert(schema.articleCategory).values(validAssignments).onConflictDoNothing();
+    }
+    console.log(`Seeded ${5} categories + ${validAssignments.length} article-category links.`);
+  } else {
+    console.log("Categories already seeded.");
+  }
+
+  // 18. Seed E-Commerce Sync tables (idempotently)
   const [existingChannel] = await db
     .select()
     .from(schema.salesChannel)
@@ -843,18 +1034,17 @@ async function main() {
     console.log("Sales channel 'Shopware 6 Hauptshop' already exists.");
   }
 
-  console.log("=========================================");
-  console.log("Full Feature Seeding Complete!");
-  console.log("=========================================");
 }
 
-main()
-  .then(async () => {
-    await closeDb();
-    process.exit(0);
-  })
-  .catch(async (err) => {
-    console.error("Full Feature Seeding Failed:", err);
-    await closeDb();
-    process.exit(1);
-  });
+if (isScriptEntry(import.meta.url)) {
+  main()
+    .then(async () => {
+      await closeDb();
+      process.exit(0);
+    })
+    .catch(async (err) => {
+      console.error("Full Feature Seeding Failed:", err);
+      await closeDb();
+      process.exit(1);
+    });
+}

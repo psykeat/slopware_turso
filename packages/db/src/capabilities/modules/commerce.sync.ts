@@ -17,7 +17,13 @@ const commerceSyncDlqItemSchema = z.looseObject({
   nextRetryAt: z.union([z.date(), z.string()]).nullable(),
 });
 
-const commerceSyncEntitySchema = z.enum(["address", "article"]);
+const commerceSyncEntitySchema = z.enum([
+  "address",
+  "article",
+  "category",
+  "media_asset",
+  "document",
+]);
 const commerceSyncRunRowSchema = z.looseObject({
   runId: z.uuid(),
   salesChannelId: z.uuid(),
@@ -28,6 +34,22 @@ const commerceSyncRunRowSchema = z.looseObject({
   totalItems: z.number().int(),
   succeededItems: z.number().int(),
   failedItems: z.number().int(),
+});
+const commerceSyncRunListRowSchema = z.looseObject({
+  runId: z.uuid(),
+  salesChannelId: z.uuid(),
+  status: z.string(),
+  direction: z.string(),
+  mode: z.string(),
+  dryRun: z.boolean(),
+  requestedEntities: z.array(z.string()),
+  totalItems: z.number().int(),
+  succeededItems: z.number().int(),
+  failedItems: z.number().int(),
+  errorSummary: z.string().nullable(),
+  startedAt: z.union([z.date(), z.string()]).nullable(),
+  completedAt: z.union([z.date(), z.string()]).nullable(),
+  createdAt: z.union([z.date(), z.string()]),
 });
 const commerceSyncStepRowSchema = z.looseObject({
   stepId: z.uuid(),
@@ -49,7 +71,7 @@ function mapServiceError(error: unknown): never {
     if (/not found/i.test(error.message)) {
       throw new CapabilityError("not_found", error.message);
     }
-    if (/only push|unsupported commerce platform/i.test(error.message)) {
+    if (/unsupported commerce (platform|sync direction)|not supported for platform/i.test(error.message)) {
       throw new CapabilityError("validation", error.message);
     }
     throw new CapabilityError("conflict", error.message);
@@ -67,8 +89,8 @@ export const commerceSyncStart = defineCapability({
     de: "Shop-Abgleich starten",
   },
   description: {
-    en: "Runs the first modular outbound commerce sync slice. V1 supports push sync for addresses and articles.",
-    de: "Fuehrt den ersten modularen ausgehenden Shop-Abgleich aus. V1 unterstuetzt Push fuer Adressen und Artikel.",
+    en: "Runs the modular commerce sync. Outbound push (direction=push) for categories, addresses, media and articles, incremental by default; set forceFullSync to re-push everything. Inbound order import (direction=pull, entities=[document]) pulls shop orders as draft sales orders, incrementally by order date.",
+    de: "Fuehrt den modularen Shop-Abgleich aus. Ausgehender Push (direction=push) fuer Kategorien, Adressen, Medien und Artikel, standardmaessig inkrementell; forceFullSync erzwingt einen vollstaendigen Push. Eingehender Bestell-Import (direction=pull, entities=[document]) holt Shop-Bestellungen als Auftrags-Entwuerfe, inkrementell nach Bestelldatum.",
   },
   input: z.object({
     salesChannelId: z.uuid(),
@@ -77,6 +99,7 @@ export const commerceSyncStart = defineCapability({
     entities: z.array(commerceSyncEntitySchema).min(1).default(["article"]),
     dryRun: z.boolean().optional(),
     batchSize: z.number().int().min(1).max(500).optional(),
+    forceFullSync: z.boolean().optional(),
   }),
   output: z.object({
     run: commerceSyncRunRowSchema,
@@ -98,6 +121,7 @@ export const commerceSyncStart = defineCapability({
         entities: input.entities,
         dryRun: input.dryRun ?? ctx.dryRun,
         batchSize: input.batchSize,
+        forceFullSync: input.forceFullSync,
       });
     } catch (error) {
       mapServiceError(error);
@@ -130,6 +154,37 @@ export const commerceSyncGet = defineCapability({
     const result = await service(ctx).get(input.runId);
     if (!result) throw new CapabilityError("not_found", "Commerce sync run not found");
     return result;
+  },
+});
+
+export const commerceSyncList = defineCapability({
+  module: "commerce",
+  entityName: "commerceSyncRun",
+  operation: "list",
+  kind: "read",
+  summary: {
+    en: "List commerce sync runs",
+    de: "Shop-Abgleiche auflisten",
+  },
+  description: {
+    en: "Returns recent commerce sync runs, newest first, optionally filtered by sales channel and status.",
+    de: "Gibt die letzten Shop-Abgleiche zurueck, neueste zuerst, optional gefiltert nach Verkaufskanal und Status.",
+  },
+  input: z.object({
+    salesChannelId: z.uuid().optional(),
+    status: z.string().optional(),
+    limit: z.number().int().min(1).max(500).optional(),
+  }),
+  output: z.object({ runs: z.array(commerceSyncRunListRowSchema) }),
+  writesTables: [],
+  sideEffects: [],
+  idempotent: true,
+  supportsDryRun: false,
+  minRole: "tenant_user",
+  exposure: { llm: "safe", http: true },
+  schemaVersion: 1,
+  handler: async (ctx, input) => {
+    return service(ctx).listRuns(input);
   },
 });
 
@@ -227,6 +282,7 @@ export const commerceSyncDeadLetterRetry = defineCapability({
 export const commerceSyncCapabilities = [
   commerceSyncStart,
   commerceSyncGet,
+  commerceSyncList,
   commerceSyncCancel,
   commerceSyncDeadLetterList,
   commerceSyncDeadLetterRetry,

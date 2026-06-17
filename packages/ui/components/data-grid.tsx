@@ -26,7 +26,6 @@ import React, {
   forwardRef,
   useState,
   useEffect,
-  useLayoutEffect,
   useRef,
   useMemo,
   useCallback,
@@ -2219,11 +2218,16 @@ function DebouncedFilterInput({
   type: string;
   className?: string;
 }) {
-  const [localValue, setLocalValue] = useState(value);
+  const [localState, setLocalState] = useState(() => ({
+    sourceValue: value,
+    value,
+  }));
 
-  useLayoutEffect(() => {
-    setLocalValue(value);
-  }, [value]);
+  let localValue = localState.value;
+  if (localState.sourceValue !== value) {
+    localValue = value;
+    setLocalState({ sourceValue: value, value });
+  }
 
   const debouncedOnChange = useDebouncedCallback(
     (newVal: string) => {
@@ -2237,7 +2241,7 @@ function DebouncedFilterInput({
       type={type}
       value={localValue}
       onChange={(e) => {
-        setLocalValue(e.target.value);
+        setLocalState({ sourceValue: value, value: e.target.value });
         debouncedOnChange(e.target.value);
       }}
       className={className}

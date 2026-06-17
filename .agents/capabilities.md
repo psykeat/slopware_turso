@@ -1,7 +1,7 @@
 # Slopware — Live Capabilities Index
 
-> Generated: 2026-06-16 18:35:13 UTC
-> Total Capabilities: 391
+> Generated: 2026-06-17 22:22:44 UTC
+> Total Capabilities: 400
 
 Here is the index of all system operations. Click on a capability name to view its detailed inputs, outputs, and AI/LLM settings.
 
@@ -42,7 +42,16 @@ Here is the index of all system operations. Click on a capability name to view i
 - [commerce.commerceSyncDeadLetter.retry](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncDeadLetter.retry.md) — Retry pending commerce sync dead letter items
 - [commerce.commerceSyncRun.cancel](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncRun.cancel.md) — Cancel a commerce sync run
 - [commerce.commerceSyncRun.get](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncRun.get.md) — Get a commerce sync run
+- [commerce.commerceSyncRun.list](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncRun.list.md) — List commerce sync runs
 - [commerce.commerceSyncRun.start](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncRun.start.md) — Start a commerce sync run
+- [commerce.commerceWebhookEvent.list](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceWebhookEvent.list.md) — List inbound shop webhook events
+- [commerce.commerceWebhookEvent.process](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceWebhookEvent.process.md) — Process pending shop webhook events
+- [commerce.salesChannel.archive](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.archive.md) — Deactivate a sales channel
+- [commerce.salesChannel.create](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.create.md) — Create a sales channel
+- [commerce.salesChannel.get](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.get.md) — Get a sales channel by ID
+- [commerce.salesChannel.list](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.list.md) — List sales channels
+- [commerce.salesChannel.testConnection](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.testConnection.md) — Test the connection to a sales channel
+- [commerce.salesChannel.update](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.update.md) — Update a sales channel
 
 ## Module: communication
 

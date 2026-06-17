@@ -21,6 +21,10 @@
 | net_price | net_price | numeric | — | NOT NULL |  |
 | discount_percentage | discount_percentage | numeric | — |  |  |
 | tax_code_id | tax_code_id | uuid | — |  |  |
+| tax_reason | tax_reason | text | — |  |  |
+| tax_rule_id | tax_rule_id | uuid | — |  |  |
+| tax_country_code_used | tax_country_code_used | varchar(2) | — |  |  |
+| tax_rate_snapshot | tax_rate_snapshot | numeric | — |  |  |
 | tax_amount | tax_amount | numeric | — |  |  |
 | line_total_net | line_total_net | numeric | — |  |  |
 | warehouse_id | warehouse_id | uuid | — |  |  |

@@ -9,6 +9,7 @@ import {
   documentGroup,
   company,
   articleBom,
+  deliveryAddress,
   documentLineTracking,
   inventoryBalance,
   inventoryMovement,
@@ -29,6 +30,7 @@ import {
 } from "../schema/app.schema";
 import { resolveFiscalPeriodId } from "./fiscal-period-generator";
 import { queueStatisticsMVRefresh } from "./statistics";
+import { TaxResolutionService } from "./tax-resolution-service";
 
 export interface TypeNode {
   documentType: string;
@@ -99,6 +101,12 @@ export interface ProductionFactTraceRow {
   inventoryMovementId: string | null;
   referenceText: string | null;
 }
+
+export type ResolveVariantPricingContext = {
+  billingCountryCode?: string | null;
+  deliveryCountryCode?: string | null;
+  deliveryAddressId?: string | null;
+};
 
 export interface DocumentAuditTrail {
   currentDocumentId: string;
@@ -360,7 +368,7 @@ async function resolveDocumentLineTruth(
   };
 }
 
-type DraftDocumentLineInput = {
+export type DraftDocumentLineInput = {
   documentLineId?: string | null;
   lineNo: number;
   articleId?: string | null;
@@ -377,6 +385,10 @@ type DraftDocumentLineInput = {
   netPrice: string | number;
   discountPercentage?: string | number | null;
   taxCodeId?: string | null;
+  taxReason?: string | null;
+  taxRuleId?: string | null;
+  taxCountryCodeUsed?: string | null;
+  taxRateSnapshot?: string | number | null;
   taxAmount?: string | number | null;
   lineTotalNet?: string | number | null;
   warehouseId?: string | null;
@@ -844,6 +856,10 @@ async function loadActiveDocumentLines(
       net_price as "netPrice",
       line_total_net as "lineTotalNet",
       tax_code_id as "taxCodeId",
+      tax_reason as "taxReason",
+      tax_rule_id as "taxRuleId",
+      tax_country_code_used as "taxCountryCodeUsed",
+      tax_rate_snapshot as "taxRateSnapshot",
       cost_center_id as "costCenterId",
       bom_group_id as "bomGroupId",
       article_text_snapshot as "articleTextSnapshot",
@@ -3033,17 +3049,29 @@ export class DocumentService {
     customerId: string | null,
     documentDate: string,
     tenantId: string,
-  ): Promise<{ unitPrice: string; taxCodeId: string | null }> {
+    taxContext: ResolveVariantPricingContext = {},
+  ): Promise<{
+    unitPrice: string;
+    taxCodeId: string | null;
+    taxReason: string;
+    taxRuleId: string | null;
+    taxCountryCodeUsed: string | null;
+    taxRate: string | null;
+    articleTaxClassId: string | null;
+    customerTaxClassId: string | null;
+  }> {
     const { articleId } = await resolveVariantTruth(db, tenantId, variantId);
-    const rows = (await db.execute(sql`
+    const articleTaxRows = (await db.execute(sql`
       select tax_class_id as "taxClassId"
       from article
       where tenant_id = ${tenantId} and article_id = ${articleId}
       limit 1
     `)) as Array<{ taxClassId: string | null }>;
-    const art = rows[0] ?? null;
+    const articleTaxContext = articleTaxRows[0] ?? null;
 
-    if (!art) throw new Error("Article not found");
+    if (!articleTaxContext) throw new Error("Article not found");
+
+    let unitPrice = "0";
 
     if (customerId) {
       const activeLists = await db
@@ -3066,12 +3094,53 @@ export class DocumentService {
           .limit(1);
 
         if (item) {
-          return { unitPrice: item.price, taxCodeId: art.taxClassId ?? null };
+          unitPrice = item.price;
         }
       }
     }
 
-    return { unitPrice: "0", taxCodeId: art.taxClassId ?? null };
+    const deliveryAddressCountryCode = taxContext.deliveryAddressId
+      ? await this.resolveDeliveryAddressCountryCode(tenantId, taxContext.deliveryAddressId)
+      : null;
+
+    const resolvedTax = await new TaxResolutionService().resolveTaxCode({
+      tenantId,
+      documentDate,
+      customerId,
+      billingCountryCode: taxContext.billingCountryCode ?? null,
+      deliveryCountryCode: deliveryAddressCountryCode ?? taxContext.deliveryCountryCode ?? null,
+      articleTaxClassId: articleTaxContext.taxClassId ?? null,
+    });
+
+    return {
+      unitPrice,
+      taxCodeId: resolvedTax.taxCodeId,
+      taxReason: resolvedTax.reason,
+      taxRuleId: resolvedTax.ruleId,
+      taxCountryCodeUsed: resolvedTax.countryCodeUsed,
+      taxRate: resolvedTax.taxRate,
+      articleTaxClassId: resolvedTax.articleTaxClassId,
+      customerTaxClassId: resolvedTax.customerTaxClassId,
+    };
+  }
+
+  private async resolveDeliveryAddressCountryCode(
+    tenantId: string,
+    deliveryAddressId: string,
+  ): Promise<string | null> {
+    const [row] = await db
+      .select({ countryCode: deliveryAddress.countryCode })
+      .from(deliveryAddress)
+      .where(
+        and(
+          eq(deliveryAddress.tenantId, tenantId),
+          eq(deliveryAddress.deliveryAddressId, deliveryAddressId),
+          eq(deliveryAddress.archived, false),
+        ),
+      )
+      .limit(1);
+
+    return row?.countryCode ?? null;
   }
 
   async applyDeltaEffect(
@@ -3251,6 +3320,10 @@ export class DocumentService {
           netPrice: string;
           discountPercentage: string | null;
           taxCodeId: string | null;
+          taxReason: string | null;
+          taxRuleId: string | null;
+          taxCountryCodeUsed: string | null;
+          taxRateSnapshot: string | null;
           taxAmount: string | null;
           lineTotalNet: string | null;
           warehouseId: string | null;
@@ -3278,6 +3351,10 @@ export class DocumentService {
           netPrice: string;
           discountPercentage: string | null;
           taxCodeId: string | null;
+          taxReason: string | null;
+          taxRuleId: string | null;
+          taxCountryCodeUsed: string | null;
+          taxRateSnapshot: string | null;
           taxAmount: string | null;
           lineTotalNet: string | null;
           warehouseId: string | null;
@@ -3313,6 +3390,10 @@ export class DocumentService {
             discountPercentage:
               line.discountPercentage != null ? String(line.discountPercentage) : null,
             taxCodeId: line.taxCodeId ?? null,
+            taxReason: line.taxReason ?? null,
+            taxRuleId: line.taxRuleId ?? null,
+            taxCountryCodeUsed: line.taxCountryCodeUsed ?? null,
+            taxRateSnapshot: line.taxRateSnapshot != null ? String(line.taxRateSnapshot) : null,
             taxAmount: line.taxAmount != null ? String(line.taxAmount) : null,
             lineTotalNet: line.lineTotalNet != null ? String(line.lineTotalNet) : null,
             warehouseId: line.warehouseId ?? null,
@@ -3357,6 +3438,10 @@ export class DocumentService {
               netPrice: row.netPrice,
               discountPercentage: row.discountPercentage,
               taxCodeId: row.taxCodeId,
+              taxReason: row.taxReason,
+              taxRuleId: row.taxRuleId,
+              taxCountryCodeUsed: row.taxCountryCodeUsed,
+              taxRateSnapshot: row.taxRateSnapshot,
               taxAmount: row.taxAmount,
               lineTotalNet: row.lineTotalNet,
               warehouseId: row.warehouseId,
@@ -4242,7 +4327,7 @@ export class DocumentService {
     try {
       return await this.deletePostedDocument(documentId, tenantId);
     } catch (err: any) {
-      if (err.code === "23503") return { deleted: false, archived: false, fkViolation: true };
+      if (err.code === "23503" || err.cause?.code === "23503") return { deleted: false, archived: false, fkViolation: true };
       throw err;
     }
   }

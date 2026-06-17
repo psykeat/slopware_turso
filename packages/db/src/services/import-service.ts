@@ -8,6 +8,7 @@ import { and, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../index";
+import { backfillDefaultArticleVariants } from "./default-variant-backfill";
 import { MetadataResolver } from "./metadata";
 import {
   address,
@@ -2261,6 +2262,7 @@ export class ImportService {
       }
     }
 
+    await backfillDefaultArticleVariants(this.tenantId);
     return ids;
   }
 
@@ -2526,6 +2528,7 @@ export class ImportService {
           },
         })
         .returning({ id: article.articleId });
+      await backfillDefaultArticleVariants(this.tenantId);
       return row.id;
     }
 
@@ -2791,6 +2794,7 @@ export class ImportService {
                 updatedAt: new Date(),
               },
             });
+          await backfillDefaultArticleVariants(this.tenantId);
         } else if (
           row.targetEntity === "articleVariant" ||
           row.targetEntity === "article_variant"

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, join, normalize } from "node:path";
 
 import type { EmailAddress, EmailDraftInput } from "./types";
@@ -23,18 +24,34 @@ function base64Body(value: Buffer | string) {
   return Buffer.from(value).toString("base64");
 }
 
-function storagePath(storageKey: string) {
-  const relative = normalize(storageKey.replace(/^storage\//, ""));
-  if (relative.startsWith("..") || relative.startsWith("/")) return null;
-  return join(process.cwd(), "storage", relative);
+function storageRoot(): string {
+  return process.env.STORAGE_PATH || join(homedir(), "slopware/storage");
+}
+
+function uniqueValues(values: string[]) {
+  return [...new Set(values)];
+}
+
+function storagePathCandidates(storageKey: string) {
+  const normalized = normalize(storageKey);
+  if (normalized.startsWith("..") || normalized.startsWith("/")) return [];
+
+  const relative = normalize(normalized.replace(/^storage\//, ""));
+  if (relative.startsWith("..") || relative.startsWith("/")) return [];
+
+  return uniqueValues([
+    join(storageRoot(), relative),
+    join(process.cwd(), "storage", relative),
+    ...(normalized.startsWith("storage/") ? [join(process.cwd(), normalized)] : []),
+  ]);
 }
 
 export async function loadDraftAttachment(
   attachment: NonNullable<EmailDraftInput["attachments"]>[number],
 ) {
   if (!attachment.storageKey) return null;
-  const path = storagePath(attachment.storageKey);
-  if (!path || !existsSync(path)) return null;
+  const path = storagePathCandidates(attachment.storageKey).find((candidate) => existsSync(candidate));
+  if (!path) return null;
   return {
     ...attachment,
     fileName: attachment.fileName || basename(path),

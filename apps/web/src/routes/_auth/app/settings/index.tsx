@@ -743,6 +743,18 @@ function SettingsView() {
                 >
                   <span>Variantenvorlagen</span>
                 </Link>
+                <Link
+                  to="/app/settings/sales-channels"
+                  className="group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] text-ink-secondary transition-colors hover:bg-canvas-soft hover:text-ink"
+                >
+                  <span>Verkaufskanäle</span>
+                </Link>
+                <Link
+                  to="/app/settings/commerce-sync"
+                  className="group flex h-7 w-full cursor-pointer items-center px-3 text-left text-[13px] text-ink-secondary transition-colors hover:bg-canvas-soft hover:text-ink"
+                >
+                  <span>Sync-Monitoring</span>
+                </Link>
               </div>
             </>
           )}

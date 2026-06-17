@@ -10,7 +10,7 @@ import { closeDb } from "../index";
 import { allCapabilities } from "./all";
 import { executeCapability } from "./core/execute";
 import { defineCapability } from "./core/define";
-import { registerCapabilities } from "./core/registry";
+import { registerCapabilities, replaceCapabilities } from "./core/registry";
 import type { ExecutionContext } from "./core/types";
 import {
   buildEntityCapabilityManifest,
@@ -258,6 +258,23 @@ test("client SDK is in sync with the registry", () => {
   );
   const actual = readFileSync(actualPath, "utf8");
   assert.equal(actual, expected, "sdk.generated.ts is stale — run pnpm db:generate-client-sdk");
+});
+
+test("static capability registration can be replayed", () => {
+  replaceCapabilities(...allCapabilities);
+  assert.equal(listCapabilities().length, allCapabilities.length);
+});
+
+test("static capability registration rejects duplicate keys before replacing", () => {
+  const before = listCapabilities().map((capability) => capability.key);
+  assert.throws(
+    () => replaceCapabilities(...allCapabilities, allCapabilities[0]!),
+    /Duplicate capability key/,
+  );
+  assert.deepEqual(
+    listCapabilities().map((capability) => capability.key),
+    before,
+  );
 });
 
 after(async () => {

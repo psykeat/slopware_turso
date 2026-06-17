@@ -8,8 +8,8 @@
 - **DE**: Shop-Abgleich starten
 
 ## Description
-- **EN**: Runs the first modular outbound commerce sync slice. V1 supports push sync for addresses and articles.
-- **DE**: Fuehrt den ersten modularen ausgehenden Shop-Abgleich aus. V1 unterstuetzt Push fuer Adressen und Artikel.
+- **EN**: Runs the modular commerce sync. Outbound push (direction=push) for categories, addresses, media and articles, incremental by default; set forceFullSync to re-push everything. Inbound order import (direction=pull, entities=[document]) pulls shop orders as draft sales orders, incrementally by order date.
+- **DE**: Fuehrt den modularen Shop-Abgleich aus. Ausgehender Push (direction=push) fuer Kategorien, Adressen, Medien und Artikel, standardmaessig inkrementell; forceFullSync erzwingt einen vollstaendigen Push. Eingehender Bestell-Import (direction=pull, entities=[document]) holt Shop-Bestellungen als Auftrags-Entwuerfe, inkrementell nach Bestelldatum.
 
 ## Input Schema
 | Field | Type | Optional | Description / Notes |
@@ -20,6 +20,7 @@
 | entities | array of unknown | No | |
 | dryRun | boolean | Yes | |
 | batchSize | number | Yes | |
+| forceFullSync | boolean | Yes | |
 
 ## Output Schema
 - **Type**: `object`

@@ -13,6 +13,9 @@
 | variantId | uuid | No | |
 | customerId | uuid (nullable) | Yes | |
 | documentDate | string | Yes | |
+| deliveryAddressId | uuid (nullable) | Yes | |
+| deliveryCountryCode | string (nullable) | Yes | |
+| billingCountryCode | string (nullable) | Yes | |
 
 ## Output Schema
 - **Type**: `object`

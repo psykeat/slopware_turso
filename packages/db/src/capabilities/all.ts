@@ -1,7 +1,9 @@
 import { accountingCapabilities } from "./modules/accounting.core";
 import { communicationEmailCapabilities } from "./modules/communication.email";
 import { emailTemplateCapabilities } from "./modules/communication.email-template";
+import { salesChannelCapabilities } from "./modules/commerce.sales-channel";
 import { commerceSyncCapabilities } from "./modules/commerce.sync";
+import { commerceWebhookCapabilities } from "./modules/commerce.webhook";
 import { importCapabilities } from "./modules/import.core";
 import { logisticsCapabilities } from "./modules/logistics.core";
 import { addressCapabilities } from "./modules/masterdata.address";
@@ -59,7 +61,9 @@ export const allCapabilities = [
   ...accountingCapabilities,
   ...communicationEmailCapabilities,
   ...emailTemplateCapabilities,
+  ...salesChannelCapabilities,
   ...commerceSyncCapabilities,
+  ...commerceWebhookCapabilities,
   ...importCapabilities,
   ...documentLineCapabilities,
   ...documentCapabilities,

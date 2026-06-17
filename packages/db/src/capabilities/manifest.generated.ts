@@ -242,7 +242,15 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
     ops: {
       "cancel": { key: "commerce.commerceSyncRun.cancel" },
       "get": { key: "commerce.commerceSyncRun.get", idParam: "runId" },
+      "list": { key: "commerce.commerceSyncRun.list", filtersWrapped: false },
       "start": { key: "commerce.commerceSyncRun.start" },
+    },
+  },
+  "commerceWebhookEvent": {
+    module: "commerce",
+    ops: {
+      "list": { key: "commerce.commerceWebhookEvent.list", filtersWrapped: false },
+      "process": { key: "commerce.commerceWebhookEvent.process" },
     },
   },
   "company": {
@@ -626,6 +634,17 @@ export const entityCapabilityManifest: EntityCapabilityManifest = {
       "get": { key: "masterdata.productionOrder.get", idParam: "id" },
       "list": { key: "masterdata.productionOrder.list", filtersWrapped: true },
       "update": { key: "masterdata.productionOrder.update", idParam: "id" },
+    },
+  },
+  "salesChannel": {
+    module: "commerce",
+    ops: {
+      "archive": { key: "commerce.salesChannel.archive", idParam: "salesChannelId" },
+      "create": { key: "commerce.salesChannel.create" },
+      "get": { key: "commerce.salesChannel.get", idParam: "salesChannelId" },
+      "list": { key: "commerce.salesChannel.list", filtersWrapped: false },
+      "testConnection": { key: "commerce.salesChannel.testConnection" },
+      "update": { key: "commerce.salesChannel.update", idParam: "salesChannelId" },
     },
   },
   "serialNumber": {

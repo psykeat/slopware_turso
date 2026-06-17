@@ -23,6 +23,9 @@ export const Route = createFileRoute("/api/articles/$articleId/pricing")({
         const customerId = url.searchParams.get("customerId") ?? null;
         const documentDate =
           url.searchParams.get("documentDate") ?? new Date().toISOString().slice(0, 10);
+        const deliveryAddressId = url.searchParams.get("deliveryAddressId") ?? null;
+        const deliveryCountryCode = url.searchParams.get("deliveryCountryCode") ?? null;
+        const billingCountryCode = url.searchParams.get("billingCountryCode") ?? null;
 
         try {
           const svc = new DocumentService();
@@ -31,6 +34,11 @@ export const Route = createFileRoute("/api/articles/$articleId/pricing")({
             customerId,
             documentDate,
             context.tenantId,
+            {
+              deliveryAddressId,
+              deliveryCountryCode,
+              billingCountryCode,
+            },
           );
           return new Response(JSON.stringify(result), {
             headers: { "content-type": "application/json" },

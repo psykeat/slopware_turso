@@ -3,6 +3,7 @@ import {
   listCapabilities,
   type CapabilityModule,
 } from "@repo/db/capabilities";
+import { discoverEntities } from "@repo/registry";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { resolveExecutionContext } from "#/lib/capability-auth";
@@ -28,7 +29,10 @@ export const Route = createFileRoute("/api/capabilities")({
         }
 
         return new Response(
-          JSON.stringify({ capabilities: capabilities.map((c) => capabilityDescriptor(c)) }),
+          JSON.stringify({
+            capabilities: capabilities.map((c) => capabilityDescriptor(c)),
+            entities: discoverEntities({ module, entityName }),
+          }),
           { headers: { "content-type": "application/json" } },
         );
       },

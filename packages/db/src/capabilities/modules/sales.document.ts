@@ -133,7 +133,7 @@ export const documentList = defineCapability({
     if (input.status) filters.status = input.status;
     if (input.customerId) filters.customerId = input.customerId;
     if (input.companyId) filters.companyId = input.companyId;
-    return runEntityList(ctx.tenantId, "document", filters, input, "documentDate:desc");
+    return runEntityList("document", filters, input, "documentDate:desc");
   },
 });
 
@@ -163,7 +163,7 @@ export const documentGet = defineCapability({
   },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("document", input.documentId);
+    const row = await new DataService().get("document", input.documentId);
     if (!row) throw new CapabilityError("not_found", "Document not found");
     return row;
   },
@@ -197,7 +197,7 @@ export const documentUpdate = defineCapability({
   },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("document", input.documentId, input.patch);
+    const [updated] = await new DataService().patch("document", input.documentId, input.patch);
     if (!updated) throw new CapabilityError("not_found", "Document not found");
     return updated;
   },
@@ -260,7 +260,8 @@ export const documentSaveDraft = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => new DocumentService().saveDocumentDraft(ctx.tenantId, ctx.userId ?? "", input),
+  handler: async (ctx, input) =>
+    new DocumentService().saveDocumentDraft(ctx.tenantId, ctx.userId ?? "", input),
 });
 
 export const documentPost = defineCapability({
@@ -271,7 +272,14 @@ export const documentPost = defineCapability({
   summary: { en: "Post a document", de: "Beleg verbuchen" },
   input: z.object({ documentId: z.uuid() }),
   output: z.object({ success: z.boolean(), document: looseRowSchema }),
-  writesTables: ["document", "documentLine", "inventoryMovement", "inventoryBalance", "journalEntry", "journalLine"],
+  writesTables: [
+    "document",
+    "documentLine",
+    "inventoryMovement",
+    "inventoryBalance",
+    "journalEntry",
+    "journalLine",
+  ],
   sideEffects: ["creates inventory and accounting postings"],
   idempotent: false,
   supportsDryRun: false,
@@ -455,14 +463,22 @@ export const documentDelete = defineCapability({
     cancelled: z.boolean(),
     fkViolation: z.boolean().optional(),
   }),
-  writesTables: ["document", "documentLine", "documentLineAllocation", "inventoryMovement", "inventoryBalance", "serialNumber"],
+  writesTables: [
+    "document",
+    "documentLine",
+    "documentLineAllocation",
+    "inventoryMovement",
+    "inventoryBalance",
+    "serialNumber",
+  ],
   sideEffects: ["cancels the document or reverts its movements"],
   idempotent: false,
   supportsDryRun: false,
   minRole: "tenant_user",
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => new DocumentService().deleteDocument(input.documentId, ctx.tenantId),
+  handler: async (ctx, input) =>
+    new DocumentService().deleteDocument(input.documentId, ctx.tenantId),
 });
 
 const targetGroupCandidateSchema = z.object({
@@ -501,10 +517,7 @@ export const documentConvertCandidates = defineCapability({
   },
   schemaVersion: 1,
   handler: async (ctx, input) => ({
-    candidates: await new DocumentService().getConversionCandidates(
-      input.documentId,
-      ctx.tenantId,
-    ),
+    candidates: await new DocumentService().getConversionCandidates(input.documentId, ctx.tenantId),
   }),
 });
 
@@ -546,7 +559,8 @@ export const documentTree = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => new DocumentService().getDocumentTree(ctx.tenantId, input.companyId),
+  handler: async (ctx, input) =>
+    new DocumentService().getDocumentTree(ctx.tenantId, input.companyId),
 });
 
 export const documentAudit = defineCapability({
@@ -564,7 +578,8 @@ export const documentAudit = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => new DocumentService().getDocumentAuditTrail(input.documentId, ctx.tenantId),
+  handler: async (ctx, input) =>
+    new DocumentService().getDocumentAuditTrail(input.documentId, ctx.tenantId),
 });
 
 export const documentShipment = defineCapability({
@@ -585,7 +600,8 @@ export const documentShipment = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => new LogisticsService().getOrCreateShipment(ctx.tenantId, input.documentId),
+  handler: async (ctx, input) =>
+    new LogisticsService().getOrCreateShipment(ctx.tenantId, input.documentId),
 });
 
 export const documentDelta = defineCapability({

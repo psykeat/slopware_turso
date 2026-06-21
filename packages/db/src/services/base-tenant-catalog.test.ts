@@ -24,7 +24,7 @@ async function getBaseTenantId() {
 
 test("base tenant articles list with their subvariants", async () => {
   const baseTenantId = await getBaseTenantId();
-  const dataService = new DataService(baseTenantId);
+  const dataService = new DataService();
 
   const articles = (await dataService.list("article", {}, { orderBy: "articleNo:asc" })) as Array<{
     articleId: string;

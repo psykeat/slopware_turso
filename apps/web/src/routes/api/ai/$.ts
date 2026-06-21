@@ -1169,10 +1169,10 @@ export const Route = createFileRoute("/api/ai/$")({
               typeof response === "string"
                 ? response
                 : response && typeof response === "object" && "content" in response
-                  // eslint-disable-next-line
-                  ? String((response as { content: unknown }).content ?? "")
-                  // eslint-disable-next-line
-                  : String(response ?? "");
+                  ? // eslint-disable-next-line
+                    String((response as { content: unknown }).content ?? "")
+                  : // eslint-disable-next-line
+                    String(response ?? "");
 
             return new Response(JSON.stringify({ result: responseText.trim() }), {
               headers: { "content-type": "application/json" },
@@ -1233,17 +1233,17 @@ export const Route = createFileRoute("/api/ai/$")({
                     "Du bist ein Assistent der professionelle Geschäftsmails auf Deutsch verfasst. Schreibe nur den Mail-Body (kein Betreff, keine Grußformel sofern nicht im Kontext vorgegeben). Nutze eine professionelle aber freundliche Sprache. Gib nur den reinen Text zurück, kein Markdown.",
                 },
                 { role: "user", content: prompt },
-              ],
+              ] as any,
             });
 
             const responseText =
               typeof response === "string"
                 ? response
                 : response && typeof response === "object" && "content" in response
-                  // eslint-disable-next-line
-                  ? String((response as { content: unknown }).content ?? "")
-                  // eslint-disable-next-line
-                  : String(response ?? "");
+                  ? // eslint-disable-next-line
+                    String((response as { content: unknown }).content ?? "")
+                  : // eslint-disable-next-line
+                    String(response ?? "");
 
             return new Response(JSON.stringify({ body: responseText.trim() }), {
               headers: { "content-type": "application/json" },
@@ -1314,9 +1314,7 @@ export const Route = createFileRoute("/api/ai/$")({
               const mappings = Array.isArray(parsed.mappings)
                 ? parsed.mappings.filter(
                     (entry: any) =>
-                      entry &&
-                      typeof entry.from === "string" &&
-                      typeof entry.to === "string",
+                      entry && typeof entry.from === "string" && typeof entry.to === "string",
                   )
                 : [];
 
@@ -1362,9 +1360,8 @@ export const Route = createFileRoute("/api/ai/$")({
             }
 
             const { listVariantTemplates } = await import("@repo/db/services/variant-template");
-            const { parseVariantTemplateDefinition } = await import(
-              "@repo/db/services/variant-template-schema"
-            );
+            const { parseVariantTemplateDefinition } =
+              await import("@repo/db/services/variant-template-schema");
 
             const templates = await listVariantTemplates(tenantId);
             const templateSummaries = templates.map((template) => ({
@@ -1378,8 +1375,8 @@ export const Route = createFileRoute("/api/ai/$")({
               "Du bist Assistent für Variantenvorlagen in einem ERP-System.",
               "Eine Vorlage definiert Variantenachsen (z. B. Farbe, Größe) mit erlaubten Werten, optionalen SKU-Codes und Preisaufschlägen, Ausschlussregeln und ein SKU-Muster.",
               "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärtext.",
-              "Wenn eine der vorhandenen Vorlagen gut zum Artikel passt, antworte mit {\"matchedTemplateId\": \"<templateId>\"}.",
-              "Sonst entwirf eine neue Vorlage und antworte mit {\"label\": \"<Kurzname>\", \"definition\": <Definition>}.",
+              'Wenn eine der vorhandenen Vorlagen gut zum Artikel passt, antworte mit {"matchedTemplateId": "<templateId>"}.',
+              'Sonst entwirf eine neue Vorlage und antworte mit {"label": "<Kurzname>", "definition": <Definition>}.',
               "Die Definition folgt exakt diesem Schema:",
               JSON.stringify({
                 version: 1,

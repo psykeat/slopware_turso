@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { DataService } from "../../services/data";
 import { AccountingExportService } from "../../services/accounting-export-service";
+import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
 import { listInputSchema, listOutputSchema, looseRowSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
@@ -37,8 +37,7 @@ function crud(
       minRole,
       exposure: { llm: "safe", http: true },
       schemaVersion: 1,
-      handler: async (ctx, input) =>
-        runEntityList(ctx.tenantId, tableName, input.filters, input, orderBy),
+      handler: async (ctx, input) => runEntityList(tableName, input.filters, input, orderBy),
     }),
     get: defineCapability({
       module: "accounting",
@@ -56,7 +55,7 @@ function crud(
       exposure: { llm: "safe", http: true },
       schemaVersion: 1,
       handler: async (ctx, input) => {
-        const row = await new DataService(ctx.tenantId).get(tableName, input.id);
+        const row = await new DataService().get(tableName, input.id);
         if (!row) throw new CapabilityError("not_found", `${entityName} not found`);
         return row;
       },
@@ -77,7 +76,7 @@ function crud(
       exposure: { llm: "safe", http: true },
       schemaVersion: 1,
       handler: async (ctx, input) => {
-        const [created] = await new DataService(ctx.tenantId).create(tableName, input);
+        const [created] = await new DataService().create(tableName, input);
         return created;
       },
     }),
@@ -97,7 +96,7 @@ function crud(
       exposure: { llm: "safe", http: true },
       schemaVersion: 1,
       handler: async (ctx, input) => {
-        const [updated] = await new DataService(ctx.tenantId).patch(tableName, input.id, input.patch);
+        const [updated] = await new DataService().patch(tableName, input.id, input.patch);
         if (!updated) throw new CapabilityError("not_found", `${entityName} not found`);
         return updated;
       },
@@ -106,10 +105,19 @@ function crud(
 }
 
 const glAccount = crud("glAccount", "glAccount", "accountNo:asc");
-const accountDeterminationRule = crud("accountDeterminationRule", "accountDeterminationRule", "postingContext:asc");
+const accountDeterminationRule = crud(
+  "accountDeterminationRule",
+  "accountDeterminationRule",
+  "postingContext:asc",
+);
 const journalEntry = crud("journalEntry", "journalEntry", "postingDate:desc");
 const journalLine = crud("journalLine", "journalLine", "createdAt:desc");
-const accountingExportRow = crud("accountingExportRow", "accountingExportRow", "createdAt:desc", "tenant_admin");
+const accountingExportRow = crud(
+  "accountingExportRow",
+  "accountingExportRow",
+  "createdAt:desc",
+  "tenant_admin",
+);
 
 export const glAccountArchive = defineCapability({
   module: "accounting",
@@ -127,7 +135,7 @@ export const glAccountArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("glAccount", input.id, { archived: true });
+    const [updated] = await new DataService().patch("glAccount", input.id, { archived: true });
     if (!updated) throw new CapabilityError("not_found", "GL account not found");
     return { id: input.id, archived: true as const };
   },
@@ -214,7 +222,8 @@ export const accountingExportBatchBuildRows = defineCapability({
   minRole: "tenant_admin",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => accountingExportService.buildExportRows(ctx.tenantId, input.batchId),
+  handler: async (ctx, input) =>
+    accountingExportService.buildExportRows(ctx.tenantId, input.batchId),
 });
 
 export const accountingExportBatchMarkExported = defineCapability({

@@ -1,8 +1,7 @@
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../../index";
-import { article } from "../../schema/app.schema";
+import { db, eq } from "../../index";
+import { article } from "../../schema/sqlite.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
 import { defineListCapability } from "../core/list";
@@ -34,11 +33,11 @@ const articleWritableFields = z.object({
   customAttributes: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
-async function findArticleByNo(tenantId: string, articleNo: string) {
+async function findArticleByNo(articleNo: string) {
   const [row] = await db
     .select({ articleId: article.articleId, archivedAt: article.archivedAt })
     .from(article)
-    .where(and(eq(article.tenantId, tenantId), eq(article.articleNo, articleNo)))
+    .where(eq(article.articleNo, articleNo))
     .limit(1);
   return row ?? null;
 }
@@ -72,7 +71,7 @@ export const articleGet = defineCapability({
   },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("article", input.articleId);
+    const row = await new DataService().get("article", input.articleId);
     if (!row) {
       throw new CapabilityError("not_found", "Article not found");
     }
@@ -124,8 +123,8 @@ export const articleUpsert = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const service = new DataService(ctx.tenantId);
-    const existing = await findArticleByNo(ctx.tenantId, input.articleNo);
+    const service = new DataService();
+    const existing = await findArticleByNo(input.articleNo);
 
     if (existing?.archivedAt) {
       throw new CapabilityError(
@@ -180,7 +179,7 @@ export const articleArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("article", input.articleId, {
+    const [updated] = await new DataService().patch("article", input.articleId, {
       archived: true,
     });
     if (!updated) {

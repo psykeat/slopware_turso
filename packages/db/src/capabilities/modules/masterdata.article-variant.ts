@@ -1,20 +1,19 @@
 import { z } from "zod";
 
-import { DataService } from "../../services/data";
 import {
   archiveArticleVariants,
   generateArticleVariants,
   previewArticleVariants,
 } from "../../services/article-variant-generator";
-import { copyVariantAxesFromArticle } from "../../services/variant-template";
+import { DataService } from "../../services/data";
 import { DocumentService } from "../../services/document-service";
+import { copyVariantAxesFromArticle } from "../../services/variant-template";
 import { defineCapability } from "../core/define";
 import { listControlsSchema, runEntityList } from "../core/list";
 import { CapabilityError } from "../core/types";
 
 const articleVariantRecordSchema = z.looseObject({
   variantId: z.uuid(),
-  tenantId: z.uuid(),
   articleId: z.uuid(),
   sku: z.string(),
   ean: z.string().nullable().optional(),
@@ -60,7 +59,12 @@ export const articleVariantList = defineCapability({
   handler: async (ctx, input) => {
     const filters: Record<string, string> = {};
     if (input.articleId) filters.articleId = input.articleId;
-    return runEntityList(ctx.tenantId, "articleVariant", filters, input, "sku:asc");
+    return runEntityList<z.output<typeof articleVariantRecordSchema>>(
+      "articleVariant",
+      filters,
+      input,
+      "sku:asc",
+    );
   },
 });
 
@@ -80,7 +84,7 @@ export const articleVariantGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("articleVariant", input.variantId);
+    const row = await new DataService().get("articleVariant", input.variantId);
     if (!row) throw new CapabilityError("not_found", "Article variant not found");
     return row;
   },
@@ -107,7 +111,7 @@ export const articleVariantUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleVariant", input.variantId, input.patch);
+    const [updated] = await new DataService().patch("articleVariant", input.variantId, input.patch);
     if (!updated) throw new CapabilityError("not_found", "Article variant not found");
     return updated;
   },
@@ -220,7 +224,10 @@ export const articleVariantCopyVariantAxes = defineCapability({
   entityName: "articleVariant",
   operation: "copyVariantAxes",
   kind: "process",
-  summary: { en: "Copy variant axes from another article", de: "Variantenachsen von anderem Artikel kopieren" },
+  summary: {
+    en: "Copy variant axes from another article",
+    de: "Variantenachsen von anderem Artikel kopieren",
+  },
   input: z.object({
     targetArticleId: z.uuid(),
     sourceArticleId: z.uuid(),

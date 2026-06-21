@@ -33,8 +33,7 @@ function makeCrudCapabilities(entityName: string, tableName: string, orderBy: st
     minRole: "tenant_user",
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
-    handler: async (ctx, input) =>
-      runEntityList(ctx.tenantId, tableName, input.filters, input, orderBy),
+    handler: async (ctx, input) => runEntityList(tableName, input.filters, input, orderBy),
   });
 
   const get = defineCapability({
@@ -53,7 +52,7 @@ function makeCrudCapabilities(entityName: string, tableName: string, orderBy: st
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const row = await new DataService(ctx.tenantId).get(tableName, input.id);
+      const row = await new DataService().get(tableName, input.id);
       if (!row) throw new CapabilityError("not_found", `${entityName} not found`);
       return row;
     },
@@ -75,7 +74,7 @@ function makeCrudCapabilities(entityName: string, tableName: string, orderBy: st
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [created] = await new DataService(ctx.tenantId).create(tableName, input);
+      const [created] = await new DataService().create(tableName, input);
       return created;
     },
   });
@@ -96,7 +95,7 @@ function makeCrudCapabilities(entityName: string, tableName: string, orderBy: st
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [updated] = await new DataService(ctx.tenantId).patch(tableName, input.id, input.patch);
+      const [updated] = await new DataService().patch(tableName, input.id, input.patch);
       if (!updated) throw new CapabilityError("not_found", `${entityName} not found`);
       return updated;
     },
@@ -105,7 +104,11 @@ function makeCrudCapabilities(entityName: string, tableName: string, orderBy: st
   return [list, get, create, update];
 }
 
-export const inventoryItemCapabilities = makeCrudCapabilities("inventoryItem", "inventoryItem", "sku:asc");
+export const inventoryItemCapabilities = makeCrudCapabilities(
+  "inventoryItem",
+  "inventoryItem",
+  "sku:asc",
+);
 export const inventoryBalanceCapabilities = makeCrudCapabilities(
   "inventoryBalance",
   "inventoryBalance",
@@ -133,7 +136,7 @@ export const inventoryMovementList = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const rows = await new DataService(ctx.tenantId).list("inventoryMovement", input.filters, {
+    const rows = await new DataService().list("inventoryMovement", input.filters, {
       search: input.search,
       limit: input.limit,
       offset: input.offset,
@@ -159,7 +162,7 @@ export const inventoryMovementGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("inventoryMovement", input.id);
+    const row = await new DataService().get("inventoryMovement", input.id);
     if (!row) throw new CapabilityError("not_found", "Inventory movement not found");
     return row;
   },
@@ -188,7 +191,7 @@ export const documentShipmentList = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const rows = await new DataService(ctx.tenantId).list("documentShipment", input.filters, {
+    const rows = await new DataService().list("documentShipment", input.filters, {
       search: input.search,
       limit: input.limit,
       offset: input.offset,
@@ -217,7 +220,10 @@ export const documentShipmentGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const result = await new LogisticsService().getShipmentWithPackages(ctx.tenantId, input.documentId);
+    const result = await new LogisticsService().getShipmentWithPackages(
+      ctx.tenantId,
+      input.documentId,
+    );
     return result ?? { shipment: null, packages: [] };
   },
 });
@@ -241,7 +247,11 @@ export const documentShipmentUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const updated = await new LogisticsService().updateShipment(ctx.tenantId, input.documentId, input.patch);
+    const updated = await new LogisticsService().updateShipment(
+      ctx.tenantId,
+      input.documentId,
+      input.patch,
+    );
     if (!updated) throw new CapabilityError("not_found", "Document shipment not found");
     return updated;
   },
@@ -293,7 +303,8 @@ export const documentShipmentExportCsv = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => new LogisticsService().exportShipmentsCSV(ctx.tenantId, input.documentIds),
+  handler: async (ctx, input) =>
+    new LogisticsService().exportShipmentsCSV(ctx.tenantId, input.documentIds),
 });
 
 export const documentShipmentImportTrackingCsv = defineCapability({
@@ -311,7 +322,8 @@ export const documentShipmentImportTrackingCsv = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => new LogisticsService().importTrackingCSV(ctx.tenantId, input.csvContent),
+  handler: async (ctx, input) =>
+    new LogisticsService().importTrackingCSV(ctx.tenantId, input.csvContent),
 });
 
 export const documentShipmentPackageList = defineCapability({
@@ -337,7 +349,7 @@ export const documentShipmentPackageList = defineCapability({
   handler: async (ctx, input) => {
     const filters: Record<string, string> = {};
     if (input.documentShipmentId) filters.documentShipmentId = input.documentShipmentId;
-    const rows = await new DataService(ctx.tenantId).list("documentShipmentPackage", filters, {
+    const rows = await new DataService().list("documentShipmentPackage", filters, {
       search: input.search,
       limit: input.limit,
       offset: input.offset,
@@ -363,7 +375,7 @@ export const documentShipmentPackageGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("documentShipmentPackage", input.id);
+    const row = await new DataService().get("documentShipmentPackage", input.id);
     if (!row) throw new CapabilityError("not_found", "Shipment package not found");
     return row;
   },
@@ -385,7 +397,7 @@ export const documentShipmentPackageUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch(
+    const [updated] = await new DataService().patch(
       "documentShipmentPackage",
       input.id,
       input.patch,

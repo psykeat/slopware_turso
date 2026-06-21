@@ -64,20 +64,17 @@ function AccountingModule() {
     "accounting.accountingExportBatch.list",
     {},
   );
-  const batches = batchData?.items ?? [];
+  const batches = (batchData?.items ?? []) as any[];
 
-  const { data: companyData } = useCapabilityQuery(
-    "system.company.list",
-    { filters: {} },
-  );
-  const companies = companyData?.items ?? [];
+  const { data: companyData } = useCapabilityQuery("system.company.list", { filters: {} });
+  const companies = (companyData?.items ?? []) as any[];
 
   const { data: periodData } = useCapabilityQuery(
     "masterdata.fiscalPeriod.list",
     { filters: { companyId: newCompanyId! } },
     { enabled: !!newCompanyId },
   );
-  const periods = periodData?.items ?? [];
+  const periods = (periodData?.items ?? []) as any[];
 
   const selectedBatch = batches.find((b) => b.batchId === selectedBatchId) ?? null;
 

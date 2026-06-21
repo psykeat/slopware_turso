@@ -1,8 +1,7 @@
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../../index";
-import { priceList } from "../../schema/app.schema";
+import { db, eq } from "../../index";
+import { priceList } from "../../schema/sqlite.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
 import { defineListCapability } from "../core/list";
@@ -10,7 +9,6 @@ import { CapabilityError } from "../core/types";
 
 const priceListRecordSchema = z.object({
   priceListId: z.uuid(),
-  tenantId: z.uuid(),
   name: z.string(),
   currencyId: z.string().min(3).max(3),
   isNet: z.boolean(),
@@ -23,11 +21,11 @@ const priceListWritableFields = z.object({
   isNet: z.boolean().optional(),
 });
 
-async function findPriceListByName(tenantId: string, name: string) {
+async function findPriceListByName(name: string) {
   const [row] = await db
     .select({ priceListId: priceList.priceListId, archived: priceList.archived })
     .from(priceList)
-    .where(and(eq(priceList.tenantId, tenantId), eq(priceList.name, name)))
+    .where(eq(priceList.name, name))
     .limit(1);
   return row ?? null;
 }
@@ -57,7 +55,7 @@ export const priceListGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("priceList", input.priceListId);
+    const row = await new DataService().get("priceList", input.priceListId);
     if (!row) throw new CapabilityError("not_found", "Price list not found");
     return row;
   },
@@ -68,10 +66,13 @@ export const priceListUpsert = defineCapability({
   entityName: "priceList",
   operation: "upsert",
   kind: "update",
-  summary: { en: "Create or update a price list by name", de: "Preisliste per Name anlegen oder ändern" },
+  summary: {
+    en: "Create or update a price list by name",
+    de: "Preisliste per Name anlegen oder ändern",
+  },
   description: {
-    en: "Name is the natural key inside a tenant: an existing price list is patched, otherwise a new one is created (currencyId required).",
-    de: "Der Name ist der natürliche Schlüssel im Tenant: eine vorhandene Preisliste wird gepatcht, sonst wird neu angelegt (currencyId erforderlich).",
+    en: "Name is the natural key in the tenant database: an existing price list is patched, otherwise a new one is created (currencyId required).",
+    de: "Der Name ist der natürliche Schlüssel in der Tenant-Datenbank: eine vorhandene Preisliste wird gepatcht, sonst wird neu angelegt (currencyId erforderlich).",
   },
   input: z.object({
     name: z.string().trim().min(1),
@@ -86,8 +87,8 @@ export const priceListUpsert = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const service = new DataService(ctx.tenantId);
-    const existing = await findPriceListByName(ctx.tenantId, input.name);
+    const service = new DataService();
+    const existing = await findPriceListByName(input.name);
 
     if (existing?.archived) {
       throw new CapabilityError(
@@ -108,9 +109,11 @@ export const priceListUpsert = defineCapability({
     }
 
     if (!input.currencyId) {
-      throw new CapabilityError("validation", "currencyId is required when creating a new price list", [
-        { path: "currencyId", message: "Required when no price list with this name exists" },
-      ]);
+      throw new CapabilityError(
+        "validation",
+        "currencyId is required when creating a new price list",
+        [{ path: "currencyId", message: "Required when no price list with this name exists" }],
+      );
     }
 
     const [created] = await service.create("priceList", input);
@@ -138,7 +141,7 @@ export const priceListArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("priceList", input.priceListId, {
+    const [updated] = await new DataService().patch("priceList", input.priceListId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Price list not found");
@@ -146,4 +149,9 @@ export const priceListArchive = defineCapability({
   },
 });
 
-export const priceListCapabilities = [priceListList, priceListGet, priceListUpsert, priceListArchive];
+export const priceListCapabilities = [
+  priceListList,
+  priceListGet,
+  priceListUpsert,
+  priceListArchive,
+];

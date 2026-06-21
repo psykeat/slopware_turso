@@ -53,7 +53,7 @@ export const categoryGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("category", input.categoryId);
+    const row = await new DataService().get("category", input.categoryId);
     if (!row) throw new CapabilityError("not_found", "Category not found");
     return row;
   },
@@ -82,7 +82,7 @@ export const categoryCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("category", input);
+    const [created] = await new DataService().create("category", input);
     return created;
   },
 });
@@ -108,7 +108,7 @@ export const categoryUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("category", input.categoryId, input.patch);
+    const [updated] = await new DataService().patch("category", input.categoryId, input.patch);
     if (!updated) throw new CapabilityError("not_found", "Category not found");
     return updated;
   },
@@ -130,7 +130,7 @@ export const categoryArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("category", input.categoryId, {
+    const [updated] = await new DataService().patch("category", input.categoryId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Category not found");
@@ -138,4 +138,10 @@ export const categoryArchive = defineCapability({
   },
 });
 
-export const categoryCapabilities = [categoryList, categoryGet, categoryCreate, categoryUpdate, categoryArchive];
+export const categoryCapabilities = [
+  categoryList,
+  categoryGet,
+  categoryCreate,
+  categoryUpdate,
+  categoryArchive,
+];

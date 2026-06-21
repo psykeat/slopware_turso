@@ -335,23 +335,24 @@ async function main() {
 
   await syncService.markRead(targetThread.emailThreadId, false);
   const unreadThread = await syncService.getThread(targetThread.emailThreadId);
+  const unreadMessages = unreadThread?.messages as Array<{ isRead: boolean }> | undefined;
   ensure(
-    unreadThread?.messages.every((message) => message.isRead === false),
+    unreadMessages?.every((message) => message.isRead === false),
     "markRead(false) did not persist locally",
   );
 
   await syncService.markRead(targetThread.emailThreadId, true);
   const readThread = await syncService.getThread(targetThread.emailThreadId);
+  const readMessages = readThread?.messages as Array<{ isRead: boolean }> | undefined;
   ensure(
-    readThread?.messages.every((message) => message.isRead === true),
+    readMessages?.every((message) => message.isRead === true),
     "markRead(true) did not persist locally",
   );
 
   await syncService.applyLabel(targetThread.emailThreadId, targetLabel.emailLabelId);
   const labeledThread = await syncService.getThread(targetThread.emailThreadId);
-  const labeledMessageIds = new Set(
-    labeledThread?.messages.map((message) => message.emailMessageId),
-  );
+  const labeledMessages = labeledThread?.messages as Array<{ emailMessageId: string }> | undefined;
+  const labeledMessageIds = new Set(labeledMessages?.map((message) => message.emailMessageId));
   const labelsOnThread = await db
     .select({
       emailMessageId: emailMessageLabel.emailMessageId,

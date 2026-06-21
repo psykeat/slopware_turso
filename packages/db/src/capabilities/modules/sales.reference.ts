@@ -27,8 +27,7 @@ function readOnly(entityName: string, tableName: string, orderBy: string) {
     minRole: "tenant_user",
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
-    handler: async (ctx, input) =>
-      runEntityList(ctx.tenantId, tableName, input.filters, input, orderBy),
+    handler: async (ctx, input) => runEntityList(tableName, input.filters, input, orderBy),
   });
 
   const get = defineCapability({
@@ -47,7 +46,7 @@ function readOnly(entityName: string, tableName: string, orderBy: string) {
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const row = await new DataService(ctx.tenantId).get(tableName, input.id);
+      const row = await new DataService().get(tableName, input.id);
       if (!row) throw new CapabilityError("not_found", `${entityName} not found`);
       return row;
     },

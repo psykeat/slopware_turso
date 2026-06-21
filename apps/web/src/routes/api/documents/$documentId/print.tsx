@@ -1,10 +1,10 @@
+import { renderToBuffer } from "@react-pdf/renderer";
 import { auth } from "@repo/auth/auth";
 import { DocumentPdfService } from "@repo/db/services/document-pdf-service";
-import { renderToBuffer } from "@react-pdf/renderer";
 import { createFileRoute } from "@tanstack/react-router";
 
-import DocumentPDF, { TYPE_LABELS } from "#/pdf/document-pdf";
 import { resolveTenantContext } from "#/lib/resolve-tenant";
+import DocumentPDF, { TYPE_LABELS, type CompanyForPrint } from "#/pdf/document-pdf";
 
 export const Route = createFileRoute("/api/documents/$documentId/print")({
   server: {
@@ -32,8 +32,13 @@ export const Route = createFileRoute("/api/documents/$documentId/print")({
           if (!model) return new Response("Not found", { status: 404 });
 
           const typeLabel = TYPE_LABELS[model.doc.documentType] ?? model.typeLabel;
+          const companyForPrint = {
+            ...model.company,
+            countryCode: model.company.countryCode ?? "",
+            showArticleImageOnDocuments: model.company.showArticleImageOnDocuments ?? undefined,
+          } as CompanyForPrint;
           const pdfBuffer = await renderToBuffer(
-            <DocumentPDF doc={model.doc} company={model.company} typeLabel={typeLabel} />,
+            <DocumentPDF doc={model.doc} company={companyForPrint} typeLabel={typeLabel} />,
           );
           const pdf = new Uint8Array(pdfBuffer);
 

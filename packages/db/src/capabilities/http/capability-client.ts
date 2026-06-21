@@ -43,6 +43,18 @@ export interface CapabilityDescriptor {
   [extra: string]: unknown;
 }
 
+export interface EntityDiscoveryDescriptor {
+  name: string;
+  pluralName: string;
+  label: { en: string; de: string };
+  module: string;
+  primaryKey: string;
+  tenantScoped: boolean;
+  schemaVersion: number;
+  projections: string[];
+  [extra: string]: unknown;
+}
+
 export class CapabilityClient {
   private constructor(
     readonly baseUrl: string,
@@ -55,7 +67,10 @@ export class CapabilityClient {
    * as a different user instead, e.g. the base-tenant-bound dev user (see
    * `db:dev-login`).
    */
-  static async login(credentials?: { email?: string; password?: string }): Promise<CapabilityClient> {
+  static async login(credentials?: {
+    email?: string;
+    password?: string;
+  }): Promise<CapabilityClient> {
     const baseUrl =
       process.env.CAPABILITY_TEST_BASE_URL ?? process.env.VITE_BASE_URL ?? "http://localhost:3000";
     const email = credentials?.email ?? process.env.CAPABILITY_TEST_EMAIL;
@@ -121,6 +136,21 @@ export class CapabilityClient {
     if (!response.ok) throw new Error(`Discovery failed: ${response.status}`);
     const body = (await response.json()) as { capabilities: CapabilityDescriptor[] };
     return body.capabilities;
+  }
+
+  /** GET /api/capabilities — entity metadata discovery from the same official surface. */
+  async discoverEntities(filter?: {
+    module?: string;
+    entityName?: string;
+  }): Promise<EntityDiscoveryDescriptor[]> {
+    const params = new URLSearchParams();
+    if (filter?.module) params.set("module", filter.module);
+    if (filter?.entityName) params.set("entityName", filter.entityName);
+    const qs = params.size > 0 ? `?${params}` : "";
+    const response = await this.request(`/api/capabilities${qs}`);
+    if (!response.ok) throw new Error(`Entity discovery failed: ${response.status}`);
+    const body = (await response.json()) as { entities?: EntityDiscoveryDescriptor[] };
+    return body.entities ?? [];
   }
 
   /** GET /api/capabilities/{key} — full descriptor incl. outputSchema, or null on 404. */

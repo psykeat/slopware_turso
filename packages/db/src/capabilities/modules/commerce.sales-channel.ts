@@ -1,8 +1,7 @@
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../../index";
-import { salesChannel } from "../../schema/app.schema";
+import { db, eq } from "../../index";
+import { salesChannel } from "../../schema/sqlite.schema";
 import { decryptSecret, encryptSecret } from "../../services/secret-crypto";
 import { defineCapability } from "../core/define";
 import { listControlsSchema, runEntityList, type ListControls } from "../core/list";
@@ -90,7 +89,6 @@ export const salesChannelList = defineCapability({
     const filters: Record<string, string> = {};
     if (input.platform) filters.platform = input.platform;
     const { items, total } = await runEntityList(
-      ctx.tenantId,
       "salesChannel",
       filters,
       input as ListControls,
@@ -120,16 +118,11 @@ export const salesChannelGet = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     const [row] = await db
       .select()
       .from(salesChannel)
-      .where(
-        and(
-          eq(salesChannel.tenantId, ctx.tenantId),
-          eq(salesChannel.salesChannelId, input.salesChannelId),
-        ),
-      )
+      .where(eq(salesChannel.salesChannelId, input.salesChannelId))
       .limit(1);
     if (!row) throw new CapabilityError("not_found", "Sales channel not found");
     return withDecryptedCredentials(row);
@@ -157,11 +150,10 @@ export const salesChannelCreate = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     const [created] = await db
       .insert(salesChannel)
       .values({
-        tenantId: ctx.tenantId,
         name: input.name,
         platform: input.platform,
         apiUrl: input.apiUrl,
@@ -198,7 +190,7 @@ export const salesChannelUpdate = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     const { credentials, ...rest } = input.patch;
     // Only touch the credentials column when the patch carries the field, so
     // editing other attributes never wipes the stored (encrypted) secret.
@@ -208,12 +200,7 @@ export const salesChannelUpdate = defineCapability({
     const [updated] = await db
       .update(salesChannel)
       .set(patch)
-      .where(
-        and(
-          eq(salesChannel.tenantId, ctx.tenantId),
-          eq(salesChannel.salesChannelId, input.salesChannelId),
-        ),
-      )
+      .where(eq(salesChannel.salesChannelId, input.salesChannelId))
       .returning();
     if (!updated) throw new CapabilityError("not_found", "Sales channel not found");
     return withDecryptedCredentials(updated);
@@ -235,16 +222,11 @@ export const salesChannelArchive = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     const [updated] = await db
       .update(salesChannel)
       .set({ isActive: false, updatedAt: new Date() })
-      .where(
-        and(
-          eq(salesChannel.tenantId, ctx.tenantId),
-          eq(salesChannel.salesChannelId, input.salesChannelId),
-        ),
-      )
+      .where(eq(salesChannel.salesChannelId, input.salesChannelId))
       .returning();
     if (!updated) throw new CapabilityError("not_found", "Sales channel not found");
     return { salesChannelId: input.salesChannelId, isActive: false as const };
@@ -281,21 +263,21 @@ export const salesChannelTestConnection = defineCapability({
   schemaVersion: 1,
   handler: async (_ctx, input) => {
     try {
-      const response = await fetch(
-        `${input.apiUrl.replace(/\/$/, "")}/api/oauth/token`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            grant_type: "client_credentials",
-            client_id: input.credentials.clientId,
-            client_secret: input.credentials.clientSecret,
-          }),
-        },
-      );
+      const response = await fetch(`${input.apiUrl.replace(/\/$/, "")}/api/oauth/token`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          grant_type: "client_credentials",
+          client_id: input.credentials.clientId,
+          client_secret: input.credentials.clientSecret,
+        }),
+      });
       if (!response.ok) {
         const body = await response.text();
-        return { success: false, message: `OAuth failed (${response.status}): ${body.slice(0, 200)}` };
+        return {
+          success: false,
+          message: `OAuth failed (${response.status}): ${body.slice(0, 200)}`,
+        };
       }
       const data = (await response.json()) as { access_token?: unknown };
       if (typeof data.access_token !== "string") {

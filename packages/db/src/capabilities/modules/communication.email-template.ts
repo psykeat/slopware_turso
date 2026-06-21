@@ -66,8 +66,7 @@ function readOps(entityName: string, tableName: string, orderBy: string) {
     minRole: "tenant_user",
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
-    handler: async (ctx, input) =>
-      runEntityList(ctx.tenantId, tableName, input.filters, input, orderBy),
+    handler: async (ctx, input) => runEntityList(tableName, input.filters, input, orderBy),
   });
 
   const get = defineCapability({
@@ -86,7 +85,7 @@ function readOps(entityName: string, tableName: string, orderBy: string) {
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const row = await new DataService(ctx.tenantId).get(tableName, input.id);
+      const row = await new DataService().get(tableName, input.id);
       if (!row) throw new CapabilityError("not_found", `${entityName} not found`);
       return row;
     },
@@ -117,7 +116,7 @@ function writeOps(
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [created] = await new DataService(ctx.tenantId).create(tableName, input);
+      const [created] = await new DataService().create(tableName, input);
       return created as z.output<typeof looseRowSchema>;
     },
   });
@@ -143,7 +142,7 @@ function writeOps(
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [updated] = await new DataService(ctx.tenantId).patch(tableName, input.id, input.patch);
+      const [updated] = await new DataService().patch(tableName, input.id, input.patch);
       if (!updated) throw new CapabilityError("not_found", `${entityName} not found`);
       return updated as z.output<typeof looseRowSchema>;
     },
@@ -169,7 +168,7 @@ function writeOps(
     exposure: { llm: "confirm", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [updated] = await new DataService(ctx.tenantId).patch(tableName, input.id, {
+      const [updated] = await new DataService().patch(tableName, input.id, {
         archived: true,
       });
       if (!updated) throw new CapabilityError("not_found", `${entityName} not found`);

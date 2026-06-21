@@ -1,2 +1,0 @@
-ALTER TABLE "ai_interpretation" ADD COLUMN "source_thread_id" uuid;--> statement-breakpoint
-ALTER TABLE "ai_interpretation" ADD CONSTRAINT "ai_interpretation_y5neVbcvpwZY_fkey" FOREIGN KEY ("source_thread_id") REFERENCES "email_thread"("email_thread_id");

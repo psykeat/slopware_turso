@@ -36,8 +36,7 @@ function crud(
     minRole,
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
-    handler: async (ctx, input) =>
-      runEntityList(ctx.tenantId, tableName, input.filters, input, orderBy),
+    handler: async (ctx, input) => runEntityList(tableName, input.filters, input, orderBy),
   });
 
   const get = defineCapability({
@@ -56,7 +55,7 @@ function crud(
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const row = await new DataService(ctx.tenantId).get(tableName, input.id);
+      const row = await new DataService().get(tableName, input.id);
       if (!row) throw new CapabilityError("not_found", `${entityName} not found`);
       return row;
     },
@@ -78,7 +77,7 @@ function crud(
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [created] = await new DataService(ctx.tenantId).create(tableName, input);
+      const [created] = await new DataService().create(tableName, input);
       return created;
     },
   });
@@ -99,7 +98,7 @@ function crud(
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [updated] = await new DataService(ctx.tenantId).patch(tableName, input.id, input.patch);
+      const [updated] = await new DataService().patch(tableName, input.id, input.patch);
       if (!updated) throw new CapabilityError("not_found", `${entityName} not found`);
       return updated;
     },
@@ -122,7 +121,7 @@ function crud(
         exposure: { llm: "confirm", http: true },
         schemaVersion: 1,
         handler: async (ctx, input) => {
-          const [updated] = await new DataService(ctx.tenantId).patch(tableName, input.id, {
+          const [updated] = await new DataService().patch(tableName, input.id, {
             archived: true,
           });
           if (!updated) throw new CapabilityError("not_found", `${entityName} not found`);
@@ -148,7 +147,13 @@ const postalCode = crud("postalCode", "postalCode", "countryCode:asc");
 const productionOrder = crud("productionOrder", "productionOrder", "createdAt:desc");
 const addressCategory = crud("addressCategory", "addressCategory", "createdAt:desc");
 const addressContact = crud("addressContact", "addressContact", "lastName:asc");
-const priceListItem = crud("priceListItem", "priceListItem", "createdAt:desc", "tenant_user", false);
+const priceListItem = crud(
+  "priceListItem",
+  "priceListItem",
+  "createdAt:desc",
+  "tenant_user",
+  false,
+);
 const fiscalPeriodList = defineCapability({
   module: "masterdata",
   entityName: "fiscalPeriod",
@@ -165,7 +170,7 @@ const fiscalPeriodList = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) =>
-    runEntityList(ctx.tenantId, "fiscalPeriod", input.filters, input, "fiscalYear:desc"),
+    runEntityList("fiscalPeriod", input.filters, input, "fiscalYear:desc"),
 });
 
 const fiscalPeriodGet = defineCapability({
@@ -184,7 +189,7 @@ const fiscalPeriodGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("fiscalPeriod", input.id);
+    const row = await new DataService().get("fiscalPeriod", input.id);
     if (!row) throw new CapabilityError("not_found", "Fiscal period not found");
     return row;
   },
@@ -213,7 +218,7 @@ const fiscalPeriodCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("fiscalPeriod", input);
+    const [created] = await new DataService().create("fiscalPeriod", input);
     return created;
   },
 });
@@ -246,7 +251,7 @@ const fiscalPeriodUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("fiscalPeriod", input.id, input.patch);
+    const [updated] = await new DataService().patch("fiscalPeriod", input.id, input.patch);
     if (!updated) throw new CapabilityError("not_found", "Fiscal period not found");
     return updated;
   },

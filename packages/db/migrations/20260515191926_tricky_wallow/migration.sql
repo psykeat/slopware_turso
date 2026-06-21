@@ -1,1 +1,0 @@
-ALTER TABLE "company" ADD COLUMN "default_warehouse_id" uuid;

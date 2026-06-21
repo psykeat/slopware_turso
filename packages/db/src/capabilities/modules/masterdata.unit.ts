@@ -1,8 +1,7 @@
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../../index";
-import { unit } from "../../schema/app.schema";
+import { db, eq } from "../../index";
+import { unit } from "../../schema/sqlite.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
 import { defineListCapability } from "../core/list";
@@ -24,11 +23,11 @@ const unitWritableFields = z.object({
   customAttributes: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
-async function findUnitByCode(tenantId: string, code: string) {
+async function findUnitByCode(code: string) {
   const [row] = await db
     .select({ unitId: unit.unitId, archived: unit.archived })
     .from(unit)
-    .where(and(eq(unit.tenantId, tenantId), eq(unit.code, code)))
+    .where(eq(unit.code, code))
     .limit(1);
   return row ?? null;
 }
@@ -60,7 +59,7 @@ export const unitGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("unit", input.unitId);
+    const row = await new DataService().get("unit", input.unitId);
     if (!row) {
       throw new CapabilityError("not_found", "Unit not found");
     }
@@ -97,8 +96,8 @@ export const unitUpsert = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const service = new DataService(ctx.tenantId);
-    const existing = await findUnitByCode(ctx.tenantId, input.code);
+    const service = new DataService();
+    const existing = await findUnitByCode(input.code);
 
     if (existing?.archived) {
       throw new CapabilityError(
@@ -154,7 +153,7 @@ export const unitArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("unit", input.unitId, {
+    const [updated] = await new DataService().patch("unit", input.unitId, {
       archived: true,
     });
     if (!updated) {

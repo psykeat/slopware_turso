@@ -1,8 +1,8 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../../index";
-import { agent, address } from "../../schema/app.schema";
+import { db, eq } from "../../index";
+import { agent, address } from "../../schema/sqlite.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
 import { defineListCapability } from "../core/list";
@@ -10,7 +10,6 @@ import { CapabilityError } from "../core/types";
 
 const agentRecordSchema = z.looseObject({
   agentId: z.uuid(),
-  tenantId: z.uuid(),
   agentNo: z.string(),
   name: z.string().nullable().optional(),
   addressId: z.uuid().nullable().optional(),
@@ -56,7 +55,7 @@ export const agentGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("agent", input.agentId);
+    const row = await new DataService().get("agent", input.agentId);
     if (!row) throw new CapabilityError("not_found", "Agent not found");
     return row;
   },
@@ -85,15 +84,18 @@ export const agentUpsert = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const service = new DataService(ctx.tenantId);
+    const service = new DataService();
     const [existing] = await db
       .select({ agentId: agent.agentId, archivedAt: agent.archivedAt })
       .from(agent)
-      .where(and(eq(agent.tenantId, ctx.tenantId), eq(agent.agentNo, input.agentNo)))
+      .where(eq(agent.agentNo, input.agentNo))
       .limit(1);
 
     if (existing?.archivedAt) {
-      throw new CapabilityError("conflict", `Agent "${input.agentNo}" is archived; unarchive it first`);
+      throw new CapabilityError(
+        "conflict",
+        `Agent "${input.agentNo}" is archived; unarchive it first`,
+      );
     }
 
     if (existing) {
@@ -103,7 +105,7 @@ export const agentUpsert = defineCapability({
       return { agent: updated, created: false };
     }
 
-    const [created] = await service.create("agent", { ...input, tenantId: ctx.tenantId });
+    const [created] = await service.create("agent", input);
     return { agent: created, created: true };
   },
 });
@@ -122,7 +124,11 @@ export const agentLinkAddresses = defineCapability({
     de: "Nach dem Import: für jede Adresse mit customAttributes.agentNo den passenden Vertreter suchen und address.agentId setzen.",
   },
   input: z.object({}),
-  output: z.object({ linked: z.number().int(), created: z.number().int(), unresolved: z.number().int() }),
+  output: z.object({
+    linked: z.number().int(),
+    created: z.number().int(),
+    unresolved: z.number().int(),
+  }),
   writesTables: ["agent", "address"],
   sideEffects: [],
   idempotent: true,
@@ -130,7 +136,7 @@ export const agentLinkAddresses = defineCapability({
   minRole: "tenant_admin",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, _input) => {
+  handler: async (_ctx, _input) => {
     // Find all addresses that have a pending agentNo in customAttributes
     const pending = await db
       .select({
@@ -139,13 +145,7 @@ export const agentLinkAddresses = defineCapability({
         companyName: address.companyName,
       })
       .from(address)
-      .where(
-        and(
-          eq(address.tenantId, ctx.tenantId),
-          isNull(address.agentId),
-          isNull(address.archivedAt),
-        ),
-      )
+      .where(and(isNull(address.agentId), isNull(address.archivedAt)))
       .limit(1000);
 
     let linked = 0;
@@ -160,7 +160,7 @@ export const agentLinkAddresses = defineCapability({
       let [agentRow] = await db
         .select({ agentId: agent.agentId })
         .from(agent)
-        .where(and(eq(agent.tenantId, ctx.tenantId), eq(agent.agentNo, agentNo)))
+        .where(eq(agent.agentNo, agentNo))
         .limit(1);
 
       if (!agentRow) {
@@ -168,13 +168,12 @@ export const agentLinkAddresses = defineCapability({
         const [agentAddress] = await db
           .select({ addressId: address.addressId, companyName: address.companyName })
           .from(address)
-          .where(and(eq(address.tenantId, ctx.tenantId), eq(address.addressNo, agentNo)))
+          .where(eq(address.addressNo, agentNo))
           .limit(1);
 
         const [newAgent] = await db
           .insert(agent)
           .values({
-            tenantId: ctx.tenantId,
             agentNo,
             name: agentAddress?.companyName ?? agentNo,
             addressId: agentAddress?.addressId ?? null,
@@ -195,7 +194,7 @@ export const agentLinkAddresses = defineCapability({
       await db
         .update(address)
         .set({ agentId: agentRow.agentId, updatedAt: new Date() })
-        .where(and(eq(address.tenantId, ctx.tenantId), eq(address.addressId, row.addressId)));
+        .where(eq(address.addressId, row.addressId));
       linked++;
     }
 
@@ -223,7 +222,7 @@ export const agentArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("agent", input.agentId, {
+    const [updated] = await new DataService().patch("agent", input.agentId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Agent not found");
@@ -231,4 +230,10 @@ export const agentArchive = defineCapability({
   },
 });
 
-export const agentCapabilities = [agentList, agentGet, agentUpsert, agentArchive, agentLinkAddresses];
+export const agentCapabilities = [
+  agentList,
+  agentGet,
+  agentUpsert,
+  agentArchive,
+  agentLinkAddresses,
+];

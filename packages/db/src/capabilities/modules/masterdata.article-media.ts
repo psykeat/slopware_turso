@@ -63,7 +63,7 @@ export const articleMediaGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("articleMedia", input.articleMediaId);
+    const row = await new DataService().get("articleMedia", input.articleMediaId);
     if (!row) throw new CapabilityError("not_found", "Article media link not found");
     return row;
   },
@@ -85,7 +85,7 @@ export const articleMediaCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("articleMedia", input);
+    const [created] = await new DataService().create("articleMedia", input);
     return created;
   },
 });
@@ -111,7 +111,11 @@ export const articleMediaUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleMedia", input.articleMediaId, input.patch);
+    const [updated] = await new DataService().patch(
+      "articleMedia",
+      input.articleMediaId,
+      input.patch,
+    );
     if (!updated) throw new CapabilityError("not_found", "Article media link not found");
     return updated;
   },
@@ -137,7 +141,7 @@ export const articleMediaArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleMedia", input.articleMediaId, {
+    const [updated] = await new DataService().patch("articleMedia", input.articleMediaId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Article media link not found");
@@ -145,4 +149,10 @@ export const articleMediaArchive = defineCapability({
   },
 });
 
-export const articleMediaCapabilities = [articleMediaList, articleMediaGet, articleMediaCreate, articleMediaUpdate, articleMediaArchive];
+export const articleMediaCapabilities = [
+  articleMediaList,
+  articleMediaGet,
+  articleMediaCreate,
+  articleMediaUpdate,
+  articleMediaArchive,
+];

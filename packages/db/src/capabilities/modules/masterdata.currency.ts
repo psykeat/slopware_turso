@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../index";
-import { currency } from "../../schema/app.schema";
+import { currency } from "../../schema/sqlite.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
 import { defineListCapability } from "../core/list";
@@ -61,7 +61,7 @@ export const currencyGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("currency", input.currencyId);
+    const row = await new DataService().get("currency", input.currencyId);
     if (!row) throw new CapabilityError("not_found", "Currency not found");
     return row;
   },
@@ -72,7 +72,10 @@ export const currencyUpsert = defineCapability({
   entityName: "currency",
   operation: "upsert",
   kind: "update",
-  summary: { en: "Create or update a currency by code", de: "Währung per Code anlegen oder ändern" },
+  summary: {
+    en: "Create or update a currency by code",
+    de: "Währung per Code anlegen oder ändern",
+  },
   description: {
     en: "Code is the natural key: an existing currency is patched, otherwise a new one is created (name required).",
     de: "Der Code ist der natürliche Schlüssel: eine vorhandene Währung wird gepatcht, sonst wird neu angelegt (Name erforderlich).",
@@ -91,7 +94,7 @@ export const currencyUpsert = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const service = new DataService(ctx.tenantId);
+    const service = new DataService();
     const existing = await findCurrencyByCode(input.code);
 
     if (existing?.archived) {
@@ -123,7 +126,10 @@ export const currencyArchive = defineCapability({
   operation: "archive",
   kind: "archive",
   summary: { en: "Archive a currency", de: "Währung archivieren" },
-  description: { en: "Soft delete: the currency is archived, never hard-deleted.", de: "Soft Delete: die Währung wird archiviert, nie hart gelöscht." },
+  description: {
+    en: "Soft delete: the currency is archived, never hard-deleted.",
+    de: "Soft Delete: die Währung wird archiviert, nie hart gelöscht.",
+  },
   input: z.object({ currencyId: z.uuid() }),
   output: z.object({ currencyId: z.uuid(), archived: z.literal(true) }),
   writesTables: ["currency"],
@@ -134,7 +140,9 @@ export const currencyArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("currency", input.currencyId, { archived: true });
+    const [updated] = await new DataService().patch("currency", input.currencyId, {
+      archived: true,
+    });
     if (!updated) throw new CapabilityError("not_found", "Currency not found");
     return { currencyId: input.currencyId, archived: true as const };
   },

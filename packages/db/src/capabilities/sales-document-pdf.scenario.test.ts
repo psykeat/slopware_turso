@@ -167,9 +167,10 @@ test("materializePdf renders through the port and writes the deterministic key",
   assert.equal(result.fileId, documentPdfStorageKey(ctx.tenantId, created.documentId));
 
   // The render port received a real, tenant-scoped print model with the line.
-  assert.ok(lastModel, "renderer port was invoked");
-  assert.equal(lastModel!.doc.documentId, created.documentId);
-  assert.equal(lastModel!.doc.lines.length, 1);
+  const renderedModel = lastModel as DocumentPdfPrintModel | null;
+  assert.ok(renderedModel, "renderer port was invoked");
+  assert.equal(renderedModel.doc.documentId, created.documentId);
+  assert.equal(renderedModel.doc.lines.length, 1);
 
   // The PDF was persisted at the storage key.
   const written = await readFile(join(storageDir, result.fileId));

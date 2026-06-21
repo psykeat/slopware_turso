@@ -72,7 +72,7 @@ export const deliveryAddressGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("deliveryAddress", input.deliveryAddressId);
+    const row = await new DataService().get("deliveryAddress", input.deliveryAddressId);
     if (!row) throw new CapabilityError("not_found", "Delivery address not found");
     return row;
   },
@@ -94,7 +94,7 @@ export const deliveryAddressCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("deliveryAddress", input);
+    const [created] = await new DataService().create("deliveryAddress", input);
     return created;
   },
 });
@@ -120,7 +120,7 @@ export const deliveryAddressUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch(
+    const [updated] = await new DataService().patch(
       "deliveryAddress",
       input.deliveryAddressId,
       input.patch,
@@ -150,7 +150,7 @@ export const deliveryAddressArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("deliveryAddress", input.deliveryAddressId, {
+    const [updated] = await new DataService().patch("deliveryAddress", input.deliveryAddressId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Delivery address not found");

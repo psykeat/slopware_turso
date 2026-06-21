@@ -4,7 +4,6 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { type ExecutionContext, executeCapability, type CapabilityInput } from "../capabilities";
 import { db } from "../index";
-import { user } from "../schema/auth.schema";
 import {
   article,
   articleVariant,
@@ -19,6 +18,7 @@ import {
   userTenant,
   warehouse,
 } from "../schema/app.schema";
+import { user } from "../schema/auth.schema";
 
 // Shared seed helpers for node:test suites. Agents: start here.
 //
@@ -134,7 +134,11 @@ async function ensureUser(): Promise<string> {
 
 /** Links an existing user (by email) to the base tenant. Idempotent. */
 export async function linkUserToBaseTenant(email: string): Promise<void> {
-  const [userRow] = await db.select({ id: user.id }).from(user).where(eq(user.email, email)).limit(1);
+  const [userRow] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
   if (!userRow) throw new Error(`User "${email}" not found — sign them up first.`);
 
   const [baseTenant] = await db
@@ -179,9 +183,7 @@ async function getTenantScopedTables(): Promise<string[]> {
     sql`select table_name from information_schema.columns
         where table_schema = 'public' and column_name = 'tenant_id' and table_name <> 'tenant'`,
   )) as unknown as Array<{ table_name: string }>;
-  tenantScopedTables = rows
-    .map((r) => r.table_name)
-    .filter((t) => /^[a-z_][a-z0-9_]*$/.test(t));
+  tenantScopedTables = rows.map((r) => r.table_name).filter((t) => /^[a-z_][a-z0-9_]*$/.test(t));
   return tenantScopedTables;
 }
 
@@ -216,7 +218,12 @@ export interface SeededTenant {
 }
 
 function slugify(label: string): string {
-  return label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "test";
+  return (
+    label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "test"
+  );
 }
 
 /** Raw org + tenant (no capability exists for these). Prefer useTestTenant / createEphemeralTenant. */
@@ -312,11 +319,7 @@ export async function getContextForTenant(tenantSlugOrId: string): Promise<Execu
       .where(eq(tenant.tenantId, tenantSlugOrId))
       .limit(1);
   } else {
-    [tenantRow] = await db
-      .select()
-      .from(tenant)
-      .where(eq(tenant.slug, tenantSlugOrId))
-      .limit(1);
+    [tenantRow] = await db.select().from(tenant).where(eq(tenant.slug, tenantSlugOrId)).limit(1);
   }
 
   if (!tenantRow) {
@@ -329,9 +332,12 @@ export async function getContextForTenant(tenantSlugOrId: string): Promise<Execu
     .where(eq(userTenant.tenantId, tenantRow.tenantId))
     .limit(1);
 
-  const role = (membership?.role === "tenant_admin" || membership?.role === "tenant_user" || membership?.role === "system")
-    ? membership.role
-    : "tenant_admin";
+  const role =
+    membership?.role === "tenant_admin" ||
+    membership?.role === "tenant_user" ||
+    membership?.role === "system"
+      ? membership.role
+      : "tenant_admin";
 
   return {
     tenantId: tenantRow.tenantId,
@@ -350,7 +356,7 @@ interface BuilderState {
   companyId?: string;
   warehouseId?: string;
   documentGroupId?: string;
-  
+
   lastArticleId?: string;
   lastVariantId?: string;
   lastVariantSku?: string;
@@ -375,9 +381,9 @@ export class TestScenarioBuilder {
         state.ctx = testTenant.ctx;
         state.tenantId = testTenant.tenantId;
       }
-      
+
       const suffix = crypto.randomUUID().slice(0, 8);
-      
+
       const [companyRow] = await db
         .insert(company)
         .values({
@@ -407,7 +413,7 @@ export class TestScenarioBuilder {
   withArticle(input: Partial<CapabilityInput<"masterdata.article.upsert">> = {}) {
     this.steps.push(async (state) => {
       if (!state.ctx) throw new Error("Tenant context not set. Call withTenant() first.");
-      
+
       const suffix = crypto.randomUUID().slice(0, 8);
       const articleNo = input.articleNo ?? `ART-${suffix}`;
       const name = input.name ?? `Article ${articleNo}`;
@@ -423,7 +429,7 @@ export class TestScenarioBuilder {
       );
 
       if (!res.ok) throw new Error("Failed to upsert article: " + JSON.stringify(res.error));
-      
+
       state.lastArticleId = res.data.article.articleId;
       if (state.lastArticleId) {
         state.articleIds.push(state.lastArticleId);
@@ -436,33 +442,45 @@ export class TestScenarioBuilder {
     this.steps.push(async (state) => {
       if (!state.tenantId) throw new Error("Tenant context not set. Call withTenant() first.");
       const articleId = input.articleId ?? state.lastArticleId;
-      if (!articleId) throw new Error("No articleId found in state context. Call withArticle() first.");
+      if (!articleId)
+        throw new Error("No articleId found in state context. Call withArticle() first.");
 
       const suffix = crypto.randomUUID().slice(0, 8);
       const sku = input.sku ?? `SKU-${suffix}`;
       const optionValueHash = input.optionValueHash ?? `hash-${suffix}`;
 
-      const [variant] = await db.insert(articleVariant).values({
-        tenantId: state.tenantId,
-        articleId,
-        sku,
-        optionValueHash,
-        isActive: input.isActive ?? true,
-        ...input,
-      }).returning({ variantId: articleVariant.variantId, sku: articleVariant.sku });
+      const [variant] = await db
+        .insert(articleVariant)
+        .values({
+          tenantId: state.tenantId,
+          articleId,
+          sku,
+          optionValueHash,
+          isActive: input.isActive ?? true,
+          ...input,
+        })
+        .returning({ variantId: articleVariant.variantId, sku: articleVariant.sku });
+      if (!variant?.variantId || !variant.sku) {
+        throw new Error("Failed to create article variant fixture");
+      }
+      const variantId = variant.variantId;
+      const variantSku = variant.sku;
 
-      state.lastVariantId = variant.variantId;
-      state.lastVariantSku = variant.sku;
-      state.variantIds.push(state.lastVariantId);
-      state.variantSkus.push(state.lastVariantSku);
+      state.lastVariantId = variantId;
+      state.lastVariantSku = variantSku;
+      state.variantIds.push(variantId);
+      state.variantSkus.push(variantSku);
 
       if (input.stock !== undefined && input.stock >= 0) {
-        const [itemRow] = await db.insert(inventoryItem).values({
-          tenantId: state.tenantId,
-          variantId: state.lastVariantId,
-          sku: state.lastVariantSku,
-          tracked: true,
-        }).returning({ itemId: inventoryItem.itemId });
+        const [itemRow] = await db
+          .insert(inventoryItem)
+          .values({
+            tenantId: state.tenantId,
+            variantId: state.lastVariantId,
+            sku: state.lastVariantSku,
+            tracked: true,
+          })
+          .returning({ itemId: inventoryItem.itemId });
 
         await db.insert(inventoryBalance).values({
           tenantId: state.tenantId,
@@ -490,15 +508,12 @@ export class TestScenarioBuilder {
       const docType = typeMap[input.type];
 
       const suffix = crypto.randomUUID().slice(0, 8);
-      
+
       let [docGroup] = await db
         .select()
         .from(documentGroup)
         .where(
-          and(
-            eq(documentGroup.tenantId, state.tenantId),
-            eq(documentGroup.documentType, docType)
-          )
+          and(eq(documentGroup.tenantId, state.tenantId), eq(documentGroup.documentType, docType)),
         )
         .limit(1);
 
@@ -544,16 +559,15 @@ export class TestScenarioBuilder {
               .select({ variantId: articleVariant.variantId })
               .from(articleVariant)
               .where(
-                and(
-                  eq(articleVariant.tenantId, state.tenantId),
-                  eq(articleVariant.sku, item.sku)
-                )
+                and(eq(articleVariant.tenantId, state.tenantId), eq(articleVariant.sku, item.sku)),
               )
               .limit(1);
             if (found) {
               variantId = found.variantId;
             } else {
-              throw new Error(`Variant with sku "${item.sku}" not found in tenant "${state.tenantId}".`);
+              throw new Error(
+                `Variant with sku "${item.sku}" not found in tenant "${state.tenantId}".`,
+              );
             }
           }
 
@@ -593,7 +607,7 @@ export class TestScenarioBuilder {
       companyId: state.companyId!,
       warehouseId: state.warehouseId!,
       ctx: state.ctx!,
-      
+
       articleId: state.lastArticleId,
       variantId: state.lastVariantId,
       sku: state.lastVariantSku,

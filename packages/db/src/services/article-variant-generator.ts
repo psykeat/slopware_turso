@@ -161,7 +161,12 @@ export async function loadVariantAxes(
   }));
 }
 
-async function findVariantByHash(tx: VariantTx, tenantId: string, articleId: string, hash: string) {
+async function findVariantByHash(
+  tx: VariantTx,
+  tenantId: string,
+  articleId: string,
+  hash: string,
+): Promise<{ variantId: string; sku: string } | null> {
   const [row] = await tx
     .select({
       variantId: articleVariant.variantId,

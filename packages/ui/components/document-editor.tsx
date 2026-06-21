@@ -108,6 +108,15 @@ interface DocGroup {
   requireBatchTracking?: boolean;
 }
 
+interface CompanySettings {
+  showArticleImageInEntry?: boolean;
+  showArticleImageOnDocuments?: boolean;
+  printAddressLongText?: boolean;
+  printPreText?: boolean;
+  printPostText?: boolean;
+  printPositionTexts?: boolean;
+}
+
 interface LineRow {
   _id: string;
   documentLineId?: string;
@@ -369,7 +378,9 @@ export function normalizeLineForSave(line: LineRow) {
     langTextOverriddenAt: line.langTextOverriddenAt ?? null,
     lineType: line.variantId
       ? (line.lineType ?? "article")
-      : (line.lineType === "article" || !line.lineType ? "comment" : line.lineType),
+      : line.lineType === "article" || !line.lineType
+        ? "comment"
+        : line.lineType,
     quantity: String(line.quantity),
     unit: line.unit,
     netPrice: String(line.netPrice),
@@ -559,12 +570,7 @@ function resolveArticleLabel(line: LineRow, articleMeta?: ArticleMetaRow | null)
 }
 
 function resolveVariantLabel(line: LineRow, variantMeta?: ArticleVariantRow | null) {
-  return (
-    variantMeta?.lookupLabel ??
-    variantMeta?.sku ??
-    line.variantId?.slice(0, 8) ??
-    "—"
-  );
+  return variantMeta?.lookupLabel ?? variantMeta?.sku ?? line.variantId?.slice(0, 8) ?? "—";
 }
 
 function isBomHeaderLineType(lineType?: string | null) {
@@ -811,7 +817,7 @@ function ArticleSearchCell({
           rowIndex,
         );
       }}
-      />
+    />
   );
 }
 
@@ -1001,10 +1007,12 @@ const DocumentLinesEditor = forwardRef<
   const [lines, setLines] = useState<LineRow[]>([]);
 
   // Fetch company settings for displaying article images in line items
-  const { data: companySettings } = useQuery({
+  const { data: companySettings } = useQuery<CompanySettings | null>({
     queryKey: ["data", "company", companyId],
     queryFn: () =>
-      companyId ? entityGet("company", companyId).catch(() => null) : Promise.resolve(null),
+      companyId
+        ? entityGet<CompanySettings>("company", companyId).catch(() => null)
+        : Promise.resolve(null),
     enabled: !!companyId,
     staleTime: 5 * 60 * 1000,
   });
@@ -1248,12 +1256,12 @@ const DocumentLinesEditor = forwardRef<
       const matchIndex = next.findIndex((line) => {
         if (line.documentLineId && row.documentLineId && line.documentLineId === row.documentLineId)
           return true;
-      return (
-        line.lineNo === row.lineNo &&
-        line.lineType === row.lineType &&
+        return (
+          line.lineNo === row.lineNo &&
+          line.lineType === row.lineType &&
           line.articleId === row.articleId &&
           line.variantId === row.variantId
-      );
+        );
       });
 
       if (matchIndex >= 0) {
@@ -2095,7 +2103,8 @@ const DocumentLinesEditor = forwardRef<
   const visibleLines = lines.filter((l) => !l.isDeleted);
   const visibleDraftLines = effectiveLines.filter((l) => !l.isDeleted);
   const staleTaxLineCount = visibleDraftLines.filter(
-    (line) => line.taxContextStale && line.lineType !== "comment" && line.lineType !== "bom_component",
+    (line) =>
+      line.taxContextStale && line.lineType !== "comment" && line.lineType !== "bom_component",
   ).length;
 
   const totals = useMemo(() => {
@@ -2193,7 +2202,12 @@ const DocumentLinesEditor = forwardRef<
                     if (!isEditing || isBomComponent) return;
                     const nextTarget = e.relatedTarget as HTMLElement | null;
                     if (nextTarget && e.currentTarget.contains(nextTarget)) return;
-                    if (nextTarget && (nextTarget.closest?.(".z-\\[70\\]") || nextTarget.closest?.("[class*=\"z-[70]\"]"))) return;
+                    if (
+                      nextTarget &&
+                      (nextTarget.closest?.(".z-\\[70\\]") ||
+                        nextTarget.closest?.('[class*="z-[70]"]'))
+                    )
+                      return;
                     window.setTimeout(() => {
                       if (isSelectingRef.current) return;
                       void commitEdit();
@@ -2689,14 +2703,18 @@ export function DocumentEditor({
   const { data: groupData } = useQuery<DocGroup | null>({
     queryKey: ["data", "documentGroup", groupId],
     queryFn: () =>
-      groupId ? entityGet<DocGroup>("documentGroup", groupId).catch(() => null) : Promise.resolve(null),
+      groupId
+        ? entityGet<DocGroup>("documentGroup", groupId).catch(() => null)
+        : Promise.resolve(null),
     enabled: !!groupId,
   });
 
-  const { data: companySettings } = useQuery({
+  const { data: companySettings } = useQuery<CompanySettings | null>({
     queryKey: ["data", "company", companyId],
     queryFn: () =>
-      companyId ? entityGet("company", companyId).catch(() => null) : Promise.resolve(null),
+      companyId
+        ? entityGet<CompanySettings>("company", companyId).catch(() => null)
+        : Promise.resolve(null),
     enabled: !!companyId,
   });
 
@@ -2975,7 +2993,11 @@ export function DocumentEditor({
           "sales.document.convertCandidates",
           { documentId },
         );
-        return data as { candidates?: ConvertCandidate[]; success?: boolean; newDocumentId?: string };
+        return data as {
+          candidates?: ConvertCandidate[];
+          success?: boolean;
+          newDocumentId?: string;
+        };
       }
       const { data } = await executeCapability<{ success: boolean; newDocumentId: string }>(
         "sales.document.convert",
@@ -3411,7 +3433,9 @@ export function DocumentEditor({
     () =>
       (paymentTerms as any[]).map((p: any) => ({
         id: p.paymentTermId,
-        label: isLocalizedText(p.name) ? resolveLocalizedText(p.name, i18n.language) : String(p.name ?? ""),
+        label: isLocalizedText(p.name)
+          ? resolveLocalizedText(p.name, i18n.language)
+          : String(p.name ?? ""),
       })),
     [paymentTerms, i18n.language],
   );
@@ -3419,7 +3443,9 @@ export function DocumentEditor({
     () =>
       (shippingMethods as any[]).map((s: any) => ({
         id: s.shippingMethodId,
-        label: isLocalizedText(s.name) ? resolveLocalizedText(s.name, i18n.language) : String(s.name ?? ""),
+        label: isLocalizedText(s.name)
+          ? resolveLocalizedText(s.name, i18n.language)
+          : String(s.name ?? ""),
       })),
     [shippingMethods, i18n.language],
   );
@@ -3616,7 +3642,9 @@ export function DocumentEditor({
                     locked={false}
                     onChange={(id, json) => {
                       const previousDeliveryAddressId = header.deliveryAddressId ?? null;
-                      const previousDeliveryCountryCode = extractCountryCode(header.deliveryAddress);
+                      const previousDeliveryCountryCode = extractCountryCode(
+                        header.deliveryAddress,
+                      );
                       const nextDeliveryCountryCode = extractCountryCode(json);
                       if (
                         previousDeliveryAddressId !== id ||

@@ -44,7 +44,7 @@ export const articleOptionGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("articleOption", input.optionId);
+    const row = await new DataService().get("articleOption", input.optionId);
     if (!row) throw new CapabilityError("not_found", "Article option not found");
     return row;
   },
@@ -70,7 +70,7 @@ export const articleOptionCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("articleOption", input);
+    const [created] = await new DataService().create("articleOption", input);
     return created;
   },
 });
@@ -83,8 +83,9 @@ export const articleOptionUpdate = defineCapability({
   summary: { en: "Update an article option", de: "Artikeloption ändern" },
   input: z.object({
     optionId: z.uuid(),
-    patch: articleOptionWritableFields
-      .refine((patch) => Object.keys(patch).length > 0, { message: "patch must not be empty" }),
+    patch: articleOptionWritableFields.refine((patch) => Object.keys(patch).length > 0, {
+      message: "patch must not be empty",
+    }),
   }),
   output: articleOptionRecordSchema,
   writesTables: ["articleOption"],
@@ -95,7 +96,7 @@ export const articleOptionUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleOption", input.optionId, input.patch);
+    const [updated] = await new DataService().patch("articleOption", input.optionId, input.patch);
     if (!updated) throw new CapabilityError("not_found", "Article option not found");
     return updated;
   },
@@ -121,7 +122,7 @@ export const articleOptionArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleOption", input.optionId, {
+    const [updated] = await new DataService().patch("articleOption", input.optionId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Article option not found");

@@ -57,7 +57,9 @@ export const emailThreadList = defineCapability({
     ai: {
       group: "mail",
       activeByDefault: true,
-      useWhen: ["The user wants to browse or search their email threads, optionally by account or folder."],
+      useWhen: [
+        "The user wants to browse or search their email threads, optionally by account or folder.",
+      ],
       resultShape: "{ items: emailThread[] }",
     },
   },
@@ -95,7 +97,9 @@ export const emailThreadGet = defineCapability({
     ai: {
       group: "mail",
       activeByDefault: true,
-      useWhen: ["You need the full content of one email thread (subject + all messages) and have its threadId."],
+      useWhen: [
+        "You need the full content of one email thread (subject + all messages) and have its threadId.",
+      ],
       requiredContext: ["threadId"],
       resultShape: "the thread record with its messages",
     },
@@ -341,7 +345,8 @@ export const emailOutboxPrepareSend = defineCapability({
         "You want to draft an email that sends a document (e.g. a quote or invoice) as a PDF. Materialize the PDF first with sales.document.materializePdf. This only creates a draft — it does not send.",
       ],
       requiredContext: ["documentId", "emailIdentityId"],
-      resultShape: "the prepared outbox draft incl. its outboxId and resolved recipients/attachments",
+      resultShape:
+        "the prepared outbox draft incl. its outboxId and resolved recipients/attachments",
     },
   },
   schemaVersion: 1,
@@ -397,7 +402,7 @@ export const emailOutboxConfirmSend = defineCapability({
       const result = await new EmailSendService(ctx.tenantId, actorUserId(ctx)).sendDraft(
         input.outboxId,
       );
-      return result as z.output<typeof looseRowSchema>;
+      return result as unknown as z.output<typeof looseRowSchema>;
     }),
 });
 

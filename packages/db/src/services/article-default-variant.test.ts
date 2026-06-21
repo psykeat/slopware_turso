@@ -14,7 +14,7 @@ const createArticleFixture = () => useTestTenant();
 
 test("article creation seeds one default variant and inventory item", async () => {
   const fixture = await createArticleFixture();
-  const dataService = new DataService(fixture.tenantId);
+  const dataService = new DataService();
   const articleNo = `ART-${fixture.suffix}`;
 
   const created = await dataService.create("article", {
@@ -35,7 +35,12 @@ test("article creation seeds one default variant and inventory item", async () =
       isActive: articleVariant.isActive,
     })
     .from(articleVariant)
-    .where(and(eq(articleVariant.tenantId, fixture.tenantId), eq(articleVariant.articleId, createdArticleId)));
+    .where(
+      and(
+        eq(articleVariant.tenantId, fixture.tenantId),
+        eq(articleVariant.articleId, createdArticleId),
+      ),
+    );
 
   assert.equal(variantRows.length, 1);
   assert.equal(variantRows[0]?.optionValueHash, createArticleVariantOptionValueHash([]));
@@ -49,7 +54,12 @@ test("article creation seeds one default variant and inventory item", async () =
       sku: inventoryItem.sku,
     })
     .from(inventoryItem)
-    .where(and(eq(inventoryItem.tenantId, fixture.tenantId), eq(inventoryItem.variantId, variantRows[0]!.variantId)));
+    .where(
+      and(
+        eq(inventoryItem.tenantId, fixture.tenantId),
+        eq(inventoryItem.variantId, variantRows[0]!.variantId),
+      ),
+    );
 
   assert.equal(inventoryRows.length, 1);
   assert.equal(inventoryRows[0]?.sku, variantRows[0]?.sku);
@@ -57,7 +67,7 @@ test("article creation seeds one default variant and inventory item", async () =
 
 test("article name changes do not change the default variant SKU", async () => {
   const fixture = await createArticleFixture();
-  const dataService = new DataService(fixture.tenantId);
+  const dataService = new DataService();
   const articleNo = `ART-NAME-${fixture.suffix}`;
 
   const created = await dataService.create("article", {
@@ -75,7 +85,12 @@ test("article name changes do not change the default variant SKU", async () => {
       sku: articleVariant.sku,
     })
     .from(articleVariant)
-    .where(and(eq(articleVariant.tenantId, fixture.tenantId), eq(articleVariant.articleId, createdArticleId)));
+    .where(
+      and(
+        eq(articleVariant.tenantId, fixture.tenantId),
+        eq(articleVariant.articleId, createdArticleId),
+      ),
+    );
   assert.equal(beforeRows.length, 1);
 
   await dataService.patch("article", createdArticleId, {
@@ -88,7 +103,12 @@ test("article name changes do not change the default variant SKU", async () => {
       sku: articleVariant.sku,
     })
     .from(articleVariant)
-    .where(and(eq(articleVariant.tenantId, fixture.tenantId), eq(articleVariant.articleId, createdArticleId)));
+    .where(
+      and(
+        eq(articleVariant.tenantId, fixture.tenantId),
+        eq(articleVariant.articleId, createdArticleId),
+      ),
+    );
   assert.equal(afterRows.length, 1);
   assert.equal(afterRows[0]?.sku, beforeRows[0]?.sku);
   assert.equal(afterRows[0]?.sku, `${articleNo}-${createArticleVariantOptionValueHash([])}`);

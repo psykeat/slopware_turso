@@ -92,7 +92,7 @@ export interface CapabilityDefinition<
   exposure: CapabilityExposure;
   /** Bump only on breaking input/output changes; additive-optional changes don't count. */
   schemaVersion: number;
-  handler: (ctx: ExecutionContext, input: z.output<I>) => Promise<z.output<O>>;
+  handler: (ctx: ExecutionContext, input: z.output<I>) => Promise<unknown>;
 }
 
 export type AnyCapability = CapabilityDefinition;
@@ -123,7 +123,7 @@ export interface CapabilityMeta {
   replayed?: boolean;
 }
 
-export type CapabilityResult<T = unknown> =
+export type CapabilityResult<T = any> =
   | { ok: true; data: T; meta: CapabilityMeta }
   | {
       ok: false;

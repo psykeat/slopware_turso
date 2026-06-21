@@ -33,7 +33,7 @@ function byIdWrites({ entityName, tableName, idParam }: EditableSpec) {
     exposure: { llm: "hidden", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [created] = await new DataService(ctx.tenantId).create(tableName, input);
+      const [created] = await new DataService().create(tableName, input);
       return created;
     },
   });
@@ -61,7 +61,7 @@ function byIdWrites({ entityName, tableName, idParam }: EditableSpec) {
     handler: async (ctx, input) => {
       const id = (input as Record<string, unknown>)[idParam] as string;
       const patch = (input as { patch: Record<string, unknown> }).patch;
-      const [updated] = await new DataService(ctx.tenantId).patch(tableName, id, patch);
+      const [updated] = await new DataService().patch(tableName, id, patch);
       if (!updated) throw new CapabilityError("not_found", `${entityName} not found`);
       return updated;
     },
@@ -74,7 +74,11 @@ export const editableMasterdataCapabilities = [
   ...byIdWrites({ entityName: "article", tableName: "article", idParam: "articleId" }),
   ...byIdWrites({ entityName: "address", tableName: "address", idParam: "addressId" }),
   ...byIdWrites({ entityName: "currency", tableName: "currency", idParam: "currencyId" }),
-  ...byIdWrites({ entityName: "articleGroup", tableName: "articleGroup", idParam: "articleGroupId" }),
+  ...byIdWrites({
+    entityName: "articleGroup",
+    tableName: "articleGroup",
+    idParam: "articleGroupId",
+  }),
   ...byIdWrites({ entityName: "country", tableName: "country", idParam: "countryId" }),
   ...byIdWrites({ entityName: "unit", tableName: "unit", idParam: "unitId" }),
   ...byIdWrites({ entityName: "priceList", tableName: "priceList", idParam: "priceListId" }),

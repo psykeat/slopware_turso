@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 
 import { db } from "../index";
-import { article, articleVariant, inventoryItem } from "../schema/app.schema";
+import { article, articleVariant, inventoryItem } from "../schema/sqlite.schema";
 import { createArticleVariantOptionValueHash } from "./ecommerce-variant";
 
 type BackfillTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -9,7 +9,6 @@ type BackfillTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type CandidateArticle = {
   articleId: string;
   articleNo: string;
-  tenantId: string;
 };
 
 export type DefaultVariantBackfillResult = {
@@ -21,32 +20,26 @@ export type DefaultVariantBackfillResult = {
 
 const DEFAULT_VARIANT_OPTION_VALUE_HASH = createArticleVariantOptionValueHash([]);
 
-async function findInventoryItemByVariantId(tx: BackfillTx, tenantId: string, variantId: string) {
+async function findInventoryItemByVariantId(tx: BackfillTx, variantId: string) {
   const [row] = await tx
     .select({
       itemId: inventoryItem.itemId,
       sku: inventoryItem.sku,
     })
     .from(inventoryItem)
-    .where(and(eq(inventoryItem.tenantId, tenantId), eq(inventoryItem.variantId, variantId)))
+    .where(eq(inventoryItem.variantId, variantId))
     .limit(1);
 
   return row ?? null;
 }
 
-async function ensureInventoryItem(
-  tx: BackfillTx,
-  tenantId: string,
-  variantId: string,
-  sku: string,
-) {
-  const existing = await findInventoryItemByVariantId(tx, tenantId, variantId);
+async function ensureInventoryItem(tx: BackfillTx, variantId: string, sku: string) {
+  const existing = await findInventoryItemByVariantId(tx, variantId);
   if (existing) return existing;
 
   const [inserted] = await tx
     .insert(inventoryItem)
     .values({
-      tenantId,
       variantId,
       sku,
       tracked: true,
@@ -59,24 +52,16 @@ async function ensureInventoryItem(
 
   if (inserted) return inserted;
 
-  return await findInventoryItemByVariantId(tx, tenantId, variantId);
+  return await findInventoryItemByVariantId(tx, variantId);
 }
 
-export async function ensureDefaultVariantForArticle(
-  tx: BackfillTx,
-  candidate: CandidateArticle,
-) {
+export async function ensureDefaultVariantForArticle(tx: BackfillTx, candidate: CandidateArticle) {
   const [existingVariant] = await tx
     .select({
       variantId: articleVariant.variantId,
     })
     .from(articleVariant)
-    .where(
-      and(
-        eq(articleVariant.tenantId, candidate.tenantId),
-        eq(articleVariant.articleId, candidate.articleId),
-      ),
-    )
+    .where(eq(articleVariant.articleId, candidate.articleId))
     .limit(1);
 
   if (existingVariant) {
@@ -90,7 +75,6 @@ export async function ensureDefaultVariantForArticle(
   const [insertedVariant] = await tx
     .insert(articleVariant)
     .values({
-      tenantId: candidate.tenantId,
       articleId: candidate.articleId,
       sku,
       optionValueHash: DEFAULT_VARIANT_OPTION_VALUE_HASH,
@@ -112,7 +96,6 @@ export async function ensureDefaultVariantForArticle(
       .from(articleVariant)
       .where(
         and(
-          eq(articleVariant.tenantId, candidate.tenantId),
           eq(articleVariant.articleId, candidate.articleId),
           eq(articleVariant.optionValueHash, DEFAULT_VARIANT_OPTION_VALUE_HASH),
         ),
@@ -130,12 +113,8 @@ export async function ensureDefaultVariantForArticle(
     createdVariant = false;
   }
 
-  const existingInventoryItem = await findInventoryItemByVariantId(
-    tx,
-    candidate.tenantId,
-    variantId,
-  );
-  const inventoryItemRow = await ensureInventoryItem(tx, candidate.tenantId, variantId, sku);
+  const existingInventoryItem = await findInventoryItemByVariantId(tx, variantId);
+  const inventoryItemRow = await ensureInventoryItem(tx, variantId, sku);
 
   return {
     createdVariant,
@@ -153,39 +132,16 @@ export async function ensureDefaultVariantForArticleRow(
 export async function backfillDefaultArticleVariants(
   tenantId?: string,
 ): Promise<DefaultVariantBackfillResult> {
-  const candidates = tenantId
-    ? await db
-        .select({
-          articleId: article.articleId,
-          articleNo: article.articleNo,
-          tenantId: article.tenantId,
-        })
-        .from(article)
-        .leftJoin(
-          articleVariant,
-          and(
-            eq(articleVariant.tenantId, article.tenantId),
-            eq(articleVariant.articleId, article.articleId),
-          ),
-        )
-        .where(and(isNull(articleVariant.variantId), eq(article.tenantId, tenantId)))
-        .orderBy(asc(article.articleNo), asc(article.articleId))
-    : await db
-        .select({
-          articleId: article.articleId,
-          articleNo: article.articleNo,
-          tenantId: article.tenantId,
-        })
-        .from(article)
-        .leftJoin(
-          articleVariant,
-          and(
-            eq(articleVariant.tenantId, article.tenantId),
-            eq(articleVariant.articleId, article.articleId),
-          ),
-        )
-        .where(isNull(articleVariant.variantId))
-        .orderBy(asc(article.tenantId), asc(article.articleNo), asc(article.articleId));
+  void tenantId;
+  const candidates = await db
+    .select({
+      articleId: article.articleId,
+      articleNo: article.articleNo,
+    })
+    .from(article)
+    .leftJoin(articleVariant, eq(articleVariant.articleId, article.articleId))
+    .where(isNull(articleVariant.variantId))
+    .orderBy(asc(article.articleNo), asc(article.articleId));
 
   const result: DefaultVariantBackfillResult = {
     candidateArticles: candidates.length,

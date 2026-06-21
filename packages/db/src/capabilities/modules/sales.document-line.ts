@@ -23,7 +23,11 @@ const patchInputSchema = z.object({
     .refine((patch) => Object.keys(patch).length > 0, { message: "patch must not be empty" }),
 });
 
-function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documentLineAllocation", tableName: string, orderBy: string) {
+function makeCrud(
+  entityName: "documentLine" | "documentLineTracking" | "documentLineAllocation",
+  tableName: string,
+  orderBy: string,
+) {
   return {
     list: defineCapability({
       module: "sales",
@@ -44,7 +48,7 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
         const filters: Record<string, string> = {};
         if (input.documentId) filters.documentId = input.documentId;
         if (input.variantId) filters.variantId = input.variantId;
-        return runEntityList(ctx.tenantId, tableName, filters, input, orderBy);
+        return runEntityList(tableName, filters, input, orderBy);
       },
     }),
     get: defineCapability({
@@ -63,7 +67,7 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
       exposure: { llm: "safe", http: true },
       schemaVersion: 1,
       handler: async (ctx, input) => {
-        const row = await new DataService(ctx.tenantId).get(tableName, input.id);
+        const row = await new DataService().get(tableName, input.id);
         if (!row) throw new CapabilityError("not_found", `${entityName} not found`);
         return row;
       },
@@ -84,7 +88,7 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
       exposure: { llm: "safe", http: true },
       schemaVersion: 1,
       handler: async (ctx, input) => {
-        const [created] = await new DataService(ctx.tenantId).create(tableName, input);
+        const [created] = await new DataService().create(tableName, input);
         return created;
       },
     }),
@@ -104,7 +108,7 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
       exposure: { llm: "safe", http: true },
       schemaVersion: 1,
       handler: async (ctx, input) => {
-        const [updated] = await new DataService(ctx.tenantId).patch(tableName, input.id, input.patch);
+        const [updated] = await new DataService().patch(tableName, input.id, input.patch);
         if (!updated) throw new CapabilityError("not_found", `${entityName} not found`);
         return updated;
       },
@@ -113,8 +117,16 @@ function makeCrud(entityName: "documentLine" | "documentLineTracking" | "documen
 }
 
 const documentLine = makeCrud("documentLine", "documentLine", "lineNo:asc");
-const documentLineTracking = makeCrud("documentLineTracking", "documentLineTracking", "createdAt:asc");
-const documentLineAllocation = makeCrud("documentLineAllocation", "documentLineAllocation", "createdAt:asc");
+const documentLineTracking = makeCrud(
+  "documentLineTracking",
+  "documentLineTracking",
+  "createdAt:asc",
+);
+const documentLineAllocation = makeCrud(
+  "documentLineAllocation",
+  "documentLineAllocation",
+  "createdAt:asc",
+);
 
 // A document line is never a plain row insert: it runs through the document
 // lifecycle (validate the parent, sequence/compute line fields, explode BOMs),
@@ -161,7 +173,7 @@ export const documentLineArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("documentLine", input.id, {
+    const [updated] = await new DataService().patch("documentLine", input.id, {
       archivedAt: new Date(),
     });
     if (!updated) throw new CapabilityError("not_found", "Document line not found");
@@ -185,7 +197,7 @@ export const documentLineTrackingRead = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const rows = await new DataService(ctx.tenantId).list(
+    const rows = await new DataService().list(
       "documentLineTracking",
       { documentLineId: input.documentLineId },
       { orderBy: "createdAt:asc" },
@@ -194,12 +206,8 @@ export const documentLineTrackingRead = defineCapability({
   },
 });
 
-async function assertLineInDocument(
-  tenantId: string,
-  documentId: string,
-  documentLineId: string,
-) {
-  const line = await new DataService(tenantId).get("documentLine", documentLineId);
+async function assertLineInDocument(tenantId: string, documentId: string, documentLineId: string) {
+  const line = await new DataService().get("documentLine", documentLineId);
   if (!line || (line as { documentId?: string }).documentId !== documentId) {
     throw new CapabilityError("not_found", "Document line not found");
   }
@@ -210,7 +218,10 @@ export const documentLineTrackingAdd = defineCapability({
   entityName: "documentLineTracking",
   operation: "add",
   kind: "create",
-  summary: { en: "Add a tracking row to a document line", de: "Tracking-Zeile zur Belegzeile hinzufügen" },
+  summary: {
+    en: "Add a tracking row to a document line",
+    de: "Tracking-Zeile zur Belegzeile hinzufügen",
+  },
   description: {
     en: "Exactly one of serialNumberId, serialNo or batchNo must be provided.",
     de: "Genau eines von serialNumberId, serialNo oder batchNo muss übergeben werden.",
@@ -225,8 +236,7 @@ export const documentLineTrackingAdd = defineCapability({
       qty: z.union([z.string(), z.number()]),
     })
     .refine(
-      (value) =>
-        [value.serialNumberId, value.serialNo, value.batchNo].filter(Boolean).length === 1,
+      (value) => [value.serialNumberId, value.serialNo, value.batchNo].filter(Boolean).length === 1,
       { message: "Exactly one of serialNumberId, serialNo or batchNo must be provided" },
     ),
   output: looseRowSchema,
@@ -239,7 +249,7 @@ export const documentLineTrackingAdd = defineCapability({
   schemaVersion: 1,
   handler: async (ctx, input) => {
     await assertLineInDocument(ctx.tenantId, input.documentId, input.documentLineId);
-    const [inserted] = await new DataService(ctx.tenantId).create("documentLineTracking", {
+    const [inserted] = await new DataService().create("documentLineTracking", {
       documentLineId: input.documentLineId,
       serialNumberId: input.serialNumberId ?? null,
       serialNo: input.serialNo ?? null,
@@ -275,21 +285,16 @@ export const documentLineTrackingRemove = defineCapability({
   schemaVersion: 1,
   handler: async (ctx, input) => {
     await assertLineInDocument(ctx.tenantId, input.documentId, input.documentLineId);
-    const tracking = await new DataService(ctx.tenantId).get(
-      "documentLineTracking",
-      input.trackingId,
-    );
+    const tracking = await new DataService().get("documentLineTracking", input.trackingId);
     if (
       !tracking ||
       (tracking as { documentLineId?: string }).documentLineId !== input.documentLineId
     ) {
       throw new CapabilityError("not_found", "Tracking entry not found");
     }
-    const result = await new DataService(ctx.tenantId).delete(
-      "documentLineTracking",
-      input.trackingId,
-    );
-    if (!result.deleted) throw new CapabilityError("conflict", "Tracking entry could not be removed");
+    const result = await new DataService().delete("documentLineTracking", input.trackingId);
+    if (!result.deleted)
+      throw new CapabilityError("conflict", "Tracking entry could not be removed");
     return { success: true as const };
   },
 });

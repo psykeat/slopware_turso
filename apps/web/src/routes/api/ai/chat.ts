@@ -45,13 +45,11 @@ export const Route = createFileRoute("/api/ai/chat")({
         const params = await chatParamsFromRequest(request);
 
         const focusGroup =
-          typeof params.forwardedProps.group === "string"
-            ? params.forwardedProps.group
-            : undefined;
+          typeof params.forwardedProps.group === "string" ? params.forwardedProps.group : undefined;
 
         const serverTools = buildOverlayTools(
           { ...ctx, actorMode: "assistant" },
-          { focusGroup, confirmMode: "approval" },
+          { focusGroups: focusGroup ? [focusGroup] : undefined, confirmMode: "approval" },
         );
         // Merge client-declared tools (e.g. assistant.requestDecision): the model
         // can call them, the loop pauses (tool-input-available), and the client

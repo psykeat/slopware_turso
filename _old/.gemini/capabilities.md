@@ -1,0 +1,435 @@
+# Slopware — Live Capabilities Index
+
+> Generated: 2026-06-21 19:51:31 UTC
+> Total Capabilities: 405
+
+Here is the index of all system operations. Click on a capability name to view its detailed inputs, outputs, and AI/LLM settings.
+
+## Module: accounting
+
+- [accounting.accountDeterminationRule.create](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountDeterminationRule.create.md) — Create accountDeterminationRule
+- [accounting.accountDeterminationRule.get](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountDeterminationRule.get.md) — Get accountDeterminationRule
+- [accounting.accountDeterminationRule.list](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountDeterminationRule.list.md) — List accountDeterminationRule
+- [accounting.accountDeterminationRule.update](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountDeterminationRule.update.md) — Update accountDeterminationRule
+- [accounting.accountingExportBatch.buildRows](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportBatch.buildRows.md) — Build export rows
+- [accounting.accountingExportBatch.createBatch](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportBatch.createBatch.md) — Create an accounting export batch
+- [accounting.accountingExportBatch.csv](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportBatch.csv.md) — Generate export CSV
+- [accounting.accountingExportBatch.get](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportBatch.get.md) — Get an accounting export batch
+- [accounting.accountingExportBatch.list](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportBatch.list.md) — List accounting export batches
+- [accounting.accountingExportBatch.markExported](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportBatch.markExported.md) — Mark export batch as exported
+- [accounting.accountingExportBatch.rebuild](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportBatch.rebuild.md) — Rebuild export rows
+- [accounting.accountingExportRow.create](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportRow.create.md) — Create accountingExportRow
+- [accounting.accountingExportRow.get](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportRow.get.md) — Get accountingExportRow
+- [accounting.accountingExportRow.list](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportRow.list.md) — List accountingExportRow
+- [accounting.accountingExportRow.update](file:///home/ubuntu/slopware/.agents/capabilities/accounting.accountingExportRow.update.md) — Update accountingExportRow
+- [accounting.glAccount.archive](file:///home/ubuntu/slopware/.agents/capabilities/accounting.glAccount.archive.md) — Archive a GL account
+- [accounting.glAccount.create](file:///home/ubuntu/slopware/.agents/capabilities/accounting.glAccount.create.md) — Create glAccount
+- [accounting.glAccount.get](file:///home/ubuntu/slopware/.agents/capabilities/accounting.glAccount.get.md) — Get glAccount
+- [accounting.glAccount.list](file:///home/ubuntu/slopware/.agents/capabilities/accounting.glAccount.list.md) — List glAccount
+- [accounting.glAccount.update](file:///home/ubuntu/slopware/.agents/capabilities/accounting.glAccount.update.md) — Update glAccount
+- [accounting.journalEntry.create](file:///home/ubuntu/slopware/.agents/capabilities/accounting.journalEntry.create.md) — Create journalEntry
+- [accounting.journalEntry.get](file:///home/ubuntu/slopware/.agents/capabilities/accounting.journalEntry.get.md) — Get journalEntry
+- [accounting.journalEntry.list](file:///home/ubuntu/slopware/.agents/capabilities/accounting.journalEntry.list.md) — List journalEntry
+- [accounting.journalEntry.update](file:///home/ubuntu/slopware/.agents/capabilities/accounting.journalEntry.update.md) — Update journalEntry
+- [accounting.journalLine.create](file:///home/ubuntu/slopware/.agents/capabilities/accounting.journalLine.create.md) — Create journalLine
+- [accounting.journalLine.get](file:///home/ubuntu/slopware/.agents/capabilities/accounting.journalLine.get.md) — Get journalLine
+- [accounting.journalLine.list](file:///home/ubuntu/slopware/.agents/capabilities/accounting.journalLine.list.md) — List journalLine
+- [accounting.journalLine.update](file:///home/ubuntu/slopware/.agents/capabilities/accounting.journalLine.update.md) — Update journalLine
+
+## Module: commerce
+
+- [commerce.commerceSyncDeadLetter.list](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncDeadLetter.list.md) — List commerce sync dead letter items
+- [commerce.commerceSyncDeadLetter.retry](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncDeadLetter.retry.md) — Retry pending commerce sync dead letter items
+- [commerce.commerceSyncRun.cancel](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncRun.cancel.md) — Cancel a commerce sync run
+- [commerce.commerceSyncRun.get](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncRun.get.md) — Get a commerce sync run
+- [commerce.commerceSyncRun.list](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncRun.list.md) — List commerce sync runs
+- [commerce.commerceSyncRun.start](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceSyncRun.start.md) — Start a commerce sync run
+- [commerce.commerceWebhookEvent.list](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceWebhookEvent.list.md) — List inbound shop webhook events
+- [commerce.commerceWebhookEvent.process](file:///home/ubuntu/slopware/.agents/capabilities/commerce.commerceWebhookEvent.process.md) — Process pending shop webhook events
+- [commerce.salesChannel.archive](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.archive.md) — Deactivate a sales channel
+- [commerce.salesChannel.create](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.create.md) — Create a sales channel
+- [commerce.salesChannel.get](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.get.md) — Get a sales channel by ID
+- [commerce.salesChannel.list](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.list.md) — List sales channels
+- [commerce.salesChannel.testConnection](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.testConnection.md) — Test the connection to a sales channel
+- [commerce.salesChannel.update](file:///home/ubuntu/slopware/.agents/capabilities/commerce.salesChannel.update.md) — Update a sales channel
+
+## Module: communication
+
+- [communication.emailAccount.list](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailAccount.list.md) — List connected email accounts
+- [communication.emailOutbox.composeDefaults](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailOutbox.composeDefaults.md) — Resolve compose defaults for a document email
+- [communication.emailOutbox.confirmSend](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailOutbox.confirmSend.md) — Send a prepared email draft
+- [communication.emailOutbox.prepareSend](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailOutbox.prepareSend.md) — Prepare a document email draft (no send)
+- [communication.emailTemplate.archive](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplate.archive.md) — Archive emailTemplate
+- [communication.emailTemplate.create](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplate.create.md) — Create emailTemplate
+- [communication.emailTemplate.get](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplate.get.md) — Get emailTemplate
+- [communication.emailTemplate.list](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplate.list.md) — List emailTemplate
+- [communication.emailTemplate.update](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplate.update.md) — Update emailTemplate
+- [communication.emailTemplateBinding.archive](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplateBinding.archive.md) — Archive emailTemplateBinding
+- [communication.emailTemplateBinding.create](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplateBinding.create.md) — Create emailTemplateBinding
+- [communication.emailTemplateBinding.get](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplateBinding.get.md) — Get emailTemplateBinding
+- [communication.emailTemplateBinding.list](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplateBinding.list.md) — List emailTemplateBinding
+- [communication.emailTemplateBinding.update](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplateBinding.update.md) — Update emailTemplateBinding
+- [communication.emailTemplateRenderLog.get](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplateRenderLog.get.md) — Get emailTemplateRenderLog
+- [communication.emailTemplateRenderLog.list](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailTemplateRenderLog.list.md) — List emailTemplateRenderLog
+- [communication.emailThread.archive](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailThread.archive.md) — Archive an email thread
+- [communication.emailThread.get](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailThread.get.md) — Get an email thread with messages
+- [communication.emailThread.link](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailThread.link.md) — Link an email thread to an address and/or document
+- [communication.emailThread.list](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailThread.list.md) — List email threads
+- [communication.emailThread.markRead](file:///home/ubuntu/slopware/.agents/capabilities/communication.emailThread.markRead.md) — Mark an email thread read/unread
+
+## Module: import
+
+- [import.bueroware.bootstrap](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.bootstrap.md) — Bootstrap a Büroware mapping from Satzbeschreibung.csv
+- [import.bueroware.getLayoutFields](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.getLayoutFields.md) — Get catalog fields and resolved assignment for a layout
+- [import.bueroware.listLayouts](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.listLayouts.md) — List the data areas (layouts) for a Büroware file
+- [import.bueroware.listTemplates](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.listTemplates.md) — List tenant import templates for a layout
+- [import.bueroware.loadCatalog](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.loadCatalog.md) — Load the central Büroware Satzbeschreibung catalog
+- [import.bueroware.queueFile](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.queueFile.md) — Queue a Büroware SEDB file already stored on disk
+- [import.bueroware.reconcile](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.reconcile.md) — Reconcile pending Büroware import references
+- [import.bueroware.runNextJob](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.runNextJob.md) — Run the next queued Büroware import job
+- [import.bueroware.saveTemplate](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.saveTemplate.md) — Save a tenant import template for a layout
+- [import.bueroware.selectLayout](file:///home/ubuntu/slopware/.agents/capabilities/import.bueroware.selectLayout.md) — Select the data area (layout) for a pending Büroware batch
+- [import.importBatch.approve](file:///home/ubuntu/slopware/.agents/capabilities/import.importBatch.approve.md) — Approve an import batch
+- [import.importBatch.get](file:///home/ubuntu/slopware/.agents/capabilities/import.importBatch.get.md) — Get an import batch with rows
+- [import.importBatch.list](file:///home/ubuntu/slopware/.agents/capabilities/import.importBatch.list.md) — List import batches
+- [import.importBatch.post](file:///home/ubuntu/slopware/.agents/capabilities/import.importBatch.post.md) — Post an import batch
+- [import.importBatch.upload](file:///home/ubuntu/slopware/.agents/capabilities/import.importBatch.upload.md) — Upload a CSV as an import batch
+- [import.importProfile.activateMapping](file:///home/ubuntu/slopware/.agents/capabilities/import.importProfile.activateMapping.md) — Activate the current mapping as a version
+- [import.importProfile.create](file:///home/ubuntu/slopware/.agents/capabilities/import.importProfile.create.md) — Create an import profile
+- [import.importProfile.list](file:///home/ubuntu/slopware/.agents/capabilities/import.importProfile.list.md) — List import profiles
+- [import.importProfile.mappings](file:///home/ubuntu/slopware/.agents/capabilities/import.importProfile.mappings.md) — Get connector mappings for a profile
+- [import.importProfile.saveMappings](file:///home/ubuntu/slopware/.agents/capabilities/import.importProfile.saveMappings.md) — Replace connector mappings for a profile
+- [import.importProfile.update](file:///home/ubuntu/slopware/.agents/capabilities/import.importProfile.update.md) — Update an import profile
+- [import.tenantConnector.list](file:///home/ubuntu/slopware/.agents/capabilities/import.tenantConnector.list.md) — List tenant connectors
+
+## Module: logistics
+
+- [logistics.documentShipment.exportCsv](file:///home/ubuntu/slopware/.agents/capabilities/logistics.documentShipment.exportCsv.md) — Export shipments as CSV
+- [logistics.documentShipment.get](file:///home/ubuntu/slopware/.agents/capabilities/logistics.documentShipment.get.md) — Get a document shipment
+- [logistics.documentShipment.importTrackingCsv](file:///home/ubuntu/slopware/.agents/capabilities/logistics.documentShipment.importTrackingCsv.md) — Import tracking CSV
+- [logistics.documentShipment.list](file:///home/ubuntu/slopware/.agents/capabilities/logistics.documentShipment.list.md) — List document shipments
+- [logistics.documentShipment.savePackages](file:///home/ubuntu/slopware/.agents/capabilities/logistics.documentShipment.savePackages.md) — Replace shipment packages
+- [logistics.documentShipment.update](file:///home/ubuntu/slopware/.agents/capabilities/logistics.documentShipment.update.md) — Update a document shipment
+- [logistics.documentShipmentPackage.get](file:///home/ubuntu/slopware/.agents/capabilities/logistics.documentShipmentPackage.get.md) — Get a shipment package
+- [logistics.documentShipmentPackage.list](file:///home/ubuntu/slopware/.agents/capabilities/logistics.documentShipmentPackage.list.md) — List shipment packages
+- [logistics.documentShipmentPackage.update](file:///home/ubuntu/slopware/.agents/capabilities/logistics.documentShipmentPackage.update.md) — Update a shipment package
+- [logistics.inventoryBalance.create](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryBalance.create.md) — Create inventoryBalance
+- [logistics.inventoryBalance.get](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryBalance.get.md) — Get inventoryBalance
+- [logistics.inventoryBalance.list](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryBalance.list.md) — List inventoryBalance
+- [logistics.inventoryBalance.update](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryBalance.update.md) — Update inventoryBalance
+- [logistics.inventoryItem.create](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryItem.create.md) — Create inventoryItem
+- [logistics.inventoryItem.get](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryItem.get.md) — Get inventoryItem
+- [logistics.inventoryItem.list](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryItem.list.md) — List inventoryItem
+- [logistics.inventoryItem.update](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryItem.update.md) — Update inventoryItem
+- [logistics.inventoryMovement.get](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryMovement.get.md) — Get an inventory movement
+- [logistics.inventoryMovement.list](file:///home/ubuntu/slopware/.agents/capabilities/logistics.inventoryMovement.list.md) — List inventory movements
+- [logistics.serialNumber.create](file:///home/ubuntu/slopware/.agents/capabilities/logistics.serialNumber.create.md) — Create serialNumber
+- [logistics.serialNumber.get](file:///home/ubuntu/slopware/.agents/capabilities/logistics.serialNumber.get.md) — Get serialNumber
+- [logistics.serialNumber.list](file:///home/ubuntu/slopware/.agents/capabilities/logistics.serialNumber.list.md) — List serialNumber
+- [logistics.serialNumber.update](file:///home/ubuntu/slopware/.agents/capabilities/logistics.serialNumber.update.md) — Update serialNumber
+
+## Module: masterdata
+
+- [masterdata.address.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.address.archive.md) — Archive an address
+- [masterdata.address.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.address.create.md) — Create address
+- [masterdata.address.geocode](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.address.geocode.md) — Geocode addresses without coordinates
+- [masterdata.address.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.address.get.md) — Get an address by id
+- [masterdata.address.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.address.list.md) — List addresses
+- [masterdata.address.search](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.address.search.md) — Search addresses for lookup
+- [masterdata.address.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.address.update.md) — Update address by id
+- [masterdata.address.upsert](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.address.upsert.md) — Create or update an address by address number
+- [masterdata.addressCategory.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressCategory.archive.md) — Archive addressCategory
+- [masterdata.addressCategory.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressCategory.create.md) — Create addressCategory
+- [masterdata.addressCategory.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressCategory.get.md) — Get addressCategory
+- [masterdata.addressCategory.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressCategory.list.md) — List addressCategory
+- [masterdata.addressCategory.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressCategory.update.md) — Update addressCategory
+- [masterdata.addressContact.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressContact.archive.md) — Archive addressContact
+- [masterdata.addressContact.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressContact.create.md) — Create addressContact
+- [masterdata.addressContact.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressContact.get.md) — Get addressContact
+- [masterdata.addressContact.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressContact.list.md) — List addressContact
+- [masterdata.addressContact.search](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressContact.search.md) — Search contacts for lookup
+- [masterdata.addressContact.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.addressContact.update.md) — Update addressContact
+- [masterdata.agent.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.agent.archive.md) — Archive a sales agent
+- [masterdata.agent.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.agent.get.md) — Get a sales agent by id
+- [masterdata.agent.linkAddresses](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.agent.linkAddresses.md) — Link agent records to their address entries and populate address.agentId FKs
+- [masterdata.agent.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.agent.list.md) — List sales agents
+- [masterdata.agent.upsert](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.agent.upsert.md) — Create or update a sales agent
+- [masterdata.article.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.article.archive.md) — Archive an article
+- [masterdata.article.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.article.create.md) — Create article
+- [masterdata.article.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.article.get.md) — Get an article by id
+- [masterdata.article.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.article.list.md) — List articles
+- [masterdata.article.search](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.article.search.md) — Search articles for lookup
+- [masterdata.article.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.article.update.md) — Update article by id
+- [masterdata.article.upsert](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.article.upsert.md) — Create or update an article by article number
+- [masterdata.articleBom.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleBom.archive.md) — Archive a BOM row
+- [masterdata.articleBom.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleBom.create.md) — Create a BOM row
+- [masterdata.articleBom.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleBom.get.md) — Get a BOM row by id
+- [masterdata.articleBom.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleBom.list.md) — List article BOM rows
+- [masterdata.articleBom.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleBom.update.md) — Update a BOM row
+- [masterdata.articleCategory.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleCategory.archive.md) — Archive an article category link
+- [masterdata.articleCategory.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleCategory.create.md) — Create an article category link
+- [masterdata.articleCategory.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleCategory.get.md) — Get an article category by id
+- [masterdata.articleCategory.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleCategory.list.md) — List article categories
+- [masterdata.articleCategory.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleCategory.update.md) — Update an article category link
+- [masterdata.articleGroup.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleGroup.archive.md) — Archive an article group
+- [masterdata.articleGroup.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleGroup.create.md) — Create articleGroup
+- [masterdata.articleGroup.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleGroup.get.md) — Get an article group by id
+- [masterdata.articleGroup.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleGroup.list.md) — List article groups
+- [masterdata.articleGroup.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleGroup.update.md) — Update articleGroup by id
+- [masterdata.articleGroup.upsert](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleGroup.upsert.md) — Create or update an article group by code
+- [masterdata.articleImage.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleImage.archive.md) — Archive an article image
+- [masterdata.articleImage.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleImage.create.md) — Create an article image
+- [masterdata.articleImage.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleImage.get.md) — Get an article image by id
+- [masterdata.articleImage.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleImage.list.md) — List article images
+- [masterdata.articleImage.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleImage.update.md) — Update an article image
+- [masterdata.articleMedia.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleMedia.archive.md) — Archive an article media link
+- [masterdata.articleMedia.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleMedia.create.md) — Create an article media link
+- [masterdata.articleMedia.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleMedia.get.md) — Get an article media link by id
+- [masterdata.articleMedia.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleMedia.list.md) — List article media links
+- [masterdata.articleMedia.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleMedia.update.md) — Update an article media link
+- [masterdata.articleOption.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOption.archive.md) — Archive an article option
+- [masterdata.articleOption.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOption.create.md) — Create an article option
+- [masterdata.articleOption.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOption.get.md) — Get an article option by id
+- [masterdata.articleOption.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOption.list.md) — List article options
+- [masterdata.articleOption.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOption.update.md) — Update an article option
+- [masterdata.articleOptionValue.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOptionValue.archive.md) — Archive an article option value
+- [masterdata.articleOptionValue.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOptionValue.create.md) — Create an article option value
+- [masterdata.articleOptionValue.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOptionValue.get.md) — Get an article option value by id
+- [masterdata.articleOptionValue.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOptionValue.list.md) — List article option values
+- [masterdata.articleOptionValue.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleOptionValue.update.md) — Update an article option value
+- [masterdata.articleVariant.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariant.archive.md) — Archive article variants
+- [masterdata.articleVariant.archiveBulk](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariant.archiveBulk.md) — Archive variants of an article
+- [masterdata.articleVariant.copyVariantAxes](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariant.copyVariantAxes.md) — Copy variant axes from another article
+- [masterdata.articleVariant.generateVariants](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariant.generateVariants.md) — Generate article variants
+- [masterdata.articleVariant.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariant.get.md) — Get an article variant by id
+- [masterdata.articleVariant.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariant.list.md) — List article variants
+- [masterdata.articleVariant.previewVariants](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariant.previewVariants.md) — Preview article variants
+- [masterdata.articleVariant.pricing](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariant.pricing.md) — Resolve variant pricing
+- [masterdata.articleVariant.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariant.update.md) — Update an article variant
+- [masterdata.articleVariantOptionValue.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariantOptionValue.create.md) — Link an option value to a variant
+- [masterdata.articleVariantOptionValue.delete](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariantOptionValue.delete.md) — Unlink an option value from a variant
+- [masterdata.articleVariantOptionValue.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariantOptionValue.get.md) — Get a variant option assignment
+- [masterdata.articleVariantOptionValue.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariantOptionValue.list.md) — List variant option assignments
+- [masterdata.articleVariantTemplate.applyToArticle](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariantTemplate.applyToArticle.md) — Apply a variant template's axes to an article
+- [masterdata.articleVariantTemplate.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariantTemplate.create.md) — Create a variant template
+- [masterdata.articleVariantTemplate.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariantTemplate.get.md) — Get a variant template by id
+- [masterdata.articleVariantTemplate.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariantTemplate.list.md) — List variant templates
+- [masterdata.articleVariantTemplate.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.articleVariantTemplate.update.md) — Update or archive a variant template
+- [masterdata.bankAccount.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.bankAccount.archive.md) — Archive bankAccount
+- [masterdata.bankAccount.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.bankAccount.create.md) — Create bankAccount
+- [masterdata.bankAccount.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.bankAccount.get.md) — Get bankAccount
+- [masterdata.bankAccount.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.bankAccount.list.md) — List bankAccount
+- [masterdata.bankAccount.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.bankAccount.update.md) — Update bankAccount
+- [masterdata.category.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.category.archive.md) — Archive a category
+- [masterdata.category.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.category.create.md) — Create a category
+- [masterdata.category.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.category.get.md) — Get a category
+- [masterdata.category.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.category.list.md) — List categories
+- [masterdata.category.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.category.update.md) — Update a category
+- [masterdata.costCenter.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.costCenter.archive.md) — Archive costCenter
+- [masterdata.costCenter.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.costCenter.create.md) — Create costCenter
+- [masterdata.costCenter.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.costCenter.get.md) — Get costCenter
+- [masterdata.costCenter.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.costCenter.list.md) — List costCenter
+- [masterdata.costCenter.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.costCenter.update.md) — Update costCenter
+- [masterdata.country.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.country.archive.md) — Archive a country
+- [masterdata.country.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.country.create.md) — Create country
+- [masterdata.country.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.country.get.md) — Get a country by id
+- [masterdata.country.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.country.list.md) — List countries
+- [masterdata.country.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.country.update.md) — Update country by id
+- [masterdata.country.upsert](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.country.upsert.md) — Create or update a country by ISO2 code
+- [masterdata.currency.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.currency.archive.md) — Archive a currency
+- [masterdata.currency.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.currency.create.md) — Create currency
+- [masterdata.currency.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.currency.get.md) — Get a currency by id
+- [masterdata.currency.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.currency.list.md) — List currencies
+- [masterdata.currency.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.currency.update.md) — Update currency by id
+- [masterdata.currency.upsert](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.currency.upsert.md) — Create or update a currency by code
+- [masterdata.deliveryAddress.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.deliveryAddress.archive.md) — Archive a delivery address
+- [masterdata.deliveryAddress.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.deliveryAddress.create.md) — Create a delivery address
+- [masterdata.deliveryAddress.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.deliveryAddress.get.md) — Get a delivery address by id
+- [masterdata.deliveryAddress.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.deliveryAddress.list.md) — List delivery addresses
+- [masterdata.deliveryAddress.search](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.deliveryAddress.search.md) — Search delivery addresses for lookup
+- [masterdata.deliveryAddress.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.deliveryAddress.update.md) — Update a delivery address
+- [masterdata.fiscalPeriod.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.fiscalPeriod.create.md) — Create a fiscal period
+- [masterdata.fiscalPeriod.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.fiscalPeriod.get.md) — Get a fiscal period
+- [masterdata.fiscalPeriod.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.fiscalPeriod.list.md) — List fiscal periods
+- [masterdata.fiscalPeriod.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.fiscalPeriod.update.md) — Update a fiscal period
+- [masterdata.incoterm.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.incoterm.archive.md) — Archive incoterm
+- [masterdata.incoterm.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.incoterm.create.md) — Create incoterm
+- [masterdata.incoterm.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.incoterm.get.md) — Get incoterm
+- [masterdata.incoterm.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.incoterm.list.md) — List incoterm
+- [masterdata.incoterm.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.incoterm.update.md) — Update incoterm
+- [masterdata.industry.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.industry.archive.md) — Archive industry
+- [masterdata.industry.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.industry.create.md) — Create industry
+- [masterdata.industry.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.industry.get.md) — Get industry
+- [masterdata.industry.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.industry.list.md) — List industry
+- [masterdata.industry.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.industry.update.md) — Update industry
+- [masterdata.numberSequence.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.numberSequence.archive.md) — Archive numberSequence
+- [masterdata.numberSequence.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.numberSequence.create.md) — Create numberSequence
+- [masterdata.numberSequence.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.numberSequence.get.md) — Get numberSequence
+- [masterdata.numberSequence.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.numberSequence.list.md) — List numberSequence
+- [masterdata.numberSequence.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.numberSequence.update.md) — Update numberSequence
+- [masterdata.paymentTerm.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.paymentTerm.archive.md) — Archive a payment term
+- [masterdata.paymentTerm.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.paymentTerm.create.md) — Create a payment term
+- [masterdata.paymentTerm.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.paymentTerm.get.md) — Get a payment term by id
+- [masterdata.paymentTerm.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.paymentTerm.list.md) — List payment terms
+- [masterdata.paymentTerm.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.paymentTerm.update.md) — Update a payment term
+- [masterdata.postalCode.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.postalCode.archive.md) — Archive postalCode
+- [masterdata.postalCode.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.postalCode.create.md) — Create postalCode
+- [masterdata.postalCode.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.postalCode.get.md) — Get postalCode
+- [masterdata.postalCode.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.postalCode.list.md) — List postalCode
+- [masterdata.postalCode.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.postalCode.update.md) — Update postalCode
+- [masterdata.priceList.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceList.archive.md) — Archive a price list
+- [masterdata.priceList.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceList.create.md) — Create priceList
+- [masterdata.priceList.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceList.get.md) — Get a price list by id
+- [masterdata.priceList.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceList.list.md) — List price lists
+- [masterdata.priceList.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceList.update.md) — Update priceList by id
+- [masterdata.priceList.upsert](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceList.upsert.md) — Create or update a price list by name
+- [masterdata.priceListItem.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceListItem.create.md) — Create priceListItem
+- [masterdata.priceListItem.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceListItem.get.md) — Get priceListItem
+- [masterdata.priceListItem.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceListItem.list.md) — List priceListItem
+- [masterdata.priceListItem.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.priceListItem.update.md) — Update priceListItem
+- [masterdata.productionOrder.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.productionOrder.archive.md) — Archive productionOrder
+- [masterdata.productionOrder.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.productionOrder.create.md) — Create productionOrder
+- [masterdata.productionOrder.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.productionOrder.get.md) — Get productionOrder
+- [masterdata.productionOrder.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.productionOrder.list.md) — List productionOrder
+- [masterdata.productionOrder.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.productionOrder.update.md) — Update productionOrder
+- [masterdata.shippingMethod.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.shippingMethod.archive.md) — Archive shippingMethod
+- [masterdata.shippingMethod.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.shippingMethod.create.md) — Create shippingMethod
+- [masterdata.shippingMethod.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.shippingMethod.get.md) — Get shippingMethod
+- [masterdata.shippingMethod.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.shippingMethod.list.md) — List shippingMethod
+- [masterdata.shippingMethod.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.shippingMethod.update.md) — Update shippingMethod
+- [masterdata.taxClass.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxClass.archive.md) — Archive taxClass
+- [masterdata.taxClass.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxClass.create.md) — Create taxClass
+- [masterdata.taxClass.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxClass.get.md) — Get taxClass
+- [masterdata.taxClass.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxClass.list.md) — List taxClass
+- [masterdata.taxClass.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxClass.update.md) — Update taxClass
+- [masterdata.taxCode.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxCode.archive.md) — Archive taxCode
+- [masterdata.taxCode.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxCode.create.md) — Create taxCode
+- [masterdata.taxCode.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxCode.get.md) — Get taxCode
+- [masterdata.taxCode.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxCode.list.md) — List taxCode
+- [masterdata.taxCode.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxCode.update.md) — Update taxCode
+- [masterdata.taxRule.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxRule.create.md) — Create taxRule
+- [masterdata.taxRule.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxRule.get.md) — Get taxRule
+- [masterdata.taxRule.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxRule.list.md) — List taxRule
+- [masterdata.taxRule.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.taxRule.update.md) — Update taxRule
+- [masterdata.unit.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.unit.archive.md) — Archive a unit
+- [masterdata.unit.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.unit.create.md) — Create unit
+- [masterdata.unit.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.unit.get.md) — Get a unit by id
+- [masterdata.unit.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.unit.list.md) — List units
+- [masterdata.unit.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.unit.update.md) — Update unit by id
+- [masterdata.unit.upsert](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.unit.upsert.md) — Create or update a unit by code
+- [masterdata.warehouse.archive](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.warehouse.archive.md) — Archive warehouse
+- [masterdata.warehouse.create](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.warehouse.create.md) — Create warehouse
+- [masterdata.warehouse.get](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.warehouse.get.md) — Get warehouse
+- [masterdata.warehouse.list](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.warehouse.list.md) — List warehouse
+- [masterdata.warehouse.update](file:///home/ubuntu/slopware/.agents/capabilities/masterdata.warehouse.update.md) — Update warehouse
+
+## Module: sales
+
+- [sales.document.audit](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.audit.md) — Get the document audit trail
+- [sales.document.convert](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.convert.md) — Convert a document
+- [sales.document.convertCandidates](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.convertCandidates.md) — List conversion target groups for a document
+- [sales.document.create](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.create.md) — Create a document
+- [sales.document.delete](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.delete.md) — Delete a document safely
+- [sales.document.delta](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.delta.md) — Apply a delta effect
+- [sales.document.duplicate](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.duplicate.md) — Duplicate a document
+- [sales.document.duplicateCandidates](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.duplicateCandidates.md) — List duplicate target groups for a document
+- [sales.document.get](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.get.md) — Get a document
+- [sales.document.list](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.list.md) — List documents
+- [sales.document.materializePdf](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.materializePdf.md) — Materialize a document PDF
+- [sales.document.post](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.post.md) — Post a document
+- [sales.document.pricing](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.pricing.md) — Resolve document pricing
+- [sales.document.saveDraft](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.saveDraft.md) — Save a draft document
+- [sales.document.shipment](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.shipment.md) — Resolve the shipment for a document
+- [sales.document.storno](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.storno.md) — Reverse a document
+- [sales.document.tree](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.tree.md) — Get the document tree
+- [sales.document.update](file:///home/ubuntu/slopware/.agents/capabilities/sales.document.update.md) — Update a document
+- [sales.documentGroup.get](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentGroup.get.md) — Get documentGroup
+- [sales.documentGroup.list](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentGroup.list.md) — List documentGroup
+- [sales.documentLine.archive](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLine.archive.md) — Archive a document line
+- [sales.documentLine.create](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLine.create.md) — Create a document line
+- [sales.documentLine.delta](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLine.delta.md) — Apply a document line delta
+- [sales.documentLine.get](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLine.get.md) — Get documentLine
+- [sales.documentLine.list](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLine.list.md) — List documentLine
+- [sales.documentLine.tracking](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLine.tracking.md) — Get document line tracking
+- [sales.documentLine.update](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLine.update.md) — Update documentLine
+- [sales.documentLineAllocation.create](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineAllocation.create.md) — Create documentLineAllocation
+- [sales.documentLineAllocation.get](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineAllocation.get.md) — Get documentLineAllocation
+- [sales.documentLineAllocation.list](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineAllocation.list.md) — List documentLineAllocation
+- [sales.documentLineAllocation.update](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineAllocation.update.md) — Update documentLineAllocation
+- [sales.documentLineTracking.add](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineTracking.add.md) — Add a tracking row to a document line
+- [sales.documentLineTracking.create](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineTracking.create.md) — Create documentLineTracking
+- [sales.documentLineTracking.get](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineTracking.get.md) — Get documentLineTracking
+- [sales.documentLineTracking.list](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineTracking.list.md) — List documentLineTracking
+- [sales.documentLineTracking.remove](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineTracking.remove.md) — Remove a tracking row
+- [sales.documentLineTracking.update](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentLineTracking.update.md) — Update documentLineTracking
+- [sales.documentType.get](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentType.get.md) — Get documentType
+- [sales.documentType.list](file:///home/ubuntu/slopware/.agents/capabilities/sales.documentType.list.md) — List documentType
+
+## Module: system
+
+- [system.company.archive](file:///home/ubuntu/slopware/.agents/capabilities/system.company.archive.md) — Archive company
+- [system.company.create](file:///home/ubuntu/slopware/.agents/capabilities/system.company.create.md) — Create company
+- [system.company.get](file:///home/ubuntu/slopware/.agents/capabilities/system.company.get.md) — Get company
+- [system.company.list](file:///home/ubuntu/slopware/.agents/capabilities/system.company.list.md) — List company
+- [system.company.update](file:///home/ubuntu/slopware/.agents/capabilities/system.company.update.md) — Update company
+- [system.connectorDefinition.create](file:///home/ubuntu/slopware/.agents/capabilities/system.connectorDefinition.create.md) — Create connectorDefinition
+- [system.connectorDefinition.get](file:///home/ubuntu/slopware/.agents/capabilities/system.connectorDefinition.get.md) — Get connectorDefinition
+- [system.connectorDefinition.list](file:///home/ubuntu/slopware/.agents/capabilities/system.connectorDefinition.list.md) — List connectorDefinition
+- [system.connectorDefinition.update](file:///home/ubuntu/slopware/.agents/capabilities/system.connectorDefinition.update.md) — Update connectorDefinition
+- [system.modules.create](file:///home/ubuntu/slopware/.agents/capabilities/system.modules.create.md) — Create modules
+- [system.modules.get](file:///home/ubuntu/slopware/.agents/capabilities/system.modules.get.md) — Get modules
+- [system.modules.list](file:///home/ubuntu/slopware/.agents/capabilities/system.modules.list.md) — List modules
+- [system.modules.update](file:///home/ubuntu/slopware/.agents/capabilities/system.modules.update.md) — Update modules
+- [system.organization.archive](file:///home/ubuntu/slopware/.agents/capabilities/system.organization.archive.md) — Archive organization
+- [system.organization.create](file:///home/ubuntu/slopware/.agents/capabilities/system.organization.create.md) — Create organization
+- [system.organization.get](file:///home/ubuntu/slopware/.agents/capabilities/system.organization.get.md) — Get organization
+- [system.organization.list](file:///home/ubuntu/slopware/.agents/capabilities/system.organization.list.md) — List organization
+- [system.organization.update](file:///home/ubuntu/slopware/.agents/capabilities/system.organization.update.md) — Update organization
+- [system.registry.discoverEntities](file:///home/ubuntu/slopware/.agents/capabilities/system.registry.discoverEntities.md) — Discover entities
+- [system.registry.explainConstraint](file:///home/ubuntu/slopware/.agents/capabilities/system.registry.explainConstraint.md) — Explain constraint
+- [system.registry.generateFixture](file:///home/ubuntu/slopware/.agents/capabilities/system.registry.generateFixture.md) — Generate fixture
+- [system.registry.resolveProjection](file:///home/ubuntu/slopware/.agents/capabilities/system.registry.resolveProjection.md) — Resolve projection
+- [system.registry.validatePayload](file:///home/ubuntu/slopware/.agents/capabilities/system.registry.validatePayload.md) — Validate payload
+- [system.systemSettings.create](file:///home/ubuntu/slopware/.agents/capabilities/system.systemSettings.create.md) — Create systemSettings
+- [system.systemSettings.get](file:///home/ubuntu/slopware/.agents/capabilities/system.systemSettings.get.md) — Get systemSettings
+- [system.systemSettings.list](file:///home/ubuntu/slopware/.agents/capabilities/system.systemSettings.list.md) — List systemSettings
+- [system.systemSettings.update](file:///home/ubuntu/slopware/.agents/capabilities/system.systemSettings.update.md) — Update systemSettings
+- [system.tenant.archive](file:///home/ubuntu/slopware/.agents/capabilities/system.tenant.archive.md) — Archive tenant
+- [system.tenant.create](file:///home/ubuntu/slopware/.agents/capabilities/system.tenant.create.md) — Create tenant
+- [system.tenant.get](file:///home/ubuntu/slopware/.agents/capabilities/system.tenant.get.md) — Get tenant
+- [system.tenant.list](file:///home/ubuntu/slopware/.agents/capabilities/system.tenant.list.md) — List tenant
+- [system.tenant.update](file:///home/ubuntu/slopware/.agents/capabilities/system.tenant.update.md) — Update tenant
+- [system.tenantConnector.archive](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantConnector.archive.md) — Archive tenantConnector
+- [system.tenantConnector.create](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantConnector.create.md) — Create tenantConnector
+- [system.tenantConnector.get](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantConnector.get.md) — Get tenantConnector
+- [system.tenantConnector.list](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantConnector.list.md) — List tenantConnector
+- [system.tenantConnector.update](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantConnector.update.md) — Update tenantConnector
+- [system.tenantConnectorMapping.create](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantConnectorMapping.create.md) — Create tenantConnectorMapping
+- [system.tenantConnectorMapping.get](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantConnectorMapping.get.md) — Get tenantConnectorMapping
+- [system.tenantConnectorMapping.list](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantConnectorMapping.list.md) — List tenantConnectorMapping
+- [system.tenantConnectorMapping.update](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantConnectorMapping.update.md) — Update tenantConnectorMapping
+- [system.tenantFields.archive](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantFields.archive.md) — Archive tenantFields
+- [system.tenantFields.create](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantFields.create.md) — Create tenantFields
+- [system.tenantFields.get](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantFields.get.md) — Get tenantFields
+- [system.tenantFields.list](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantFields.list.md) — List tenantFields
+- [system.tenantFields.update](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantFields.update.md) — Update tenantFields
+- [system.tenantGroups.create](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantGroups.create.md) — Create tenantGroups
+- [system.tenantGroups.get](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantGroups.get.md) — Get tenantGroups
+- [system.tenantGroups.list](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantGroups.list.md) — List tenantGroups
+- [system.tenantGroups.update](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantGroups.update.md) — Update tenantGroups
+- [system.tenantLayouts.create](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantLayouts.create.md) — Create tenantLayouts
+- [system.tenantLayouts.get](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantLayouts.get.md) — Get tenantLayouts
+- [system.tenantLayouts.list](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantLayouts.list.md) — List tenantLayouts
+- [system.tenantLayouts.update](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantLayouts.update.md) — Update tenantLayouts
+- [system.tenantLlmConfig.create](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantLlmConfig.create.md) — Create tenantLlmConfig
+- [system.tenantLlmConfig.get](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantLlmConfig.get.md) — Get tenantLlmConfig
+- [system.tenantLlmConfig.list](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantLlmConfig.list.md) — List tenantLlmConfig
+- [system.tenantLlmConfig.update](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantLlmConfig.update.md) — Update tenantLlmConfig
+- [system.tenantRules.create](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantRules.create.md) — Create tenantRules
+- [system.tenantRules.get](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantRules.get.md) — Get tenantRules
+- [system.tenantRules.list](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantRules.list.md) — List tenantRules
+- [system.tenantRules.update](file:///home/ubuntu/slopware/.agents/capabilities/system.tenantRules.update.md) — Update tenantRules
+- [system.userTenant.create](file:///home/ubuntu/slopware/.agents/capabilities/system.userTenant.create.md) — Create userTenant
+- [system.userTenant.get](file:///home/ubuntu/slopware/.agents/capabilities/system.userTenant.get.md) — Get userTenant
+- [system.userTenant.list](file:///home/ubuntu/slopware/.agents/capabilities/system.userTenant.list.md) — List userTenant
+- [system.userTenant.update](file:///home/ubuntu/slopware/.agents/capabilities/system.userTenant.update.md) — Update userTenant

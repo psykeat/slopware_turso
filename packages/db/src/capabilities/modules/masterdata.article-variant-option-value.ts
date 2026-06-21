@@ -1,13 +1,12 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../../index";
-import { articleOptionValue, articleVariantOptionValue } from "../../schema/app.schema";
+import { db, eq } from "../../index";
+import { articleOptionValue, articleVariantOptionValue } from "../../schema/sqlite.schema";
 import { defineCapability } from "../core/define";
 import { CapabilityError } from "../core/types";
 
 const variantOptionValueRecordSchema = z.looseObject({
-  tenantId: z.uuid(),
   variantId: z.uuid(),
   valueId: z.uuid(),
   optionId: z.uuid(),
@@ -23,22 +22,27 @@ const variantOptionValueFilterSchema = z.object({
   offset: z.number().int().min(0).default(0),
 });
 
-async function loadVariantOptionValueRows(tenantId: string, filters: z.output<typeof variantOptionValueFilterSchema>) {
-  const conditions = [eq(articleVariantOptionValue.tenantId, tenantId)];
-  if (filters.variantId) conditions.push(eq(articleVariantOptionValue.variantId, filters.variantId));
+async function loadVariantOptionValueRows(
+  filters: z.output<typeof variantOptionValueFilterSchema>,
+) {
+  const conditions = [];
+  if (filters.variantId)
+    conditions.push(eq(articleVariantOptionValue.variantId, filters.variantId));
   if (filters.valueId) conditions.push(eq(articleVariantOptionValue.valueId, filters.valueId));
   if (filters.optionId) conditions.push(eq(articleOptionValue.optionId, filters.optionId));
 
   const rows = await db
     .select({
-      tenantId: articleVariantOptionValue.tenantId,
       variantId: articleVariantOptionValue.variantId,
       valueId: articleVariantOptionValue.valueId,
       optionId: articleOptionValue.optionId,
       value: articleOptionValue.value,
     })
     .from(articleVariantOptionValue)
-    .innerJoin(articleOptionValue, eq(articleVariantOptionValue.valueId, articleOptionValue.valueId))
+    .innerJoin(
+      articleOptionValue,
+      eq(articleVariantOptionValue.valueId, articleOptionValue.valueId),
+    )
     .where(and(...conditions))
     .orderBy(asc(articleVariantOptionValue.variantId), asc(articleOptionValue.sortOrder));
 
@@ -72,7 +76,7 @@ export const articleVariantOptionValueList = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => ({ items: await loadVariantOptionValueRows(ctx.tenantId, input) }),
+  handler: async (_ctx, input) => ({ items: await loadVariantOptionValueRows(input) }),
 });
 
 export const articleVariantOptionValueGet = defineCapability({
@@ -93,8 +97,8 @@ export const articleVariantOptionValueGet = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
-    const rows = await loadVariantOptionValueRows(ctx.tenantId, {
+  handler: async (_ctx, input) => {
+    const rows = await loadVariantOptionValueRows({
       variantId: input.variantId,
       valueId: input.valueId,
       limit: 1,
@@ -124,30 +128,28 @@ export const articleVariantOptionValueCreate = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     const [created] = await db
       .insert(articleVariantOptionValue)
       .values({
-        tenantId: ctx.tenantId,
         variantId: input.variantId,
         valueId: input.valueId,
       })
       .returning({
-        tenantId: articleVariantOptionValue.tenantId,
         variantId: articleVariantOptionValue.variantId,
         valueId: articleVariantOptionValue.valueId,
       });
 
-    if (!created) throw new CapabilityError("internal", "Failed to link variant option value");
+    if (!created) throw new Error("Failed to link variant option value");
 
-    const rows = await loadVariantOptionValueRows(ctx.tenantId, {
+    const rows = await loadVariantOptionValueRows({
       variantId: input.variantId,
       valueId: input.valueId,
       limit: 1,
       offset: 0,
     });
     const [row] = rows;
-    if (!row) throw new CapabilityError("internal", "Failed to load linked variant option value");
+    if (!row) throw new Error("Failed to load linked variant option value");
     return row;
   },
 });
@@ -170,19 +172,19 @@ export const articleVariantOptionValueDelete = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     const deleted = await db
       .delete(articleVariantOptionValue)
       .where(
         and(
-          eq(articleVariantOptionValue.tenantId, ctx.tenantId),
           eq(articleVariantOptionValue.variantId, input.variantId),
           eq(articleVariantOptionValue.valueId, input.valueId),
         ),
       )
       .returning({ variantId: articleVariantOptionValue.variantId });
 
-    if (deleted.length === 0) throw new CapabilityError("not_found", "Variant option assignment not found");
+    if (deleted.length === 0)
+      throw new CapabilityError("not_found", "Variant option assignment not found");
     return { deleted: true as const };
   },
 });

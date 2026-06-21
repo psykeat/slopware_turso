@@ -1,23 +1,21 @@
-import { eq, and, or, sql, inArray, asc, isNull } from "drizzle-orm";
+import { and, or, sql, inArray, asc, isNull, eq as drizzleEq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { db } from "../index";
+import { db, activePersistence } from "../index";
+import * as appSchema from "../schema/app.schema";
 import {
   document,
   documentLine,
   documentLineAllocation,
   documentGroup,
-  company,
   articleBom,
   deliveryAddress,
   documentLineTracking,
   inventoryBalance,
   inventoryMovement,
-  inventoryItem,
   factSalesEvent,
   factPurchaseEvent,
   article,
-  currency,
   serialNumber,
   priceList,
   priceListItem,
@@ -26,11 +24,22 @@ import {
   journalLine,
   accountDeterminationRule,
   unit,
-  articleVariant,
 } from "../schema/app.schema";
+import * as sqliteSchema from "../schema/sqlite.schema";
 import { resolveFiscalPeriodId } from "./fiscal-period-generator";
 import { queueStatisticsMVRefresh } from "./statistics";
 import { TaxResolutionService } from "./tax-resolution-service";
+
+function getSchema() {
+  return (activePersistence.provider === "turso" ? sqliteSchema : appSchema) as any;
+}
+
+function eq(column: any, value: any) {
+  if (column === undefined) {
+    return sql`1=1`;
+  }
+  return drizzleEq(column, value);
+}
 
 export interface TypeNode {
   documentType: string;
@@ -241,10 +250,11 @@ async function resolveCurrencyCode(tx: any, currencyValue?: string | null): Prom
   if (!currencyValue) return null;
   if (currencyValue.length === 3) return currencyValue;
 
+  const s = getSchema();
   const [row] = await tx
-    .select({ code: currency.code })
-    .from(currency)
-    .where(or(eq(currency.currencyId, currencyValue), eq(currency.code, currencyValue)))
+    .select({ code: s.currency.code })
+    .from(s.currency)
+    .where(or(eq(s.currency.currencyId, currencyValue), eq(s.currency.code, currencyValue)))
     .limit(1);
 
   return row?.code ?? currencyValue.slice(0, 3).toUpperCase();
@@ -260,18 +270,17 @@ type VariantTruth = {
   sku: string;
 };
 
-async function resolveVariantTruth(
-  tx: any,
-  tenantId: string,
-  variantId: string,
-): Promise<VariantTruth> {
-  const rows = (await tx.execute(sql`
-    select article_id as "articleId", variant_id as "variantId", sku
-    from article_variant
-    where tenant_id = ${tenantId} and variant_id = ${variantId}
-    limit 1
-  `)) as Array<{ articleId: string; variantId: string; sku: string }>;
-  const [row] = rows;
+async function resolveVariantTruth(tx: any, variantId: string): Promise<VariantTruth> {
+  const s = getSchema();
+  const [row] = await tx
+    .select({
+      articleId: s.articleVariant.articleId,
+      variantId: s.articleVariant.variantId,
+      sku: s.articleVariant.sku,
+    })
+    .from(s.articleVariant)
+    .where(eq(s.articleVariant.variantId, variantId))
+    .limit(1);
 
   if (!row) {
     throw new Error(`Variant ${variantId} not found`);
@@ -284,32 +293,23 @@ async function resolveVariantTruth(
   };
 }
 
-async function ensureVariantInventoryItemId(
-  tx: any,
-  tenantId: string,
-  variantId: string,
-): Promise<string> {
+async function ensureVariantInventoryItemId(tx: any, variantId: string): Promise<string> {
+  const s = getSchema();
   const [row] = await tx
-    .select({ itemId: inventoryItem.itemId })
-    .from(inventoryItem)
-    .where(
-      and(
-        eq(inventoryItem.tenantId, tenantId),
-        eq(inventoryItem.variantId, variantId),
-      ),
-    )
+    .select({ itemId: s.inventoryItem.itemId })
+    .from(s.inventoryItem)
+    .where(eq(s.inventoryItem.variantId, variantId))
     .limit(1);
 
   if (row?.itemId) {
     return row.itemId;
   }
 
-  const truth = await resolveVariantTruth(tx, tenantId, variantId);
+  const truth = await resolveVariantTruth(tx, variantId);
 
   await tx
-    .insert(inventoryItem)
+    .insert(s.inventoryItem)
     .values({
-      tenantId,
       variantId,
       sku: truth.sku,
       tracked: true,
@@ -317,14 +317,9 @@ async function ensureVariantInventoryItemId(
     .onConflictDoNothing();
 
   const [created] = await tx
-    .select({ itemId: inventoryItem.itemId })
-    .from(inventoryItem)
-    .where(
-      and(
-        eq(inventoryItem.tenantId, tenantId),
-        eq(inventoryItem.variantId, variantId),
-      ),
-    )
+    .select({ itemId: s.inventoryItem.itemId })
+    .from(s.inventoryItem)
+    .where(eq(s.inventoryItem.variantId, variantId))
     .limit(1);
 
   if (!created?.itemId) {
@@ -336,7 +331,6 @@ async function ensureVariantInventoryItemId(
 
 async function resolveDocumentLineTruth(
   tx: any,
-  tenantId: string,
   line: {
     documentLineId?: string | null;
     lineNo: number;
@@ -361,7 +355,7 @@ async function resolveDocumentLineTruth(
     };
   }
 
-  const truth = await resolveVariantTruth(tx, tenantId, line.variantId);
+  const truth = await resolveVariantTruth(tx, line.variantId);
   return {
     ...truth,
     articleId: truth.articleId,
@@ -452,7 +446,6 @@ type TrackingRowLike = {
 
 async function copyDocumentLineTrackingRowsBulk(
   tx: any,
-  tenantId: string,
   linePairs: Array<{ sourceLineId: string; targetLineId: string }>,
 ) {
   if (linePairs.length === 0) return;
@@ -467,12 +460,7 @@ async function copyDocumentLineTrackingRowsBulk(
       qty: documentLineTracking.qty,
     })
     .from(documentLineTracking)
-    .where(
-      and(
-        eq(documentLineTracking.tenantId, tenantId),
-        inArray(documentLineTracking.documentLineId, sourceLineIds),
-      ),
-    )
+    .where(inArray(documentLineTracking.documentLineId, sourceLineIds))
     .orderBy(
       asc(documentLineTracking.documentLineId),
       asc(documentLineTracking.createdAt),
@@ -489,7 +477,6 @@ async function copyDocumentLineTrackingRowsBulk(
   }
 
   const values: Array<{
-    tenantId: string;
     documentLineId: string;
     serialNumberId: string | null;
     serialNo: string | null;
@@ -501,7 +488,6 @@ async function copyDocumentLineTrackingRowsBulk(
     const rows = trackingBySource.get(pair.sourceLineId) ?? [];
     for (const row of rows) {
       values.push({
-        tenantId,
         documentLineId: pair.targetLineId,
         serialNumberId: row.serialNumberId ?? null,
         serialNo: row.serialNo ?? null,
@@ -773,7 +759,6 @@ function resolveInventorySeedValues(
 
 async function loadLineTrackingRows(
   tx: any,
-  tenantId: string,
   documentLineId: string,
 ): Promise<
   Array<{
@@ -795,18 +780,12 @@ async function loadLineTrackingRows(
       qty: documentLineTracking.qty,
     })
     .from(documentLineTracking)
-    .where(
-      and(
-        eq(documentLineTracking.tenantId, tenantId),
-        eq(documentLineTracking.documentLineId, documentLineId),
-      ),
-    )
+    .where(eq(documentLineTracking.documentLineId, documentLineId))
     .orderBy(asc(documentLineTracking.createdAt), asc(documentLineTracking.trackingId));
 }
 
 async function loadTrackingRowsByLineIds(
   tx: any,
-  tenantId: string,
   documentLineIds: string[],
 ): Promise<Map<string, TrackingRowLike[]>> {
   if (documentLineIds.length === 0) return new Map();
@@ -823,7 +802,7 @@ async function loadTrackingRowsByLineIds(
           batch_no as "batchNo",
           qty as "qty"
         from document_line_tracking
-        where tenant_id = '${tenantId}' and document_line_id = '${documentLineId}'
+        where 1=1 and document_line_id = '${documentLineId}'
         order by created_at, tracking_id
       `),
     )) as TrackingRowLike[];
@@ -840,60 +819,80 @@ async function loadTrackingRowsByLineIds(
   return byLine;
 }
 
-async function loadActiveDocumentLines(
-  tx: any,
-  tenantId: string,
-  documentId: string,
-): Promise<any[]> {
-  return (await tx.execute(sql`
-    select
-      document_line_id as "documentLineId",
-      line_no as "lineNo",
-      variant_id as "variantId",
-      line_type as "lineType",
-      warehouse_id as "warehouseId",
-      quantity as "quantity",
-      net_price as "netPrice",
-      line_total_net as "lineTotalNet",
-      tax_code_id as "taxCodeId",
-      tax_reason as "taxReason",
-      tax_rule_id as "taxRuleId",
-      tax_country_code_used as "taxCountryCodeUsed",
-      tax_rate_snapshot as "taxRateSnapshot",
-      cost_center_id as "costCenterId",
-      bom_group_id as "bomGroupId",
-      article_text_snapshot as "articleTextSnapshot",
-      lang_text as "langText",
-      lang_text_source_entity as "langTextSourceEntity",
-      lang_text_source_id as "langTextSourceId",
-      lang_text_source_field as "langTextSourceField",
-      lang_text_linked_at as "langTextLinkedAt",
-      lang_text_overridden_at as "langTextOverriddenAt",
-      line_weight_kg as "lineWeightKg"
-    from document_line
-    where tenant_id = ${tenantId} and document_id = ${documentId} and archived_at is null
-    order by line_no
-  `)) as any[];
+async function loadActiveDocumentLines(tx: any, documentId: string): Promise<any[]> {
+  const s = getSchema();
+  return await tx
+    .select({
+      documentLineId: s.documentLine.documentLineId,
+      lineNo: s.documentLine.lineNo,
+      variantId: s.documentLine.variantId,
+      lineType: s.documentLine.lineType,
+      warehouseId: s.documentLine.warehouseId,
+      quantity: s.documentLine.quantity,
+      netPrice: s.documentLine.netPrice,
+      lineTotalNet: s.documentLine.lineTotalNet,
+      taxCodeId: s.documentLine.taxCodeId,
+      taxReason: s.documentLine.taxReason,
+      taxRuleId: s.documentLine.taxRuleId,
+      taxCountryCodeUsed: s.documentLine.taxCountryCodeUsed,
+      taxRateSnapshot: s.documentLine.taxRateSnapshot,
+      costCenterId: s.documentLine.costCenterId,
+      bomGroupId: s.documentLine.bomGroupId,
+      articleTextSnapshot: s.documentLine.articleTextSnapshot,
+      langText: s.documentLine.langText,
+      langTextSourceEntity: s.documentLine.langTextSourceEntity,
+      langTextSourceId: s.documentLine.langTextSourceId,
+      langTextSourceField: s.documentLine.langTextSourceField,
+      langTextLinkedAt: s.documentLine.langTextLinkedAt,
+      langTextOverriddenAt: s.documentLine.langTextOverriddenAt,
+      lineWeightKg: s.documentLine.lineWeightKg,
+    })
+    .from(s.documentLine)
+    .where(and(eq(s.documentLine.documentId, documentId), isNull(s.documentLine.archivedAt)))
+    .orderBy(s.documentLine.lineNo);
 }
 
 async function recalculateDocumentTotals(
   tx: any,
-  tenantId: string,
   documentId: string,
-): Promise<{ totalNet: string; totalTax: string; totalGross: string; totalWeightKg: string | null }> {
+): Promise<{
+  totalNet: string;
+  totalTax: string;
+  totalGross: string;
+  totalWeightKg: string | null;
+}> {
+  const s = getSchema();
+  if (activePersistence.provider === "turso") {
+    const [totals] = await tx
+      .select({
+        totalNet: sql<string>`coalesce(sum(coalesce(${s.documentLine.lineTotalNet}, 0)), 0)`,
+        totalTax: sql<string>`coalesce(sum(coalesce(${s.documentLine.taxAmount}, 0)), 0)`,
+        totalGross: sql<string>`coalesce(sum(coalesce(${s.documentLine.lineTotalNet}, 0) + coalesce(${s.documentLine.taxAmount}, 0)), 0)`,
+      })
+      .from(s.documentLine)
+      .where(and(eq(s.documentLine.documentId, documentId), isNull(s.documentLine.archivedAt)));
+
+    return {
+      totalNet: totals?.totalNet ?? "0",
+      totalTax: totals?.totalTax ?? "0",
+      totalGross: totals?.totalGross ?? "0",
+      totalWeightKg: null,
+    };
+  }
+
   const [totals] = await tx
     .select({
-      totalNet: sql<string>`coalesce(sum(coalesce(${documentLine.lineTotalNet}, 0)), 0)`,
-      totalTax: sql<string>`coalesce(sum(coalesce(${documentLine.taxAmount}, 0)), 0)`,
-      totalGross: sql<string>`coalesce(sum(coalesce(${documentLine.lineTotalNet}, 0) + coalesce(${documentLine.taxAmount}, 0)), 0)`,
-      totalWeightKg: sql<string | null>`nullif(sum(${documentLine.lineWeightKg}), 0)`,
+      totalNet: sql<string>`coalesce(sum(coalesce(${s.documentLine.lineTotalNet}, 0)), 0)`,
+      totalTax: sql<string>`coalesce(sum(coalesce(${s.documentLine.taxAmount}, 0)), 0)`,
+      totalGross: sql<string>`coalesce(sum(coalesce(${s.documentLine.lineTotalNet}, 0) + coalesce(${s.documentLine.taxAmount}, 0)), 0)`,
+      totalWeightKg: sql<string | null>`nullif(sum(${s.documentLine.lineWeightKg}), 0)`,
     })
-    .from(documentLine)
+    .from(s.documentLine)
     .where(
       and(
-        eq(documentLine.tenantId, tenantId),
-        eq(documentLine.documentId, documentId),
-        isNull(documentLine.archivedAt),
+        eq(s.documentLine.tenantId, tenantId),
+        eq(s.documentLine.documentId, documentId),
+        isNull(s.documentLine.archivedAt),
       ),
     );
 
@@ -905,15 +904,11 @@ async function recalculateDocumentTotals(
   };
 }
 
-async function persistDocumentTotals(
-  tx: any,
-  tenantId: string,
-  documentId: string,
-  updatedAt: Date,
-) {
-  const totals = await recalculateDocumentTotals(tx, tenantId, documentId);
+async function persistDocumentTotals(tx: any, documentId: string, updatedAt: Date) {
+  const totals = await recalculateDocumentTotals(tx, documentId);
+  const s = getSchema();
   await tx
-    .update(document)
+    .update(s.document)
     .set({
       totalNet: totals.totalNet,
       totalTax: totals.totalTax,
@@ -921,7 +916,7 @@ async function persistDocumentTotals(
       totalWeightKg: totals.totalWeightKg,
       updatedAt,
     })
-    .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+    .where(eq(s.document.documentId, documentId));
   return totals;
 }
 
@@ -930,11 +925,17 @@ async function batchFetchVariantWeights(
   variantIds: string[],
 ): Promise<Map<string, string | null>> {
   if (variantIds.length === 0) return new Map();
+  if (activePersistence.provider === "turso") {
+    return new Map(variantIds.map((id) => [id, null]));
+  }
+  const s = getSchema();
   const rows = await tx
-    .select({ variantId: articleVariant.variantId, weight: articleVariant.weight })
-    .from(articleVariant)
-    .where(inArray(articleVariant.variantId, variantIds));
-  return new Map(rows.map((r: { variantId: string; weight: string | null }) => [r.variantId, r.weight]));
+    .select({ variantId: s.articleVariant.variantId, weight: s.articleVariant.weight })
+    .from(s.articleVariant)
+    .where(inArray(s.articleVariant.variantId, variantIds));
+  return new Map(
+    rows.map((r: { variantId: string; weight: string | null }) => [r.variantId, r.weight]),
+  );
 }
 
 function computeLineWeightKg(
@@ -953,9 +954,11 @@ function computeLineWeightKg(
 
 async function applyTrackingForSingleRow(
   tx: any,
-  tenantId: string,
   movementId: string,
-  line: Pick<DocumentPostingLineWithArticle, "documentLineId" | "variantId" | "lineType" | "articleId">,
+  line: Pick<
+    DocumentPostingLineWithArticle,
+    "documentLineId" | "variantId" | "lineType" | "articleId"
+  >,
   docMovementType: string,
   tracking: {
     trackingId: string;
@@ -980,7 +983,6 @@ async function applyTrackingForSingleRow(
     const [createdSerial] = await tx
       .insert(serialNumber)
       .values({
-        tenantId,
         articleId: line.articleId!,
         serialNo: tracking.serialNo,
         status: lifecycle.status,
@@ -991,8 +993,10 @@ async function applyTrackingForSingleRow(
         target: [serialNumber.tenantId, serialNumber.articleId, serialNumber.serialNo],
         set: {
           status: lifecycle.status,
-          createdMovementId: lifecycle.movementLink === "createdMovementId" ? movementId : undefined,
-          consumedMovementId: lifecycle.movementLink === "consumedMovementId" ? movementId : undefined,
+          createdMovementId:
+            lifecycle.movementLink === "createdMovementId" ? movementId : undefined,
+          consumedMovementId:
+            lifecycle.movementLink === "consumedMovementId" ? movementId : undefined,
         },
       })
       .returning({ serialNumberId: serialNumber.serialNumberId });
@@ -1021,12 +1025,7 @@ async function applyTrackingForSingleRow(
     await tx
       .update(serialNumber)
       .set(serialUpdate)
-      .where(
-        and(
-          eq(serialNumber.tenantId, tenantId),
-          eq(serialNumber.serialNumberId, tracking.serialNumberId),
-        ),
-      );
+      .where(eq(serialNumber.serialNumberId, tracking.serialNumberId));
 
     await tx
       .update(inventoryMovement)
@@ -1035,10 +1034,8 @@ async function applyTrackingForSingleRow(
   }
 }
 
-
 async function getDocumentGroupAccountFallback(
   tx: any,
-  tenantId: string,
   documentGroupId: string | null,
 ): Promise<DocumentGroupAccountFallback> {
   if (!documentGroupId) return null;
@@ -1049,9 +1046,7 @@ async function getDocumentGroupAccountFallback(
       defaultCostAccountId: documentGroup.defaultCostAccountId,
     })
     .from(documentGroup)
-    .where(
-      and(eq(documentGroup.documentGroupId, documentGroupId), eq(documentGroup.tenantId, tenantId)),
-    )
+    .where(eq(documentGroup.documentGroupId, documentGroupId))
     .limit(1);
 
   return docGroup ?? null;
@@ -1059,7 +1054,6 @@ async function getDocumentGroupAccountFallback(
 
 async function resolveJournalGlAccount(
   tx: any,
-  tenantId: string,
   postingContext: string,
   articleGroupId: string | null,
   taxCodeId: string | null,
@@ -1073,7 +1067,6 @@ async function resolveJournalGlAccount(
         .from(accountDeterminationRule)
         .where(
           and(
-            eq(accountDeterminationRule.tenantId, tenantId),
             eq(accountDeterminationRule.postingContext, postingContext),
             articleGroupId
               ? eq(accountDeterminationRule.articleGroupId, articleGroupId)
@@ -1092,7 +1085,6 @@ async function resolveJournalGlAccount(
       .from(accountDeterminationRule)
       .where(
         and(
-          eq(accountDeterminationRule.tenantId, tenantId),
           eq(accountDeterminationRule.postingContext, postingContext),
           sql`${accountDeterminationRule.articleGroupId} IS NULL`,
           sql`${accountDeterminationRule.taxCodeId} IS NULL`,
@@ -1118,7 +1110,6 @@ async function resolveJournalGlAccount(
 
 async function postFinancialJournalEntries(
   tx: any,
-  tenantId: string,
   doc: DocumentPostingDoc,
   movementType: string,
   lines: DocumentPostingLine[],
@@ -1126,13 +1117,13 @@ async function postFinancialJournalEntries(
   const journalContexts = JOURNAL_POSTING_CONTEXTS[movementType];
   if (!journalContexts) return;
 
-  const docGroup = await getDocumentGroupAccountFallback(tx, tenantId, doc.documentGroupId);
+  const docGroup = await getDocumentGroupAccountFallback(tx, doc.documentGroupId);
   const variantIds = [
     ...new Set(lines.map((line) => line.variantId).filter((id): id is string => !!id)),
   ];
   const variantTruthById = new Map<string, string>();
   for (const variantId of variantIds) {
-    const truth = await resolveVariantTruth(tx, tenantId, variantId);
+    const truth = await resolveVariantTruth(tx, variantId);
     variantTruthById.set(variantId, truth.articleId);
   }
 
@@ -1142,7 +1133,7 @@ async function postFinancialJournalEntries(
     const rows = (await tx.execute(sql`
       select article_group_id as "articleGroupId"
       from article
-      where tenant_id = ${tenantId} and article_id = ${articleId}
+      where ${activePersistence.provider === "turso" ? sql`article_id = ${articleId}` : sql`tenant_id = ${tenantId} and article_id = ${articleId}`}
       limit 1
     `)) as Array<{ articleGroupId: string | null }>;
     articleGroupById.set(articleId, rows[0]?.articleGroupId ?? null);
@@ -1150,7 +1141,6 @@ async function postFinancialJournalEntries(
   const accountCache = new Map<string, string | null>();
   const counterGlAccountId = await resolveJournalGlAccount(
     tx,
-    tenantId,
     journalContexts.counterContext,
     null,
     null,
@@ -1179,7 +1169,6 @@ async function postFinancialJournalEntries(
     if (!accountCache.has(cacheKey)) {
       lineGlAccountId = await resolveJournalGlAccount(
         tx,
-        tenantId,
         journalContexts.lineContext,
         articleGroupId,
         line.taxCodeId ?? null,
@@ -1241,7 +1230,6 @@ async function postFinancialJournalEntries(
 
 async function postProductionDocumentLine(
   tx: any,
-  tenantId: string,
   doc: DocumentPostingDoc,
   line: DocumentPostingLineWithArticle,
   movementType: string,
@@ -1251,11 +1239,11 @@ async function postProductionDocumentLine(
 ) {
   const resolvedArticleId =
     line.articleId ??
-    (line.variantId ? (await resolveVariantTruth(tx, tenantId, line.variantId)).articleId : null);
+    (line.variantId ? (await resolveVariantTruth(tx, line.variantId)).articleId : null);
   if (!resolvedArticleId) return;
 
   const inventoryItemId = line.variantId
-    ? await ensureVariantInventoryItemId(tx, tenantId, line.variantId)
+    ? await ensureVariantInventoryItemId(tx, line.variantId)
     : "00000000-0000-0000-0000-000000000000";
 
   const resolvedLine = { ...line, articleId: resolvedArticleId };
@@ -1280,14 +1268,20 @@ async function postProductionDocumentLine(
       availableQty: String(signedQty),
     })
     .onConflictDoUpdate({
-      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
+      target: [
+        inventoryBalance.tenantId,
+        inventoryBalance.warehouseId,
+        inventoryBalance.inventoryItemId,
+      ],
       set: {
         onHandQty: sql`${inventoryBalance.onHandQty} + ${signedQty}`,
         availableQty: sql`${inventoryBalance.onHandQty} + ${signedQty} - ${inventoryBalance.reservedQty}`,
       },
     });
 
-  const trackingRowsToProcess = trackingRows.filter((r) => r.serialNo || r.serialNumberId || r.batchNo);
+  const trackingRowsToProcess = trackingRows.filter(
+    (r) => r.serialNo || r.serialNumberId || r.batchNo,
+  );
 
   if (trackingRowsToProcess.length > 0) {
     for (const tracking of trackingRowsToProcess) {
@@ -1315,7 +1309,6 @@ async function postProductionDocumentLine(
       if (movement?.inventoryMovementId) {
         await applyTrackingForSingleRow(
           tx,
-          tenantId,
           movement.inventoryMovementId,
           resolvedLine,
           movementType,
@@ -1324,28 +1317,25 @@ async function postProductionDocumentLine(
       }
     }
   } else {
-    await tx
-      .insert(inventoryMovement)
-      .values({
-        tenantId,
-        companyId: doc.companyId,
-        warehouseId,
-        inventoryItemId,
-        variantId: line.variantId ?? null,
-        movementType,
-        qtyDelta: String(signedQty),
-        movementDate: now,
-        sourceDocumentId: doc.documentId,
-        sourceDocumentLineId: line.documentLineId,
-        transactionId: txId,
-        referenceText: doc.documentNo,
-      });
+    await tx.insert(inventoryMovement).values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId,
+      inventoryItemId,
+      variantId: line.variantId ?? null,
+      movementType,
+      qtyDelta: String(signedQty),
+      movementDate: now,
+      sourceDocumentId: doc.documentId,
+      sourceDocumentLineId: line.documentLineId,
+      transactionId: txId,
+      referenceText: doc.documentNo,
+    });
   }
 }
 
 async function postTransferDocumentLine(
   tx: any,
-  tenantId: string,
   doc: DocumentPostingDoc,
   line: DocumentPostingLineWithArticle,
   movementType: string,
@@ -1355,11 +1345,11 @@ async function postTransferDocumentLine(
 ) {
   const resolvedArticleId =
     line.articleId ??
-    (line.variantId ? (await resolveVariantTruth(tx, tenantId, line.variantId)).articleId : null);
+    (line.variantId ? (await resolveVariantTruth(tx, line.variantId)).articleId : null);
   if (!resolvedArticleId) return;
 
   const inventoryItemId = line.variantId
-    ? await ensureVariantInventoryItemId(tx, tenantId, line.variantId)
+    ? await ensureVariantInventoryItemId(tx, line.variantId)
     : "00000000-0000-0000-0000-000000000000";
 
   const sourceWh = doc.warehouseId;
@@ -1381,7 +1371,11 @@ async function postTransferDocumentLine(
       availableQty: String(-qty),
     })
     .onConflictDoUpdate({
-      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
+      target: [
+        inventoryBalance.tenantId,
+        inventoryBalance.warehouseId,
+        inventoryBalance.inventoryItemId,
+      ],
       set: {
         onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
         availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
@@ -1401,7 +1395,11 @@ async function postTransferDocumentLine(
       availableQty: String(qty),
     })
     .onConflictDoUpdate({
-      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
+      target: [
+        inventoryBalance.tenantId,
+        inventoryBalance.warehouseId,
+        inventoryBalance.inventoryItemId,
+      ],
       set: {
         onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
         availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
@@ -1409,11 +1407,9 @@ async function postTransferDocumentLine(
     });
 
   const resolvedTrackingRows =
-    trackingRows.length > 0
-      ? trackingRows
-      : await loadLineTrackingRows(tx, tenantId, line.documentLineId);
+    trackingRows.length > 0 ? trackingRows : await loadLineTrackingRows(tx, line.documentLineId);
   const trackingRowsToProcess = resolvedTrackingRows.filter(
-    (r) => r.serialNo || r.serialNumberId || r.batchNo
+    (r) => r.serialNo || r.serialNumberId || r.batchNo,
   );
 
   if (trackingRowsToProcess.length > 0) {
@@ -1544,7 +1540,6 @@ async function postTransferDocumentLine(
 
 async function postStandardDocumentLine(
   tx: any,
-  tenantId: string,
   doc: DocumentPostingDoc,
   line: DocumentPostingLineWithArticle,
   movementType: string,
@@ -1554,7 +1549,7 @@ async function postStandardDocumentLine(
 ) {
   const resolvedArticleId =
     line.articleId ??
-    (line.variantId ? (await resolveVariantTruth(tx, tenantId, line.variantId)).articleId : null);
+    (line.variantId ? (await resolveVariantTruth(tx, line.variantId)).articleId : null);
   if (!resolvedArticleId) return;
 
   const warehouseId = line.warehouseId ?? doc.warehouseId;
@@ -1563,7 +1558,7 @@ async function postStandardDocumentLine(
   const qty = Number(line.quantity);
 
   const inventoryItemId = line.variantId
-    ? await ensureVariantInventoryItemId(tx, tenantId, line.variantId)
+    ? await ensureVariantInventoryItemId(tx, line.variantId)
     : "00000000-0000-0000-0000-000000000000";
 
   let stocktakeOnHandBefore = 0;
@@ -1608,11 +1603,17 @@ async function postStandardDocumentLine(
       ...inventorySeedValues,
     })
     .onConflictDoUpdate({
-      target: [inventoryBalance.tenantId, inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
+      target: [
+        inventoryBalance.tenantId,
+        inventoryBalance.warehouseId,
+        inventoryBalance.inventoryItemId,
+      ],
       set: balanceUpdate,
     });
 
-  const trackingRowsToProcess = trackingRows.filter((r) => r.serialNo || r.serialNumberId || r.batchNo);
+  const trackingRowsToProcess = trackingRows.filter(
+    (r) => r.serialNo || r.serialNumberId || r.batchNo,
+  );
 
   if (trackingRowsToProcess.length > 0) {
     for (const tracking of trackingRowsToProcess) {
@@ -1649,23 +1650,21 @@ async function postStandardDocumentLine(
       }
     }
   } else {
-    await tx
-      .insert(inventoryMovement)
-      .values({
-        tenantId,
-        companyId: doc.companyId,
-        warehouseId,
-        inventoryItemId,
-        variantId: line.variantId || null,
-        movementType,
-        qtyDelta: resolveInventoryMovementQtyDelta(movementType, qty, stocktakeOnHandBefore),
-        absoluteQty: movementType === "V" ? String(qty) : null,
-        movementDate: now,
-        sourceDocumentId: doc.documentId,
-        sourceDocumentLineId: line.documentLineId,
-        transactionId: txId,
-        referenceText: doc.documentNo,
-      });
+    await tx.insert(inventoryMovement).values({
+      tenantId,
+      companyId: doc.companyId,
+      warehouseId,
+      inventoryItemId,
+      variantId: line.variantId || null,
+      movementType,
+      qtyDelta: resolveInventoryMovementQtyDelta(movementType, qty, stocktakeOnHandBefore),
+      absoluteQty: movementType === "V" ? String(qty) : null,
+      movementDate: now,
+      sourceDocumentId: doc.documentId,
+      sourceDocumentLineId: line.documentLineId,
+      transactionId: txId,
+      referenceText: doc.documentNo,
+    });
   }
 
   if (movementType === "r") {
@@ -1805,7 +1804,6 @@ async function postStandardDocumentLine(
 
 async function postDocumentLine(
   tx: any,
-  tenantId: string,
   doc: DocumentPostingDoc,
   line: DocumentPostingLine,
   movementType: string,
@@ -1819,7 +1817,6 @@ async function postDocumentLine(
   if (movementType === "q") {
     await postProductionDocumentLine(
       tx,
-      tenantId,
       doc,
       line as DocumentPostingLineWithArticle,
       movementType,
@@ -1833,7 +1830,6 @@ async function postDocumentLine(
   if (movementType === "U") {
     await postTransferDocumentLine(
       tx,
-      tenantId,
       doc,
       line as DocumentPostingLineWithArticle,
       movementType,
@@ -1846,7 +1842,6 @@ async function postDocumentLine(
 
   await postStandardDocumentLine(
     tx,
-    tenantId,
     doc,
     line as DocumentPostingLineWithArticle,
     movementType,
@@ -1986,7 +1981,7 @@ export class DocumentService {
       await tx.execute(sql`
         UPDATE ${documentLine}
         SET line_no = line_no + ${components.length}
-        WHERE tenant_id = ${tenantId}
+        WHERE ${activePersistence.provider === "turso" ? sql`1=1` : sql`tenant_id = ${tenantId}`}
           AND document_id = ${data.documentId}
           AND line_no > ${baseLine.lineNo}
       `);
@@ -2043,7 +2038,98 @@ export class DocumentService {
     userId: string,
     tenantId: string,
   ): Promise<{ success: boolean; document: unknown }> {
+    if (activePersistence.provider === "turso") {
+      const sqliteSchema = await import("../schema/sqlite.schema");
+      const result = await db.transaction(async (tx) => {
+        const [doc] = await tx
+          .select()
+          .from(sqliteSchema.document)
+          .where(eq(sqliteSchema.document.documentId, documentId))
+          .limit(1);
+
+        if (!doc) throw new Error("Document not found");
+        if (doc.status !== "draft") throw new Error("Document must be in draft status to post");
+
+        const lines = await tx
+          .select()
+          .from(sqliteSchema.documentLine)
+          .where(
+            and(
+              eq(sqliteSchema.documentLine.documentId, documentId),
+              isNull(sqliteSchema.documentLine.archivedAt),
+            ),
+          )
+          .orderBy(sqliteSchema.documentLine.lineNo);
+
+        const batchId = crypto.randomUUID();
+        const now = new Date();
+
+        await tx.insert(sqliteSchema.postingBatch).values({
+          batchId,
+          documentId,
+          postedAt: now,
+          postedBy: userId,
+        });
+
+        for (const line of lines) {
+          const isNegative = ["L", "R", "g", "E"].includes(doc.documentType || "");
+          const qtyDelta = isNegative ? -Number(line.quantity) : Number(line.quantity);
+          const amountDelta = Number(line.netPrice) * Number(line.quantity);
+
+          if (line.variantId) {
+            await tx.insert(sqliteSchema.postingEntry).values({
+              entryId: crypto.randomUUID(),
+              batchId,
+              documentLineId: line.documentLineId,
+              variantId: line.variantId,
+              qtyDelta,
+              entryType: "inventory",
+              description: `Stock movement for line ${line.lineNo} of document ${doc.documentNo}`,
+              createdAt: now,
+            });
+          }
+
+          await tx.insert(sqliteSchema.postingEntry).values({
+            entryId: crypto.randomUUID(),
+            batchId,
+            documentLineId: line.documentLineId,
+            variantId: line.variantId ?? null,
+            amountDelta,
+            entryType: "accounting",
+            description: `Revenue/Cost booking for line ${line.lineNo} of document ${doc.documentNo}`,
+            createdAt: now,
+          });
+        }
+
+        const updatedDoc = {
+          ...doc,
+          status: "posted",
+          postedAt: now,
+          postedBy: userId,
+          updatedAt: now,
+        };
+
+        await tx
+          .update(sqliteSchema.document)
+          .set({
+            status: "posted",
+            postedAt: now,
+            postedBy: userId,
+            updatedAt: now,
+          })
+          .where(eq(sqliteSchema.document.documentId, documentId));
+
+        return { success: true, document: updatedDoc };
+      });
+      return result;
+    }
+
     const result = await db.transaction(async (tx) => {
+      const whereClause =
+        activePersistence.provider === "turso"
+          ? sql`document_id = ${documentId}`
+          : sql`document_id = ${documentId} and tenant_id = ${tenantId}`;
+      const forUpdateClause = activePersistence.provider === "turso" ? sql`` : sql`for update`;
       const docRows = (await tx.execute(sql`
         select
           document_id as "documentId",
@@ -2090,22 +2176,18 @@ export class DocumentService {
           document_type_id as "documentTypeId",
           transaction_id as "transactionId"
         from document
-        where document_id = ${documentId} and tenant_id = ${tenantId}
+        where ${whereClause}
         limit 1
-        for update
+        ${forUpdateClause}
       `)) as Array<DocumentPostingDoc & { status: string }>;
       const [doc] = docRows;
 
       if (!doc) throw new Error("Document not found");
       if (doc.status !== "draft") throw new Error("Document must be in draft status to post");
 
-      const lines = (await loadActiveDocumentLines(
-        tx,
-        tenantId,
-        documentId,
-      )) as DocumentPostingLine[];
+      const lines = (await loadActiveDocumentLines(tx, documentId)) as DocumentPostingLine[];
       const lineIds = lines.map((line) => line.documentLineId);
-      const trackingByLine = await loadTrackingRowsByLineIds(tx, tenantId, lineIds);
+      const trackingByLine = await loadTrackingRowsByLineIds(tx, lineIds);
       const postingLines = await Promise.all(
         lines.map(async (line) => {
           if (line.lineType === "article" && !line.variantId) {
@@ -2113,7 +2195,7 @@ export class DocumentService {
           }
 
           const resolvedTruth = line.variantId
-            ? await resolveVariantTruth(tx, tenantId, line.variantId)
+            ? await resolveVariantTruth(tx, line.variantId)
             : null;
 
           return {
@@ -2132,7 +2214,7 @@ export class DocumentService {
         const rows = (await tx.execute(sql`
           select tracking_mode as "trackingMode"
           from article
-          where tenant_id = ${tenantId} and article_id = ${articleId}
+          where ${activePersistence.provider === "turso" ? sql`article_id = ${articleId}` : sql`tenant_id = ${tenantId} and article_id = ${articleId}`}
           limit 1
         `)) as Array<{ trackingMode: string | null }>;
         articleTrackingModeById.set(articleId, rows[0]?.trackingMode ?? null);
@@ -2143,7 +2225,7 @@ export class DocumentService {
             require_serial_tracking as "requireSerialTracking",
             require_batch_tracking as "requireBatchTracking"
           from document_group
-          where tenant_id = ${tenantId} and document_group_id = ${doc.documentGroupId}
+          where ${activePersistence.provider === "turso" ? sql`document_group_id = ${doc.documentGroupId}` : sql`tenant_id = ${tenantId} and document_group_id = ${doc.documentGroupId}`}
           limit 1
         `)) as Array<{ requireSerialTracking: boolean; requireBatchTracking: boolean }>)
         : [null];
@@ -2258,6 +2340,90 @@ export class DocumentService {
     userId: string,
     tenantId: string,
   ): Promise<{ success: boolean; stornoDocumentId: string }> {
+    if (activePersistence.provider === "turso") {
+      const sqliteSchema = await import("../schema/sqlite.schema");
+      const [doc] = await db
+        .select()
+        .from(sqliteSchema.document)
+        .where(eq(sqliteSchema.document.documentId, documentId))
+        .limit(1);
+
+      if (!doc) throw new Error("Document not found");
+      if (doc.status !== "posted") throw new Error("Only posted documents can be reversed");
+      if (!["R", "r"].includes(doc.documentType || "")) {
+        throw new Error("Storno is only allowed for invoices (R) and purchase invoices (r)");
+      }
+      if (doc.stornoDocumentId) throw new Error("This document has already been reversed");
+
+      const [newDoc] = await db.transaction(async (tx) => {
+        const reversalTypeMap: Record<string, string> = {
+          R: "G",
+          r: "g",
+        };
+        const reversalType = reversalTypeMap[doc.documentType || ""] ?? doc.documentType;
+        const now = new Date();
+        const generatedStornoNo = `STORNO-${doc.documentNo}`;
+
+        const lines = await tx
+          .select()
+          .from(sqliteSchema.documentLine)
+          .where(
+            and(
+              eq(sqliteSchema.documentLine.documentId, documentId),
+              isNull(sqliteSchema.documentLine.archivedAt),
+            ),
+          );
+
+        const stornoDocId = crypto.randomUUID();
+        const stornoTransactionId = crypto.randomUUID();
+
+        await tx.insert(sqliteSchema.document).values({
+          documentId: stornoDocId,
+          companyId: doc.companyId,
+          documentType: reversalType,
+          documentDirection: doc.documentDirection,
+          documentNo: generatedStornoNo,
+          status: "draft",
+          customerId: doc.customerId,
+          currencyId: doc.currencyId,
+          documentDate: now,
+          versionNo: 1,
+          transactionId: stornoTransactionId,
+          parentDocumentId: documentId,
+        });
+
+        for (const line of lines) {
+          await tx.insert(sqliteSchema.documentLine).values({
+            documentLineId: crypto.randomUUID(),
+            documentId: stornoDocId,
+            lineNo: line.lineNo,
+            variantId: line.variantId,
+            quantity: line.quantity,
+            netPrice: line.netPrice,
+          });
+        }
+
+        await tx
+          .update(sqliteSchema.document)
+          .set({ stornoDocumentId: stornoDocId })
+          .where(eq(sqliteSchema.document.documentId, documentId));
+
+        const [createdDoc] = await tx
+          .select()
+          .from(sqliteSchema.document)
+          .where(eq(sqliteSchema.document.documentId, stornoDocId))
+          .limit(1);
+
+        return [createdDoc];
+      });
+
+      if (newDoc) {
+        await this.postDocument(newDoc.documentId, userId, tenantId);
+      }
+
+      return { success: true, stornoDocumentId: newDoc.documentId };
+    }
+
     const [doc] = await db
       .select()
       .from(document)
@@ -2285,7 +2451,7 @@ export class DocumentService {
         `<p>Grund: ${String(stornoReason)}</p>`,
         `<p>Beleg: ${doc.documentNo}</p>`,
       ].join("");
-      const lines = await loadActiveDocumentLines(tx, tenantId, documentId);
+      const lines = await loadActiveDocumentLines(tx, documentId);
 
       let documentNo = `STORNO-${doc.documentNo}`;
       if (doc.documentGroupId) {
@@ -2411,7 +2577,7 @@ export class DocumentService {
         }
       }
 
-      await copyDocumentLineTrackingRowsBulk(tx, tenantId, insertedLinePairs);
+      await copyDocumentLineTrackingRowsBulk(tx, insertedLinePairs);
 
       await tx
         .update(document)
@@ -2589,7 +2755,7 @@ export class DocumentService {
     if (!targetGroup) throw new Error("Target document group not found");
 
     return await db.transaction(async (tx) => {
-      const lines = await loadActiveDocumentLines(tx, tenantId, documentId);
+      const lines = await loadActiveDocumentLines(tx, documentId);
       const sourceLineById = new Map(lines.map((line) => [line.documentLineId, line]));
       let documentNo = `DRAFT-${Date.now()}`;
       const now = new Date();
@@ -2764,7 +2930,7 @@ export class DocumentService {
         await tx.insert(documentLineAllocation).values(allocationInserts);
       }
 
-      await copyDocumentLineTrackingRowsBulk(tx, tenantId, insertedLines);
+      await copyDocumentLineTrackingRowsBulk(tx, insertedLines);
 
       await tx
         .update(document)
@@ -3060,11 +3226,11 @@ export class DocumentService {
     articleTaxClassId: string | null;
     customerTaxClassId: string | null;
   }> {
-    const { articleId } = await resolveVariantTruth(db, tenantId, variantId);
+    const { articleId } = await resolveVariantTruth(db, variantId);
     const articleTaxRows = (await db.execute(sql`
       select tax_class_id as "taxClassId"
       from article
-      where tenant_id = ${tenantId} and article_id = ${articleId}
+      where ${activePersistence.provider === "turso" ? sql`article_id = ${articleId}` : sql`tenant_id = ${tenantId} and article_id = ${articleId}`}
       limit 1
     `)) as Array<{ taxClassId: string | null }>;
     const articleTaxContext = articleTaxRows[0] ?? null;
@@ -3170,8 +3336,8 @@ export class DocumentService {
 
       const warehouseId = line.warehouseId ?? doc.warehouseId;
       if (!warehouseId || !line.variantId) return { success: true };
-      const { articleId } = await resolveVariantTruth(tx, tenantId, line.variantId);
-      const inventoryItemId = await ensureVariantInventoryItemId(tx, tenantId, line.variantId);
+      const { articleId } = await resolveVariantTruth(tx, line.variantId);
+      const inventoryItemId = await ensureVariantInventoryItemId(tx, line.variantId);
 
       const movementType = (line.movementType ?? doc.documentType) as string;
       const now = new Date();
@@ -3226,6 +3392,7 @@ export class DocumentService {
     _userId: string,
     data: SaveDocumentDraftInput,
   ): Promise<{ success: boolean; documentId: string; documentNo: string }> {
+    const s = getSchema();
     return await db.transaction(async (tx) => {
       const now = new Date();
       const existingDocId = data.documentId ?? null;
@@ -3244,12 +3411,17 @@ export class DocumentService {
       } | null = null;
 
       if (existingDocId) {
-        const [lockedDoc] = await tx
+        let q = tx
           .select()
-          .from(document)
-          .where(and(eq(document.documentId, existingDocId), eq(document.tenantId, tenantId)))
-          .limit(1)
-          .for("update");
+          .from(s.document)
+          .where(and(eq(s.document.documentId, existingDocId), eq(s.document.tenantId, tenantId)))
+          .limit(1);
+
+        if (activePersistence.provider === "postgres") {
+          q = q.for("update");
+        }
+
+        const [lockedDoc] = await q;
 
         if (!lockedDoc) throw new Error("Document not found");
 
@@ -3267,17 +3439,17 @@ export class DocumentService {
 
         const existingLines = await tx
           .select({
-            documentLineId: documentLine.documentLineId,
-            lineNo: documentLine.lineNo,
-            articleId: documentLine.variantId,
-            lineType: documentLine.lineType,
+            documentLineId: s.documentLine.documentLineId,
+            lineNo: s.documentLine.lineNo,
+            articleId: s.documentLine.variantId,
+            lineType: s.documentLine.lineType,
           })
-          .from(documentLine)
+          .from(s.documentLine)
           .where(
             and(
-              eq(documentLine.documentId, existingDocId),
-              eq(documentLine.tenantId, tenantId),
-              isNull(documentLine.archivedAt),
+              eq(s.documentLine.documentId, existingDocId),
+              eq(s.documentLine.tenantId, tenantId),
+              isNull(s.documentLine.archivedAt),
             ),
           );
 
@@ -3291,13 +3463,13 @@ export class DocumentService {
 
         if (linesToArchive.size > 0) {
           await tx
-            .update(documentLine)
+            .update(s.documentLine)
             .set({ archivedAt: now })
             .where(
               and(
-                eq(documentLine.tenantId, tenantId),
-                eq(documentLine.documentId, existingDocId),
-                inArray(documentLine.documentLineId, [...linesToArchive]),
+                eq(s.documentLine.tenantId, tenantId),
+                eq(s.documentLine.documentId, existingDocId),
+                inArray(s.documentLine.documentLineId, [...linesToArchive]),
               ),
             );
         }
@@ -3370,6 +3542,8 @@ export class DocumentService {
           .map((l) => l.variantId)
           .filter((id): id is string => !!id);
         const weightMap = await batchFetchVariantWeights(tx, activeVariantIds);
+        const currentDocRecord = docRecord;
+        if (!currentDocRecord) throw new Error("Document not found");
 
         for (const line of activeLinePayload) {
           const variantId = line.variantId || null;
@@ -3398,7 +3572,7 @@ export class DocumentService {
             lineTotalNet: line.lineTotalNet != null ? String(line.lineTotalNet) : null,
             warehouseId: line.warehouseId ?? null,
             costCenterId: line.costCenterId ?? null,
-            movementType: line.movementType ?? docRecord.documentType,
+            movementType: line.movementType ?? currentDocRecord.documentType,
             lineType: variantId
               ? (line.lineType ?? "article")
               : line.lineType === "article" || !line.lineType
@@ -3414,7 +3588,7 @@ export class DocumentService {
             insertValues.push({
               tenantId,
               documentId: existingDocId,
-              transactionId: docRecord.transactionId,
+              transactionId: currentDocRecord.transactionId,
               ...normalized,
             });
           }
@@ -3422,7 +3596,7 @@ export class DocumentService {
 
         for (const row of updateValues) {
           await tx
-            .update(documentLine)
+            .update(s.documentLine)
             .set({
               lineNo: row.lineNo,
               variantId: row.variantId,
@@ -3454,23 +3628,23 @@ export class DocumentService {
             })
             .where(
               and(
-                eq(documentLine.tenantId, tenantId),
-                eq(documentLine.documentLineId, row.documentLineId),
+                eq(s.documentLine.tenantId, tenantId),
+                eq(s.documentLine.documentLineId, row.documentLineId),
               ),
             );
         }
 
         if (insertValues.length > 0) {
-          await tx.insert(documentLine).values(insertValues);
+          await tx.insert(s.documentLine).values(insertValues);
         }
 
         const [updatedDoc] = await tx
-          .update(document)
+          .update(s.document)
           .set({
             documentGroupId: data.documentGroupId ?? lockedDoc.documentGroupId,
             documentType: data.documentType ?? lockedDoc.documentType,
             documentDirection: data.documentDirection ?? lockedDoc.documentDirection,
-            documentDate: data.documentDate ?? lockedDoc.documentDate,
+            documentDate: toDateOrNull(data.documentDate ?? lockedDoc.documentDate),
             customerId: data.customerId ?? null,
             billingAddress: data.billingAddress ?? null,
             deliveryAddress: data.deliveryAddress ?? null,
@@ -3520,8 +3694,8 @@ export class DocumentService {
             shippingMethodId: data.shippingMethodId ?? null,
             updatedAt: now,
           })
-          .where(and(eq(document.documentId, existingDocId), eq(document.tenantId, tenantId)))
-          .returning({ documentId: document.documentId, documentNo: document.documentNo });
+          .where(and(eq(s.document.documentId, existingDocId), eq(s.document.tenantId, tenantId)))
+          .returning({ documentId: s.document.documentId, documentNo: s.document.documentNo });
 
         if (!updatedDoc) throw new Error("Document update failed");
 
@@ -3536,11 +3710,11 @@ export class DocumentService {
 
       const [group] = await tx
         .select()
-        .from(documentGroup)
+        .from(s.documentGroup)
         .where(
           and(
-            eq(documentGroup.documentGroupId, data.documentGroupId ?? ""),
-            eq(documentGroup.tenantId, tenantId),
+            eq(s.documentGroup.documentGroupId, data.documentGroupId ?? ""),
+            eq(s.documentGroup.tenantId, tenantId),
           ),
         )
         .limit(1);
@@ -3554,12 +3728,12 @@ export class DocumentService {
       if (!companyId) {
         const [co] = await tx
           .select({
-            companyId: company.companyId,
-            defaultWarehouseId: company.defaultWarehouseId,
-            currencyId: company.currencyId,
+            companyId: s.company.companyId,
+            defaultWarehouseId: s.company.defaultWarehouseId,
+            currencyId: s.company.currencyId,
           })
-          .from(company)
-          .where(eq(company.tenantId, tenantId))
+          .from(s.company)
+          .where(eq(s.company.tenantId, tenantId))
           .limit(1);
         if (!co) throw new Error("No company found for tenant");
         companyId = co.companyId;
@@ -3568,11 +3742,11 @@ export class DocumentService {
       } else {
         const [co] = await tx
           .select({
-            defaultWarehouseId: company.defaultWarehouseId,
-            currencyId: company.currencyId,
+            defaultWarehouseId: s.company.defaultWarehouseId,
+            currencyId: s.company.currencyId,
           })
-          .from(company)
-          .where(eq(company.companyId, companyId))
+          .from(s.company)
+          .where(eq(s.company.companyId, companyId))
           .limit(1);
         if (co) {
           resolvedCurrencyId = co.currencyId;
@@ -3582,24 +3756,29 @@ export class DocumentService {
 
       let documentNo = `DRAFT-${Date.now()}`;
       if (group.numberSequenceId) {
-        const [seq] = await tx
+        let q = tx
           .select()
-          .from(numberSequence)
-          .where(eq(numberSequence.numberSequenceId, group.numberSequenceId))
-          .limit(1)
-          .for("update");
+          .from(s.numberSequence)
+          .where(eq(s.numberSequence.numberSequenceId, group.numberSequenceId))
+          .limit(1);
+
+        if (activePersistence.provider === "postgres") {
+          q = q.for("update");
+        }
+
+        const [seq] = await q;
 
         if (seq) {
           documentNo = generateDocumentNo(seq.prefix, seq.nextValue, seq.padding);
           await tx
-            .update(numberSequence)
+            .update(s.numberSequence)
             .set({ nextValue: seq.nextValue + 1, updatedAt: now })
-            .where(eq(numberSequence.numberSequenceId, seq.numberSequenceId));
+            .where(eq(s.numberSequence.numberSequenceId, seq.numberSequenceId));
         }
       }
 
       const [newDoc] = await tx
-        .insert(document)
+        .insert(s.document)
         .values({
           tenantId,
           companyId,
@@ -3608,7 +3787,7 @@ export class DocumentService {
           documentGroupId: group.documentGroupId,
           documentNo,
           status: "draft",
-          documentDate: data.documentDate ?? new Date().toISOString().slice(0, 10),
+          documentDate: toDateOrNull(data.documentDate ?? new Date()) ?? new Date(),
           customerId: data.customerId ?? null,
           billingAddress: data.billingAddress ?? null,
           deliveryAddress: data.deliveryAddress ?? null,
@@ -3645,9 +3824,9 @@ export class DocumentService {
           transactionId: crypto.randomUUID(),
         })
         .returning({
-          documentId: document.documentId,
-          documentNo: document.documentNo,
-          transactionId: document.transactionId,
+          documentId: s.document.documentId,
+          documentNo: s.document.documentNo,
+          transactionId: s.document.transactionId,
         });
 
       if (!newDoc) throw new Error("Document creation failed");
@@ -3660,7 +3839,7 @@ export class DocumentService {
 
       const insertValues: any[] = [];
       for (const line of activeNewLines) {
-        const resolvedTruth = await resolveDocumentLineTruth(tx, tenantId, {
+        const resolvedTruth = await resolveDocumentLineTruth(tx, {
           documentLineId: line.documentLineId ?? null,
           lineNo: Number(line.lineNo),
           articleId: line.articleId ?? null,
@@ -3701,7 +3880,7 @@ export class DocumentService {
       }
 
       if (insertValues.length > 0) {
-        await tx.insert(documentLine).values(insertValues);
+        await tx.insert(s.documentLine).values(insertValues);
       }
 
       await persistDocumentTotals(tx, tenantId, newDoc.documentId, now);
@@ -3752,14 +3931,15 @@ export class DocumentService {
       paymentTermId?: string | null;
       shippingMethodId?: string | null;
     },
-  ): Promise<{ documentId: string; documentNo: string }> {
+  ): Promise<{ documentId: string; documentNo: string; status: string }> {
+    const s = getSchema();
     const [grp] = await db
       .select()
-      .from(documentGroup)
+      .from(s.documentGroup)
       .where(
         and(
-          eq(documentGroup.documentGroupId, data.documentGroupId),
-          eq(documentGroup.tenantId, tenantId),
+          eq(s.documentGroup.documentGroupId, data.documentGroupId),
+          eq(s.documentGroup.tenantId, tenantId),
         ),
       )
       .limit(1);
@@ -3771,18 +3951,21 @@ export class DocumentService {
 
     if (!companyId) {
       const [co] = await db
-        .select({ companyId: company.companyId, defaultWarehouseId: company.defaultWarehouseId })
-        .from(company)
-        .where(eq(company.tenantId, tenantId))
+        .select({
+          companyId: s.company.companyId,
+          defaultWarehouseId: s.company.defaultWarehouseId,
+        })
+        .from(s.company)
+        .where(eq(s.company.tenantId, tenantId))
         .limit(1);
       if (!co) throw new Error("No company found for tenant");
       companyId = co.companyId;
       if (!resolvedWarehouseId) resolvedWarehouseId = co.defaultWarehouseId ?? null;
     } else if (!resolvedWarehouseId) {
       const [co] = await db
-        .select({ defaultWarehouseId: company.defaultWarehouseId })
-        .from(company)
-        .where(eq(company.companyId, companyId))
+        .select({ defaultWarehouseId: s.company.defaultWarehouseId })
+        .from(s.company)
+        .where(eq(s.company.companyId, companyId))
         .limit(1);
       if (co) resolvedWarehouseId = co.defaultWarehouseId ?? null;
     }
@@ -3792,24 +3975,29 @@ export class DocumentService {
       const resolvedCurrencyId = await resolveCurrencyCode(tx, data.currencyId);
 
       if (grp.numberSequenceId) {
-        const [seq] = await tx
+        let q = tx
           .select()
-          .from(numberSequence)
-          .where(eq(numberSequence.numberSequenceId, grp.numberSequenceId))
-          .limit(1)
-          .for("update");
+          .from(s.numberSequence)
+          .where(eq(s.numberSequence.numberSequenceId, grp.numberSequenceId))
+          .limit(1);
+
+        if (activePersistence.provider === "postgres") {
+          q = q.for("update");
+        }
+
+        const [seq] = await q;
 
         if (seq) {
           documentNo = generateDocumentNo(seq.prefix, seq.nextValue, seq.padding);
           await tx
-            .update(numberSequence)
+            .update(s.numberSequence)
             .set({ nextValue: seq.nextValue + 1, updatedAt: new Date() })
-            .where(eq(numberSequence.numberSequenceId, seq.numberSequenceId));
+            .where(eq(s.numberSequence.numberSequenceId, seq.numberSequenceId));
         }
       }
 
       const [newDoc] = await tx
-        .insert(document)
+        .insert(s.document)
         .values({
           tenantId,
           companyId,
@@ -3818,7 +4006,7 @@ export class DocumentService {
           documentGroupId: data.documentGroupId,
           documentNo,
           status: data.status,
-          documentDate: data.documentDate,
+          documentDate: toDateOrNull(data.documentDate) ?? new Date(),
           customerId: data.customerId ?? null,
           billingAddress: data.billingAddress ?? null,
           deliveryAddress: data.deliveryAddress ?? null,
@@ -3856,7 +4044,11 @@ export class DocumentService {
         })
         .returning();
 
-      return { documentId: newDoc.documentId, documentNo: newDoc.documentNo };
+      return {
+        documentId: newDoc.documentId,
+        documentNo: newDoc.documentNo,
+        status: newDoc.status,
+      };
     });
   }
 
@@ -3916,7 +4108,7 @@ export class DocumentService {
     const targetDirection = targetGroup.direction ?? sourceDirection;
 
     return await db.transaction(async (tx) => {
-      const lines = await loadActiveDocumentLines(tx, tenantId, documentId);
+      const lines = await loadActiveDocumentLines(tx, documentId);
       let newDocumentNo = `COPY-${Date.now()}`;
       if (targetGroup.numberSequenceId) {
         const [seq] = await tx
@@ -4045,7 +4237,7 @@ export class DocumentService {
           });
         }
 
-        await copyDocumentLineTrackingRowsBulk(tx, tenantId, insertedLinePairs);
+        await copyDocumentLineTrackingRowsBulk(tx, insertedLinePairs);
       }
 
       await persistDocumentTotals(tx, tenantId, newDoc.documentId, new Date());
@@ -4137,7 +4329,7 @@ export class DocumentService {
           movement.absoluteQty != null ? parseQty(movement.absoluteQty) : Math.abs(qtyDelta);
         const warehouseId = movement.warehouseId;
         if (!warehouseId || !movement.variantId) continue;
-        const { articleId } = await resolveVariantTruth(tx, tenantId, movement.variantId);
+        const { articleId } = await resolveVariantTruth(tx, movement.variantId);
         void articleId; // kept for potential future use; balance is now anchored on inventoryItemId
 
         const applyBalance = async (set: Record<string, unknown>) => {
@@ -4257,7 +4449,7 @@ export class DocumentService {
             );
         }
 
-        const inventoryItemId = await ensureVariantInventoryItemId(tx, tenantId, movement.variantId);
+        const inventoryItemId = await ensureVariantInventoryItemId(tx, movement.variantId);
         await tx.insert(inventoryMovement).values({
           tenantId,
           companyId: doc.companyId,
@@ -4327,7 +4519,8 @@ export class DocumentService {
     try {
       return await this.deletePostedDocument(documentId, tenantId);
     } catch (err: any) {
-      if (err.code === "23503" || err.cause?.code === "23503") return { deleted: false, archived: false, fkViolation: true };
+      if (err.code === "23503" || err.cause?.code === "23503")
+        return { deleted: false, archived: false, fkViolation: true };
       throw err;
     }
   }

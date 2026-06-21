@@ -56,13 +56,24 @@ export interface ListControls {
 // Runs DataService.list with the shared controls. `defaultOrderBy` is the
 // per-entity fallback sort applied when the caller doesn't request one.
 export async function runEntityList(
-  tenantId: string,
   tableName: string,
   filters: Record<string, string>,
   controls: ListControls,
   defaultOrderBy: string,
-): Promise<{ items: unknown[]; total?: number }> {
-  const result = await new DataService(tenantId).list(tableName, filters, {
+): Promise<{ items: Record<string, unknown>[]; total?: number }>;
+export async function runEntityList<T>(
+  tableName: string,
+  filters: Record<string, string>,
+  controls: ListControls,
+  defaultOrderBy: string,
+): Promise<{ items: T[]; total?: number }>;
+export async function runEntityList<T = Record<string, unknown>>(
+  tableName: string,
+  filters: Record<string, string>,
+  controls: ListControls,
+  defaultOrderBy: string,
+): Promise<{ items: T[]; total?: number }> {
+  const result = await new DataService().list(tableName, filters, {
     search: controls.search,
     limit: controls.limit,
     offset: controls.offset,
@@ -71,10 +82,10 @@ export async function runEntityList(
     count: controls.withTotal,
   });
   if (controls.withTotal) {
-    const { data, total } = result as { data: unknown[]; total: number };
+    const { data, total } = result as { data: T[]; total: number };
     return { items: data, total };
   }
-  return { items: result as unknown[] };
+  return { items: result as T[] };
 }
 
 // Factory for the common flat-filter list capability shape: a handful of
@@ -135,7 +146,12 @@ export function defineListCapability<
         const value = raw[key];
         if (value !== undefined && value !== null && value !== "") filters[key] = String(value);
       }
-      return runEntityList(ctx.tenantId, tableName, filters, input as ListControls, config.defaultOrderBy);
+      return runEntityList<z.output<R>>(
+        tableName,
+        filters,
+        input as ListControls,
+        config.defaultOrderBy,
+      );
     },
   });
 }

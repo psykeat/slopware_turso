@@ -1,0 +1,15 @@
+{
+  "name": "@repo/business",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./bulk": "./src/bulk.ts",
+    "./ledger": "./src/ledger.ts"
+  },
+  "devDependencies": {
+    "@repo/tsconfig": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

@@ -1,1 +1,0 @@
--- Column sort_order was already added in migration 20260516072847_slippery_black_tarantula

@@ -1,9 +1,9 @@
 import { accountingCapabilities } from "./modules/accounting.core";
-import { communicationEmailCapabilities } from "./modules/communication.email";
-import { emailTemplateCapabilities } from "./modules/communication.email-template";
 import { salesChannelCapabilities } from "./modules/commerce.sales-channel";
 import { commerceSyncCapabilities } from "./modules/commerce.sync";
 import { commerceWebhookCapabilities } from "./modules/commerce.webhook";
+import { communicationEmailCapabilities } from "./modules/communication.email";
+import { emailTemplateCapabilities } from "./modules/communication.email-template";
 import { importCapabilities } from "./modules/import.core";
 import { logisticsCapabilities } from "./modules/logistics.core";
 import { addressCapabilities } from "./modules/masterdata.address";
@@ -33,6 +33,7 @@ import { documentCapabilities } from "./modules/sales.document";
 import { documentLineCapabilities } from "./modules/sales.document-line";
 import { salesReferenceCapabilities } from "./modules/sales.reference";
 import { systemCapabilities } from "./modules/system.core";
+import { registryCapabilities } from "./modules/system.registry";
 
 // Single aggregation point for every capability module. index.ts registers
 // from here; type-map.ts derives the literal-key index type from here. Kept
@@ -69,6 +70,7 @@ export const allCapabilities = [
   ...documentCapabilities,
   ...salesReferenceCapabilities,
   ...logisticsCapabilities,
+  ...registryCapabilities,
   ...systemCapabilities,
   ...masterdataRemainingCapabilities,
   ...searchCapabilities,

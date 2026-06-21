@@ -44,7 +44,7 @@ export const articleOptionValueGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("articleOptionValue", input.valueId);
+    const row = await new DataService().get("articleOptionValue", input.valueId);
     if (!row) throw new CapabilityError("not_found", "Article option value not found");
     return row;
   },
@@ -70,7 +70,7 @@ export const articleOptionValueCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("articleOptionValue", input);
+    const [created] = await new DataService().create("articleOptionValue", input);
     return created;
   },
 });
@@ -96,7 +96,7 @@ export const articleOptionValueUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch(
+    const [updated] = await new DataService().patch(
       "articleOptionValue",
       input.valueId,
       input.patch,
@@ -126,7 +126,7 @@ export const articleOptionValueArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleOptionValue", input.valueId, {
+    const [updated] = await new DataService().patch("articleOptionValue", input.valueId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Article option value not found");

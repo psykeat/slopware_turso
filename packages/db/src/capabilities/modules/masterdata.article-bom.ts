@@ -59,7 +59,7 @@ export const articleBomGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("articleBom", input.bomId);
+    const row = await new DataService().get("articleBom", input.bomId);
     if (!row) throw new CapabilityError("not_found", "BOM row not found");
     return row;
   },
@@ -81,7 +81,7 @@ export const articleBomCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("articleBom", input);
+    const [created] = await new DataService().create("articleBom", input);
     return created;
   },
 });
@@ -107,7 +107,7 @@ export const articleBomUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleBom", input.bomId, input.patch);
+    const [updated] = await new DataService().patch("articleBom", input.bomId, input.patch);
     if (!updated) throw new CapabilityError("not_found", "BOM row not found");
     return updated;
   },
@@ -133,7 +133,7 @@ export const articleBomArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleBom", input.bomId, {
+    const [updated] = await new DataService().patch("articleBom", input.bomId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "BOM row not found");
@@ -141,4 +141,10 @@ export const articleBomArchive = defineCapability({
   },
 });
 
-export const articleBomCapabilities = [articleBomList, articleBomGet, articleBomCreate, articleBomUpdate, articleBomArchive];
+export const articleBomCapabilities = [
+  articleBomList,
+  articleBomGet,
+  articleBomCreate,
+  articleBomUpdate,
+  articleBomArchive,
+];

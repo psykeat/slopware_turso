@@ -1,8 +1,8 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../../index";
-import { address } from "../../schema/app.schema";
+import { db, eq } from "../../index";
+import { address } from "../../schema/sqlite.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
 import { defineListCapability } from "../core/list";
@@ -11,7 +11,6 @@ import { CapabilityError } from "../core/types";
 const addressRecordSchema = z.looseObject({
   addressId: z.uuid(),
   addressNo: z.string(),
-  tenantId: z.uuid(),
   isCustomer: z.boolean(),
   isSupplier: z.boolean(),
   companyName: z.string().nullable().optional(),
@@ -86,11 +85,11 @@ const addressWritableFields = z.object({
   shopActive: z.boolean().optional(),
 });
 
-async function findAddressByNo(tenantId: string, addressNo: string) {
+async function findAddressByNo(addressNo: string) {
   const [row] = await db
     .select({ addressId: address.addressId, archivedAt: address.archivedAt })
     .from(address)
-    .where(and(eq(address.tenantId, tenantId), eq(address.addressNo, addressNo)))
+    .where(eq(address.addressNo, addressNo))
     .limit(1);
   return row ?? null;
 }
@@ -129,7 +128,7 @@ export const addressGet = defineCapability({
   },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("address", input.addressId);
+    const row = await new DataService().get("address", input.addressId);
     if (!row) throw new CapabilityError("not_found", "Address not found");
     return row;
   },
@@ -140,10 +139,13 @@ export const addressUpsert = defineCapability({
   entityName: "address",
   operation: "upsert",
   kind: "update",
-  summary: { en: "Create or update an address by address number", de: "Adresse per Adressnummer anlegen oder ändern" },
+  summary: {
+    en: "Create or update an address by address number",
+    de: "Adresse per Adressnummer anlegen oder ändern",
+  },
   description: {
-    en: "Address number is the natural key inside a tenant: an existing address is patched, otherwise a new one is created (name and address lines required).",
-    de: "Die Adressnummer ist der natürliche Schlüssel im Tenant: eine vorhandene Adresse wird gepatcht, sonst wird neu angelegt (Name und Adressdaten erforderlich).",
+    en: "Address number is the natural key in the tenant database: an existing address is patched, otherwise a new one is created (name and address lines required).",
+    de: "Die Adressnummer ist der natürliche Schlüssel in der Mandantendatenbank: eine vorhandene Adresse wird gepatcht, sonst wird neu angelegt (Name und Adressdaten erforderlich).",
   },
   input: z.object({
     addressNo: z.string().trim().min(1),
@@ -169,8 +171,8 @@ export const addressUpsert = defineCapability({
   },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const service = new DataService(ctx.tenantId);
-    const existing = await findAddressByNo(ctx.tenantId, input.addressNo);
+    const service = new DataService();
+    const existing = await findAddressByNo(input.addressNo);
 
     if (existing?.archivedAt) {
       throw new CapabilityError(
@@ -194,13 +196,14 @@ export const addressUpsert = defineCapability({
       throw new CapabilityError(
         "validation",
         "companyName or a person name is required when creating a new address",
-        [
-          { path: "companyName", message: "Required unless firstName/lastName identify a person" },
-        ],
+        [{ path: "companyName", message: "Required unless firstName/lastName identify a person" }],
       );
     }
     if (!input.addressLine1 || !input.postalCode || !input.city || !input.countryCode) {
-      throw new CapabilityError("validation", "addressLine1, postalCode, city and countryCode are required when creating a new address");
+      throw new CapabilityError(
+        "validation",
+        "addressLine1, postalCode, city and countryCode are required when creating a new address",
+      );
     }
 
     const [created] = await service.create("address", input);
@@ -228,7 +231,7 @@ export const addressArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("address", input.addressId, {
+    const [updated] = await new DataService().patch("address", input.addressId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Address not found");
@@ -241,7 +244,10 @@ export const addressGeocode = defineCapability({
   entityName: "address",
   operation: "geocode",
   kind: "update",
-  summary: { en: "Geocode addresses without coordinates", de: "Adressen ohne Koordinaten geocodieren" },
+  summary: {
+    en: "Geocode addresses without coordinates",
+    de: "Adressen ohne Koordinaten geocodieren",
+  },
   description: {
     en: "Calls OpenStreetMap Nominatim to fill coordinates for addresses that have none. Respects Nominatim's 1 req/s policy. Pass addressId to geocode one address, or omit to batch all missing.",
     de: "Ruft OpenStreetMap Nominatim auf, um Koordinaten für Adressen ohne Koordinaten zu füllen. Ohne addressId werden alle fehlenden Adressen gecodiert.",
@@ -267,7 +273,6 @@ export const addressGeocode = defineCapability({
       .from(address)
       .where(
         and(
-          eq(address.tenantId, ctx.tenantId),
           isNull(address.coordinates),
           isNull(address.archivedAt),
           ...(input.addressId ? [eq(address.addressId, input.addressId)] : []),
@@ -294,8 +299,11 @@ export const addressGeocode = defineCapability({
         if (data[0]) {
           await db
             .update(address)
-            .set({ coordinates: { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }, updatedAt: new Date() })
-            .where(and(eq(address.tenantId, ctx.tenantId), eq(address.addressId, row.addressId)));
+            .set({
+              coordinates: { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) },
+              updatedAt: new Date(),
+            })
+            .where(eq(address.addressId, row.addressId));
           geocoded++;
         } else {
           failed++;
@@ -310,4 +318,10 @@ export const addressGeocode = defineCapability({
   },
 });
 
-export const addressCapabilities = [addressList, addressGet, addressUpsert, addressArchive, addressGeocode];
+export const addressCapabilities = [
+  addressList,
+  addressGet,
+  addressUpsert,
+  addressArchive,
+  addressGeocode,
+];

@@ -462,10 +462,14 @@ function EmailWorkspace() {
   const { data: templates = EMPTY } = useQuery<EmailTemplateRow[]>({
     queryKey: ["email", "templates"],
     queryFn: () =>
-      entityList<EmailTemplateRow>("emailTemplate", {}, {
-        limit: 200,
-        orderBy: "updatedAt:desc",
-      }).catch(() => []),
+      entityList<EmailTemplateRow>(
+        "emailTemplate",
+        {},
+        {
+          limit: 200,
+          orderBy: "updatedAt:desc",
+        },
+      ).catch(() => []),
     placeholderData: keepPreviousData,
   });
 
@@ -603,9 +607,9 @@ function EmailWorkspace() {
   // @ts-expect-error
   // eslint-disable-next-line
   const accountSyncTimeLabel = activeAccount?.lastSyncAt
-    // @ts-expect-error
-    // eslint-disable-next-line
-    ? new Date(activeAccount.lastSyncAt).toLocaleTimeString([], {
+    ? // @ts-expect-error
+      // eslint-disable-next-line
+      new Date(activeAccount.lastSyncAt).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       })
@@ -951,7 +955,10 @@ function EmailWorkspace() {
       // the compose-draft panel with the current composer state as context.
       if (detail?.compose || composerOpen) {
         const toAddresses = composer.to
-          ? composer.to.split(",").map((s) => s.trim()).filter(Boolean)
+          ? composer.to
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
           : [];
         openAiOverlay({
           taskScope: "mail-compose-draft",
@@ -1796,7 +1803,7 @@ function EmailWorkspace() {
                     <TrashIcon className="size-4" />
                   </button>
                   <button
-                    onClick={openMailAiAssistant}
+                    onClick={() => openMailAiAssistant()}
                     disabled={!selectedThreadId}
                     className="grid size-7 place-items-center rounded-sm text-ink-secondary hover:bg-canvas-soft hover:text-ink"
                     title="AI Assistant (Alt+A)"

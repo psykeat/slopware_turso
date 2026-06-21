@@ -264,8 +264,13 @@ export function AddressPickerField({
 
   const handleSelect = async (addr: AddressResult) => {
     if (locked) return;
-    const fullData = await entityGet<Record<string, any>>("address", addr.addressId).catch(() => null);
-    const snap = normalizeSnapshot(fullData ?? addr, snapshotFromSearchResult(addr));
+    const fullData = await entityGet<Record<string, any>>("address", addr.addressId).catch(
+      () => null,
+    );
+    const snap = normalizeSnapshot(
+      (fullData ?? addr) as Partial<AddressSnapshot> & Record<string, any>,
+      snapshotFromSearchResult(addr),
+    );
     setLocalSnap(snap);
     onChange(addr.addressId, snap, addr);
     setIsOpen(false);
@@ -468,8 +473,8 @@ export function AddressPickerField({
             className={cn(
               "min-h-[56px] w-full rounded border px-3 py-2 text-left text-[12px] transition-colors",
               locked
-              ? "cursor-not-allowed border-hairline bg-canvas-soft opacity-70"
-              : "cursor-pointer border-hairline bg-canvas-soft hover:border-hairline-input",
+                ? "cursor-not-allowed border-hairline bg-canvas-soft opacity-70"
+                : "cursor-pointer border-hairline bg-canvas-soft hover:border-hairline-input",
             )}
             tabIndex={-1}
             onClick={() => {

@@ -4,12 +4,11 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import * as readline from "node:readline";
 
+import { DRIZZLE_SQLITE_BULK_INSERT_MAX_ROWS, chunkRecords } from "@repo/business";
 import { and, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../index";
-import { backfillDefaultArticleVariants } from "./default-variant-backfill";
-import { MetadataResolver } from "./metadata";
 import {
   address,
   article,
@@ -28,6 +27,8 @@ import {
   tenantConnectorMapping,
   unit,
 } from "../schema/app.schema";
+import { backfillDefaultArticleVariants } from "./default-variant-backfill";
+import { MetadataResolver } from "./metadata";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -188,13 +189,15 @@ const documentLinePayloadSchema = z.object({
 function isFilledBusinessKey(targetEntity: string, payload: Record<string, unknown>): boolean {
   const normalizedTargetEntity = normalizeTargetEntity(targetEntity);
   if (normalizedTargetEntity === "document") {
-    return Boolean(toStrOrNull(payload.documentType)?.trim() && toStrOrNull(payload.documentNo)?.trim());
+    return Boolean(
+      toStrOrNull(payload.documentType)?.trim() && toStrOrNull(payload.documentNo)?.trim(),
+    );
   }
   if (normalizedTargetEntity === "document_line") {
     return Boolean(
       toStrOrNull(payload.documentType)?.trim() &&
-        toStrOrNull(payload.documentNo)?.trim() &&
-        toStrOrNull(payload.lineNo)?.trim(),
+      toStrOrNull(payload.documentNo)?.trim() &&
+      toStrOrNull(payload.lineNo)?.trim(),
     );
   }
   return true;
@@ -847,7 +850,11 @@ export class ImportService {
       });
 
       await tx.insert(importFieldMapping).values(fields);
-      return { versionId: version.versionId, versionNo: version.versionNo, fieldCount: fields.length };
+      return {
+        versionId: version.versionId,
+        versionNo: version.versionNo,
+        fieldCount: fields.length,
+      };
     });
   }
 
@@ -992,8 +999,7 @@ export class ImportService {
             formatting: formattingIdx >= 0 ? row[formattingIdx]?.trim() || null : null,
             refreshTable: refreshIdx >= 0 ? row[refreshIdx]?.trim() || null : null,
             importMarker: importMarkerIdx >= 0 ? row[importMarkerIdx]?.trim() || null : null,
-            ordinal:
-              ordinalIdx >= 0 ? Number.parseInt(row[ordinalIdx] ?? "", 10) || null : null,
+            ordinal: ordinalIdx >= 0 ? Number.parseInt(row[ordinalIdx] ?? "", 10) || null : null,
             defaultTargetField: catalog?.targetField ?? null,
             defaultReferenceEntity: catalog?.referenceEntity ?? null,
           };
@@ -1158,9 +1164,9 @@ export class ImportService {
     if (metadataEntity) {
       try {
         const resolver = new MetadataResolver({ tenantId: this.tenantId, userId: this.userId });
-        const effective = (await resolver.getEffectiveFields(
-          metadataEntity,
-        )) as Array<Record<string, unknown>>;
+        const effective = (await resolver.getEffectiveFields(metadataEntity)) as Array<
+          Record<string, unknown>
+        >;
         targetFields = effective
           .filter((f) => f.isVisible !== false)
           .map((f) => ({
@@ -1212,10 +1218,7 @@ export class ImportService {
         versionNo: importProfileMappingVersion.versionNo,
       })
       .from(importProfileMappingVersion)
-      .innerJoin(
-        importProfile,
-        eq(importProfile.profileId, importProfileMappingVersion.profileId),
-      )
+      .innerJoin(importProfile, eq(importProfile.profileId, importProfileMappingVersion.profileId))
       .where(
         and(
           eq(importProfileMappingVersion.tenantId, this.tenantId),
@@ -1258,7 +1261,8 @@ export class ImportService {
 
     const targetEntity = layout.defaultTargetEntity ?? "article";
     const slug =
-      params.slug ?? `bw-${slugifyTemplate(layout.fileName)}-${slugifyTemplate(layout.dataArea)}-${slugifyTemplate(params.label)}`;
+      params.slug ??
+      `bw-${slugifyTemplate(layout.fileName)}-${slugifyTemplate(layout.dataArea)}-${slugifyTemplate(params.label)}`;
 
     return await db.transaction(async (tx) => {
       const [profile] = await tx
@@ -1340,7 +1344,11 @@ export class ImportService {
         await tx.insert(importFieldMapping).values(rows);
       }
 
-      return { profileId: profile.profileId, versionId: version.versionId, fieldCount: rows.length };
+      return {
+        profileId: profile.profileId,
+        versionId: version.versionId,
+        fieldCount: rows.length,
+      };
     });
   }
 
@@ -1507,7 +1515,9 @@ export class ImportService {
           errorSummary: { message } as Record<string, unknown>,
           processedAt: new Date(),
         })
-        .where(and(eq(importBatch.batchId, batch.batchId), eq(importBatch.tenantId, this.tenantId)));
+        .where(
+          and(eq(importBatch.batchId, batch.batchId), eq(importBatch.tenantId, this.tenantId)),
+        );
       return { batchId: batch.batchId, status: "failed" };
     }
   }
@@ -1625,7 +1635,7 @@ export class ImportService {
         payload,
       });
 
-      if (rowBuffer.length >= 1000) {
+      if (rowBuffer.length >= DRIZZLE_SQLITE_BULK_INSERT_MAX_ROWS) {
         await db.insert(importRow).values(rowBuffer);
         inserted += rowBuffer.length;
         rowBuffer = [];
@@ -1900,9 +1910,7 @@ export class ImportService {
           for (const mapping of referenceFields) {
             const externalKey = toStrOrNull(payload[mapping.targetField])?.trim();
             if (!externalKey || !mapping.referenceEntity) continue;
-            const internalId = referenceLookup.get(
-              `${mapping.referenceEntity}:${externalKey}`,
-            );
+            const internalId = referenceLookup.get(`${mapping.referenceEntity}:${externalKey}`);
             if (!internalId) {
               missing[mapping.targetField] = externalKey;
             } else {
@@ -2023,7 +2031,10 @@ export class ImportService {
           and(
             eq(externalSyncMapping.tenantId, this.tenantId),
             eq(externalSyncMapping.sourceSystem, "bueroware"),
-            eq(externalSyncMapping.entityType, entityType as "article" | "article_group" | "address"),
+            eq(
+              externalSyncMapping.entityType,
+              entityType as "article" | "article_group" | "address",
+            ),
             inArray(externalSyncMapping.externalId, [...keys]),
           ),
         );
@@ -2098,8 +2109,8 @@ export class ImportService {
     rows: Array<{ rowId: string; message: string }>,
   ): Promise<void> {
     if (rows.length === 0) return;
-    const values = rows.map((row) =>
-      sql`(${row.rowId}::uuid, ${JSON.stringify({ message: row.message })}::jsonb)`,
+    const values = rows.map(
+      (row) => sql`(${row.rowId}::uuid, ${JSON.stringify({ message: row.message })}::jsonb)`,
     );
     await db.execute(sql`
       UPDATE import_row AS r
@@ -2116,8 +2127,8 @@ export class ImportService {
     rows: Array<{ rowId: string; payload: Record<string, unknown> }>,
   ): Promise<void> {
     if (rows.length === 0) return;
-    const values = rows.map((row) =>
-      sql`(${row.rowId}::uuid, ${JSON.stringify(row.payload)}::jsonb)`,
+    const values = rows.map(
+      (row) => sql`(${row.rowId}::uuid, ${JSON.stringify(row.payload)}::jsonb)`,
     );
     await db.execute(sql`
       UPDATE import_row AS r
@@ -2229,7 +2240,9 @@ export class ImportService {
 
     const ids = new Map<string, string>();
     for (const [key, payloads] of groups.entries()) {
-      const updateFields = key ? (key.split("|") as Array<(typeof ARTICLE_UPDATE_FIELDS)[number]>) : [];
+      const updateFields = key
+        ? (key.split("|") as Array<(typeof ARTICLE_UPDATE_FIELDS)[number]>)
+        : [];
       const byExternalId = new Map<string, Record<string, unknown>>();
       for (const payload of payloads) {
         byExternalId.set(toStr(payload.articleNo), payload);
@@ -2248,17 +2261,19 @@ export class ImportService {
         set[field] = this.articleExcludedColumn(field);
       }
 
-      const result = await db
-        .insert(article)
-        .values(values)
-        .onConflictDoUpdate({
-          target: [article.tenantId, article.articleNo],
-          set,
-        })
-        .returning({ externalId: article.articleNo, internalId: article.articleId });
+      for (const chunk of chunkRecords(values)) {
+        const result = await db
+          .insert(article)
+          .values(chunk)
+          .onConflictDoUpdate({
+            target: [article.tenantId, article.articleNo],
+            set,
+          })
+          .returning({ externalId: article.articleNo, internalId: article.articleId });
 
-      for (const row of result) {
-        ids.set(row.externalId, row.internalId);
+        for (const row of result) {
+          ids.set(row.externalId, row.internalId);
+        }
       }
     }
 
@@ -2300,18 +2315,25 @@ export class ImportService {
       tenantId: this.tenantId,
     }));
 
-    const result = await db
-      .insert(articleGroup)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [articleGroup.tenantId, articleGroup.code],
-        set: {
-          name: sql`excluded.name`,
-        },
-      })
-      .returning({ externalId: articleGroup.code, internalId: articleGroup.articleGroupId });
+    const ids = new Map<string, string>();
+    for (const chunk of chunkRecords(values)) {
+      const result = await db
+        .insert(articleGroup)
+        .values(chunk)
+        .onConflictDoUpdate({
+          target: [articleGroup.tenantId, articleGroup.code],
+          set: {
+            name: sql`excluded.name`,
+          },
+        })
+        .returning({ externalId: articleGroup.code, internalId: articleGroup.articleGroupId });
 
-    return new Map(result.map((row) => [row.externalId, row.internalId]));
+      for (const row of result) {
+        ids.set(row.externalId, row.internalId);
+      }
+    }
+
+    return ids;
   }
 
   private async bulkUpsertAddresses(
@@ -2330,7 +2352,9 @@ export class ImportService {
 
     const ids = new Map<string, string>();
     for (const [key, payloads] of groups.entries()) {
-      const updateFields = key ? (key.split("|") as Array<(typeof ADDRESS_UPDATE_FIELDS)[number]>) : [];
+      const updateFields = key
+        ? (key.split("|") as Array<(typeof ADDRESS_UPDATE_FIELDS)[number]>)
+        : [];
       const byExternalId = new Map<string, Record<string, unknown>>();
       for (const payload of payloads) {
         byExternalId.set(toStr(payload.addressNo), payload);
@@ -2368,17 +2392,19 @@ export class ImportService {
         set[field] = this.addressExcludedColumn(field);
       }
 
-      const result = await db
-        .insert(address)
-        .values(values)
-        .onConflictDoUpdate({
-          target: [address.tenantId, address.addressNo],
-          set,
-        })
-        .returning({ externalId: address.addressNo, internalId: address.addressId });
+      for (const chunk of chunkRecords(values)) {
+        const result = await db
+          .insert(address)
+          .values(chunk)
+          .onConflictDoUpdate({
+            target: [address.tenantId, address.addressNo],
+            set,
+          })
+          .returning({ externalId: address.addressNo, internalId: address.addressId });
 
-      for (const row of result) {
-        ids.set(row.externalId, row.internalId);
+        for (const row of result) {
+          ids.set(row.externalId, row.internalId);
+        }
       }
     }
 
@@ -2468,36 +2494,38 @@ export class ImportService {
       });
     }
 
-    await db
-      .insert(externalSyncMapping)
-      .values(
-        [...byMappingKey.values()].map((row) => ({
-          tenantId: this.tenantId,
-          salesChannelId: null,
-          sourceSystem: "bueroware",
-          entityType: row.entityType,
-          internalId: row.internalId,
-          externalId: row.externalId,
-          syncDirection: "pull" as const,
-          syncStatus: "success" as const,
-          payloadSnapshot: row.payload,
-          lastSyncAt: new Date(),
-        })),
-      )
-      .onConflictDoUpdate({
-        target: [
-          externalSyncMapping.tenantId,
-          externalSyncMapping.sourceSystem,
-          externalSyncMapping.entityType,
-          externalSyncMapping.externalId,
-        ],
-        set: {
-          internalId: sql`excluded.internal_id`,
-          payloadSnapshot: sql`excluded.payload_snapshot`,
-          syncStatus: "success",
-          lastSyncAt: new Date(),
-        },
-      });
+    const values = [...byMappingKey.values()].map((row) => ({
+      tenantId: this.tenantId,
+      salesChannelId: null,
+      sourceSystem: "bueroware",
+      entityType: row.entityType,
+      internalId: row.internalId,
+      externalId: row.externalId,
+      syncDirection: "pull" as const,
+      syncStatus: "success" as const,
+      payloadSnapshot: row.payload,
+      lastSyncAt: new Date(),
+    }));
+
+    for (const chunk of chunkRecords(values)) {
+      await db
+        .insert(externalSyncMapping)
+        .values(chunk)
+        .onConflictDoUpdate({
+          target: [
+            externalSyncMapping.tenantId,
+            externalSyncMapping.sourceSystem,
+            externalSyncMapping.entityType,
+            externalSyncMapping.externalId,
+          ],
+          set: {
+            internalId: sql`excluded.internal_id`,
+            payloadSnapshot: sql`excluded.payload_snapshot`,
+            syncStatus: "success",
+            lastSyncAt: new Date(),
+          },
+        });
+    }
   }
 
   private async upsertBuerowarePayload(
@@ -2613,7 +2641,10 @@ export class ImportService {
     payload: Record<string, unknown>,
     internalId: string,
   ): Promise<void> {
-    const entityType = normalizeTargetEntity(targetEntity) as "article" | "article_group" | "address";
+    const entityType = normalizeTargetEntity(targetEntity) as
+      | "article"
+      | "article_group"
+      | "address";
     await db
       .insert(externalSyncMapping)
       .values({
@@ -2644,11 +2675,17 @@ export class ImportService {
       });
   }
 
-  async reconcilePendingRows(): Promise<{ posted: number; failed: number; pendingReferences: number }> {
+  async reconcilePendingRows(): Promise<{
+    posted: number;
+    failed: number;
+    pendingReferences: number;
+  }> {
     const pendingRows = await db
       .select()
       .from(importRow)
-      .where(and(eq(importRow.tenantId, this.tenantId), eq(importRow.status, "pending_references")));
+      .where(
+        and(eq(importRow.tenantId, this.tenantId), eq(importRow.status, "pending_references")),
+      );
 
     const rowsByBatch = new Map<string, Array<typeof importRow.$inferSelect>>();
     for (const row of pendingRows) {

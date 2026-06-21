@@ -1,8 +1,7 @@
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../../index";
-import { articleGroup } from "../../schema/app.schema";
+import { db, eq } from "../../index";
+import { articleGroup } from "../../schema/sqlite.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
 import { defineListCapability } from "../core/list";
@@ -34,11 +33,11 @@ const articleGroupWritableFields = z.object({
   printPositionTexts: z.boolean().nullable().optional(),
 });
 
-async function findArticleGroupByCode(tenantId: string, code: string) {
+async function findArticleGroupByCode(code: string) {
   const [row] = await db
     .select({ articleGroupId: articleGroup.articleGroupId, archived: articleGroup.archived })
     .from(articleGroup)
-    .where(and(eq(articleGroup.tenantId, tenantId), eq(articleGroup.code, code)))
+    .where(eq(articleGroup.code, code))
     .limit(1);
   return row ?? null;
 }
@@ -70,7 +69,7 @@ export const articleGroupGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("articleGroup", input.articleGroupId);
+    const row = await new DataService().get("articleGroup", input.articleGroupId);
     if (!row) {
       throw new CapabilityError("not_found", "Article group not found");
     }
@@ -106,8 +105,8 @@ export const articleGroupUpsert = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const service = new DataService(ctx.tenantId);
-    const existing = await findArticleGroupByCode(ctx.tenantId, input.code);
+    const service = new DataService();
+    const existing = await findArticleGroupByCode(input.code);
 
     if (existing?.archived) {
       throw new CapabilityError(
@@ -130,9 +129,11 @@ export const articleGroupUpsert = defineCapability({
     }
 
     if (!input.name) {
-      throw new CapabilityError("validation", "name is required when creating a new article group", [
-        { path: "name", message: "Required when no article group with this code exists" },
-      ]);
+      throw new CapabilityError(
+        "validation",
+        "name is required when creating a new article group",
+        [{ path: "name", message: "Required when no article group with this code exists" }],
+      );
     }
 
     const [created] = await service.create("articleGroup", input);
@@ -163,7 +164,7 @@ export const articleGroupArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleGroup", input.articleGroupId, {
+    const [updated] = await new DataService().patch("articleGroup", input.articleGroupId, {
       archived: true,
     });
     if (!updated) {

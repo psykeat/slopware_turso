@@ -51,7 +51,7 @@ export const paymentTermGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("paymentTerm", input.paymentTermId);
+    const row = await new DataService().get("paymentTerm", input.paymentTermId);
     if (!row) throw new CapabilityError("not_found", "Payment term not found");
     return row;
   },
@@ -77,7 +77,7 @@ export const paymentTermCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("paymentTerm", input);
+    const [created] = await new DataService().create("paymentTerm", input);
     return created;
   },
 });
@@ -103,7 +103,7 @@ export const paymentTermUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch(
+    const [updated] = await new DataService().patch(
       "paymentTerm",
       input.paymentTermId,
       input.patch,
@@ -133,7 +133,7 @@ export const paymentTermArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("paymentTerm", input.paymentTermId, {
+    const [updated] = await new DataService().patch("paymentTerm", input.paymentTermId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Payment term not found");

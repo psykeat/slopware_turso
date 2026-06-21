@@ -32,7 +32,9 @@ export async function seedE2eData() {
       .limit(1);
 
     if (!baseTenant) {
-      throw new Error("No base tenant found. Ensure auth.setup.ts links the E2E user before seeding.");
+      throw new Error(
+        "No base tenant found. Ensure auth.setup.ts links the E2E user before seeding.",
+      );
     }
 
     const tenantId = baseTenant.tenantId;
@@ -55,7 +57,6 @@ export async function seedE2eData() {
     await db
       .insert(schema.article)
       .values({
-        // @ts-expect-error
         // eslint-disable-next-line
         tenantId,
         articleNo: "E2E-ART-100",

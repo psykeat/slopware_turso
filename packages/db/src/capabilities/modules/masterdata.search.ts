@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../../index";
+import { db, eq } from "../../index";
 import {
   address,
   addressContact,
@@ -9,7 +9,7 @@ import {
   article,
   deliveryAddress,
   unit,
-} from "../../schema/app.schema";
+} from "../../schema/sqlite.schema";
 import { defineCapability } from "../core/define";
 
 function formatContactName(firstName: string | null, lastName: string | null) {
@@ -25,7 +25,7 @@ const searchInputSchema = z.object({
 
 // Dedicated lookup/search reads, moved verbatim out of the ad-hoc
 // /api/{articles,addresses,delivery-addresses}/search routes. Bespoke column
-// projections + multi-field ilike, so they stay hand-written queries rather
+// projections + multi-field search, so they stay hand-written queries rather
 // than going through DataService.list.
 
 export const articleSearch = defineCapability({
@@ -58,7 +58,7 @@ export const articleSearch = defineCapability({
     },
   },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     const rows = await db
       .select({
         articleId: article.articleId,
@@ -73,10 +73,9 @@ export const articleSearch = defineCapability({
       .leftJoin(unit, eq(unit.unitId, article.baseUnitId))
       .where(
         and(
-          eq(article.tenantId, ctx.tenantId),
           isNull(article.archivedAt),
           input.q.length > 0
-            ? or(ilike(article.articleNo, `%${input.q}%`), ilike(article.name, `%${input.q}%`))
+            ? or(like(article.articleNo, `%${input.q}%`), like(article.name, `%${input.q}%`))
             : undefined,
         ),
       )
@@ -115,7 +114,7 @@ export const addressSearch = defineCapability({
     },
   },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     const rows = await db
       .select({
         addressId: address.addressId,
@@ -134,13 +133,12 @@ export const addressSearch = defineCapability({
       .from(address)
       .where(
         and(
-          eq(address.tenantId, ctx.tenantId),
           input.q.length > 0
             ? or(
-                ilike(address.companyName, `%${input.q}%`),
-                ilike(address.addressNo, `%${input.q}%`),
-                ilike(address.city, `%${input.q}%`),
-                ilike(address.searchText, `%${input.q}%`),
+                like(address.companyName, `%${input.q}%`),
+                like(address.addressNo, `%${input.q}%`),
+                like(address.city, `%${input.q}%`),
+                like(address.searchText, `%${input.q}%`),
               )
             : undefined,
         ),
@@ -169,7 +167,7 @@ export const deliveryAddressSearch = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     const rows = await db
       .select({
         deliveryAddressId: deliveryAddress.deliveryAddressId,
@@ -185,18 +183,16 @@ export const deliveryAddressSearch = defineCapability({
       .innerJoin(address, eq(deliveryAddress.addressId, address.addressId))
       .where(
         and(
-          eq(deliveryAddress.tenantId, ctx.tenantId),
-          eq(address.tenantId, ctx.tenantId),
           input.addressId ? eq(deliveryAddress.addressId, input.addressId) : undefined,
           input.q.length > 0
             ? or(
-                ilike(deliveryAddress.name, `%${input.q}%`),
-                ilike(deliveryAddress.addressLine1, `%${input.q}%`),
-                ilike(deliveryAddress.city, `%${input.q}%`),
-                ilike(deliveryAddress.postalCode, `%${input.q}%`),
-                ilike(address.addressNo, `%${input.q}%`),
-                ilike(address.companyName, `%${input.q}%`),
-                ilike(address.searchText, `%${input.q}%`),
+                like(deliveryAddress.name, `%${input.q}%`),
+                like(deliveryAddress.addressLine1, `%${input.q}%`),
+                like(deliveryAddress.city, `%${input.q}%`),
+                like(deliveryAddress.postalCode, `%${input.q}%`),
+                like(address.addressNo, `%${input.q}%`),
+                like(address.companyName, `%${input.q}%`),
+                like(address.searchText, `%${input.q}%`),
               )
             : undefined,
         ),
@@ -240,7 +236,7 @@ export const addressContactSearch = defineCapability({
     },
   },
   schemaVersion: 1,
-  handler: async (ctx, input) => {
+  handler: async (_ctx, input) => {
     if (input.q.length === 0) return { items: [] };
     const term = `%${input.q}%`;
     const rows = await db
@@ -260,24 +256,27 @@ export const addressContactSearch = defineCapability({
       )
       .where(
         and(
-          eq(addressContact.tenantId, ctx.tenantId),
           eq(addressContact.archived, false),
           or(
             and(
               isNotNull(addressContact.email),
               sql`${addressContact.email} <> ''`,
               or(
-                ilike(addressContact.firstName, term),
-                ilike(addressContact.lastName, term),
-                ilike(addressContact.email, term),
+                like(addressContact.firstName, term),
+                like(addressContact.lastName, term),
+                like(addressContact.email, term),
               ),
             ),
-            ilike(addressContactIdentity.value, term),
-            ilike(addressContactIdentity.normalizedValue, term),
+            like(addressContactIdentity.value, term),
+            like(addressContactIdentity.normalizedValue, term),
           ),
         ),
       )
-      .orderBy(asc(addressContact.lastName), asc(addressContact.firstName), asc(addressContact.email))
+      .orderBy(
+        asc(addressContact.lastName),
+        asc(addressContact.firstName),
+        asc(addressContact.email),
+      )
       .limit(input.limit * 5);
 
     const deduped = new Map<string, z.output<typeof looseRowSchema>>();

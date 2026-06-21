@@ -82,7 +82,7 @@ export const Route = createFileRoute("/api/ai/execute")({
 
         const runStream = () =>
           provider.stream({
-            messages,
+            messages: messages as any,
             tools,
             agentLoopStrategy: maxIterations(iterations),
           });

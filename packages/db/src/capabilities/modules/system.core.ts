@@ -38,7 +38,7 @@ function makeSystemEntityCapabilities(spec: SystemEntitySpec) {
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) =>
-      runEntityList(ctx.tenantId, spec.tableName, input.filters, input, spec.orderBy),
+      runEntityList(spec.tableName, input.filters, input, spec.orderBy),
   });
 
   const get = defineCapability({
@@ -57,7 +57,7 @@ function makeSystemEntityCapabilities(spec: SystemEntitySpec) {
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const row = await new DataService(ctx.tenantId).get(spec.tableName, input.id);
+      const row = await new DataService().get(spec.tableName, input.id);
       if (!row) throw new CapabilityError("not_found", `${spec.entityName} not found`);
       return row;
     },
@@ -79,7 +79,7 @@ function makeSystemEntityCapabilities(spec: SystemEntitySpec) {
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [created] = await new DataService(ctx.tenantId).create(spec.tableName, input);
+      const [created] = await new DataService().create(spec.tableName, input);
       return created;
     },
   });
@@ -100,7 +100,7 @@ function makeSystemEntityCapabilities(spec: SystemEntitySpec) {
     exposure: { llm: "safe", http: true },
     schemaVersion: 1,
     handler: async (ctx, input) => {
-      const [updated] = await new DataService(ctx.tenantId).patch(spec.tableName, input.id, input.patch);
+      const [updated] = await new DataService().patch(spec.tableName, input.id, input.patch);
       if (!updated) throw new CapabilityError("not_found", `${spec.entityName} not found`);
       return updated;
     },
@@ -124,7 +124,7 @@ function makeSystemEntityCapabilities(spec: SystemEntitySpec) {
           exposure: { llm: "confirm", http: true },
           schemaVersion: 1,
           handler: async (ctx, input) => {
-            const [updated] = await new DataService(ctx.tenantId).patch(spec.tableName, input.id, {
+            const [updated] = await new DataService().patch(spec.tableName, input.id, {
               archived: true,
             });
             if (!updated) throw new CapabilityError("not_found", `${spec.entityName} not found`);

@@ -1,3 +1,0 @@
-CREATE INDEX "idx_email_account_backstop" ON "email_account" ("archived","activity_tier","last_sync_at") WHERE archived = false;--> statement-breakpoint
-CREATE INDEX "idx_email_job_stale" ON "email_job" ("locked_at") WHERE status = 'processing';--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_email_subscription_channel_token" ON "email_subscription" ("channel_token") WHERE channel_token IS NOT NULL;

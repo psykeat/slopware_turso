@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../index";
-import { country } from "../../schema/app.schema";
+import { country } from "../../schema/sqlite.schema";
 import { DataService } from "../../services/data";
 import { defineCapability } from "../core/define";
 import { defineListCapability } from "../core/list";
@@ -61,7 +61,7 @@ export const countryGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("country", input.countryId);
+    const row = await new DataService().get("country", input.countryId);
     if (!row) throw new CapabilityError("not_found", "Country not found");
     return row;
   },
@@ -72,7 +72,10 @@ export const countryUpsert = defineCapability({
   entityName: "country",
   operation: "upsert",
   kind: "update",
-  summary: { en: "Create or update a country by ISO2 code", de: "Land per ISO2-Code anlegen oder ändern" },
+  summary: {
+    en: "Create or update a country by ISO2 code",
+    de: "Land per ISO2-Code anlegen oder ändern",
+  },
   description: {
     en: "ISO2 code is the natural key: an existing country is patched, otherwise a new one is created (ISO3, name required).",
     de: "Der ISO2-Code ist der natürliche Schlüssel: ein vorhandenes Land wird gepatcht, sonst wird neu angelegt (ISO3, Name erforderlich).",
@@ -92,7 +95,7 @@ export const countryUpsert = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const service = new DataService(ctx.tenantId);
+    const service = new DataService();
     const existing = await findCountryByIso2Code(input.iso2Code);
 
     if (existing?.archived) {
@@ -124,7 +127,10 @@ export const countryArchive = defineCapability({
   operation: "archive",
   kind: "archive",
   summary: { en: "Archive a country", de: "Land archivieren" },
-  description: { en: "Soft delete: the country is archived, never hard-deleted.", de: "Soft Delete: das Land wird archiviert, nie hart gelöscht." },
+  description: {
+    en: "Soft delete: the country is archived, never hard-deleted.",
+    de: "Soft Delete: das Land wird archiviert, nie hart gelöscht.",
+  },
   input: z.object({ countryId: z.uuid() }),
   output: z.object({ countryId: z.uuid(), archived: z.literal(true) }),
   writesTables: ["country"],
@@ -135,7 +141,7 @@ export const countryArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("country", input.countryId, { archived: true });
+    const [updated] = await new DataService().patch("country", input.countryId, { archived: true });
     if (!updated) throw new CapabilityError("not_found", "Country not found");
     return { countryId: input.countryId, archived: true as const };
   },

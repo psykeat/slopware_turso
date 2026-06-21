@@ -43,9 +43,7 @@ export interface BuildCapabilityToolsOptions {
  * never eligible; a capability is AI-exposed exactly when it carries an
  * `exposure.ai` projection.
  */
-export function listAiCapabilities(
-  options: BuildCapabilityToolsOptions = {},
-): AnyCapability[] {
+export function listAiCapabilities(options: BuildCapabilityToolsOptions = {}): AnyCapability[] {
   const exposed = listCapabilities({ llm: ["safe", "confirm"] }).filter(
     (capability) => capability.exposure.ai,
   );
@@ -101,9 +99,7 @@ function capabilitiesToTools(
       // The capability's own zod input schema is the contract. It never
       // contains `tenantId` — that is resolved server-side from `ctx`.
       inputSchema: capability.input,
-      ...(requireApproval && capability.exposure.llm === "confirm"
-        ? { needsApproval: true }
-        : {}),
+      ...(requireApproval && capability.exposure.llm === "confirm" ? { needsApproval: true } : {}),
     });
 
     return definition.server(async (input: unknown) => {
@@ -147,9 +143,7 @@ export interface OverlayToolsOptions {
  *   group seeded from the Invocation Context. Writes are curated to this group;
  *   switching focus widens the writable set.
  */
-export function selectOverlayCapabilities(
-  focusGroups?: string | string[],
-): AnyCapability[] {
+export function selectOverlayCapabilities(focusGroups?: string | string[]): AnyCapability[] {
   const focus = new Set(typeof focusGroups === "string" ? [focusGroups] : (focusGroups ?? []));
   const exposed = listCapabilities({ llm: ["safe", "confirm"] }).filter(
     (capability) => capability.exposure.ai,
@@ -158,7 +152,8 @@ export function selectOverlayCapabilities(
   const selected = new Map<string, AnyCapability>();
   for (const capability of exposed) {
     const isBackboneRead = capability.kind === "read";
-    const inFocusGroup = focus.has(capability.exposure.ai!.group);
+    const aiGroup = capability.exposure.ai?.group;
+    const inFocusGroup = aiGroup ? focus.has(aiGroup) : false;
     if (isBackboneRead || inFocusGroup) {
       selected.set(capability.key, capability);
     }

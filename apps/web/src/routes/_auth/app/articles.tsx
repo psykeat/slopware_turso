@@ -247,7 +247,7 @@ function ArticleSalesBlock({
           </select>
         </label>
         {!isEdit && (
-          <p className="sm:col-span-2 text-[12px] text-ink-mute">
+          <p className="text-[12px] text-ink-mute sm:col-span-2">
             {t("article.salesCreateHint", {
               defaultValue:
                 "These values are applied to the default variant after the article is saved.",
@@ -303,7 +303,9 @@ function ArticleVariantEditForm({
           {t("article.variants.edit", { defaultValue: "Edit Variant" })}
         </div>
         {variant.variantOptionSummary && (
-          <div className="mt-0.5 text-[12px] text-ink-secondary">{variant.variantOptionSummary}</div>
+          <div className="mt-0.5 text-[12px] text-ink-secondary">
+            {variant.variantOptionSummary}
+          </div>
         )}
       </div>
       <div className="grid gap-3 p-4 sm:grid-cols-2">
@@ -441,14 +443,14 @@ function ArticleVariantsAndOptionsTab({
   const { data: optionData, isLoading: isOptionsLoading } = useCapabilityQuery(
     "masterdata.articleOption.list",
     { articleId: articleId! },
-    { enabled: !!articleId, placeholderData: keepPreviousData }
+    { enabled: !!articleId, placeholderData: keepPreviousData },
   );
   const optionRows = optionData?.items ?? EMPTY_ARRAY;
 
   const { data: variantData, isLoading: isVariantsLoading } = useCapabilityQuery(
     "masterdata.articleVariant.list",
     { articleId: articleId! },
-    { enabled: !!articleId, placeholderData: keepPreviousData }
+    { enabled: !!articleId, placeholderData: keepPreviousData },
   );
   const variantRows = variantData?.items ?? EMPTY_ARRAY;
   const variantMode = resolveArticleVariantMode({
@@ -484,8 +486,8 @@ function ArticleVariantsAndOptionsTab({
     setShowVariantEdit(true);
   }, []);
 
-  const variantById = useMemo(
-    () => new Map(variantRows.map((row: any) => [row.variantId, row])),
+  const variantById = useMemo<Map<string, any>>(
+    () => new Map<string, any>(variantRows.map((row: any) => [row.variantId, row])),
     [variantRows],
   );
 
@@ -653,9 +655,7 @@ function ArticleVariantsAndOptionsTab({
         valueId: surchargeValueId,
       });
       const matchingVariantIds = new Set(junctionRows.map((row) => row.variantId as string));
-      const targets = surchargeVariantIds.filter((variantId) =>
-        matchingVariantIds.has(variantId),
-      );
+      const targets = surchargeVariantIds.filter((variantId) => matchingVariantIds.has(variantId));
 
       if (targets.length === 0) {
         toast.info("Keine der ausgewählten Varianten trägt diesen Merkmalswert.");
@@ -728,7 +728,14 @@ function ArticleVariantsAndOptionsTab({
     } finally {
       setBulkPriceSubmitting(false);
     }
-  }, [bulkPriceField, bulkPriceMode, bulkPriceValue, bulkVariantRows, patchEntity, refreshVariants]);
+  }, [
+    bulkPriceField,
+    bulkPriceMode,
+    bulkPriceValue,
+    bulkVariantRows,
+    patchEntity,
+    refreshVariants,
+  ]);
 
   const handleVariantSaved = useCallback(
     async (record: unknown) => {
@@ -962,7 +969,8 @@ function ArticleVariantsAndOptionsTab({
             </div>
             <div className="mt-0.5 text-[12px] text-ink-secondary">
               {t("article.variantsSimple", {
-                defaultValue: "Simple articles use a single default variant until you activate variants.",
+                defaultValue:
+                  "Simple articles use a single default variant until you activate variants.",
               })}
             </div>
           </div>
@@ -1232,7 +1240,9 @@ function ArticlesModule() {
       offset: (gridState.queryParams.page - 1) * gridState.queryParams.limit,
       orderBy: gridState.queryParams.orderBy || undefined,
       search: gridState.queryParams.search || undefined,
-      filterRules: gridState.queryParams.filters as Array<{ col: string; op: string; val: string }> | undefined,
+      filterRules: gridState.queryParams.filters as
+        | Array<{ col: string; op: string; val: string }>
+        | undefined,
       withTotal: true,
     },
     {
@@ -1246,15 +1256,13 @@ function ArticlesModule() {
   const { data: activeVariantData } = useCapabilityQuery(
     "masterdata.articleVariant.list",
     { articleId: activeArticleId! },
-    { enabled: !!activeArticleId, placeholderData: keepPreviousData }
+    { enabled: !!activeArticleId, placeholderData: keepPreviousData },
   );
   const activeVariantRows = activeVariantData?.items ?? EMPTY_ARRAY;
 
   const activeDefaultVariant = useMemo(
     () =>
-      activeVariantRows.find(
-        (r: any) => r.optionValueHash === DEFAULT_VARIANT_OPTION_VALUE_HASH,
-      ) ??
+      activeVariantRows.find((r: any) => r.optionValueHash === DEFAULT_VARIANT_OPTION_VALUE_HASH) ??
       activeVariantRows[0] ??
       null,
     [activeVariantRows],
@@ -1438,7 +1446,14 @@ function ArticlesModule() {
         }
       }
     },
-    [createSalesDraft.ean, createSalesDraft.isActive, createSalesDraft.price, createSalesDraft.trackingMode, createSalesDraft.weight, patchEntity],
+    [
+      createSalesDraft.ean,
+      createSalesDraft.isActive,
+      createSalesDraft.price,
+      createSalesDraft.trackingMode,
+      createSalesDraft.weight,
+      patchEntity,
+    ],
   );
 
   const selectTreeNode = useCallback(

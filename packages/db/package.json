@@ -9,12 +9,15 @@
     "./capabilities": "./src/capabilities/index.ts",
     "./capabilities/manifest": "./src/capabilities/manifest.generated.ts",
     "./capabilities/entity-ops": "./src/capabilities/entity-ops.ts",
+    "./persistence/*": "./src/persistence/*.ts",
+    "./turso": "./src/turso/index.ts",
+    "./turso/*": "./src/turso/*.ts",
     "./services/*": "./src/services/*.ts",
     "./test-support/*": "./src/test-support/*.ts"
   },
   "scripts": {
     "db": "drizzle-kit",
-    "generate": "drizzle-kit generate && pnpm run docs",
+    "generate": "tsx src/scripts/generate-sqlite-schema.ts && drizzle-kit generate && drizzle-kit generate --config=drizzle.sqlite.config.ts && pnpm run docs",
     "migrate": "drizzle-kit migrate && pnpm run docs && pnpm run seed:metadata && pnpm run sync:capabilities",
     "sync:capabilities": "tsx src/scripts/sync-capabilities.ts",
     "generate:manifest": "tsx src/scripts/generate-capability-manifest.ts",
@@ -44,7 +47,10 @@
     "auth:generate": "vpx https://pkg.pr.new/auth@9489 generate --config ../auth/src/auth.ts --y --output ./src/schema/auth.schema.ts"
   },
   "dependencies": {
+    "@libsql/client": "catalog:",
     "@repo/agent": "workspace:*",
+    "@repo/business": "workspace:*",
+    "@repo/registry": "workspace:*",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "postgres": "catalog:",

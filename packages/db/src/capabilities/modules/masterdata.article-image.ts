@@ -71,7 +71,7 @@ export const articleImageGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("articleImage", input.articleImageId);
+    const row = await new DataService().get("articleImage", input.articleImageId);
     if (!row) throw new CapabilityError("not_found", "Article image not found");
     return row;
   },
@@ -93,7 +93,7 @@ export const articleImageCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("articleImage", input);
+    const [created] = await new DataService().create("articleImage", input);
     return created;
   },
 });
@@ -119,7 +119,11 @@ export const articleImageUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleImage", input.articleImageId, input.patch);
+    const [updated] = await new DataService().patch(
+      "articleImage",
+      input.articleImageId,
+      input.patch,
+    );
     if (!updated) throw new CapabilityError("not_found", "Article image not found");
     return updated;
   },
@@ -145,7 +149,7 @@ export const articleImageArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleImage", input.articleImageId, {
+    const [updated] = await new DataService().patch("articleImage", input.articleImageId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Article image not found");
@@ -153,4 +157,10 @@ export const articleImageArchive = defineCapability({
   },
 });
 
-export const articleImageCapabilities = [articleImageList, articleImageGet, articleImageCreate, articleImageUpdate, articleImageArchive];
+export const articleImageCapabilities = [
+  articleImageList,
+  articleImageGet,
+  articleImageCreate,
+  articleImageUpdate,
+  articleImageArchive,
+];

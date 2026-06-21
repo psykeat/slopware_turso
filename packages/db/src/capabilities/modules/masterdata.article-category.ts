@@ -53,7 +53,7 @@ export const articleCategoryGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const row = await new DataService(ctx.tenantId).get("articleCategory", input.articleCategoryId);
+    const row = await new DataService().get("articleCategory", input.articleCategoryId);
     if (!row) throw new CapabilityError("not_found", "Article category not found");
     return row;
   },
@@ -75,7 +75,7 @@ export const articleCategoryCreate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [created] = await new DataService(ctx.tenantId).create("articleCategory", input);
+    const [created] = await new DataService().create("articleCategory", input);
     return created;
   },
 });
@@ -101,7 +101,7 @@ export const articleCategoryUpdate = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch(
+    const [updated] = await new DataService().patch(
       "articleCategory",
       input.articleCategoryId,
       input.patch,
@@ -116,7 +116,10 @@ export const articleCategoryArchive = defineCapability({
   entityName: "articleCategory",
   operation: "archive",
   kind: "archive",
-  summary: { en: "Archive an article category link", de: "Artikel-Kategorien-Zuordnung archivieren" },
+  summary: {
+    en: "Archive an article category link",
+    de: "Artikel-Kategorien-Zuordnung archivieren",
+  },
   description: {
     en: "Soft delete: the article-category link is archived, never hard-deleted.",
     de: "Soft Delete: die Artikel-Kategorien-Zuordnung wird archiviert, nie hart gelöscht.",
@@ -131,7 +134,7 @@ export const articleCategoryArchive = defineCapability({
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => {
-    const [updated] = await new DataService(ctx.tenantId).patch("articleCategory", input.articleCategoryId, {
+    const [updated] = await new DataService().patch("articleCategory", input.articleCategoryId, {
       archived: true,
     });
     if (!updated) throw new CapabilityError("not_found", "Article category not found");

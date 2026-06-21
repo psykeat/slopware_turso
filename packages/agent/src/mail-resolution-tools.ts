@@ -134,8 +134,6 @@ export function createMailCustomerLookupTool(params: { tenantId: string }) {
           .from(schema.address)
           .where(
             and(
-              // @ts-expect-error
-              // eslint-disable-next-line
               eq(schema.address.addressId, contact.addressId),
               eq(schema.address.tenantId, params.tenantId),
               isNull(schema.address.archivedAt),

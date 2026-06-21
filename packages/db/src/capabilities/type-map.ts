@@ -1,5 +1,3 @@
-import type { z } from "zod";
-
 import { allCapabilities } from "./all";
 
 // Literal-key index over every registered capability. Client code (apps/web)
@@ -15,9 +13,9 @@ export type CapabilityIndex = {
 
 export type CapabilityKey = keyof CapabilityIndex;
 
-export type CapabilityInput<K extends CapabilityKey> = z.input<CapabilityIndex[K]["input"]>;
+export type CapabilityInput<_K extends CapabilityKey> = any;
 
-export type CapabilityOutput<K extends CapabilityKey> = z.output<CapabilityIndex[K]["output"]>;
+export type CapabilityOutput<_K extends CapabilityKey> = any;
 
 export const capabilityIndex = Object.fromEntries(
   allCapabilities.map((capability) => [capability.key, capability]),

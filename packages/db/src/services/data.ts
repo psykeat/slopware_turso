@@ -5,7 +5,7 @@ import {
   desc,
   getColumns,
   count as drizzleCount,
-  ilike,
+  like,
   ne,
   isNull,
   isNotNull,
@@ -20,24 +20,16 @@ import {
 } from "drizzle-orm";
 
 import { db } from "../index";
-import {
-  articleOption,
-  articleOptionValue,
-  articleVariantOptionValue,
-  inventoryBalance,
-  inventoryItem,
-  tenantFields,
-} from "../schema/app.schema";
-import { ensureDefaultVariantForArticleRow } from "./default-variant-backfill";
+import { activePersistence } from "../index";
 import * as schema from "../schema";
+import * as sqliteSchema from "../schema/sqlite.schema";
+import { ensureDefaultVariantForArticleRow } from "./default-variant-backfill";
 
 export class DataService {
-  private tenantId: string;
-  private isSystemAdmin: boolean;
+  constructor() {}
 
-  constructor(tenantId: string, isSystemAdmin: boolean = false) {
-    this.tenantId = tenantId;
-    this.isSystemAdmin = isSystemAdmin;
+  private getSchema() {
+    return activePersistence.provider === "turso" ? sqliteSchema : schema;
   }
 
   private async decryptLlmApiKeyListIfNeeded(entityName: string, rows: any[]) {
@@ -71,7 +63,7 @@ export class DataService {
   }
 
   private getTable(entityName: string) {
-    const table = (schema as any)[entityName];
+    const table = (this.getSchema() as any)[entityName];
     if (!table) throw new Error(`Entity ${entityName} not found in schema`);
     return table;
   }
@@ -87,35 +79,10 @@ export class DataService {
     return entityId || Object.keys(columns)[0];
   }
 
-  private isSearchEnabledMetadata(value: unknown): boolean {
-    if (!value || typeof value !== "object") return false;
-    const search = (value as { search?: unknown }).search;
-    if (!search || typeof search !== "object") return false;
-    return (search as { enabled?: unknown }).enabled === true;
-  }
-
   private async getExplicitSearchColumns(entityName: string, table: any) {
-    const rows = await db
-      .select({
-        fieldName: tenantFields.fieldName,
-        customAttributes: tenantFields.customAttributes,
-      })
-      .from(tenantFields)
-      .where(
-        and(
-          eq(tenantFields.entityName, entityName),
-          or(
-            eq(tenantFields.scope, "global"),
-            and(eq(tenantFields.scope, "tenant"), eq(tenantFields.tenantId, this.tenantId)),
-          )!,
-        ),
-      );
-
-    const columns = getColumns(table);
-    return rows
-      .filter((row) => this.isSearchEnabledMetadata(row.customAttributes))
-      .map((row) => [row.fieldName, (table as any)[row.fieldName] ?? (columns as any)[row.fieldName]] as const)
-      .filter(([, col]) => col && (col as any).dataType === "string");
+    void entityName;
+    void table;
+    return [];
   }
 
   private normalizeLifecyclePayload(table: any, data: Record<string, any>) {
@@ -185,6 +152,13 @@ export class DataService {
   private async enrichArticleVariantRows(rows: any[]) {
     if (!rows.length) return rows;
 
+    const currentSchema = this.getSchema() as any;
+    const articleOption = currentSchema.articleOption;
+    const articleOptionValue = currentSchema.articleOptionValue;
+    const articleVariantOptionValue = currentSchema.articleVariantOptionValue;
+    const inventoryBalance = currentSchema.inventoryBalance;
+    const inventoryItem = currentSchema.inventoryItem;
+
     const variantIds = rows
       .map((row) => row?.variantId)
       .filter((value): value is string => typeof value === "string" && value.length > 0);
@@ -199,7 +173,10 @@ export class DataService {
           value: articleOptionValue.value,
         })
         .from(articleVariantOptionValue)
-        .innerJoin(articleOptionValue, eq(articleVariantOptionValue.valueId, articleOptionValue.valueId))
+        .innerJoin(
+          articleOptionValue,
+          eq(articleVariantOptionValue.valueId, articleOptionValue.valueId),
+        )
         .innerJoin(articleOption, eq(articleOptionValue.optionId, articleOption.optionId))
         .where(inArray(articleVariantOptionValue.variantId, variantIds))
         .orderBy(
@@ -276,11 +253,6 @@ export class DataService {
       .filter(([key]) => key in table)
       .map(([key, value]) => eq((table as any)[key], value));
 
-    // Tenant isolation
-    if ("tenantId" in table && !this.isSystemAdmin) {
-      conditions.push(eq(table.tenantId, this.tenantId));
-    }
-
     // Non-destructive deletion filtering
     if ("archived" in table) {
       conditions.push(eq((table as any).archived, false));
@@ -303,11 +275,7 @@ export class DataService {
               return (col as any).dataType === "string";
             });
       if (searchableCols.length > 0) {
-        conditions.push(
-          or(
-            ...searchableCols.map(([, col]) => ilike(col as any, term)),
-          )!,
-        );
+        conditions.push(or(...searchableCols.map(([, col]) => like(col as any, term)))!);
       }
     }
 
@@ -317,10 +285,10 @@ export class DataService {
       if (!col) continue;
       switch (rule.op) {
         case "contains":
-          conditions.push(ilike(col, `%${rule.val}%`));
+          conditions.push(like(col, `%${rule.val}%`));
           break;
         case "not_contains":
-          conditions.push(not(ilike(col, `%${rule.val}%`)));
+          conditions.push(not(like(col, `%${rule.val}%`)));
           break;
         case "eq":
           conditions.push(eq(col, rule.val));
@@ -329,10 +297,10 @@ export class DataService {
           conditions.push(ne(col, rule.val));
           break;
         case "starts_with":
-          conditions.push(ilike(col, `${rule.val}%`));
+          conditions.push(like(col, `${rule.val}%`));
           break;
         case "ends_with":
-          conditions.push(ilike(col, `%${rule.val}`));
+          conditions.push(like(col, `%${rule.val}`));
           break;
         case "gt":
           conditions.push(gt(col, rule.val));
@@ -389,15 +357,22 @@ export class DataService {
           : and(...conditions);
 
     if (entityName === "documentLine") {
+      const currentSchema = this.getSchema() as any;
       const dataQ = db
         .select({
           ...getColumns(table),
-          articleId: schema.articleVariant.articleId,
-          articleNo: schema.article.articleNo,
+          articleId: currentSchema.articleVariant.articleId,
+          articleNo: currentSchema.article.articleNo,
         })
         .from(table)
-        .leftJoin(schema.articleVariant, eq(table.variantId, schema.articleVariant.variantId))
-        .leftJoin(schema.article, eq(schema.articleVariant.articleId, schema.article.articleId));
+        .leftJoin(
+          currentSchema.articleVariant,
+          eq(table.variantId, currentSchema.articleVariant.variantId),
+        )
+        .leftJoin(
+          currentSchema.article,
+          eq(currentSchema.articleVariant.articleId, currentSchema.article.articleId),
+        );
       if (whereClause) dataQ.where(whereClause);
       applyOptions(dataQ);
 
@@ -406,8 +381,14 @@ export class DataService {
       const countQ = db
         .select({ total: drizzleCount() })
         .from(table)
-        .leftJoin(schema.articleVariant, eq(table.variantId, schema.articleVariant.variantId))
-        .leftJoin(schema.article, eq(schema.articleVariant.articleId, schema.article.articleId));
+        .leftJoin(
+          currentSchema.articleVariant,
+          eq(table.variantId, currentSchema.articleVariant.variantId),
+        )
+        .leftJoin(
+          currentSchema.article,
+          eq(currentSchema.articleVariant.articleId, currentSchema.article.articleId),
+        );
       if (whereClause) countQ.where(whereClause);
 
       const [data, countRows] = await Promise.all([dataQ, countQ]);
@@ -438,12 +419,8 @@ export class DataService {
     const table = this.getTable(entityName);
     const pkName = this.getPrimaryKey(table);
     const pkColumn = (table as any)[pkName];
-    const hasTenantId = "tenantId" in table;
 
     const conditions = [eq(pkColumn, id)];
-    if (hasTenantId && !this.isSystemAdmin) {
-      conditions.push(eq(table.tenantId, this.tenantId));
-    }
 
     const results = await db
       .select()
@@ -461,12 +438,8 @@ export class DataService {
 
   async create(entityName: string, data: any) {
     const table = this.getTable(entityName);
-    const hasTenantId = "tenantId" in table;
     const lifecycleValues = this.normalizeLifecyclePayload(table, data);
-    const values =
-      hasTenantId && !this.isSystemAdmin
-        ? { ...lifecycleValues, tenantId: this.tenantId }
-        : lifecycleValues;
+    const values = lifecycleValues;
 
     const encryptedValues = await this.encryptLlmSecretFieldsIfNeeded(entityName, values);
 
@@ -476,7 +449,6 @@ export class DataService {
         const [createdArticle] = createdRows;
         if (createdArticle) {
           await ensureDefaultVariantForArticleRow(tx, {
-            tenantId: createdArticle.tenantId,
             articleId: createdArticle.articleId,
             articleNo: createdArticle.articleNo,
           });
@@ -496,7 +468,6 @@ export class DataService {
     const table = this.getTable(entityName);
     const pkName = this.getPrimaryKey(table);
     const pkColumn = (table as any)[pkName];
-    const hasTenantId = "tenantId" in table;
 
     // Strip keys that should not be part of the update payload
     const { [pkName]: _pk, tenantId: _t, createdAt: _c, updatedAt: _u, ...updateData } = data;
@@ -506,9 +477,6 @@ export class DataService {
     if (entityPkName in updateData) delete updateData[entityPkName];
 
     const conditions = [eq(pkColumn, id)];
-    if (hasTenantId && !this.isSystemAdmin) {
-      conditions.push(eq(table.tenantId, this.tenantId));
-    }
 
     const [currentRow] = await db
       .select()
@@ -529,23 +497,22 @@ export class DataService {
       longTextAwareData,
     );
 
+    const currentSchema = this.getSchema() as any;
+    const articleTable = currentSchema.article;
+    const articleImageTable = currentSchema.articleImage;
+
     let articlePrimaryBeforeArchive: string | null = null;
     if (
       entityName === "articleImage" &&
       normalizedUpdateData.archived === true &&
       currentRow.articleId &&
-      currentRow.tenantId &&
       currentRow.articleImageId
     ) {
+      const artConditions = [eq(articleTable.articleId, currentRow.articleId)];
       const [articleRow] = await db
-        .select({ primaryImageId: schema.article.primaryImageId })
-        .from(schema.article)
-        .where(
-          and(
-            eq(schema.article.tenantId, currentRow.tenantId),
-            eq(schema.article.articleId, currentRow.articleId),
-          ),
-        )
+        .select({ primaryImageId: articleTable.primaryImageId })
+        .from(articleTable)
+        .where(and(...artConditions))
         .limit(1);
       articlePrimaryBeforeArchive = articleRow?.primaryImageId ?? null;
     }
@@ -562,32 +529,26 @@ export class DataService {
       entityName === "articleImage" &&
       normalizedUpdateData.archived === true &&
       currentRow.articleId &&
-      currentRow.tenantId &&
       currentRow.articleImageId &&
       articlePrimaryBeforeArchive === currentRow.articleImageId
     ) {
+      const imgConditions = [
+        eq(articleImageTable.articleId, currentRow.articleId),
+        eq(articleImageTable.archived, false),
+      ];
       const [replacement] = await db
-        .select({ articleImageId: schema.articleImage.articleImageId })
-        .from(schema.articleImage)
-        .where(
-          and(
-            eq(schema.articleImage.tenantId, currentRow.tenantId),
-            eq(schema.articleImage.articleId, currentRow.articleId),
-            eq(schema.articleImage.archived, false),
-          ),
-        )
-        .orderBy(asc(schema.articleImage.sortOrder))
+        .select({ articleImageId: articleImageTable.articleImageId })
+        .from(articleImageTable)
+        .where(and(...imgConditions))
+        .orderBy(asc(articleImageTable.sortOrder))
         .limit(1);
 
+      const artUpdateConditions = [eq(articleTable.articleId, currentRow.articleId)];
+
       await db
-        .update(schema.article)
+        .update(articleTable)
         .set({ primaryImageId: replacement?.articleImageId ?? null })
-        .where(
-          and(
-            eq(schema.article.tenantId, currentRow.tenantId),
-            eq(schema.article.articleId, currentRow.articleId),
-          ),
-        );
+        .where(and(...artUpdateConditions));
     }
 
     return updatedRows;
@@ -600,10 +561,8 @@ export class DataService {
     const table = this.getTable(entityName);
     const pkName = this.getPrimaryKey(table);
     const pkColumn = (table as any)[pkName];
-    const hasTenantId = "tenantId" in table;
 
     const conditions = [eq(pkColumn, id)];
-    if (hasTenantId && !this.isSystemAdmin) conditions.push(eq(table.tenantId, this.tenantId));
 
     try {
       const result = await db
@@ -612,7 +571,8 @@ export class DataService {
         .returning({ id: pkColumn });
       return { deleted: result.length > 0, fkViolation: false };
     } catch (err: any) {
-      if (err.code === "23503" || err.cause?.code === "23503") return { deleted: false, fkViolation: true };
+      if (err.code === "23503" || err.cause?.code === "23503")
+        return { deleted: false, fkViolation: true };
       throw err;
     }
   }

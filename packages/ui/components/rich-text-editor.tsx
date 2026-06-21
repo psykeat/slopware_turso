@@ -21,7 +21,7 @@ export function RichTextEditor({
   onChange,
   className,
   mode = "html",
-  _onChangeMode,
+  onChangeMode: _onChangeMode,
   onAttachmentsChange,
 }: RichTextEditorProps) {
   // Convert standard HTML string to Novel/Tiptap format or pass directly

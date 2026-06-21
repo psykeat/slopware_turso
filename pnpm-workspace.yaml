@@ -4,7 +4,7 @@ packages:
   - tooling/*
 allowBuilds:
   "@google/genai": true
-  '@openrouter/sdk': true
+  "@openrouter/sdk": true
   esbuild: true
   msw: false
   protobufjs: true
@@ -111,7 +111,8 @@ catalog:
   "@tiptap/extension-font-family": ^2.23.0
   "@tiptap/extension-underline": ^2.23.0
   fflate: 0.8.2
-  fallow: 2.90.0
+  fallow: "2.90.0"
+  "@libsql/client": ^0.17.3
 catalogMode: prefer
 
 overrides:

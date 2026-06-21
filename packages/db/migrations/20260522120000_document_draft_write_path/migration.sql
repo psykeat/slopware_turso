@@ -1,4 +1,0 @@
--- Intentionally left blank.
--- The `document_line.archived_at` migration already exists in
--- 20260522010307_purple_firestar. This placeholder keeps the historical
--- migration timeline intact without reapplying the same DDL on fresh setups.

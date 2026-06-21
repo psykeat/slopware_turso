@@ -1,33 +1,42 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { postgresPersistence } from "./persistence/postgres";
+import { tursoPersistence } from "./persistence/turso";
+import type { PersistenceRuntime } from "./persistence/types";
 
-import "@tanstack/react-start/server-only";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+const provider = (process.env.PERSISTENCE_PROVIDER || "postgres") as "postgres" | "turso";
 
-import { relations as authRelations } from "./schema/auth.schema";
-import { relations } from "./schema/relations";
+export const activePersistence: PersistenceRuntime<any> =
+  provider === "turso" ? tursoPersistence : postgresPersistence;
 
-const client = postgres(process.env.DATABASE_URL as string);
+type AnyQuery = PromiseLike<any[]> & {
+  from(...args: any[]): AnyQuery;
+  where(...args: any[]): AnyQuery;
+  leftJoin(...args: any[]): AnyQuery;
+  innerJoin(...args: any[]): AnyQuery;
+  orderBy(...args: any[]): AnyQuery;
+  groupBy(...args: any[]): AnyQuery;
+  having(...args: any[]): AnyQuery;
+  limit(...args: any[]): AnyQuery;
+  offset(...args: any[]): AnyQuery;
+  values(...args: any[]): AnyQuery;
+  set(...args: any[]): AnyQuery;
+  returning(...args: any[]): AnyQuery;
+  onConflictDoNothing(...args: any[]): AnyQuery;
+  onConflictDoUpdate(...args: any[]): AnyQuery;
+  execute(...args: any[]): Promise<any>;
+  all(...args: any[]): Promise<any[]>;
+  get(...args: any[]): Promise<any>;
+  [key: string]: any;
+};
 
-// The real drizzle instance. Everything talks to the `db` Proxy below; this is
-// only used directly where we deliberately need a connection outside any
-// tenant-scoped transaction (e.g. opening the transaction itself).
-const baseDb = drizzle({
-  client,
-  // authRelations must come first, since it's using defineRelations as the main relation
-  // https://orm.drizzle.team/docs/relations-v2#relations-parts
-  relations: { ...authRelations, ...relations },
-});
-
-type DbLike = typeof baseDb;
-
-// When a tenant-scoped transaction is active (see runWithDbTx), every query
-// issued through the exported `db` is transparently routed to that transaction.
-// This is what lets capability handlers keep importing the global `db` while
-// their queries run on a connection that has the transaction-local tenant GUC
-// set — the precondition for PostgreSQL RLS under connection pooling. When no
-// store is active the Proxy is a no-op and behaves exactly like baseDb.
-const txStore = new AsyncLocalStorage<DbLike>();
+type DbFacade = {
+  select(...args: any[]): AnyQuery;
+  selectDistinct(...args: any[]): AnyQuery;
+  insert(...args: any[]): AnyQuery;
+  update(...args: any[]): AnyQuery;
+  delete(...args: any[]): AnyQuery;
+  transaction<T>(callback: (tx: DbFacade) => Promise<T>, config?: any): Promise<T>;
+  [key: string]: any;
+};
 
 /**
  * Run `fn` with every `db` query routed to `tx` (used by the capability
@@ -36,27 +45,23 @@ const txStore = new AsyncLocalStorage<DbLike>();
  * PgTransaction generics.
  */
 export function runWithDbTx<T>(tx: unknown, fn: () => Promise<T>): Promise<T> {
-  return txStore.run(tx as DbLike, fn);
+  return activePersistence.runWithDbTx(tx, fn);
 }
 
 /** The transaction bound to the current async context, if any. */
-export function currentDbTx(): DbLike | undefined {
-  return txStore.getStore();
+export function currentDbTx() {
+  return activePersistence.currentDbTx();
 }
 
-export const db = new Proxy(baseDb, {
-  get(target, prop, receiver) {
-    const active = (txStore.getStore() ?? target) as DbLike;
-    const value = Reflect.get(active, prop, receiver === db ? active : receiver);
-    return typeof value === "function" ? value.bind(active) : value;
-  },
-}) as DbLike;
+export const db = activePersistence.db as DbFacade;
 
 /** Open a transaction on the base connection, bypassing any active tenant scope. */
-export const dbTransaction: DbLike["transaction"] = baseDb.transaction.bind(baseDb);
+export const dbTransaction = activePersistence.transaction as DbFacade["transaction"];
+
+export const runInTenantScope = activePersistence.runInTenantScope;
 
 export async function closeDb() {
-  await client.end({ timeout: 5 });
+  await activePersistence.close();
 }
 
 export { eq, sql, and, or } from "drizzle-orm";

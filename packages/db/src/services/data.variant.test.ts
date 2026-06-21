@@ -147,7 +147,7 @@ async function createVariantProjectionFixture(withOptionSummary = false) {
 
 test("articleVariant lookup projects availability from inventory_level", async () => {
   const fixture = await createVariantProjectionFixture();
-  const dataService = new DataService(fixture.tenantId);
+  const dataService = new DataService();
 
   const rows = (await dataService.list("articleVariant", {
     articleId: fixture.articleId,
@@ -163,7 +163,7 @@ test("articleVariant lookup projects availability from inventory_level", async (
 
 test("articleVariant lookupLabel combines SKU, option summary, and availability", async () => {
   const fixture = await createVariantProjectionFixture(true);
-  const dataService = new DataService(fixture.tenantId);
+  const dataService = new DataService();
 
   const rows = (await dataService.list("articleVariant", {
     articleId: fixture.articleId,

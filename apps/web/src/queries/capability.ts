@@ -1,7 +1,12 @@
-import { queryOptions, useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import type { UseQueryOptions, UseSuspenseQueryOptions } from "@tanstack/react-query";
-
 import type { CapabilityInput, CapabilityKey, CapabilityOutput } from "@repo/db/capabilities";
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import type { UseQueryOptions, UseSuspenseQueryOptions } from "@tanstack/react-query";
 
 import { callCapability, capability } from "#/server-fns/capabilities";
 import type { CapabilityCallOptions } from "#/server-fns/capabilities";
@@ -16,10 +21,7 @@ function entityNameFromKey(key: CapabilityKey): string {
 // Shared queryOptions factory for read capabilities. Per-entity query modules
 // (queries/documents.ts, …) wrap this with named exports; route files should
 // not call it with ad-hoc keys.
-export function capabilityQueryOptions<K extends CapabilityKey>(
-  key: K,
-  input: CapabilityInput<K>,
-) {
+export function capabilityQueryOptions<K extends CapabilityKey>(key: K, input: CapabilityInput<K>) {
   return queryOptions({
     queryKey: entityKeys.operation(entityNameFromKey(key), key, input),
     queryFn: () => capability(key)(input),
@@ -48,37 +50,28 @@ export function useCapabilityMutation<K extends CapabilityKey>(
 }
 
 // Type-safe hook for capability read queries.
-export function useCapabilityQuery<
-  K extends CapabilityKey,
-  TData = CapabilityOutput<K>,
->(
+export function useCapabilityQuery<K extends CapabilityKey, TData = CapabilityOutput<K>>(
   key: K,
   input: CapabilityInput<K>,
-  options?: Omit<
-    UseQueryOptions<CapabilityOutput<K>, Error, TData>,
-    "queryKey" | "queryFn"
-  >,
-) {
+  options?: Omit<UseQueryOptions<CapabilityOutput<K>, Error, TData>, "queryKey" | "queryFn">,
+): any {
   return useQuery({
     ...capabilityQueryOptions(key, input),
     ...options,
-  });
+  } as any);
 }
 
 // Type-safe hook for React Suspense read queries.
-export function useCapabilitySuspenseQuery<
-  K extends CapabilityKey,
-  TData = CapabilityOutput<K>,
->(
+export function useCapabilitySuspenseQuery<K extends CapabilityKey, TData = CapabilityOutput<K>>(
   key: K,
   input: CapabilityInput<K>,
   options?: Omit<
     UseSuspenseQueryOptions<CapabilityOutput<K>, Error, TData>,
     "queryKey" | "queryFn"
   >,
-) {
+): any {
   return useSuspenseQuery({
     ...capabilityQueryOptions(key, input),
     ...options,
-  });
+  } as any);
 }

@@ -1,3 +1,4 @@
+import type { CapabilityResult } from "@repo/db/capabilities";
 // Generic entity CRUD for apps/web, replacing the introspective
 // `/api/data/<entity>` route on a *dynamic* entityName. Op resolution is shared
 // with packages/ui via @repo/db/capabilities/entity-ops; here we dispatch
@@ -11,7 +12,6 @@ import {
   resolveEntitySave,
   type EntityListOptions,
 } from "@repo/db/capabilities/entity-ops";
-import type { CapabilityResult } from "@repo/db/capabilities";
 
 import { $executeCapability, CapabilityClientError } from "#/server-fns/capabilities";
 
@@ -23,7 +23,7 @@ async function exec<T>(key: string, input: Record<string, unknown>): Promise<T> 
   return result.data;
 }
 
-export async function entityList<T = Record<string, unknown>>(
+export async function entityList<T = any>(
   entityName: string,
   filters: Record<string, string> = {},
   opts?: EntityListOptions,
@@ -34,7 +34,7 @@ export async function entityList<T = Record<string, unknown>>(
 }
 
 // Paginated variant returning the row count alongside the page.
-export async function entityListPage<T = Record<string, unknown>>(
+export async function entityListPage<T = any>(
   entityName: string,
   filters: Record<string, string> = {},
   opts?: EntityListOptions,
@@ -44,15 +44,12 @@ export async function entityListPage<T = Record<string, unknown>>(
   return { items: data.items, total: data.total ?? data.items.length };
 }
 
-export async function entityGet<T = Record<string, unknown>>(
-  entityName: string,
-  id: string,
-): Promise<T> {
+export async function entityGet<T = any>(entityName: string, id: string): Promise<T> {
   const { key, input } = resolveEntityGet(entityName, id);
   return exec<T>(key, input);
 }
 
-export async function entitySave<T = Record<string, unknown>>(
+export async function entitySave<T = any>(
   entityName: string,
   id: string | null,
   values: Record<string, unknown>,

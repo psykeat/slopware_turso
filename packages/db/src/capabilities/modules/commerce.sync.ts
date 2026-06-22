@@ -71,7 +71,11 @@ function mapServiceError(error: unknown): never {
     if (/not found/i.test(error.message)) {
       throw new CapabilityError("not_found", error.message);
     }
-    if (/unsupported commerce (platform|sync direction)|not supported for platform/i.test(error.message)) {
+    if (
+      /unsupported commerce (platform|sync direction)|not supported for platform/i.test(
+        error.message,
+      )
+    ) {
       throw new CapabilityError("validation", error.message);
     }
     throw new CapabilityError("conflict", error.message);
@@ -106,7 +110,9 @@ export const commerceSyncStart = defineCapability({
     steps: z.array(commerceSyncStepRowSchema),
   }),
   writesTables: ["commerceSyncRun", "commerceSyncRunStep", "externalSyncMapping"],
-  sideEffects: ["pushes selected entities to the configured commerce platform unless dryRun is true"],
+  sideEffects: [
+    "pushes selected entities to the configured commerce platform unless dryRun is true",
+  ],
   idempotent: false,
   supportsDryRun: true,
   minRole: "tenant_user",

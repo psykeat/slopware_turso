@@ -437,3 +437,43 @@ Start with the smallest slice that removes real bloat:
 6. Add guardrails preventing those files/imports from coming back.
 
 This first slice removes the generated compatibility map and proves the registry can own operation projections without requiring a full rewrite of every domain handler.
+
+## Implementation Status
+
+Last updated: 2026-06-22.
+
+Completed:
+
+- Registry-owned generic entity action projection added in `@repo/registry`.
+- Dynamic entity CRUD helpers in `apps/web` and `packages/ui` now resolve operations from registry action projection.
+- DB-side generated capability manifest removed.
+- DB-side entity operation resolver removed.
+- Capability manifest generation script removed.
+- Capability-to-`entity_commands` sync script and implementation removed.
+- `@repo/db/actions` adapter added for registry-action execution, descriptors, JSON schema projection, and action type aliases.
+- Agent tool builder now uses `@repo/db/actions` internally and exposes action-named APIs.
+- `/api/ai/execute` now uses `buildActionTools`.
+- AI command discovery no longer reads `entity_commands`; it projects commands from registry-backed actions.
+- Legacy `/api/ai/plan` and `/api/ai/plans/*` compatibility endpoints removed.
+- Metadata GET route now prefers registry projections for settings registry, fields, and grid layouts.
+- Generated frontend SDK now emits `action(...)` and `ActionInput`/`ActionOutput` imports.
+- Web server function internals execute through `executeAction`; `capability()` remains as a compatibility alias for existing call sites.
+- Guardrails added to prevent the deleted manifest/sync layers from returning.
+- Package typechecks pass for registry, DB, agent, UI, and web.
+
+Remaining:
+
+- Rename remaining app-facing `capability()` helper imports and query hook names to action terminology once call sites are migrated.
+- Move route `/api/capabilities*` to `/api/actions*` or keep as deliberate backwards-compatible HTTP API with an explicit deprecation note.
+- Convert remaining direct app business routes that still import DB schema:
+  - `api/delivery-addresses/$deliveryAddressId`
+  - `api/setup/initialize`
+  - `api/setup/year-end`
+  - `api/me/company`
+  - `api/admin/document-groups/*`
+  - `api/articles/$articleId/{images,bom,bom/$bomId,serial-numbers,batches}`
+  - `api/stats/*`
+  - selected admin/config routes that should be classified as true admin exceptions or actionized.
+- Move legacy AI planning services (`ai-planning.ts` plan tables and command-key executor) behind registry actions or delete them if no longer used.
+- Replace metadata write/designer fallback paths with a real registry overlay implementation.
+- Move action definitions fully into `@repo/registry`; current action execution still bridges over existing capability handlers.

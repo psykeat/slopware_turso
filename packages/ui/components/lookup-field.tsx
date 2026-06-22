@@ -546,7 +546,10 @@ function lookupFilterToControls(lookupFilter: unknown): {
 } {
   if (!lookupFilter) return { filters: {} };
   if (Array.isArray(lookupFilter)) {
-    return { filters: {}, filterRules: lookupFilter as Array<{ col: string; op: string; val: string }> };
+    return {
+      filters: {},
+      filterRules: lookupFilter as Array<{ col: string; op: string; val: string }>,
+    };
   }
   const filters: Record<string, string> = {};
   if (isObject(lookupFilter)) {

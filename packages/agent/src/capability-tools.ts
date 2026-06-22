@@ -1,36 +1,35 @@
 import {
-  executeCapability,
-  listCapabilities,
-  type AnyCapability,
-  type CapabilityResult,
-  type ExecutionContext,
-} from "@repo/db/capabilities";
+  executeAction,
+  listActions,
+  type ActionExecutionContext,
+  type ActionResult,
+  type AnyRegistryBackedAction,
+} from "@repo/db/actions";
 import { toolDefinition } from "@tanstack/ai";
 
-// AI projection of the capability runtime: the LLM never sees raw services and
+// AI projection of the registry action runtime: the LLM never sees raw services and
 // never receives a `tenantId` parameter. Every tool is a thin wrapper that
-// delegates to `executeCapability` with a server-built ExecutionContext, so the
+// delegates to `executeAction` with a server-built execution context, so the
 // AI write path is exactly the same gated path the UI and external callers use.
 
 /** Default tool name, mirrored by the contract test in @repo/db. */
-export function capabilityToolName(capability: AnyCapability): string {
+export function actionToolName(action: AnyRegistryBackedAction): string {
   return (
-    capability.exposure.ai?.toolName ??
-    `${capability.module}_${capability.operation}_${capability.entityName}`
+    action.exposure.ai?.toolName ?? `${action.module}_${action.operation}_${action.entityName}`
   );
 }
 
 export type ConfirmMode = "approval" | "exclude" | "allow";
 
-export interface BuildCapabilityToolsOptions {
+export interface BuildActionToolsOptions {
   /** Restrict to one projection group, e.g. "mail" | "sales-documents" | "catalog". */
   group?: string;
-  /** Only capabilities flagged `activeByDefault`. Defaults to true. */
+  /** Only actions flagged `activeByDefault`. Defaults to true. */
   activeByDefaultOnly?: boolean;
-  /** Explicit capability-key allow-list. Overrides `group`/`activeByDefaultOnly`. */
+  /** Explicit action-key allow-list. Overrides `group`/`activeByDefaultOnly`. */
   keys?: string[];
   /**
-   * How to treat confirm-gated capabilities (`exposure.llm === "confirm"`):
+   * How to treat confirm-gated actions (`exposure.llm === "confirm"`):
    * - "approval" (default): emit with `needsApproval` so the client confirms.
    * - "exclude": leave them out of the toolset entirely (headless/autonomous runs).
    * - "allow": expose without an approval gate (trusted server contexts).
@@ -39,71 +38,69 @@ export interface BuildCapabilityToolsOptions {
 }
 
 /**
- * Select the AI-exposed capabilities for a toolset. Hidden capabilities are
- * never eligible; a capability is AI-exposed exactly when it carries an
+ * Select the AI-exposed actions for a toolset. Hidden actions are
+ * never eligible; an action is AI-exposed exactly when it carries an
  * `exposure.ai` projection.
  */
-export function listAiCapabilities(options: BuildCapabilityToolsOptions = {}): AnyCapability[] {
-  const exposed = listCapabilities({ llm: ["safe", "confirm"] }).filter(
-    (capability) => capability.exposure.ai,
-  );
+export function listAiActions(options: BuildActionToolsOptions = {}): AnyRegistryBackedAction[] {
+  const exposed = listActions({ llm: ["safe", "confirm"] }).filter((action) => action.exposure.ai);
 
   if (options.keys) {
     const allow = new Set(options.keys);
-    return exposed.filter((capability) => allow.has(capability.key));
+    return exposed.filter((action) => allow.has(action.key));
   }
 
   let result = exposed;
   if (options.group) {
-    result = result.filter((capability) => capability.exposure.ai!.group === options.group);
+    result = result.filter((action) => action.exposure.ai!.group === options.group);
   }
   if (options.activeByDefaultOnly ?? true) {
-    result = result.filter((capability) => capability.exposure.ai!.activeByDefault);
+    result = result.filter((action) => action.exposure.ai!.activeByDefault);
   }
   if (options.confirmMode === "exclude") {
-    result = result.filter((capability) => capability.exposure.llm !== "confirm");
+    result = result.filter((action) => action.exposure.llm !== "confirm");
   }
   return result;
 }
 
-/** Compose an LLM-facing description from the capability's AI projection. */
-export function capabilityToolDescription(capability: AnyCapability): string {
-  const ai = capability.exposure.ai;
-  const parts: string[] = [capability.summary.en];
+/** Compose an LLM-facing description from the action's AI projection. */
+export function actionToolDescription(action: AnyRegistryBackedAction): string {
+  const ai = action.exposure.ai;
+  const parts: string[] = [action.summary.en];
   if (ai?.useWhen?.length) parts.push(`Use when: ${ai.useWhen.join(" ")}`);
   if (ai?.avoidWhen?.length) parts.push(`Avoid when: ${ai.avoidWhen.join(" ")}`);
   if (ai?.requiredContext?.length) parts.push(`Requires: ${ai.requiredContext.join(", ")}.`);
   if (ai?.resultShape) parts.push(`Returns: ${ai.resultShape}.`);
-  if (capability.exposure.llm === "confirm") {
+  if (action.exposure.llm === "confirm") {
     parts.push("This action changes data and requires user confirmation before it runs.");
   }
   return parts.join(" ");
 }
 
 /**
- * Turn a fixed set of capabilities into @tanstack/ai server tools. The `ctx` is
+ * Turn a fixed set of actions into @tanstack/ai server tools. The `ctx` is
  * closed over so the model can never set tenant/actor itself — exactly the
  * factory pattern the bespoke mail tools used.
  */
-function capabilitiesToTools(
-  ctx: ExecutionContext,
-  capabilities: AnyCapability[],
+function actionsToTools(
+  ctx: ActionExecutionContext,
+  actions: AnyRegistryBackedAction[],
   confirmMode: ConfirmMode,
 ) {
   const requireApproval = confirmMode === "approval";
 
-  return capabilities.map((capability) => {
+  return actions.map((action) => {
     const definition = toolDefinition({
-      name: capabilityToolName(capability),
-      description: capabilityToolDescription(capability),
-      // The capability's own zod input schema is the contract. It never
+      name: actionToolName(action),
+      description: actionToolDescription(action),
+      // The action's own zod input schema is the contract. It never
       // contains `tenantId` — that is resolved server-side from `ctx`.
-      inputSchema: capability.input,
-      ...(requireApproval && capability.exposure.llm === "confirm" ? { needsApproval: true } : {}),
+      inputSchema: action.input,
+      ...(requireApproval && action.exposure.llm === "confirm" ? { needsApproval: true } : {}),
     });
 
     return definition.server(async (input: unknown) => {
-      const result: CapabilityResult = await executeCapability(capability.key, ctx, input);
+      const result: ActionResult = await executeAction(action.key, ctx, input);
       if (result.ok) {
         return { ok: true, data: result.data };
       }
@@ -115,11 +112,11 @@ function capabilitiesToTools(
 /**
  * Build the @tanstack/ai server tools for one request from a group/keys scope.
  */
-export function buildCapabilityTools(
-  ctx: ExecutionContext,
-  options: BuildCapabilityToolsOptions = {},
+export function buildActionTools(
+  ctx: ActionExecutionContext,
+  options: BuildActionToolsOptions = {},
 ) {
-  return capabilitiesToTools(ctx, listAiCapabilities(options), options.confirmMode ?? "approval");
+  return actionsToTools(ctx, listAiActions(options), options.confirmMode ?? "approval");
 }
 
 export interface OverlayToolsOptions {
@@ -129,33 +126,31 @@ export interface OverlayToolsOptions {
    * `["mail", "sales-documents"]`). Writes are curated to these groups.
    */
   focusGroups?: string | string[];
-  /** Confirm policy for write capabilities. Defaults to "approval". */
+  /** Confirm policy for write actions. Defaults to "approval". */
   confirmMode?: ConfirmMode;
 }
 
 /**
- * Select the overlay's capabilities under the **"reads global, writes scoped"**
+ * Select the overlay's actions under the **"reads global, writes scoped"**
  * rule:
- * - **Backbone** — every AI-exposed `kind: "read"` capability across *all*
+ * - **Backbone** — every AI-exposed `kind: "read"` action across *all*
  *   groups. This is the Exploration backbone and never a thinking boundary, so
  *   the model can look anything up regardless of the focused group.
- * - **Focus group** — every AI-exposed capability (read *and* write) in the
+ * - **Focus group** — every AI-exposed action (read *and* write) in the
  *   group seeded from the Invocation Context. Writes are curated to this group;
  *   switching focus widens the writable set.
  */
-export function selectOverlayCapabilities(focusGroups?: string | string[]): AnyCapability[] {
+export function selectOverlayActions(focusGroups?: string | string[]): AnyRegistryBackedAction[] {
   const focus = new Set(typeof focusGroups === "string" ? [focusGroups] : (focusGroups ?? []));
-  const exposed = listCapabilities({ llm: ["safe", "confirm"] }).filter(
-    (capability) => capability.exposure.ai,
-  );
+  const exposed = listActions({ llm: ["safe", "confirm"] }).filter((action) => action.exposure.ai);
 
-  const selected = new Map<string, AnyCapability>();
-  for (const capability of exposed) {
-    const isBackboneRead = capability.kind === "read";
-    const aiGroup = capability.exposure.ai?.group;
+  const selected = new Map<string, AnyRegistryBackedAction>();
+  for (const action of exposed) {
+    const isBackboneRead = action.kind === "read";
+    const aiGroup = action.exposure.ai?.group;
     const inFocusGroup = aiGroup ? focus.has(aiGroup) : false;
     if (isBackboneRead || inFocusGroup) {
-      selected.set(capability.key, capability);
+      selected.set(action.key, action);
     }
   }
   return [...selected.values()];
@@ -165,10 +160,19 @@ export function selectOverlayCapabilities(focusGroups?: string | string[]): AnyC
  * Build the interactive overlay toolset (`/api/ai/chat`). Reads are global,
  * writes are scoped to the focused group(s) and gated by the approval handshake.
  */
-export function buildOverlayTools(ctx: ExecutionContext, options: OverlayToolsOptions = {}) {
-  return capabilitiesToTools(
+export function buildOverlayTools(ctx: ActionExecutionContext, options: OverlayToolsOptions = {}) {
+  return actionsToTools(
     ctx,
-    selectOverlayCapabilities(options.focusGroups),
+    selectOverlayActions(options.focusGroups),
     options.confirmMode ?? "approval",
   );
 }
+
+export type BuildCapabilityToolsOptions = BuildActionToolsOptions;
+export type AnyCapability = AnyRegistryBackedAction;
+export type ExecutionContext = ActionExecutionContext;
+export const capabilityToolName = actionToolName;
+export const capabilityToolDescription = actionToolDescription;
+export const listAiCapabilities = listAiActions;
+export const buildCapabilityTools = buildActionTools;
+export const selectOverlayCapabilities = selectOverlayActions;

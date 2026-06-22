@@ -55,7 +55,9 @@ export const Route = createFileRoute("/api/capabilities/$key/execute")({
         // Replay token: the standard Idempotency-Key header wins, with the body
         // field as a fallback. executeCapability enforces it per tenant.
         const idempotencyKey =
-          request.headers.get("idempotency-key")?.trim() || body.idempotencyKey?.trim() || undefined;
+          request.headers.get("idempotency-key")?.trim() ||
+          body.idempotencyKey?.trim() ||
+          undefined;
 
         const result = await executeCapability(
           params.key,

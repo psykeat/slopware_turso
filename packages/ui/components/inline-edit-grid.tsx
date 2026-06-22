@@ -60,7 +60,11 @@ export function InlineEditGrid({
   const saveMutation = useMutation({
     mutationFn: (data: Record<string, any>) => {
       const isNew = editingId === NEW_ROW_ID;
-      return entitySave(entityName, isNew ? null : editingId, isNew ? { ...parentKey, ...data } : data);
+      return entitySave(
+        entityName,
+        isNew ? null : editingId,
+        isNew ? { ...parentKey, ...data } : data,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["data", entityName] });
@@ -120,7 +124,7 @@ export function InlineEditGrid({
   const emptyLabel = labels?.empty ?? "No records yet.";
   const recordCountLabel =
     rows.length > 0
-      ? labels?.records?.(rows.length) ?? `${rows.length} record${rows.length !== 1 ? "s" : ""}`
+      ? (labels?.records?.(rows.length) ?? `${rows.length} record${rows.length !== 1 ? "s" : ""}`)
       : "";
 
   return (

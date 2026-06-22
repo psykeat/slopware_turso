@@ -1,6 +1,6 @@
 import { auth } from "@repo/auth/auth";
-import { db } from "@repo/db";
-import { user } from "@repo/db/schema";
+import { configDb as db } from "@repo/db/config";
+import { user } from "@repo/db/config-schema";
 import { getUserTenantInfo, getTenantInfoById, getUserTenantRole } from "@repo/db/services/tenant";
 import { createFileRoute } from "@tanstack/react-router";
 import { eq } from "drizzle-orm";

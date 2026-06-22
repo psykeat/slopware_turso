@@ -1,4 +1,4 @@
-import type { CapabilityInput, CapabilityKey, CapabilityOutput } from "@repo/db/capabilities";
+import type { ActionInput, ActionKey, ActionOutput } from "@repo/db/actions";
 import {
   queryOptions,
   useMutation,
@@ -14,14 +14,14 @@ import type { CapabilityCallOptions } from "#/server-fns/capabilities";
 import { invalidateAfterCapability } from "./invalidate";
 import { entityKeys } from "./keys";
 
-function entityNameFromKey(key: CapabilityKey): string {
+function entityNameFromKey(key: ActionKey): string {
   return key.split(".")[1] ?? key;
 }
 
 // Shared queryOptions factory for read capabilities. Per-entity query modules
 // (queries/documents.ts, …) wrap this with named exports; route files should
 // not call it with ad-hoc keys.
-export function capabilityQueryOptions<K extends CapabilityKey>(key: K, input: CapabilityInput<K>) {
+export function capabilityQueryOptions<K extends ActionKey>(key: K, input: ActionInput<K>) {
   return queryOptions({
     queryKey: entityKeys.operation(entityNameFromKey(key), key, input),
     queryFn: () => capability(key)(input),
@@ -29,18 +29,17 @@ export function capabilityQueryOptions<K extends CapabilityKey>(key: K, input: C
 }
 
 // Mutation hook with automatic writesTables-driven invalidation.
-export function useCapabilityMutation<K extends CapabilityKey>(
+export function useCapabilityMutation<K extends ActionKey>(
   key: K,
   options?: {
     dryRun?: CapabilityCallOptions["dryRun"];
-    onSuccess?: (data: CapabilityOutput<K>) => void;
+    onSuccess?: (data: ActionOutput<K>) => void;
     onError?: (error: unknown) => void;
   },
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CapabilityInput<K>) =>
-      callCapability(key, input, { dryRun: options?.dryRun }),
+    mutationFn: (input: ActionInput<K>) => callCapability(key, input, { dryRun: options?.dryRun }),
     onSuccess: (result) => {
       invalidateAfterCapability(queryClient, result.meta);
       options?.onSuccess?.(result.data);
@@ -50,10 +49,10 @@ export function useCapabilityMutation<K extends CapabilityKey>(
 }
 
 // Type-safe hook for capability read queries.
-export function useCapabilityQuery<K extends CapabilityKey, TData = CapabilityOutput<K>>(
+export function useCapabilityQuery<K extends ActionKey, TData = ActionOutput<K>>(
   key: K,
-  input: CapabilityInput<K>,
-  options?: Omit<UseQueryOptions<CapabilityOutput<K>, Error, TData>, "queryKey" | "queryFn">,
+  input: ActionInput<K>,
+  options?: Omit<UseQueryOptions<ActionOutput<K>, Error, TData>, "queryKey" | "queryFn">,
 ): any {
   return useQuery({
     ...capabilityQueryOptions(key, input),
@@ -62,13 +61,10 @@ export function useCapabilityQuery<K extends CapabilityKey, TData = CapabilityOu
 }
 
 // Type-safe hook for React Suspense read queries.
-export function useCapabilitySuspenseQuery<K extends CapabilityKey, TData = CapabilityOutput<K>>(
+export function useCapabilitySuspenseQuery<K extends ActionKey, TData = ActionOutput<K>>(
   key: K,
-  input: CapabilityInput<K>,
-  options?: Omit<
-    UseSuspenseQueryOptions<CapabilityOutput<K>, Error, TData>,
-    "queryKey" | "queryFn"
-  >,
+  input: ActionInput<K>,
+  options?: Omit<UseSuspenseQueryOptions<ActionOutput<K>, Error, TData>, "queryKey" | "queryFn">,
 ): any {
   return useSuspenseQuery({
     ...capabilityQueryOptions(key, input),

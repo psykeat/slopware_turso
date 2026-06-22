@@ -5,7 +5,7 @@ import { dirname } from "node:path";
 import * as readline from "node:readline";
 
 import { DRIZZLE_SQLITE_BULK_INSERT_MAX_ROWS, chunkRecords } from "@repo/business";
-import { and, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../index";
@@ -23,10 +23,8 @@ import {
   importProfile,
   importProfileMappingVersion,
   importRow,
-  tenantConnector,
-  tenantConnectorMapping,
   unit,
-} from "../schema/app.schema";
+} from "../schema/sqlite.schema";
 import { backfillDefaultArticleVariants } from "./default-variant-backfill";
 import { MetadataResolver } from "./metadata";
 
@@ -385,7 +383,7 @@ async function resolveUnitIdByCode(tenantId: string, code: unknown) {
   const [row] = await db
     .select({ unitId: unit.unitId })
     .from(unit)
-    .where(and(eq(unit.tenantId, tenantId), eq(unit.code, unitCode)))
+    .where(eq(unit.code, unitCode))
     .limit(1);
 
   return row?.unitId ?? null;
@@ -398,7 +396,7 @@ async function resolveArticleIdByNo(tenantId: string, articleNo: unknown) {
   const [row] = await db
     .select({ articleId: article.articleId })
     .from(article)
-    .where(and(eq(article.tenantId, tenantId), eq(article.articleNo, articleCode)))
+    .where(eq(article.articleNo, articleCode))
     .limit(1);
 
   return row?.articleId ?? null;
@@ -417,9 +415,7 @@ async function resolveVariantIdentity(
         sku: articleVariant.sku,
       })
       .from(articleVariant)
-      .where(
-        and(eq(articleVariant.tenantId, tenantId), eq(articleVariant.variantId, directVariantId)),
-      )
+      .where(eq(articleVariant.variantId, directVariantId))
       .limit(1);
 
     if (row) return row;
@@ -434,7 +430,7 @@ async function resolveVariantIdentity(
         sku: articleVariant.sku,
       })
       .from(articleVariant)
-      .where(and(eq(articleVariant.tenantId, tenantId), eq(articleVariant.sku, sku)))
+      .where(eq(articleVariant.sku, sku))
       .limit(1);
 
     if (row) return row;
@@ -453,7 +449,6 @@ async function resolveVariantIdentity(
     .from(articleVariant)
     .where(
       and(
-        eq(articleVariant.tenantId, tenantId),
         eq(articleVariant.articleId, articleId),
         eq(articleVariant.optionValueHash, optionValueHash),
       ),
@@ -556,7 +551,7 @@ export class ImportService {
     return db
       .select()
       .from(importProfile)
-      .where(and(eq(importProfile.tenantId, this.tenantId), eq(importProfile.archived, false)))
+      .where(and(eq(importProfile.archived, false)))
       .orderBy(desc(importProfile.createdAt));
   }
 
@@ -580,7 +575,7 @@ export class ImportService {
     const [existing] = await db
       .select({ profileId: importProfile.profileId })
       .from(importProfile)
-      .where(and(eq(importProfile.profileId, profileId), eq(importProfile.tenantId, this.tenantId)))
+      .where(and(eq(importProfile.profileId, profileId)))
       .limit(1);
     if (!existing) throw new Error("Profile not found");
 
@@ -595,7 +590,7 @@ export class ImportService {
         ...(data.archived !== undefined && { archived: data.archived }),
         updatedAt: new Date(),
       })
-      .where(and(eq(importProfile.profileId, profileId), eq(importProfile.tenantId, this.tenantId)))
+      .where(and(eq(importProfile.profileId, profileId)))
       .returning();
     return updated;
   }
@@ -611,9 +606,7 @@ export class ImportService {
     await db
       .update(importProfile)
       .set({ archived: true, updatedAt: new Date() })
-      .where(
-        and(eq(importProfile.profileId, profileId), eq(importProfile.tenantId, this.tenantId)),
-      );
+      .where(and(eq(importProfile.profileId, profileId)));
   }
 
   // ─── Mappings ─────────────────────────────────────────────────────────────
@@ -624,7 +617,6 @@ export class ImportService {
       .from(tenantConnectorMapping)
       .where(
         and(
-          eq(tenantConnectorMapping.tenantId, this.tenantId),
           eq(tenantConnectorMapping.tenantConnectorId, tenantConnectorId),
           eq(tenantConnectorMapping.profileId, profileId),
         ),
@@ -642,7 +634,6 @@ export class ImportService {
         .delete(tenantConnectorMapping)
         .where(
           and(
-            eq(tenantConnectorMapping.tenantId, this.tenantId),
             eq(tenantConnectorMapping.tenantConnectorId, tenantConnectorId),
             eq(tenantConnectorMapping.profileId, profileId),
           ),
@@ -679,7 +670,6 @@ export class ImportService {
       .from(tenantConnectorMapping)
       .where(
         and(
-          eq(tenantConnectorMapping.tenantId, this.tenantId),
           eq(tenantConnectorMapping.tenantConnectorId, tenantConnectorId),
           eq(tenantConnectorMapping.profileId, profileId),
         ),
@@ -749,7 +739,7 @@ export class ImportService {
     const [profile] = await db
       .select()
       .from(importProfile)
-      .where(and(eq(importProfile.profileId, profileId), eq(importProfile.tenantId, this.tenantId)))
+      .where(and(eq(importProfile.profileId, profileId)))
       .limit(1);
     if (!profile) throw new Error("Import profile not found");
 
@@ -954,7 +944,6 @@ export class ImportService {
         .set({ isActive: false })
         .where(
           and(
-            isNull(importProfileMappingVersion.tenantId),
             eq(importProfileMappingVersion.sourceSystem, "bueroware"),
             eq(importProfileMappingVersion.isActive, true),
           ),
@@ -1110,7 +1099,6 @@ export class ImportService {
       .from(importProfileMappingVersion)
       .where(
         and(
-          isNull(importProfileMappingVersion.tenantId),
           eq(importProfileMappingVersion.sourceSystem, "bueroware"),
           eq(importProfileMappingVersion.layoutId, layoutId),
           eq(importProfileMappingVersion.isActive, true),
@@ -1435,7 +1423,7 @@ export class ImportService {
     const [batch] = await db
       .select()
       .from(importBatch)
-      .where(and(eq(importBatch.batchId, params.batchId), eq(importBatch.tenantId, this.tenantId)))
+      .where(eq(importBatch.batchId, params.batchId))
       .limit(1);
     if (!batch) throw new Error("Batch not found");
     if (batch.status !== "pending" && batch.status !== "queued") {
@@ -1468,7 +1456,7 @@ export class ImportService {
           : null,
         status: "queued",
       })
-      .where(and(eq(importBatch.batchId, params.batchId), eq(importBatch.tenantId, this.tenantId)))
+      .where(eq(importBatch.batchId, params.batchId))
       .returning();
 
     return { batchId: updated.batchId, status: updated.status };
@@ -1498,7 +1486,7 @@ export class ImportService {
     const [batch] = await db
       .select()
       .from(importBatch)
-      .where(and(eq(importBatch.batchId, claimedId), eq(importBatch.tenantId, this.tenantId)))
+      .where(eq(importBatch.batchId, claimedId))
       .limit(1);
     if (!batch) return null;
 
@@ -1515,9 +1503,7 @@ export class ImportService {
           errorSummary: { message } as Record<string, unknown>,
           processedAt: new Date(),
         })
-        .where(
-          and(eq(importBatch.batchId, batch.batchId), eq(importBatch.tenantId, this.tenantId)),
-        );
+        .where(and(eq(importBatch.batchId, batch.batchId)));
       return { batchId: batch.batchId, status: "failed" };
     }
   }
@@ -1545,7 +1531,6 @@ export class ImportService {
               .from(importProfileMappingVersion)
               .where(
                 and(
-                  isNull(importProfileMappingVersion.tenantId),
                   eq(importProfileMappingVersion.sourceSystem, "bueroware"),
                   eq(
                     importProfileMappingVersion.sourceFileName,
@@ -1571,9 +1556,7 @@ export class ImportService {
       .where(eq(importFieldMapping.versionId, mappingVersion));
     if (mappings.length === 0) throw new Error("Mapping version has no field mappings");
 
-    await db
-      .delete(importRow)
-      .where(and(eq(importRow.batchId, batch.batchId), eq(importRow.tenantId, this.tenantId)));
+    await db.delete(importRow).where(eq(importRow.batchId, batch.batchId));
 
     // A mapping version maps exactly one data area (one layout) → one qualifier.
     const qualifier =
@@ -1666,7 +1649,6 @@ export class ImportService {
       .from(importProfileMappingVersion)
       .where(
         and(
-          eq(importProfileMappingVersion.tenantId, this.tenantId),
           eq(importProfileMappingVersion.tenantConnectorId, tenantConnectorId),
           eq(importProfileMappingVersion.profileId, profileId),
           eq(importProfileMappingVersion.isActive, true),
@@ -1718,7 +1700,7 @@ export class ImportService {
     const [profile] = await db
       .select()
       .from(importProfile)
-      .where(and(eq(importProfile.profileId, profileId), eq(importProfile.tenantId, this.tenantId)))
+      .where(eq(importProfile.profileId, profileId))
       .limit(1);
 
     if (!profile) throw new Error("Import profile not found");
@@ -1772,7 +1754,7 @@ export class ImportService {
   // ─── Batches ─────────────────────────────────────────────────────────────
 
   async listBatches(filters?: { profileId?: string; status?: string }) {
-    const conditions = [eq(importBatch.tenantId, this.tenantId)];
+    const conditions = [];
     if (filters?.profileId) {
       conditions.push(eq(importBatch.profileId, filters.profileId));
     }
@@ -1791,15 +1773,12 @@ export class ImportService {
     const [batch] = await db
       .select()
       .from(importBatch)
-      .where(and(eq(importBatch.batchId, batchId), eq(importBatch.tenantId, this.tenantId)))
+      .where(and(eq(importBatch.batchId, batchId)))
       .limit(1);
 
     if (!batch) throw new Error("Batch not found");
 
-    const rows = await db
-      .select()
-      .from(importRow)
-      .where(and(eq(importRow.batchId, batchId), eq(importRow.tenantId, this.tenantId)));
+    const rows = await db.select().from(importRow).where(eq(importRow.batchId, batchId));
 
     return { batch, rows };
   }
@@ -1808,7 +1787,7 @@ export class ImportService {
     const [batch] = await db
       .select()
       .from(importBatch)
-      .where(and(eq(importBatch.batchId, batchId), eq(importBatch.tenantId, this.tenantId)))
+      .where(eq(importBatch.batchId, batchId))
       .limit(1);
 
     if (!batch) throw new Error("Batch not found");
@@ -1823,7 +1802,7 @@ export class ImportService {
     await db
       .update(importBatch)
       .set({ status: "approved", isDryRun: false })
-      .where(and(eq(importBatch.batchId, batchId), eq(importBatch.tenantId, this.tenantId)));
+      .where(eq(importBatch.batchId, batchId));
   }
 
   async resolveBuerowareBatch(
@@ -1833,7 +1812,7 @@ export class ImportService {
     const [batch] = await db
       .select()
       .from(importBatch)
-      .where(and(eq(importBatch.batchId, batchId), eq(importBatch.tenantId, this.tenantId)))
+      .where(eq(importBatch.batchId, batchId))
       .limit(1);
     if (!batch) throw new Error("Batch not found");
     const mappingVersion =
@@ -1845,7 +1824,6 @@ export class ImportService {
               .from(importProfileMappingVersion)
               .where(
                 and(
-                  isNull(importProfileMappingVersion.tenantId),
                   eq(importProfileMappingVersion.sourceSystem, "bueroware"),
                   eq(
                     importProfileMappingVersion.sourceFileName,
@@ -1992,7 +1970,7 @@ export class ImportService {
         pendingReferenceCount: totalPendingReferences,
         processedAt: new Date(),
       })
-      .where(and(eq(importBatch.batchId, batchId), eq(importBatch.tenantId, this.tenantId)));
+      .where(eq(importBatch.batchId, batchId));
 
     if (!options.dryRun && posted > 0 && options.triggerReconcile !== false) {
       await this.reconcilePendingRows();
@@ -2029,7 +2007,6 @@ export class ImportService {
         .from(externalSyncMapping)
         .where(
           and(
-            eq(externalSyncMapping.tenantId, this.tenantId),
             eq(externalSyncMapping.sourceSystem, "bueroware"),
             eq(
               externalSyncMapping.entityType,
@@ -2266,7 +2243,7 @@ export class ImportService {
           .insert(article)
           .values(chunk)
           .onConflictDoUpdate({
-            target: [article.tenantId, article.articleNo],
+            target: [article.articleNo],
             set,
           })
           .returning({ externalId: article.articleNo, internalId: article.articleId });
@@ -2321,7 +2298,7 @@ export class ImportService {
         .insert(articleGroup)
         .values(chunk)
         .onConflictDoUpdate({
-          target: [articleGroup.tenantId, articleGroup.code],
+          target: [articleGroup.code],
           set: {
             name: sql`excluded.name`,
           },
@@ -2397,7 +2374,7 @@ export class ImportService {
           .insert(address)
           .values(chunk)
           .onConflictDoUpdate({
-            target: [address.tenantId, address.addressNo],
+            target: [address.addressNo],
             set,
           })
           .returning({ externalId: address.addressNo, internalId: address.addressId });
@@ -2542,7 +2519,7 @@ export class ImportService {
           tenantId: this.tenantId,
         })
         .onConflictDoUpdate({
-          target: [article.tenantId, article.articleNo],
+          target: [article.articleNo],
           set: {
             name: normalized.name,
             ...(payload.description !== undefined && {
@@ -2571,7 +2548,7 @@ export class ImportService {
           ...(normalized.shopActive !== undefined && { shopActive: normalized.shopActive }),
         })
         .onConflictDoUpdate({
-          target: [address.tenantId, address.addressNo],
+          target: [address.addressNo],
           set: {
             ...(payload.companyName !== undefined && {
               companyName: normalized.companyName,
@@ -2616,7 +2593,7 @@ export class ImportService {
           tenantId: this.tenantId,
         })
         .onConflictDoUpdate({
-          target: [articleGroup.tenantId, articleGroup.code],
+          target: [articleGroup.code],
           set: {
             name: normalized.name,
           },
@@ -2683,9 +2660,7 @@ export class ImportService {
     const pendingRows = await db
       .select()
       .from(importRow)
-      .where(
-        and(eq(importRow.tenantId, this.tenantId), eq(importRow.status, "pending_references")),
-      );
+      .where(eq(importRow.status, "pending_references"));
 
     const rowsByBatch = new Map<string, Array<typeof importRow.$inferSelect>>();
     for (const row of pendingRows) {
@@ -2701,7 +2676,7 @@ export class ImportService {
       const [batch] = await db
         .select()
         .from(importBatch)
-        .where(and(eq(importBatch.batchId, batchId), eq(importBatch.tenantId, this.tenantId)))
+        .where(eq(importBatch.batchId, batchId))
         .limit(1);
       const versionId =
         batch?.mappingVersionId ??
@@ -2753,7 +2728,7 @@ export class ImportService {
     const [batch] = await db
       .select()
       .from(importBatch)
-      .where(and(eq(importBatch.batchId, batchId), eq(importBatch.tenantId, this.tenantId)))
+      .where(eq(importBatch.batchId, batchId))
       .limit(1);
 
     if (!batch) throw new Error("Batch not found");
@@ -2776,12 +2751,7 @@ export class ImportService {
       const [profile] = await db
         .select({ requiresApproval: importProfile.requiresApproval })
         .from(importProfile)
-        .where(
-          and(
-            eq(importProfile.profileId, batch.profileId),
-            eq(importProfile.tenantId, this.tenantId),
-          ),
-        )
+        .where(and(eq(importProfile.profileId, batch.profileId)))
         .limit(1);
 
       if (profile?.requiresApproval !== false) {
@@ -2960,7 +2930,7 @@ export class ImportService {
         postedEntityCount: posted,
         processedAt: new Date(),
       })
-      .where(and(eq(importBatch.batchId, batchId), eq(importBatch.tenantId, this.tenantId)));
+      .where(eq(importBatch.batchId, batchId));
 
     return { posted, failed };
   }
@@ -2980,12 +2950,6 @@ export class ImportService {
         connectorDefinition,
         eq(connectorDefinition.connectorId, tenantConnector.connectorId),
       )
-      .where(
-        and(
-          eq(tenantConnector.tenantId, this.tenantId),
-          eq(tenantConnector.isActive, true),
-          eq(tenantConnector.archived, false),
-        ),
-      );
+      .where(and(eq(tenantConnector.isActive, true), eq(tenantConnector.archived, false)));
   }
 }

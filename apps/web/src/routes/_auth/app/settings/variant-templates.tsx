@@ -193,17 +193,17 @@ function VariantTemplatesView() {
 
   useEffect(() => () => setSubCrumb(undefined), [setSubCrumb]);
 
-  const { data: templates = [], isLoading: isTemplatesLoading } = useQuery<
-    VariantTemplateRecord[]
-  >({
-    queryKey: ["variant-templates"],
-    queryFn: async () => {
-      const { items } = await capability("masterdata.articleVariantTemplate.list")({
-        includeArchived: true,
-      });
-      return items as unknown as VariantTemplateRecord[];
+  const { data: templates = [], isLoading: isTemplatesLoading } = useQuery<VariantTemplateRecord[]>(
+    {
+      queryKey: ["variant-templates"],
+      queryFn: async () => {
+        const { items } = await capability("masterdata.articleVariantTemplate.list")({
+          includeArchived: true,
+        });
+        return items as unknown as VariantTemplateRecord[];
+      },
     },
-  });
+  );
 
   const { data: articleGroups = [] } = useQuery<any[]>({
     queryKey: ["data", "articleGroup"],
@@ -403,7 +403,11 @@ function VariantTemplatesView() {
     });
   };
 
-  const updateValue = (axisId: string, valueId: string, patch: Partial<Omit<DraftValue, "_localId">>) => {
+  const updateValue = (
+    axisId: string,
+    valueId: string,
+    patch: Partial<Omit<DraftValue, "_localId">>,
+  ) => {
     setDraft((d) => ({
       ...d,
       axes: d.axes.map((axis) =>
@@ -428,7 +432,13 @@ function VariantTemplatesView() {
               ...axis,
               values: [
                 ...axis.values,
-                { _localId: localId(), value: "", skuCode: "", priceSurcharge: "", weightDelta: "" },
+                {
+                  _localId: localId(),
+                  value: "",
+                  skuCode: "",
+                  priceSurcharge: "",
+                  weightDelta: "",
+                },
               ],
             }
           : axis,
@@ -944,9 +954,7 @@ function VariantTemplatesView() {
                         </button>
                         <button
                           onClick={() => normalizeMutation.mutate(selectedAxis._localId)}
-                          disabled={
-                            normalizeMutation.isPending || selectedAxis.values.length === 0
-                          }
+                          disabled={normalizeMutation.isPending || selectedAxis.values.length === 0}
                           className="flex items-center gap-1.5 text-[13px] text-ink-secondary transition-colors hover:text-ink disabled:opacity-40"
                         >
                           <SparklesIcon className="size-3.5" />

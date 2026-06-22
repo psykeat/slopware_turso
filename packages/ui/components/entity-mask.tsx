@@ -189,7 +189,9 @@ function FieldInput({
   }, [originalField]);
   const { i18n } = useTranslation();
   const hasError = !!field.error;
-  const displayValue = isLocalizedText(value) ? resolveLocalizedText(value, i18n.language) : (value ?? "");
+  const displayValue = isLocalizedText(value)
+    ? resolveLocalizedText(value, i18n.language)
+    : (value ?? "");
   const lookupSource = useMemo(() => {
     if (field.type !== "lookup") return null;
     const sourceConfig = buildLookupConfigFromField(field, field.label, undefined, "No results");
@@ -350,9 +352,7 @@ export function EntityMask({
       let result: unknown;
       if (apiBase === ADMIN_DATA_BASE) {
         // System-admin introspection route — kept on raw fetch.
-        const url = isEdit
-          ? `${apiBase}/${entityName}/${recordId}`
-          : `${apiBase}/${entityName}`;
+        const url = isEdit ? `${apiBase}/${entityName}/${recordId}` : `${apiBase}/${entityName}`;
         const res = await fetch(url, {
           method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -681,9 +681,7 @@ export function EntityMask({
     for (const field of effectiveFields) {
       const frameId = fieldFrameByKey.get(field.key) ?? primaryFrameId ?? "default";
       const label =
-        frameId === "default"
-          ? ""
-          : (frameLabelById.get(frameId) || formatFrameLabel(frameId));
+        frameId === "default" ? "" : frameLabelById.get(frameId) || formatFrameLabel(frameId);
       ensureGroup(frameId, label).fields.push(field);
     }
 
@@ -840,7 +838,10 @@ export function EntityMask({
           : fieldRefs.current.get(anchorKey);
       if (!anchor) return;
       const rect = anchor.getBoundingClientRect();
-      const width = Math.min(window.innerWidth - 24, selectedDesignerNode?.kind === "group-frame" ? 340 : 400);
+      const width = Math.min(
+        window.innerWidth - 24,
+        selectedDesignerNode?.kind === "group-frame" ? 340 : 400,
+      );
       const estimatedHeight = selectedDesignerNode?.kind === "group-frame" ? 240 : 360;
       let top = rect.bottom + 10;
       if (top + estimatedHeight > window.innerHeight - 12) {
@@ -1727,7 +1728,8 @@ export function EntityMask({
                   </span>
                   <span className="rounded-full border border-hairline bg-canvas px-1.5 py-0.5">
                     {groupedFields.find((group) => group.frameId === selectedDesignerFrame.id)
-                      ?.fields.length ?? 0} field(s)
+                      ?.fields.length ?? 0}{" "}
+                    field(s)
                   </span>
                 </div>
               </div>
@@ -1911,9 +1913,5 @@ export function EntityMask({
     );
   }
 
-  return (
-    <>
-      {renderedContent}
-    </>
-  );
+  return <>{renderedContent}</>;
 }

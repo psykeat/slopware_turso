@@ -1,9 +1,8 @@
 import { auth } from "@repo/auth/auth";
-import { db } from "@repo/db";
+import { db, activePersistence, runInTenantScope } from "@repo/db";
 import { documentGroup } from "@repo/db/schema";
 import { DIRECTION_FROM_TYPE } from "@repo/db/services/document-service";
 import { createFileRoute } from "@tanstack/react-router";
-import { eq } from "drizzle-orm";
 
 import { resolveTenantContext } from "#/lib/resolve-tenant";
 
@@ -44,23 +43,22 @@ export const Route = createFileRoute("/api/admin/document-groups/")({
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context) return new Response("No active tenant found", { status: 403 });
 
-        const groups = await db
-          .select()
-          .from(documentGroup)
-          .where(eq(documentGroup.tenantId, context.tenantId));
+        return runInTenantScope(context, async () => {
+          const groups = await db.select().from(documentGroup);
 
-        groups.sort((a, b) => {
-          const da = TYPE_ORDER[DIRECTION_FROM_TYPE[a.documentType] ?? ""] ?? 99;
-          const db_ = TYPE_ORDER[DIRECTION_FROM_TYPE[b.documentType] ?? ""] ?? 99;
-          if (da !== db_) return da - db_;
-          const ta = TYPE_SEQUENCE[a.documentType] ?? 99;
-          const tb = TYPE_SEQUENCE[b.documentType] ?? 99;
-          if (ta !== tb) return ta - tb;
-          return a.groupNumber - b.groupNumber;
-        });
+          groups.sort((a, b) => {
+            const da = TYPE_ORDER[DIRECTION_FROM_TYPE[a.documentType] ?? ""] ?? 99;
+            const db_ = TYPE_ORDER[DIRECTION_FROM_TYPE[b.documentType] ?? ""] ?? 99;
+            if (da !== db_) return da - db_;
+            const ta = TYPE_SEQUENCE[a.documentType] ?? 99;
+            const tb = TYPE_SEQUENCE[b.documentType] ?? 99;
+            if (ta !== tb) return ta - tb;
+            return a.groupNumber - b.groupNumber;
+          });
 
-        return new Response(JSON.stringify(groups), {
-          headers: { "content-type": "application/json" },
+          return new Response(JSON.stringify(groups), {
+            headers: { "content-type": "application/json" },
+          });
         });
       },
 
@@ -87,10 +85,8 @@ export const Route = createFileRoute("/api/admin/document-groups/")({
         if (!direction) return new Response("Invalid document type", { status: 400 });
 
         try {
-          const [created] = await db
-            .insert(documentGroup)
-            .values({
-              tenantId: context.tenantId,
+          return await runInTenantScope(context, async () => {
+            const insertValues: any = {
               documentType: body.documentType,
               name: body.name,
               groupNumber: body.groupNumber,
@@ -98,11 +94,17 @@ export const Route = createFileRoute("/api/admin/document-groups/")({
               nextGroupId: body.nextGroupId ?? null,
               numberSequenceId: body.numberSequenceId ?? null,
               defaultWarehouseId: body.defaultWarehouseId ?? null,
-            })
-            .returning();
+            };
 
-          return new Response(JSON.stringify(created), {
-            headers: { "content-type": "application/json" },
+            if (activePersistence.provider === "postgres") {
+              insertValues.tenantId = context.tenantId;
+            }
+
+            const [created] = await db.insert(documentGroup).values(insertValues).returning();
+
+            return new Response(JSON.stringify(created), {
+              headers: { "content-type": "application/json" },
+            });
           });
         } catch (err: any) {
           return new Response(err.message, { status: 400 });

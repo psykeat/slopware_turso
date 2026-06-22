@@ -1663,7 +1663,9 @@ export const inventoryMovement = pgTable(
     warehouseId: uuid("warehouse_id")
       .notNull()
       .references(() => warehouse.warehouseId),
-    inventoryItemId: uuid("inventory_item_id").notNull().references(() => inventoryItem.itemId),
+    inventoryItemId: uuid("inventory_item_id")
+      .notNull()
+      .references(() => inventoryItem.itemId),
     variantId: uuid("variant_id").references(() => articleVariant.variantId),
     movementType: char("movement_type", { length: 1 }).notNull(),
     qtyDelta: numeric("qty_delta"),
@@ -1903,8 +1905,7 @@ export const priceListItem = pgTable(
     priceListId: uuid("price_list_id")
       .notNull()
       .references(() => priceList.priceListId),
-    articleId: uuid("article_id")
-      .references(() => article.articleId),
+    articleId: uuid("article_id").references(() => article.articleId),
     // Pricing is variant-specific; articleId is retained only for compatibility with older imports.
     variantId: uuid("variant_id")
       .notNull()
@@ -1921,11 +1922,7 @@ export const priceListItem = pgTable(
       table.variantId,
       table.validFrom,
     ),
-    index("idx_price_list_item_variant").on(
-      table.priceListId,
-      table.variantId,
-      table.validFrom,
-    ),
+    index("idx_price_list_item_variant").on(table.priceListId, table.variantId, table.validFrom),
     index("idx_price_list_item_tenant").on(table.tenantId),
   ],
 );
@@ -2525,10 +2522,7 @@ export const emailAccount = pgTable(
       "chk_email_account_activity_tier",
       sql`activity_tier IN ('hot', 'warm', 'cold', 'dormant')`,
     ),
-    check(
-      "chk_email_account_sync_priority",
-      sql`sync_priority IN ('high', 'normal', 'low')`,
-    ),
+    check("chk_email_account_sync_priority", sql`sync_priority IN ('high', 'normal', 'low')`),
   ],
 );
 
@@ -2910,10 +2904,7 @@ export const emailSubscription = pgTable(
     uniqueIndex("idx_email_subscription_channel_token")
       .on(table.channelToken)
       .where(sql`channel_token IS NOT NULL`),
-    check(
-      "chk_email_subscription_resource",
-      sql`resource IN ('mail', 'calendar', 'contacts')`,
-    ),
+    check("chk_email_subscription_resource", sql`resource IN ('mail', 'calendar', 'contacts')`),
     check(
       "chk_email_subscription_status",
       sql`status IN ('active', 'expired', 'renewal_pending', 'failed')`,
@@ -3625,8 +3616,7 @@ export const externalSyncMapping = pgTable(
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenant.tenantId),
-    salesChannelId: uuid("sales_channel_id")
-      .references(() => salesChannel.salesChannelId),
+    salesChannelId: uuid("sales_channel_id").references(() => salesChannel.salesChannelId),
     sourceSystem: text("source_system").notNull().default("sales_channel"),
     entityType: externalSyncEntityType("entity_type").notNull(),
     internalId: uuid("internal_id").notNull(),

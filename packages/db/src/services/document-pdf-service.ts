@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { db } from "../index";
-import { article, articleImage, company, document, documentLine } from "../schema/app.schema";
+import { article, articleImage, company, document, documentLine } from "../schema/sqlite.schema";
 
 // ---------------------------------------------------------------------------
 // Render port (dependency injection)
@@ -127,7 +127,7 @@ export class DocumentPdfService {
     const docs = await db
       .select()
       .from(document)
-      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
     const doc = docs[0];
     if (!doc) return null;
@@ -150,13 +150,13 @@ export class DocumentPdfService {
       })
       .from(documentLine)
       .leftJoin(article, eq(documentLine.variantId, article.articleId))
-      .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)))
+      .where(eq(documentLine.documentId, documentId))
       .orderBy(asc(documentLine.lineNo));
 
     const companies = await db
       .select()
       .from(company)
-      .where(and(eq(company.companyId, doc.companyId), eq(company.tenantId, tenantId)))
+      .where(eq(company.companyId, doc.companyId))
       .limit(1);
     const co = companies[0];
     if (!co) throw new DocumentPdfNotRenderableError("Company not found for document");
@@ -245,12 +245,7 @@ export class DocumentPdfService {
     const imageRecords = await db
       .select()
       .from(articleImage)
-      .where(
-        and(
-          inArray(articleImage.articleImageId, primaryImageIds),
-          eq(articleImage.tenantId, tenantId),
-        ),
-      );
+      .where(inArray(articleImage.articleImageId, primaryImageIds));
 
     const baseDir = join(storageRoot(), "..");
     for (const imgRec of imageRecords) {
@@ -270,10 +265,7 @@ export class DocumentPdfService {
    * `emailOutbox.prepareSend` references. Returns the storage key as `fileId`.
    * This is its own verb — never an implicit side effect of prepareSend.
    */
-  async materialize(
-    tenantId: string,
-    documentId: string,
-  ): Promise<{ fileId: string }> {
+  async materialize(tenantId: string, documentId: string): Promise<{ fileId: string }> {
     if (!registeredRenderer) {
       throw new DocumentPdfNotRenderableError(
         "No document PDF renderer registered. The web layer must call registerDocumentPdfRenderer at server start.",

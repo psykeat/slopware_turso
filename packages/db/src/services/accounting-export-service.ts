@@ -9,7 +9,7 @@ import {
   journalLine,
   fiscalPeriod,
   document,
-} from "../schema/app.schema";
+} from "../schema/sqlite.schema";
 
 export class AccountingExportService {
   // 1. Create a new export batch for a fiscal period + company
@@ -43,12 +43,7 @@ export class AccountingExportService {
       const [batch] = await tx
         .select()
         .from(accountingExportBatch)
-        .where(
-          and(
-            eq(accountingExportBatch.batchId, batchId),
-            eq(accountingExportBatch.tenantId, tenantId),
-          ),
-        )
+        .where(eq(accountingExportBatch.batchId, batchId))
         .limit(1);
 
       if (!batch) throw new Error("Batch not found");
@@ -58,12 +53,7 @@ export class AccountingExportService {
       const [period] = await tx
         .select()
         .from(fiscalPeriod)
-        .where(
-          and(
-            eq(fiscalPeriod.fiscalPeriodId, batch.fiscalPeriodId),
-            eq(fiscalPeriod.tenantId, tenantId),
-          ),
-        )
+        .where(eq(fiscalPeriod.fiscalPeriodId, batch.fiscalPeriodId))
         .limit(1);
 
       if (!period) throw new Error("Fiscal period not found");
@@ -88,7 +78,6 @@ export class AccountingExportService {
         .leftJoin(document, eq(journalEntry.sourceDocumentId, document.documentId))
         .where(
           and(
-            eq(journalLine.tenantId, tenantId),
             eq(journalEntry.companyId, companyId),
             gte(journalEntry.postingDate, period.startDate),
             lte(journalEntry.postingDate, period.endDate),
@@ -127,12 +116,7 @@ export class AccountingExportService {
       await tx
         .update(accountingExportBatch)
         .set({ rowCount: rows.length })
-        .where(
-          and(
-            eq(accountingExportBatch.batchId, batchId),
-            eq(accountingExportBatch.tenantId, tenantId),
-          ),
-        );
+        .where(eq(accountingExportBatch.batchId, batchId));
 
       return { rowCount: rows.length };
     });
@@ -143,12 +127,7 @@ export class AccountingExportService {
     const [batch] = await db
       .select()
       .from(accountingExportBatch)
-      .where(
-        and(
-          eq(accountingExportBatch.batchId, batchId),
-          eq(accountingExportBatch.tenantId, tenantId),
-        ),
-      )
+      .where(eq(accountingExportBatch.batchId, batchId))
       .limit(1);
 
     if (!batch) throw new Error("Batch not found");
@@ -163,12 +142,7 @@ export class AccountingExportService {
     await db
       .update(accountingExportBatch)
       .set({ status: "exported", exportedAt: new Date() })
-      .where(
-        and(
-          eq(accountingExportBatch.batchId, batchId),
-          eq(accountingExportBatch.tenantId, tenantId),
-        ),
-      );
+      .where(eq(accountingExportBatch.batchId, batchId));
   }
 
   // 4. Rebuild: clear existing rows and re-run buildExportRows
@@ -178,12 +152,7 @@ export class AccountingExportService {
       const [batch] = await tx
         .select()
         .from(accountingExportBatch)
-        .where(
-          and(
-            eq(accountingExportBatch.batchId, batchId),
-            eq(accountingExportBatch.tenantId, tenantId),
-          ),
-        )
+        .where(eq(accountingExportBatch.batchId, batchId))
         .limit(1);
 
       if (!batch) throw new Error("Batch not found");
@@ -196,12 +165,7 @@ export class AccountingExportService {
       const [period] = await tx
         .select()
         .from(fiscalPeriod)
-        .where(
-          and(
-            eq(fiscalPeriod.fiscalPeriodId, batch.fiscalPeriodId),
-            eq(fiscalPeriod.tenantId, tenantId),
-          ),
-        )
+        .where(eq(fiscalPeriod.fiscalPeriodId, batch.fiscalPeriodId))
         .limit(1);
 
       if (!period) throw new Error("Fiscal period not found");
@@ -226,7 +190,6 @@ export class AccountingExportService {
         .leftJoin(document, eq(journalEntry.sourceDocumentId, document.documentId))
         .where(
           and(
-            eq(journalLine.tenantId, tenantId),
             eq(journalEntry.companyId, companyId),
             gte(journalEntry.postingDate, period.startDate),
             lte(journalEntry.postingDate, period.endDate),
@@ -265,12 +228,7 @@ export class AccountingExportService {
       await tx
         .update(accountingExportBatch)
         .set({ rowCount: rows.length })
-        .where(
-          and(
-            eq(accountingExportBatch.batchId, batchId),
-            eq(accountingExportBatch.tenantId, tenantId),
-          ),
-        );
+        .where(eq(accountingExportBatch.batchId, batchId));
 
       return { rowCount: rows.length };
     });
@@ -282,12 +240,7 @@ export class AccountingExportService {
     const [batch] = await db
       .select()
       .from(accountingExportBatch)
-      .where(
-        and(
-          eq(accountingExportBatch.batchId, batchId),
-          eq(accountingExportBatch.tenantId, tenantId),
-        ),
-      )
+      .where(eq(accountingExportBatch.batchId, batchId))
       .limit(1);
 
     if (!batch) throw new Error("Batch not found");
@@ -295,9 +248,7 @@ export class AccountingExportService {
     const rows = await db
       .select()
       .from(accountingExportRow)
-      .where(
-        and(eq(accountingExportRow.batchId, batchId), eq(accountingExportRow.tenantId, tenantId)),
-      );
+      .where(eq(accountingExportRow.batchId, batchId));
 
     const header =
       "batch_id,posting_date,gl_account_id,cost_center_id,tax_code_id,debit_amount,credit_amount,currency_id,source_document_no";
@@ -325,12 +276,7 @@ export class AccountingExportService {
     const [batch] = await db
       .select()
       .from(accountingExportBatch)
-      .where(
-        and(
-          eq(accountingExportBatch.batchId, batchId),
-          eq(accountingExportBatch.tenantId, tenantId),
-        ),
-      )
+      .where(eq(accountingExportBatch.batchId, batchId))
       .limit(1);
 
     if (!batch) throw new Error("Batch not found");
@@ -338,16 +284,14 @@ export class AccountingExportService {
     const rows = await db
       .select()
       .from(accountingExportRow)
-      .where(
-        and(eq(accountingExportRow.batchId, batchId), eq(accountingExportRow.tenantId, tenantId)),
-      );
+      .where(eq(accountingExportRow.batchId, batchId));
 
     return { batch, rows };
   }
 
   // 7. List all batches for a tenant
   async listBatches(tenantId: string, companyId?: string): Promise<unknown[]> {
-    const conditions = [eq(accountingExportBatch.tenantId, tenantId)];
+    const conditions: ReturnType<typeof eq>[] = [];
 
     if (companyId) {
       conditions.push(eq(accountingExportBatch.companyId, companyId));
@@ -356,6 +300,6 @@ export class AccountingExportService {
     return await db
       .select()
       .from(accountingExportBatch)
-      .where(and(...conditions));
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
   }
 }

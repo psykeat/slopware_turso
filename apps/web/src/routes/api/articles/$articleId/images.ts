@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { auth } from "@repo/auth/auth";
-import { db } from "@repo/db";
+import { db, activePersistence, runInTenantScope } from "@repo/db";
 import { article, articleImage } from "@repo/db/schema";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, eq } from "drizzle-orm";
@@ -27,20 +27,18 @@ export const Route = createFileRoute("/api/articles/$articleId/images")({
         }
 
         try {
-          const records = await db
-            .select()
-            .from(articleImage)
-            .where(
-              and(
-                eq(articleImage.tenantId, context.tenantId),
-                eq(articleImage.articleId, params.articleId),
-                eq(articleImage.archived, false),
-              ),
-            )
-            .orderBy(articleImage.sortOrder);
+          return await runInTenantScope(context, async () => {
+            const records = await db
+              .select()
+              .from(articleImage)
+              .where(
+                and(eq(articleImage.articleId, params.articleId), eq(articleImage.archived, false)),
+              )
+              .orderBy(articleImage.sortOrder);
 
-          return new Response(JSON.stringify(records), {
-            headers: { "content-type": "application/json" },
+            return new Response(JSON.stringify(records), {
+              headers: { "content-type": "application/json" },
+            });
           });
         } catch (err: any) {
           return new Response(err.message, { status: 500 });
@@ -89,28 +87,25 @@ export const Route = createFileRoute("/api/articles/$articleId/images")({
           const buffer = Buffer.from(arrayBuffer);
           await writeFile(absolutePath, buffer);
 
-          const newImage = await db.transaction(async (tx) => {
-            const existingImages = await tx
-              .select({ sortOrder: articleImage.sortOrder })
-              .from(articleImage)
-              .where(
-                and(
-                  eq(articleImage.tenantId, context.tenantId),
-                  eq(articleImage.articleId, params.articleId),
-                  eq(articleImage.archived, false),
-                ),
-              );
+          const newImage = await runInTenantScope(context, async () => {
+            return await db.transaction(async (tx) => {
+              const existingImages = await tx
+                .select({ sortOrder: articleImage.sortOrder })
+                .from(articleImage)
+                .where(
+                  and(
+                    eq(articleImage.articleId, params.articleId),
+                    eq(articleImage.archived, false),
+                  ),
+                );
 
-            const nextSortOrder =
-              existingImages.length > 0
-                ? Math.max(...existingImages.map((img) => img.sortOrder)) + 1
-                : 0;
+              const nextSortOrder =
+                existingImages.length > 0
+                  ? Math.max(...existingImages.map((img) => img.sortOrder)) + 1
+                  : 0;
 
-            const [inserted] = await tx
-              .insert(articleImage)
-              .values({
+              const insertValues: any = {
                 articleImageId: uuid,
-                tenantId: context.tenantId,
                 articleId: params.articleId,
                 storageKey,
                 fileName,
@@ -119,32 +114,28 @@ export const Route = createFileRoute("/api/articles/$articleId/images")({
                 altText,
                 sortOrder: nextSortOrder,
                 archived: false,
-              })
-              .returning();
+              };
 
-            const [art] = await tx
-              .select({ primaryImageId: article.primaryImageId })
-              .from(article)
-              .where(
-                and(
-                  eq(article.tenantId, context.tenantId),
-                  eq(article.articleId, params.articleId),
-                ),
-              );
+              if (activePersistence.provider === "postgres") {
+                insertValues.tenantId = context.tenantId;
+              }
 
-            if (art && !art.primaryImageId) {
-              await tx
-                .update(article)
-                .set({ primaryImageId: inserted.articleImageId })
-                .where(
-                  and(
-                    eq(article.tenantId, context.tenantId),
-                    eq(article.articleId, params.articleId),
-                  ),
-                );
-            }
+              const [inserted] = await tx.insert(articleImage).values(insertValues).returning();
 
-            return inserted;
+              const [art] = await tx
+                .select({ primaryImageId: article.primaryImageId })
+                .from(article)
+                .where(eq(article.articleId, params.articleId));
+
+              if (art && !art.primaryImageId) {
+                await tx
+                  .update(article)
+                  .set({ primaryImageId: inserted.articleImageId })
+                  .where(eq(article.articleId, params.articleId));
+              }
+
+              return inserted;
+            });
           });
 
           return new Response(JSON.stringify(newImage), {

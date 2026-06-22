@@ -321,7 +321,9 @@ function FieldAssignmentMask({
       });
     },
     onSuccess: async (res) => {
-      await queryClient.invalidateQueries({ queryKey: ["import", "bw-templates", layout.layoutId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["import", "bw-templates", layout.layoutId],
+      });
       setTemplateProfileId(res.profileId);
       setTemplateName("");
       setEditsState({ sourceKey: `${layout.layoutId}:${res.profileId}`, edits: {} });
@@ -355,8 +357,9 @@ function FieldAssignmentMask({
     return hay.includes(filter.toLowerCase());
   });
 
-  const assignedCount = fields.filter((f) => effectiveRow(f).included && effectiveRow(f).targetField)
-    .length;
+  const assignedCount = fields.filter(
+    (f) => effectiveRow(f).included && effectiveRow(f).targetField,
+  ).length;
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-canvas">
@@ -468,7 +471,9 @@ function FieldAssignmentMask({
                     </td>
                     <td className="px-3 py-1.5">
                       <div className="font-medium text-ink">{f.label ?? f.buerowareFieldId}</div>
-                      <div className="font-mono text-[10px] text-ink-mute">{f.buerowareFieldId}</div>
+                      <div className="font-mono text-[10px] text-ink-mute">
+                        {f.buerowareFieldId}
+                      </div>
                     </td>
                     <td className="px-3 py-1.5 text-ink-secondary">
                       <span className="font-mono text-[11px]">{f.sampleValue || "—"}</span>
@@ -489,7 +494,9 @@ function FieldAssignmentMask({
                       >
                         <option value={NOT_IMPORTED}>— nicht importieren —</option>
                         {isCustom && (
-                          <option value={row.targetField}>Custom: {row.targetField.slice(17)}</option>
+                          <option value={row.targetField}>
+                            Custom: {row.targetField.slice(17)}
+                          </option>
                         )}
                         {targetFields.map((t) => (
                           <option key={t.fieldName} value={t.fieldName}>

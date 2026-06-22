@@ -33,7 +33,6 @@ export const Route = createFileRoute("/api/articles/$articleId/pricing")({
             params.articleId,
             customerId,
             documentDate,
-            context.tenantId,
             {
               deliveryAddressId,
               deliveryCountryCode,

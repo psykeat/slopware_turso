@@ -14,6 +14,16 @@ const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const scanRoots = ["apps/web/src", "packages/ui", "packages/agent/src"];
 const skipDirs = new Set(["node_modules", "dist", ".output", "build", ".vite", "coverage"]);
 const FORBIDDEN = /fetch\(\s*[`"']\/api\/data\b/;
+const DELETED_CAPABILITY_PROJECTIONS = [
+  "@repo/db/capabilities/entity-ops",
+  "@repo/db/capabilities/manifest",
+  "manifest.generated",
+  "manifest-build",
+  "generate:manifest",
+  "sync:capabilities",
+  "sync-capabilities",
+  "syncEntityCommands",
+];
 
 function walk(dir: string, out: string[]) {
   let entries: string[];
@@ -43,6 +53,24 @@ test("no direct fetch to the deleted /api/data route remains", () => {
   assert.deepEqual(
     offenders.map((f) => f.slice(repoRoot.length)),
     [],
-    "use the capability runtime (executeCapability / capability() / executeCapability HTTP) instead of fetch(\"/api/data\")",
+    'use the capability runtime (executeCapability / capability() / executeCapability HTTP) instead of fetch("/api/data")',
   );
+});
+
+test("deleted capability projection and sync layers stay deleted", () => {
+  const files: string[] = [];
+  for (const root of scanRoots) walk(join(repoRoot, root), files);
+  walk(join(repoRoot, "packages/db/src"), files);
+  assert.ok(files.length > 0, "guardrail scanned no files — check scanRoots");
+
+  const offenders: Array<{ file: string; token: string }> = [];
+  for (const file of files) {
+    if (file.endsWith("capabilities.guardrails.test.ts")) continue;
+    const source = readFileSync(file, "utf8");
+    for (const token of DELETED_CAPABILITY_PROJECTIONS) {
+      if (source.includes(token)) offenders.push({ file: file.slice(repoRoot.length), token });
+    }
+  }
+
+  assert.deepEqual(offenders, []);
 });

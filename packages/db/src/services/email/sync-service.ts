@@ -11,7 +11,7 @@ import {
   emailMessageLabel,
   emailSyncState,
   emailThread,
-} from "../../schema/app.schema";
+} from "../../schema/sqlite.schema";
 import { EmailAccountService } from "./account-service";
 import { createEmailProviderAdapter } from "./adapters";
 import { EmailJobService, activityTierPriority } from "./job-service";
@@ -85,9 +85,7 @@ export class EmailSyncService {
     await db
       .update(emailAccount)
       .set({ activityTier: "hot", lastUserActivityAt: now, updatedAt: now })
-      .where(
-        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
-      );
+      .where(eq(emailAccount.emailAccountId, accountId));
   }
 
   async queueAccountJob(
@@ -100,9 +98,7 @@ export class EmailSyncService {
     await db
       .update(emailAccount)
       .set({ lastSyncStatus: "queued", updatedAt: new Date() })
-      .where(
-        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
-      );
+      .where(eq(emailAccount.emailAccountId, accountId));
     return await this.jobService.enqueue({
       jobType,
       emailAccountId: accountId,
@@ -137,23 +133,14 @@ export class EmailSyncService {
         .from(emailMessage)
         .innerJoin(
           emailMessageLabel,
-          and(
-            eq(emailMessageLabel.tenantId, this.tenantId),
-            eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
-          ),
+          eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
         )
-        .where(
-          and(
-            eq(emailMessage.tenantId, this.tenantId),
-            eq(emailMessageLabel.emailLabelId, options.labelId),
-          ),
-        );
+        .where(eq(emailMessageLabel.emailLabelId, options.labelId));
       threadIdsWithLabel = rows.map((row) => row.emailThreadId);
       if (threadIdsWithLabel.length === 0) return [];
     }
 
     const conditions = [
-      eq(emailThread.tenantId, this.tenantId),
       options.folder === "trash"
         ? eq(emailThread.inTrash, true)
         : and(
@@ -176,7 +163,6 @@ export class EmailSyncService {
         .from(emailLabel)
         .where(
           and(
-            eq(emailLabel.tenantId, this.tenantId),
             options.accountId ? eq(emailLabel.emailAccountId, options.accountId) : undefined,
             or(
               ilike(emailLabel.name, "draft%"),
@@ -200,14 +186,10 @@ export class EmailSyncService {
         .from(emailMessage)
         .leftJoin(
           emailMessageLabel,
-          and(
-            eq(emailMessageLabel.tenantId, this.tenantId),
-            eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
-          ),
+          eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
         )
         .where(
           and(
-            eq(emailMessage.tenantId, this.tenantId),
             options.accountId ? eq(emailMessage.emailAccountId, options.accountId) : undefined,
             or(...draftConditions),
           ),
@@ -221,7 +203,6 @@ export class EmailSyncService {
         .from(emailLabel)
         .where(
           and(
-            eq(emailLabel.tenantId, this.tenantId),
             options.accountId ? eq(emailLabel.emailAccountId, options.accountId) : undefined,
             or(
               ilike(emailLabel.name, "sent%"),
@@ -244,14 +225,10 @@ export class EmailSyncService {
         .from(emailMessage)
         .leftJoin(
           emailMessageLabel,
-          and(
-            eq(emailMessageLabel.tenantId, this.tenantId),
-            eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
-          ),
+          eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
         )
         .where(
           and(
-            eq(emailMessage.tenantId, this.tenantId),
             options.accountId ? eq(emailMessage.emailAccountId, options.accountId) : undefined,
             or(...sentConditions),
           ),
@@ -265,7 +242,6 @@ export class EmailSyncService {
         .from(emailLabel)
         .where(
           and(
-            eq(emailLabel.tenantId, this.tenantId),
             options.accountId ? eq(emailLabel.emailAccountId, options.accountId) : undefined,
             or(
               ilike(emailLabel.name, "inbox"),
@@ -288,14 +264,10 @@ export class EmailSyncService {
         .from(emailMessage)
         .leftJoin(
           emailMessageLabel,
-          and(
-            eq(emailMessageLabel.tenantId, this.tenantId),
-            eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
-          ),
+          eq(emailMessageLabel.emailMessageId, emailMessage.emailMessageId),
         )
         .where(
           and(
-            eq(emailMessage.tenantId, this.tenantId),
             options.accountId ? eq(emailMessage.emailAccountId, options.accountId) : undefined,
             or(...inboxConditions),
           ),
@@ -339,12 +311,7 @@ export class EmailSyncService {
         hasAttachments: emailMessage.hasAttachments,
       })
       .from(emailMessage)
-      .where(
-        and(
-          eq(emailMessage.tenantId, this.tenantId),
-          inArray(emailMessage.emailThreadId, threadIds),
-        ),
-      )
+      .where(inArray(emailMessage.emailThreadId, threadIds))
       .orderBy(emailMessage.receivedAt, emailMessage.sentAt, emailMessage.createdAt);
 
     // Fetch distinct labels for these threads
@@ -358,26 +325,9 @@ export class EmailSyncService {
         kind: emailLabel.kind,
       })
       .from(emailMessageLabel)
-      .innerJoin(
-        emailMessage,
-        and(
-          eq(emailMessage.tenantId, this.tenantId),
-          eq(emailMessage.emailMessageId, emailMessageLabel.emailMessageId),
-        ),
-      )
-      .innerJoin(
-        emailLabel,
-        and(
-          eq(emailLabel.tenantId, this.tenantId),
-          eq(emailLabel.emailLabelId, emailMessageLabel.emailLabelId),
-        ),
-      )
-      .where(
-        and(
-          eq(emailMessageLabel.tenantId, this.tenantId),
-          inArray(emailMessage.emailThreadId, threadIds),
-        ),
-      );
+      .innerJoin(emailMessage, eq(emailMessage.emailMessageId, emailMessageLabel.emailMessageId))
+      .innerJoin(emailLabel, eq(emailLabel.emailLabelId, emailMessageLabel.emailLabelId))
+      .where(inArray(emailMessage.emailThreadId, threadIds));
 
     const getSenderName = (fromJson: any, direction: string) => {
       if (direction === "outbound" || direction === "draft") return "me";
@@ -424,15 +374,13 @@ export class EmailSyncService {
 
       const senderDisplay = senders.join(", ") || "Unknown";
 
-      const labels = Array.from(labelsByThread.get(t.emailThreadId)?.values() ?? []).map(
-        (lbl) => ({
-          emailLabelId: lbl.emailLabelId,
-          providerLabelId: lbl.providerLabelId,
-          name: lbl.name,
-          color: lbl.color,
-          kind: lbl.kind,
-        }),
-      );
+      const labels = Array.from(labelsByThread.get(t.emailThreadId)?.values() ?? []).map((lbl) => ({
+        emailLabelId: lbl.emailLabelId,
+        providerLabelId: lbl.providerLabelId,
+        name: lbl.name,
+        color: lbl.color,
+        kind: lbl.kind,
+      }));
 
       return {
         ...t,
@@ -448,13 +396,7 @@ export class EmailSyncService {
     return await db
       .select()
       .from(emailLabel)
-      .where(
-        and(
-          eq(emailLabel.tenantId, this.tenantId),
-          eq(emailLabel.emailAccountId, accountId),
-          eq(emailLabel.archived, false),
-        ),
-      )
+      .where(and(eq(emailLabel.emailAccountId, accountId), eq(emailLabel.archived, false)))
       .orderBy(emailLabel.kind, emailLabel.name);
   }
 
@@ -479,12 +421,7 @@ export class EmailSyncService {
     return await db
       .select()
       .from(emailSyncState)
-      .where(
-        and(
-          eq(emailSyncState.tenantId, this.tenantId),
-          eq(emailSyncState.emailAccountId, accountId),
-        ),
-      )
+      .where(eq(emailSyncState.emailAccountId, accountId))
       .orderBy(emailSyncState.scope);
   }
 
@@ -492,13 +429,7 @@ export class EmailSyncService {
     const [thread] = await db
       .select()
       .from(emailThread)
-      .where(
-        and(
-          eq(emailThread.tenantId, this.tenantId),
-          eq(emailThread.emailThreadId, threadId),
-          eq(emailThread.archived, false),
-        ),
-      )
+      .where(and(eq(emailThread.emailThreadId, threadId), eq(emailThread.archived, false)))
       .limit(1);
     if (!thread) return null;
 
@@ -506,21 +437,14 @@ export class EmailSyncService {
     const messages = await db
       .select()
       .from(emailMessage)
-      .where(
-        and(eq(emailMessage.tenantId, this.tenantId), eq(emailMessage.emailThreadId, threadId)),
-      )
+      .where(eq(emailMessage.emailThreadId, threadId))
       .orderBy(emailMessage.receivedAt, emailMessage.sentAt, emailMessage.createdAt);
     const messageIds = messages.map((message) => message.emailMessageId);
     const attachments = messageIds.length
       ? await db
           .select()
           .from(emailAttachment)
-          .where(
-            and(
-              eq(emailAttachment.tenantId, this.tenantId),
-              inArray(emailAttachment.emailMessageId, messageIds),
-            ),
-          )
+          .where(inArray(emailAttachment.emailMessageId, messageIds))
       : [];
     const labels = messageIds.length
       ? await db
@@ -532,19 +456,8 @@ export class EmailSyncService {
             kind: emailLabel.kind,
           })
           .from(emailMessageLabel)
-          .innerJoin(
-            emailLabel,
-            and(
-              eq(emailLabel.tenantId, this.tenantId),
-              eq(emailLabel.emailLabelId, emailMessageLabel.emailLabelId),
-            ),
-          )
-          .where(
-            and(
-              eq(emailMessageLabel.tenantId, this.tenantId),
-              inArray(emailMessageLabel.emailMessageId, messageIds),
-            ),
-          )
+          .innerJoin(emailLabel, eq(emailLabel.emailLabelId, emailMessageLabel.emailLabelId))
+          .where(inArray(emailMessageLabel.emailMessageId, messageIds))
       : [];
     return { ...thread, messages, attachments, labels };
   }
@@ -555,9 +468,7 @@ export class EmailSyncService {
         emailAccountId: emailMessage.emailAccountId,
       })
       .from(emailMessage)
-      .where(
-        and(eq(emailMessage.tenantId, this.tenantId), eq(emailMessage.emailMessageId, messageId)),
-      )
+      .where(eq(emailMessage.emailMessageId, messageId))
       .limit(1);
     if (!message) return null;
 
@@ -565,12 +476,7 @@ export class EmailSyncService {
     return await db
       .select()
       .from(emailAttachment)
-      .where(
-        and(
-          eq(emailAttachment.tenantId, this.tenantId),
-          eq(emailAttachment.emailMessageId, messageId),
-        ),
-      )
+      .where(eq(emailAttachment.emailMessageId, messageId))
       .orderBy(emailAttachment.createdAt);
   }
 
@@ -619,12 +525,7 @@ export class EmailSyncService {
     await db
       .update(emailAttachment)
       .set({ fetchedAt: new Date() })
-      .where(
-        and(
-          eq(emailAttachment.tenantId, this.tenantId),
-          eq(emailAttachment.emailAttachmentId, attachmentId),
-        ),
-      );
+      .where(eq(emailAttachment.emailAttachmentId, attachmentId));
 
     return {
       attachment: row.attachment,
@@ -648,15 +549,11 @@ export class EmailSyncService {
       await tx
         .update(emailThread)
         .set({ isRead: read, updatedAt: new Date() })
-        .where(
-          and(eq(emailThread.tenantId, this.tenantId), eq(emailThread.emailThreadId, threadId)),
-        );
+        .where(eq(emailThread.emailThreadId, threadId));
       await tx
         .update(emailMessage)
         .set({ isRead: read, updatedAt: new Date() })
-        .where(
-          and(eq(emailMessage.tenantId, this.tenantId), eq(emailMessage.emailThreadId, threadId)),
-        );
+        .where(eq(emailMessage.emailThreadId, threadId));
     });
     return { ok: true };
   }
@@ -671,7 +568,6 @@ export class EmailSyncService {
       .from(emailLabel)
       .where(
         and(
-          eq(emailLabel.tenantId, this.tenantId),
           eq(emailLabel.emailAccountId, thread.emailAccountId),
           eq(emailLabel.emailLabelId, labelId),
           eq(emailLabel.archived, false),
@@ -693,15 +589,12 @@ export class EmailSyncService {
     const messages = await db
       .select({ emailMessageId: emailMessage.emailMessageId })
       .from(emailMessage)
-      .where(
-        and(eq(emailMessage.tenantId, this.tenantId), eq(emailMessage.emailThreadId, threadId)),
-      );
+      .where(eq(emailMessage.emailThreadId, threadId));
 
     for (const message of messages) {
       await db
         .insert(emailMessageLabel)
         .values({
-          tenantId: this.tenantId,
           emailMessageId: message.emailMessageId,
           emailLabelId: labelId,
         })
@@ -726,7 +619,7 @@ export class EmailSyncService {
     await db
       .update(emailThread)
       .set({ archived: true, updatedAt: new Date() })
-      .where(and(eq(emailThread.tenantId, this.tenantId), eq(emailThread.emailThreadId, threadId)));
+      .where(eq(emailThread.emailThreadId, threadId));
     return { ok: true };
   }
 
@@ -737,7 +630,7 @@ export class EmailSyncService {
     const [thread] = await db
       .select()
       .from(emailThread)
-      .where(and(eq(emailThread.tenantId, this.tenantId), eq(emailThread.emailThreadId, threadId)))
+      .where(eq(emailThread.emailThreadId, threadId))
       .limit(1);
     if (!thread) return null;
     await this.accountService.assertGrant(thread.emailAccountId, "read");
@@ -749,7 +642,7 @@ export class EmailSyncService {
     const [updated] = await db
       .update(emailThread)
       .set(patch)
-      .where(and(eq(emailThread.tenantId, this.tenantId), eq(emailThread.emailThreadId, threadId)))
+      .where(eq(emailThread.emailThreadId, threadId))
       .returning();
     return updated ?? null;
   }
@@ -783,12 +676,7 @@ export class EmailSyncService {
             contactId: addressContactIdentity.contactId,
           })
           .from(addressContactIdentity)
-          .where(
-            and(
-              eq(addressContactIdentity.tenantId, this.tenantId),
-              eq(addressContactIdentity.normalizedValue, normalizedEmail),
-            ),
-          )
+          .where(eq(addressContactIdentity.normalizedValue, normalizedEmail))
           .limit(1);
 
         if (existingIdentity) {
@@ -800,24 +688,14 @@ export class EmailSyncService {
               sourceAccountId: accountId,
               updatedAt: new Date(),
             })
-            .where(
-              and(
-                eq(addressContactIdentity.tenantId, this.tenantId),
-                eq(addressContactIdentity.identityId, existingIdentity.identityId),
-              ),
-            );
+            .where(eq(addressContactIdentity.identityId, existingIdentity.identityId));
           return;
         }
 
         const [existingContact] = await tx
           .select({ contactId: addressContact.contactId })
           .from(addressContact)
-          .where(
-            and(
-              eq(addressContact.tenantId, this.tenantId),
-              sql`lower(${addressContact.email}) = ${normalizedEmail}`,
-            ),
-          )
+          .where(sql`lower(${addressContact.email}) = ${normalizedEmail}`)
           .limit(1);
 
         let contactId = existingContact?.contactId;
@@ -881,7 +759,7 @@ export class EmailSyncService {
     await db
       .update(emailThread)
       .set({ archived: false, inTrash: true, updatedAt: new Date() })
-      .where(and(eq(emailThread.tenantId, this.tenantId), eq(emailThread.emailThreadId, threadId)));
+      .where(eq(emailThread.emailThreadId, threadId));
     return { ok: true };
   }
 
@@ -903,12 +781,7 @@ export class EmailSyncService {
       await db
         .update(emailAccount)
         .set({ lastSyncStatus: "syncing", updatedAt: new Date() })
-        .where(
-          and(
-            eq(emailAccount.tenantId, this.tenantId),
-            eq(emailAccount.emailAccountId, account.emailAccountId),
-          ),
-        );
+        .where(eq(emailAccount.emailAccountId, account.emailAccountId));
 
       if (jobType === "initial_sync" || jobType === "reconcile") {
         const cursor = typeof (payload as any).cursor === "string" ? (payload as any).cursor : null;
@@ -929,7 +802,6 @@ export class EmailSyncService {
           .from(emailSyncState)
           .where(
             and(
-              eq(emailSyncState.tenantId, this.tenantId),
               eq(emailSyncState.emailAccountId, account.emailAccountId),
               eq(emailSyncState.scope, "mailbox"),
             ),
@@ -977,12 +849,7 @@ export class EmailSyncService {
               lastSyncError: syncError,
               updatedAt: now,
             })
-            .where(
-              and(
-                eq(emailAccount.tenantId, this.tenantId),
-                eq(emailAccount.emailAccountId, account.emailAccountId),
-              ),
-            );
+            .where(eq(emailAccount.emailAccountId, account.emailAccountId));
           await this.jobService.enqueue({
             jobType: "reconcile",
             emailAccountId: account.emailAccountId,
@@ -1012,12 +879,7 @@ export class EmailSyncService {
         await db
           .update(emailAccount)
           .set({ watchExpiresAt: result.expiresAt, updatedAt: new Date() })
-          .where(
-            and(
-              eq(emailAccount.tenantId, this.tenantId),
-              eq(emailAccount.emailAccountId, account.emailAccountId),
-            ),
-          );
+          .where(eq(emailAccount.emailAccountId, account.emailAccountId));
         const subscriptionService = new EmailSubscriptionService(this.tenantId);
         await subscriptionService.registerSubscription({
           emailAccountId: account.emailAccountId,
@@ -1053,12 +915,7 @@ export class EmailSyncService {
           lastSyncError: syncError,
           updatedAt: now,
         })
-        .where(
-          and(
-            eq(emailAccount.tenantId, this.tenantId),
-            eq(emailAccount.emailAccountId, account.emailAccountId),
-          ),
-        );
+        .where(eq(emailAccount.emailAccountId, account.emailAccountId));
       return { ok: true, recoveryRequired };
     } catch (error) {
       const isReauth = error instanceof ProviderReauthRequiredError;
@@ -1071,12 +928,7 @@ export class EmailSyncService {
           lastSyncError: error instanceof Error ? error.message : String(error),
           updatedAt: now,
         })
-        .where(
-          and(
-            eq(emailAccount.tenantId, this.tenantId),
-            eq(emailAccount.emailAccountId, account.emailAccountId),
-          ),
-        );
+        .where(eq(emailAccount.emailAccountId, account.emailAccountId));
       throw error;
     }
   }
@@ -1098,9 +950,7 @@ export class EmailSyncService {
     const [row] = await db
       .select({ activityTier: emailAccount.activityTier, syncPriority: emailAccount.syncPriority })
       .from(emailAccount)
-      .where(
-        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
-      )
+      .where(eq(emailAccount.emailAccountId, accountId))
       .limit(1);
 
     const rawTier = row?.activityTier ?? "cold";
@@ -1224,9 +1074,7 @@ export class EmailSyncService {
     await db
       .update(emailAccount)
       .set({ credentialsEncrypted, status: "connected", updatedAt: new Date() })
-      .where(
-        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
-      );
+      .where(eq(emailAccount.emailAccountId, accountId));
   }
 
   private async mergeThread(tx: any, accountId: string, thread: ProviderThread) {
@@ -1379,7 +1227,6 @@ export class EmailSyncService {
           .from(emailLabel)
           .where(
             and(
-              eq(emailLabel.tenantId, this.tenantId),
               eq(emailLabel.emailAccountId, accountId),
               inArray(emailLabel.providerLabelId, message.providerLabelIds),
             ),
@@ -1412,7 +1259,6 @@ export class EmailSyncService {
         .from(addressContact)
         .where(
           and(
-            eq(addressContact.tenantId, this.tenantId),
             eq(addressContact.archived, false),
             sql`lower(${addressContact.email}) = ${fromEmail}`,
           ),

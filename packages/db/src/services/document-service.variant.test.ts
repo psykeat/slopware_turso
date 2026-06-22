@@ -113,7 +113,7 @@ test("saveDocumentDraft rejects catalog lines without variantId", async () => {
   const service = new DocumentService();
 
   await assert.rejects(
-    service.saveDocumentDraft(fixture.tenantId, "variant-test-user", {
+    service.saveDocumentDraft("variant-test-user", {
       documentGroupId: fixture.documentGroupId,
       documentType: "L",
       documentDirection: "OUTBOUND",
@@ -171,11 +171,7 @@ test("postDocument resolves article truth from variantId, not the stored article
     transactionId: crypto.randomUUID(),
   });
 
-  const result = await service.postDocument(
-    documentRow.documentId,
-    "variant-test-user",
-    fixture.tenantId,
-  );
+  const result = await service.postDocument(documentRow.documentId, "variant-test-user");
   assert.equal(result.success, true);
 
   const movementRows = (await db.execute(sql`
@@ -248,7 +244,7 @@ test("saveDocumentDraft accepts posted documents and keeps them posted", async (
     transactionId: crypto.randomUUID(),
   });
 
-  const result = await service.saveDocumentDraft(fixture.tenantId, "variant-test-user", {
+  const result = await service.saveDocumentDraft("variant-test-user", {
     documentId,
     documentGroupId: fixture.documentGroupId,
     documentType: "L",

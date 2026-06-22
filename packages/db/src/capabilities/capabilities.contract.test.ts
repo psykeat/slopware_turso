@@ -8,21 +8,17 @@ import { z } from "zod";
 import "../scripts/load-env";
 import { closeDb } from "../index";
 import { allCapabilities } from "./all";
-import { executeCapability } from "./core/execute";
 import { defineCapability } from "./core/define";
+import { executeCapability } from "./core/execute";
 import { registerCapabilities, replaceCapabilities } from "./core/registry";
 import type { ExecutionContext } from "./core/types";
-import {
-  buildEntityCapabilityManifest,
-  serializeEntityCapabilityManifest,
-} from "./manifest-build";
-import { buildAndSerializeClientSdk } from "./sdk-build";
 import {
   capabilityIndex,
   capabilityInputJsonSchema,
   capabilityOutputJsonSchema,
   listCapabilities,
 } from "./index";
+import { buildAndSerializeClientSdk } from "./sdk-build";
 
 const KEY_PATTERN =
   /^(masterdata|sales|logistics|accounting|communication|commerce|import|system)\.[a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z][a-zA-Z0-9]*$/;
@@ -229,23 +225,12 @@ test("ai tool names are unique across the projected set", () => {
   for (const capability of listCapabilities()) {
     const ai = capability.exposure.ai;
     if (!ai) continue;
-    const toolName = ai.toolName ?? `${capability.module}_${capability.operation}_${capability.entityName}`;
+    const toolName =
+      ai.toolName ?? `${capability.module}_${capability.operation}_${capability.entityName}`;
     const existing = byToolName.get(toolName);
     assert.ok(!existing, `tool name "${toolName}" is shared by ${existing} and ${capability.key}`);
     byToolName.set(toolName, capability.key);
   }
-});
-
-test("entity capability manifest is in sync with the registry", () => {
-  // The generated manifest is imported by client bundles, so it must never
-  // drift from the registry. Regenerate in-memory and compare byte-for-byte;
-  // run `pnpm run generate:manifest` (packages/db) if this fails.
-  const expected = serializeEntityCapabilityManifest(
-    buildEntityCapabilityManifest(allCapabilities),
-  );
-  const actualPath = fileURLToPath(new URL("./manifest.generated.ts", import.meta.url));
-  const actual = readFileSync(actualPath, "utf8");
-  assert.equal(actual, expected, "manifest.generated.ts is stale — run pnpm run generate:manifest");
 });
 
 test("client SDK is in sync with the registry", () => {

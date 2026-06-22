@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/admin/data/$")({
 
         try {
           if (id) {
-            const service = new DataService("", true);
+            const service = new DataService();
             const result = await service.get(entityName, id);
             if (!result) return new Response("Not Found", { status: 404 });
             return new Response(JSON.stringify(result), {
@@ -34,7 +34,7 @@ export const Route = createFileRoute("/api/admin/data/$")({
           }
 
           const paginated = url.searchParams.get("paginated") === "true";
-          const service = new DataService("", true);
+          const service = new DataService();
           if (paginated) {
             const limit = Math.max(1, Number(url.searchParams.get("limit") ?? "50"));
             const page = Math.max(1, Number(url.searchParams.get("page") ?? "1"));

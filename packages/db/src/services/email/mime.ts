@@ -50,7 +50,9 @@ export async function loadDraftAttachment(
   attachment: NonNullable<EmailDraftInput["attachments"]>[number],
 ) {
   if (!attachment.storageKey) return null;
-  const path = storagePathCandidates(attachment.storageKey).find((candidate) => existsSync(candidate));
+  const path = storagePathCandidates(attachment.storageKey).find((candidate) =>
+    existsSync(candidate),
+  );
   if (!path) return null;
   return {
     ...attachment,

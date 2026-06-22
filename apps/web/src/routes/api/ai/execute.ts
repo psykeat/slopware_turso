@@ -1,16 +1,16 @@
-import { buildCapabilityTools, createConfiguredProvider, maxIterations } from "@repo/agent";
+import { buildActionTools, createConfiguredProvider, maxIterations } from "@repo/agent";
 import type { ConfirmMode } from "@repo/agent";
 import { resolveLlmRuntimeConfig } from "@repo/db/services/ai-orchestrator";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { resolveExecutionContext } from "#/lib/capability-auth";
 
-// The single AI execute entry point. The model talks to the capability runtime
-// through `buildCapabilityTools` only — it never sees raw services and never
+// The single AI execute entry point. The model talks to the registry action runtime
+// through `buildActionTools` only — it never sees raw services and never
 // receives a tenantId. Tool selection (group / keys), confirmation policy and
 // the tenant/actor context are all resolved server-side here.
 //
-// Confirm-gated capabilities (post / storno / delete / send) are EXCLUDED by
+// Confirm-gated actions (post / storno / delete / send) are EXCLUDED by
 // default because this REST endpoint has no interactive approval channel; a
 // caller that owns the human-in-the-loop can opt in with confirmMode.
 
@@ -56,7 +56,7 @@ export const Route = createFileRoute("/api/ai/execute")({
           });
         }
 
-        const tools = buildCapabilityTools(
+        const tools = buildActionTools(
           { ...ctx, actorMode: "assistant" },
           {
             group: body?.group,

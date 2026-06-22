@@ -1,5 +1,4 @@
 import "@tanstack/react-start/server-only";
-
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -105,10 +104,7 @@ export interface CommerceSyncAdapter {
    * import implement it. `since` enables the incremental pull (orders changed
    * after the last successful pull run).
    */
-  pullOrders?(input: {
-    salesChannel: SalesChannelConfig;
-    since?: Date;
-  }): Promise<ShopwareOrder[]>;
+  pullOrders?(input: { salesChannel: SalesChannelConfig; since?: Date }): Promise<ShopwareOrder[]>;
 }
 
 /** A single line of a pulled shop order, already flattened from the Shopware payload. */
@@ -282,7 +278,10 @@ class ShopwareHttpError extends Error {
 
 async function withRetry<T>(
   fn: () => Promise<T>,
-  { maxAttempts = 3, initialDelayMs = 1000 }: { maxAttempts?: number; initialDelayMs?: number } = {},
+  {
+    maxAttempts = 3,
+    initialDelayMs = 1000,
+  }: { maxAttempts?: number; initialDelayMs?: number } = {},
 ): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {
@@ -304,7 +303,9 @@ function stableShopwareId(namespace: string, id: string): string {
 
 function compactRecord(record: Record<string, unknown>) {
   return Object.fromEntries(
-    Object.entries(record).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+    Object.entries(record).filter(
+      ([, value]) => value !== undefined && value !== null && value !== "",
+    ),
   );
 }
 
@@ -507,7 +508,8 @@ function mapSalutationKey(salutation: string | null): string {
   if (!salutation) return "not_specified";
   const lower = salutation.toLowerCase().trim();
   if (lower === "herr" || lower === "mr" || lower === "mr.") return "mr";
-  if (lower === "frau" || lower === "mrs" || lower === "mrs." || lower === "ms" || lower === "ms.") return "mrs";
+  if (lower === "frau" || lower === "mrs" || lower === "mrs." || lower === "ms" || lower === "ms.")
+    return "mrs";
   return "not_specified";
 }
 
@@ -519,9 +521,10 @@ export function mapArticleToShopwareProduct(
 ) {
   const activeVariants = variants.filter((variant) => variant.isActive);
   const externalId = stableShopwareId("article", row.articleId);
-  const categories = categoryIds && categoryIds.length > 0
-    ? categoryIds.map((cid) => ({ id: stableShopwareId("category", cid) }))
-    : undefined;
+  const categories =
+    categoryIds && categoryIds.length > 0
+      ? categoryIds.map((cid) => ({ id: stableShopwareId("category", cid) }))
+      : undefined;
   const { media, coverId } = buildProductMedia(externalId, mediaLinks);
   const basePayload = compactRecord({
     id: externalId,
@@ -555,7 +558,12 @@ export function mapArticleToShopwareProduct(
         price: buildVariantPrice(variant, row.taxRate),
       }),
       variantExternalIds: variant
-        ? [{ internalId: variant.variantId, externalId: stableShopwareId("article-variant", variant.variantId) }]
+        ? [
+            {
+              internalId: variant.variantId,
+              externalId: stableShopwareId("article-variant", variant.variantId),
+            },
+          ]
         : [],
       optionGroups: [] as OptionGroupPayload[],
     };
@@ -693,11 +701,15 @@ export function mapArticleImageToShopwareMedia(row: MediaRow) {
   };
 }
 
-function validateShopwareMediaPayload(payload: Record<string, unknown>, binary?: MediaBinaryRef): string[] {
+function validateShopwareMediaPayload(
+  payload: Record<string, unknown>,
+  binary?: MediaBinaryRef,
+): string[] {
   const errors: string[] = [];
   if (!payload.id) errors.push("missing: id");
   if (!binary?.storageKey) errors.push("missing: storageKey");
-  if (!binary?.extension) errors.push("missing: file extension (cannot determine Shopware upload type)");
+  if (!binary?.extension)
+    errors.push("missing: file extension (cannot determine Shopware upload type)");
   return errors;
 }
 
@@ -772,12 +784,17 @@ export class Shopware6Adapter implements CommerceSyncAdapter {
     const snapshotFor = (internalId: string, prepared: Record<string, unknown>) =>
       rawPayloadById.get(internalId) ?? prepared;
 
-    const accepted: Array<{ internalId: string; externalId: string; payloadSnapshot?: unknown }> = [];
+    const accepted: Array<{ internalId: string; externalId: string; payloadSnapshot?: unknown }> =
+      [];
     const rejected: Array<{ internalId: string; error: string }> = [];
     const customerItems: Array<{ internalId: string; prepared: Record<string, unknown> }> = [];
     const productItems: Array<{ internalId: string; prepared: Record<string, unknown> }> = [];
     const categoryItems: Array<{ internalId: string; prepared: Record<string, unknown> }> = [];
-    const mediaItems: Array<{ internalId: string; prepared: Record<string, unknown>; binary?: MediaBinaryRef }> = [];
+    const mediaItems: Array<{
+      internalId: string;
+      prepared: Record<string, unknown>;
+      binary?: MediaBinaryRef;
+    }> = [];
     const allOptionGroups: OptionGroupPayload[] = [];
 
     for (const item of input.items) {
@@ -787,10 +804,18 @@ export class Shopware6Adapter implements CommerceSyncAdapter {
           if (errors.length > 0) {
             rejected.push({ internalId: item.internalId, error: errors.join("; ") });
           } else {
-            mediaItems.push({ internalId: item.internalId, prepared: item.payload, binary: item.mediaBinary });
+            mediaItems.push({
+              internalId: item.internalId,
+              prepared: item.payload,
+              binary: item.mediaBinary,
+            });
           }
         } else if (item.entity === "address") {
-          const prepared = this.prepareCustomerPayload(item.payload, references, item.salutationKey);
+          const prepared = this.prepareCustomerPayload(
+            item.payload,
+            references,
+            item.salutationKey,
+          );
           const errors = validateShopwareCustomerPayload(prepared);
           if (errors.length > 0) {
             rejected.push({ internalId: item.internalId, error: errors.join("; ") });
@@ -857,7 +882,9 @@ export class Shopware6Adapter implements CommerceSyncAdapter {
         if (!mediaId) continue;
         try {
           const bytes = await readStorageBinary(m.binary.storageKey);
-          await withRetry(() => this.uploadMediaBinary(input.salesChannel, token, mediaId, m.binary!, bytes));
+          await withRetry(() =>
+            this.uploadMediaBinary(input.salesChannel, token, mediaId, m.binary!, bytes),
+          );
         } catch (error) {
           failedMediaIds.add(m.internalId);
           rejected.push({
@@ -882,12 +909,18 @@ export class Shopware6Adapter implements CommerceSyncAdapter {
 
     if (allOptionGroups.length > 0) {
       await withRetry(() =>
-        this.callSyncApi(input.salesChannel, token, this.buildPropertyGroupOperations(allOptionGroups)),
+        this.callSyncApi(
+          input.salesChannel,
+          token,
+          this.buildPropertyGroupOperations(allOptionGroups),
+        ),
       );
     }
 
-    const operations: Record<string, { entity: string; action: string; payload: Record<string, unknown>[] }> =
-      {};
+    const operations: Record<
+      string,
+      { entity: string; action: string; payload: Record<string, unknown>[] }
+    > = {};
     if (customerItems.length > 0) {
       operations["slopware-customer-upsert"] = {
         entity: "customer",
@@ -1037,11 +1070,13 @@ export class Shopware6Adapter implements CommerceSyncAdapter {
         : undefined;
     const countryId = countryCode ? references.countriesByIso.get(countryCode) : undefined;
     if (!countryId) {
-      throw new Error(`Shopware country mapping missing for ISO code "${countryCode ?? "unknown"}"`);
+      throw new Error(
+        `Shopware country mapping missing for ISO code "${countryCode ?? "unknown"}"`,
+      );
     }
     const salutationId =
-      (salutationKey ? references.salutationsByKey.get(salutationKey) : undefined)
-      ?? references.salutationId;
+      (salutationKey ? references.salutationsByKey.get(salutationKey) : undefined) ??
+      references.salutationId;
     delete billingAddress.country;
     return {
       ...payload,
@@ -1066,7 +1101,9 @@ export class Shopware6Adapter implements CommerceSyncAdapter {
       ? (references.taxRateMap.get(taxRate) ?? references.taxId)
       : references.taxId;
 
-    const children = Array.isArray(payload.children) ? payload.children as Record<string, unknown>[] : [];
+    const children = Array.isArray(payload.children)
+      ? (payload.children as Record<string, unknown>[])
+      : [];
     const preparedChildren = children.map((child) => ({
       ...child,
       taxId: resolvedTaxId,
@@ -1086,8 +1123,10 @@ export class Shopware6Adapter implements CommerceSyncAdapter {
   private buildPropertyGroupOperations(
     optionGroups: OptionGroupPayload[],
   ): Record<string, { entity: string; action: string; payload: Record<string, unknown>[] }> {
-    const operations: Record<string, { entity: string; action: string; payload: Record<string, unknown>[] }> =
-      {};
+    const operations: Record<
+      string,
+      { entity: string; action: string; payload: Record<string, unknown>[] }
+    > = {};
     operations["slopware-property-group-upsert"] = {
       entity: "property_group",
       action: "upsert",
@@ -1164,22 +1203,29 @@ export class Shopware6Adapter implements CommerceSyncAdapter {
     salesChannelConfig: SalesChannelConfig,
     token: string,
   ): Promise<ShopwareReferences> {
-    const [currency, taxes, customerGroup, paymentMethod, shopwareSalesChannel, salutations, countries] =
-      await Promise.all([
-        this.searchFirst(salesChannelConfig, token, "currency", {
-          filter: [{ type: "equals", field: "isoCode", value: "EUR" }],
-        }),
-        this.searchMany(salesChannelConfig, token, "tax", { limit: 500 }),
-        this.searchFirst(salesChannelConfig, token, "customer-group", { limit: 1 }),
-        this.searchFirst(salesChannelConfig, token, "payment-method", {
-          filter: [{ type: "equals", field: "active", value: true }],
-        }),
-        this.searchFirst(salesChannelConfig, token, "sales-channel", {
-          filter: [{ type: "equals", field: "active", value: true }],
-        }),
-        this.searchMany(salesChannelConfig, token, "salutation", { limit: 100 }),
-        this.searchMany(salesChannelConfig, token, "country", { limit: 500 }),
-      ]);
+    const [
+      currency,
+      taxes,
+      customerGroup,
+      paymentMethod,
+      shopwareSalesChannel,
+      salutations,
+      countries,
+    ] = await Promise.all([
+      this.searchFirst(salesChannelConfig, token, "currency", {
+        filter: [{ type: "equals", field: "isoCode", value: "EUR" }],
+      }),
+      this.searchMany(salesChannelConfig, token, "tax", { limit: 500 }),
+      this.searchFirst(salesChannelConfig, token, "customer-group", { limit: 1 }),
+      this.searchFirst(salesChannelConfig, token, "payment-method", {
+        filter: [{ type: "equals", field: "active", value: true }],
+      }),
+      this.searchFirst(salesChannelConfig, token, "sales-channel", {
+        filter: [{ type: "equals", field: "active", value: true }],
+      }),
+      this.searchMany(salesChannelConfig, token, "salutation", { limit: 100 }),
+      this.searchMany(salesChannelConfig, token, "country", { limit: 500 }),
+    ]);
 
     const taxRateMap = new Map<string, string>();
     let defaultTaxId: string | undefined;
@@ -1227,7 +1273,10 @@ export class Shopware6Adapter implements CommerceSyncAdapter {
     entity: string,
     criteria: Record<string, unknown>,
   ) {
-    const rows = await this.searchMany(salesChannelConfig, token, entity, { limit: 1, ...criteria });
+    const rows = await this.searchMany(salesChannelConfig, token, entity, {
+      limit: 1,
+      ...criteria,
+    });
     return rows[0] ?? null;
   }
 
@@ -1365,8 +1414,9 @@ export function normalizeShopwareOrder(raw: Record<string, unknown>): ShopwareOr
     transactions
       .map(asRecord)
       .filter((t): t is Record<string, unknown> => t !== null)
-      .sort((a, b) => (asString(b.createdAt) ?? "").localeCompare(asString(a.createdAt) ?? ""))[0] ??
-    null;
+      .sort((a, b) =>
+        (asString(b.createdAt) ?? "").localeCompare(asString(a.createdAt) ?? ""),
+      )[0] ?? null;
   const paymentState = latestTx
     ? asString(asRecord(latestTx.stateMachineState)?.technicalName)
     : null;
@@ -1448,8 +1498,9 @@ export class CommerceSyncService {
   constructor(
     private readonly tenantId: string,
     private readonly userId: string | null,
-    private readonly adapterFactory: (salesChannel: SalesChannelConfig) => CommerceSyncAdapter = () =>
-      new Shopware6Adapter(),
+    private readonly adapterFactory: (
+      salesChannel: SalesChannelConfig,
+    ) => CommerceSyncAdapter = () => new Shopware6Adapter(),
   ) {}
 
   async start(plan: CommerceSyncPlan) {
@@ -1567,7 +1618,14 @@ export class CommerceSyncService {
               `${entity} batch ${batchIndex}: ${result.rejected.length} item(s) rejected — ${result.rejected[0].error}`,
             );
           }
-          await this.finishStep(step.stepId, result.rejected.length === result.accepted + result.rejected.length ? "error" : "success", result.accepted, result.rejected.length);
+          await this.finishStep(
+            step.stepId,
+            result.rejected.length === result.accepted + result.rejected.length
+              ? "error"
+              : "success",
+            result.accepted,
+            result.rejected.length,
+          );
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown commerce sync error";
           failed += batchItems.length;
@@ -1616,7 +1674,12 @@ export class CommerceSyncService {
     if (filter?.salesChannelId)
       conditions.push(eq(commerceSyncRun.salesChannelId, filter.salesChannelId));
     if (filter?.status)
-      conditions.push(eq(commerceSyncRun.status, filter.status as typeof commerceSyncRun.status.enumValues[number]));
+      conditions.push(
+        eq(
+          commerceSyncRun.status,
+          filter.status as (typeof commerceSyncRun.status.enumValues)[number],
+        ),
+      );
 
     const rows = await db
       .select()
@@ -1644,13 +1707,9 @@ export class CommerceSyncService {
     return run ?? null;
   }
 
-  async listDeadLetter(
-    salesChannelId?: string,
-    status?: "pending" | "resolved" | "abandoned",
-  ) {
+  async listDeadLetter(salesChannelId?: string, status?: "pending" | "resolved" | "abandoned") {
     const conditions = [eq(commerceSyncDeadLetter.tenantId, this.tenantId)];
-    if (salesChannelId)
-      conditions.push(eq(commerceSyncDeadLetter.salesChannelId, salesChannelId));
+    if (salesChannelId) conditions.push(eq(commerceSyncDeadLetter.salesChannelId, salesChannelId));
     if (status) conditions.push(eq(commerceSyncDeadLetter.status, status));
 
     const items = await db
@@ -2188,7 +2247,6 @@ export class CommerceSyncService {
             variantId,
             customerId,
             documentDate,
-            this.tenantId,
             { billingCountryCode },
           );
           const rate = toDecimalNumber(pricing.taxRate ?? null) ?? line.taxRate ?? 0;
@@ -2266,8 +2324,8 @@ export class CommerceSyncService {
       customAttributes,
     };
 
-    const created = await docService.createDocument(this.tenantId, { ...header, status: "draft" });
-    await docService.saveDocumentDraft(this.tenantId, this.userId ?? "", {
+    const created = await docService.createDocument({ ...header, status: "draft" });
+    await docService.saveDocumentDraft(this.userId ?? "", {
       ...header,
       documentId: created.documentId,
       lines,
@@ -2317,7 +2375,8 @@ export class CommerceSyncService {
       )
       .limit(1);
     if (!row) throw new Error("Sales channel not found");
-    if (row.platform !== "shopware6") throw new Error(`Unsupported commerce platform: ${row.platform}`);
+    if (row.platform !== "shopware6")
+      throw new Error(`Unsupported commerce platform: ${row.platform}`);
     return {
       salesChannelId: row.salesChannelId,
       platform: row.platform,
@@ -2472,9 +2531,7 @@ export class CommerceSyncService {
     return this.articlesWithVariantsToItems(enriched);
   }
 
-  private async articlesWithVariantsToItems(
-    articles: ArticleRow[],
-  ): Promise<SyncItem[]> {
+  private async articlesWithVariantsToItems(articles: ArticleRow[]): Promise<SyncItem[]> {
     if (articles.length === 0) return [];
 
     const articleIds = articles.map((a) => a.articleId);
@@ -2499,78 +2556,73 @@ export class CommerceSyncService {
 
     const variantIds = variants.map((v) => v.variantId);
 
-    const [stockRows, optionValueRows, articleCategoryMap, priceListRows, articleMediaMap] = await Promise.all([
-      variantIds.length > 0
-        ? db
-            .select({
-              variantId: inventoryItem.variantId,
-              totalQty: sql<string>`COALESCE(SUM(${inventoryLevel.quantity}), 0)`,
-            })
-            .from(inventoryItem)
-            .leftJoin(inventoryLevel, eq(inventoryLevel.itemId, inventoryItem.itemId))
-            .where(
-              and(
-                eq(inventoryItem.tenantId, this.tenantId),
-                inArray(inventoryItem.variantId, variantIds),
-              ),
-            )
-            .groupBy(inventoryItem.variantId)
-        : Promise.resolve([]),
-      variantIds.length > 0
-        ? db
-            .select({
-              variantId: articleVariantOptionValue.variantId,
-              valueId: articleOptionValue.valueId,
-              value: articleOptionValue.value,
-              groupId: articleOption.optionId,
-              groupName: articleOption.name,
-            })
-            .from(articleVariantOptionValue)
-            .innerJoin(
-              articleOptionValue,
-              eq(articleVariantOptionValue.valueId, articleOptionValue.valueId),
-            )
-            .innerJoin(
-              articleOption,
-              eq(articleOptionValue.optionId, articleOption.optionId),
-            )
-            .where(
-              and(
-                eq(articleVariantOptionValue.tenantId, this.tenantId),
-                inArray(articleVariantOptionValue.variantId, variantIds),
-              ),
-            )
-        : Promise.resolve([]),
-      this.loadArticleCategoryIds(articleIds),
-      variantIds.length > 0
-        ? db
-            .select({
-              variantId: priceListItem.variantId,
-              price: priceListItem.price,
-              plName: priceList.name,
-              isNet: priceList.isNet,
-              currencyId: priceList.currencyId,
-            })
-            .from(priceListItem)
-            .innerJoin(priceList, eq(priceListItem.priceListId, priceList.priceListId))
-            .where(
-              and(
-                eq(priceListItem.tenantId, this.tenantId),
-                inArray(priceListItem.variantId, variantIds),
-                eq(priceList.archived, false),
-                or(
-                  isNull(priceListItem.validFrom),
-                  lte(priceListItem.validFrom, sql`CURRENT_DATE`),
+    const [stockRows, optionValueRows, articleCategoryMap, priceListRows, articleMediaMap] =
+      await Promise.all([
+        variantIds.length > 0
+          ? db
+              .select({
+                variantId: inventoryItem.variantId,
+                totalQty: sql<string>`COALESCE(SUM(${inventoryLevel.quantity}), 0)`,
+              })
+              .from(inventoryItem)
+              .leftJoin(inventoryLevel, eq(inventoryLevel.itemId, inventoryItem.itemId))
+              .where(
+                and(
+                  eq(inventoryItem.tenantId, this.tenantId),
+                  inArray(inventoryItem.variantId, variantIds),
                 ),
-                or(
-                  isNull(priceListItem.validTo),
-                  sql`${priceListItem.validTo} >= CURRENT_DATE`,
+              )
+              .groupBy(inventoryItem.variantId)
+          : Promise.resolve([]),
+        variantIds.length > 0
+          ? db
+              .select({
+                variantId: articleVariantOptionValue.variantId,
+                valueId: articleOptionValue.valueId,
+                value: articleOptionValue.value,
+                groupId: articleOption.optionId,
+                groupName: articleOption.name,
+              })
+              .from(articleVariantOptionValue)
+              .innerJoin(
+                articleOptionValue,
+                eq(articleVariantOptionValue.valueId, articleOptionValue.valueId),
+              )
+              .innerJoin(articleOption, eq(articleOptionValue.optionId, articleOption.optionId))
+              .where(
+                and(
+                  eq(articleVariantOptionValue.tenantId, this.tenantId),
+                  inArray(articleVariantOptionValue.variantId, variantIds),
                 ),
-              ),
-            )
-        : Promise.resolve([]),
-      this.loadArticleMediaLinks(articleIds),
-    ]);
+              )
+          : Promise.resolve([]),
+        this.loadArticleCategoryIds(articleIds),
+        variantIds.length > 0
+          ? db
+              .select({
+                variantId: priceListItem.variantId,
+                price: priceListItem.price,
+                plName: priceList.name,
+                isNet: priceList.isNet,
+                currencyId: priceList.currencyId,
+              })
+              .from(priceListItem)
+              .innerJoin(priceList, eq(priceListItem.priceListId, priceList.priceListId))
+              .where(
+                and(
+                  eq(priceListItem.tenantId, this.tenantId),
+                  inArray(priceListItem.variantId, variantIds),
+                  eq(priceList.archived, false),
+                  or(
+                    isNull(priceListItem.validFrom),
+                    lte(priceListItem.validFrom, sql`CURRENT_DATE`),
+                  ),
+                  or(isNull(priceListItem.validTo), sql`${priceListItem.validTo} >= CURRENT_DATE`),
+                ),
+              )
+          : Promise.resolve([]),
+        this.loadArticleMediaLinks(articleIds),
+      ]);
 
     const stockMap = new Map<string, number>();
     for (const row of stockRows) {
@@ -2642,12 +2694,7 @@ export class CommerceSyncService {
         sortOrder: category.sortOrder,
       })
       .from(category)
-      .where(
-        and(
-          eq(category.tenantId, this.tenantId),
-          eq(category.archived, false),
-        ),
-      );
+      .where(and(eq(category.tenantId, this.tenantId), eq(category.archived, false)));
 
     return topologicalSortCategories(rows).map((row) => {
       const mapped = mapCategoryToShopwareCategory(row);
@@ -2714,7 +2761,9 @@ export class CommerceSyncService {
     return map;
   }
 
-  private async loadArticleMediaLinks(articleIds: string[]): Promise<Map<string, ArticleMediaLink[]>> {
+  private async loadArticleMediaLinks(
+    articleIds: string[],
+  ): Promise<Map<string, ArticleMediaLink[]>> {
     if (articleIds.length === 0) return new Map();
     const rows = await db
       .select({
@@ -2782,7 +2831,9 @@ export class CommerceSyncService {
 
     const map = new Map<string, string | null>();
     for (const row of rows) {
-      const snapshot = row.payloadSnapshot as { customFields?: { slopwareChecksum?: unknown } } | null;
+      const snapshot = row.payloadSnapshot as {
+        customFields?: { slopwareChecksum?: unknown };
+      } | null;
       const checksum = snapshot?.customFields?.slopwareChecksum;
       map.set(row.internalId, typeof checksum === "string" ? checksum : null);
     }
@@ -2799,7 +2850,10 @@ export class CommerceSyncService {
     return Promise.all(
       rows.map(async (row) => {
         const checksum =
-          row.checksum ?? createHash("sha256").update(await readStorageBinary(row.storageKey)).digest("hex");
+          row.checksum ??
+          createHash("sha256")
+            .update(await readStorageBinary(row.storageKey))
+            .digest("hex");
         const mapped = mapArticleImageToShopwareMedia({ ...row, checksum });
         const priorChecksum = syncedChecksums.get(row.articleImageId);
         const alreadySynced = syncedChecksums.has(row.articleImageId);
@@ -2819,17 +2873,15 @@ export class CommerceSyncService {
     const rows = await db
       .selectDistinct(CommerceSyncService.mediaSelect)
       .from(articleImage)
-      .where(
-        and(
-          eq(articleImage.tenantId, this.tenantId),
-          eq(articleImage.archived, false),
-        ),
-      );
+      .where(and(eq(articleImage.tenantId, this.tenantId), eq(articleImage.archived, false)));
 
     return this.mediaRowsToItems(rows, salesChannelId);
   }
 
-  private async buildMediaItemsForIds(internalIds: string[], salesChannelId: string): Promise<SyncItem[]> {
+  private async buildMediaItemsForIds(
+    internalIds: string[],
+    salesChannelId: string,
+  ): Promise<SyncItem[]> {
     if (internalIds.length === 0) return [];
     const rows = await db
       .selectDistinct(CommerceSyncService.mediaSelect)
@@ -3075,7 +3127,10 @@ export class CommerceSyncService {
   }
 }
 
-function normalizeEntities(entities: CommerceSyncEntity[], mode: CommerceSyncMode): CommerceSyncEntity[] {
+function normalizeEntities(
+  entities: CommerceSyncEntity[],
+  mode: CommerceSyncMode,
+): CommerceSyncEntity[] {
   // Media must be pushed before articles, since product payloads reference media ids.
   if (mode === "full") return ["category", "address", "media_asset", "article"];
   return [...new Set(entities)];

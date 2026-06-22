@@ -1,5 +1,5 @@
 import { auth } from "@repo/auth/auth";
-import { db } from "@repo/db";
+import { db, runInTenantScope } from "@repo/db";
 import { inventoryMovement } from "@repo/db/schema";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
@@ -20,30 +20,31 @@ export const Route = createFileRoute("/api/articles/$articleId/batches")({
         const url = new URL(request.url);
         const warehouseId = url.searchParams.get("warehouseId");
 
-        const conditions = [
-          eq(inventoryMovement.tenantId, context.tenantId),
-          // @ts-ignore
-          eq(inventoryMovement.variantId, params.articleId),
-          isNotNull(inventoryMovement.batchNo),
-        ];
+        return runInTenantScope(context, async () => {
+          const conditions = [
+            // @ts-ignore
+            eq(inventoryMovement.variantId, params.articleId),
+            isNotNull(inventoryMovement.batchNo),
+          ];
 
-        if (warehouseId) {
-          conditions.push(eq(inventoryMovement.warehouseId, warehouseId));
-        }
+          if (warehouseId) {
+            conditions.push(eq(inventoryMovement.warehouseId, warehouseId));
+          }
 
-        const rows = await db
-          .select({
-            batchNo: inventoryMovement.batchNo,
-            warehouseId: inventoryMovement.warehouseId,
-            balance: sql<string>`SUM(${inventoryMovement.qtyDelta})`,
-          })
-          .from(inventoryMovement)
-          .where(and(...conditions))
-          .groupBy(inventoryMovement.batchNo, inventoryMovement.warehouseId)
-          .having(sql`SUM(${inventoryMovement.qtyDelta}) > 0`);
+          const rows = await db
+            .select({
+              batchNo: inventoryMovement.batchNo,
+              warehouseId: inventoryMovement.warehouseId,
+              balance: sql<string>`SUM(${inventoryMovement.qtyDelta})`,
+            })
+            .from(inventoryMovement)
+            .where(and(...conditions))
+            .groupBy(inventoryMovement.batchNo, inventoryMovement.warehouseId)
+            .having(sql`SUM(${inventoryMovement.qtyDelta}) > 0`);
 
-        return new Response(JSON.stringify(rows), {
-          headers: { "content-type": "application/json" },
+          return new Response(JSON.stringify(rows), {
+            headers: { "content-type": "application/json" },
+          });
         });
       },
     },

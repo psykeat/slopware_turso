@@ -21,7 +21,9 @@ async function createBackfillFixture() {
   const defaultVariantHash = createArticleVariantOptionValueHash([]);
 
   // Already has a (custom) variant + inventory → not a backfill candidate.
-  const existingVariantArticle = await seedArticleRow(tenantId, { articleNo: `BF-EXIST-${suffix}` });
+  const existingVariantArticle = await seedArticleRow(tenantId, {
+    articleNo: `BF-EXIST-${suffix}`,
+  });
   const existingVariant = await seedVariantRow(tenantId, {
     articleId: existingVariantArticle.articleId,
     sku: `CUSTOM-${suffix}`,

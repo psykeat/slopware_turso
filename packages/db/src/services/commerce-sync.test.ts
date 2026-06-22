@@ -139,9 +139,7 @@ test("commerce mappers create deterministic Shopware payload identities", () => 
         weight: "0.2",
         isActive: true,
         availableStock: 50,
-        optionValues: [
-          { groupName: "Color", groupId: "g1", valueId: "v1", value: "Red" },
-        ],
+        optionValues: [{ groupName: "Color", groupId: "g1", valueId: "v1", value: "Red" }],
       },
       {
         variantId: "bfc4c778-fcb9-43e3-a53a-7a157b195249",
@@ -152,9 +150,7 @@ test("commerce mappers create deterministic Shopware payload identities", () => 
         weight: null,
         isActive: true,
         availableStock: 25,
-        optionValues: [
-          { groupName: "Color", groupId: "g1", valueId: "v2", value: "Blue" },
-        ],
+        optionValues: [{ groupName: "Color", groupId: "g1", valueId: "v2", value: "Blue" }],
       },
     ],
   );
@@ -170,8 +166,15 @@ test("commerce mappers create deterministic Shopware payload identities", () => 
   assert.equal(firstChild.stock, 50);
 
   // Variant options: configuratorSettings on parent, options on children
-  const configuratorSettings = mappedArticle.payload.configuratorSettings as Array<{ id: string; optionId: string }>;
-  assert.equal(configuratorSettings.length, 2, "parent should have 2 configuratorSettings (Red + Blue)");
+  const configuratorSettings = mappedArticle.payload.configuratorSettings as Array<{
+    id: string;
+    optionId: string;
+  }>;
+  assert.equal(
+    configuratorSettings.length,
+    2,
+    "parent should have 2 configuratorSettings (Red + Blue)",
+  );
   assert.equal(configuratorSettings[0].id.length, 32);
   assert.equal(configuratorSettings[0].optionId.length, 32);
 
@@ -241,9 +244,7 @@ test("commerce mapper uses price list prices with net→gross calculation", () =
         weight: null,
         isActive: true,
         availableStock: 5,
-        optionValues: [
-          { groupName: "Color", groupId: "g1", valueId: "v1", value: "Red" },
-        ],
+        optionValues: [{ groupName: "Color", groupId: "g1", valueId: "v1", value: "Red" }],
         priceListPrices: [
           { priceListName: "Standard", isNet: true, currencyId: "EUR", price: 100 },
         ],
@@ -257,9 +258,7 @@ test("commerce mapper uses price list prices with net→gross calculation", () =
         weight: null,
         isActive: true,
         availableStock: 3,
-        optionValues: [
-          { groupName: "Color", groupId: "g1", valueId: "v2", value: "Blue" },
-        ],
+        optionValues: [{ groupName: "Color", groupId: "g1", valueId: "v2", value: "Blue" }],
         priceListPrices: [
           { priceListName: "Standard", isNet: false, currencyId: "EUR", price: 119.99 },
         ],
@@ -563,7 +562,13 @@ test("commerce.sync.start dry-run records address and article steps without exte
   });
 
   const result = expectOk<{
-    run: { runId: string; status: string; totalItems: number; succeededItems: number; dryRun: boolean };
+    run: {
+      runId: string;
+      status: string;
+      totalItems: number;
+      succeededItems: number;
+      dryRun: boolean;
+    };
     steps: Array<{ entityType: string; status: string; plannedItems: number }>;
   }>(
     await executeCapability("commerce.commerceSyncRun.start", ctx, {
@@ -843,7 +848,10 @@ test("commerce.sync adapter writes rejected items to DLQ and accepted items to m
         .map((i) => ({ internalId: i.internalId, externalId: `ext-${i.internalId}` }));
       const rejected = input.items
         .filter((i) => i.internalId === addr2.addressId)
-        .map((i) => ({ internalId: i.internalId, error: "Shopware rejected: invalid postal code" }));
+        .map((i) => ({
+          internalId: i.internalId,
+          error: "Shopware rejected: invalid postal code",
+        }));
       return { accepted: accepted.length, externalIds: accepted, rejected };
     },
   };
@@ -894,13 +902,19 @@ test("commerce.sync DLQ retry resolves an item on second attempt", async () => {
         return {
           accepted: 0,
           externalIds: [],
-          rejected: input.items.map((i) => ({ internalId: i.internalId, error: "transient error" })),
+          rejected: input.items.map((i) => ({
+            internalId: i.internalId,
+            error: "transient error",
+          })),
         };
       }
       // Second attempt succeeds
       return {
         accepted: input.items.length,
-        externalIds: input.items.map((i) => ({ internalId: i.internalId, externalId: `ext-${i.internalId}` })),
+        externalIds: input.items.map((i) => ({
+          internalId: i.internalId,
+          externalId: `ext-${i.internalId}`,
+        })),
         rejected: [],
       };
     },
@@ -921,9 +935,7 @@ test("commerce.sync DLQ retry resolves an item on second attempt", async () => {
   assert.equal(dlqBefore.items.length, 1);
 
   // Force nextRetryAt to past so retry picks it up
-  await db
-    .update(commerceSyncDeadLetter)
-    .set({ nextRetryAt: new Date(Date.now() - 1000) });
+  await db.update(commerceSyncDeadLetter).set({ nextRetryAt: new Date(Date.now() - 1000) });
 
   // Retry
   const retryResult = await svc.retryDeadLetter(salesChannelId);
@@ -1044,13 +1056,23 @@ test("commerce.sync delta skips unchanged items and re-pushes changed ones", asy
   const svc = new CommerceSyncService(ctx.tenantId, null, () => recordingAdapter);
 
   // Run 1: both addresses are new → both pushed.
-  const run1 = await svc.start({ salesChannelId, direction: "push", mode: "single", entities: ["address"] });
+  const run1 = await svc.start({
+    salesChannelId,
+    direction: "push",
+    mode: "single",
+    entities: ["address"],
+  });
   assert.equal(run1.run.status, "success");
   assert.equal(run1.run.totalItems, 2);
   assert.deepEqual(pushedBatches, [2]);
 
   // Run 2: nothing changed → delta skips everything, no push happens.
-  const run2 = await svc.start({ salesChannelId, direction: "push", mode: "single", entities: ["address"] });
+  const run2 = await svc.start({
+    salesChannelId,
+    direction: "push",
+    mode: "single",
+    entities: ["address"],
+  });
   assert.equal(run2.run.status, "success");
   assert.equal(run2.run.totalItems, 0);
   assert.deepEqual(pushedBatches, [2], "no further push when nothing changed");
@@ -1063,7 +1085,12 @@ test("commerce.sync delta skips unchanged items and re-pushes changed ones", asy
     .set({ companyName: "Delta Customer One (edited)" })
     .where(eq(address.addressId, addr1.addressId));
 
-  const run3 = await svc.start({ salesChannelId, direction: "push", mode: "single", entities: ["address"] });
+  const run3 = await svc.start({
+    salesChannelId,
+    direction: "push",
+    mode: "single",
+    entities: ["address"],
+  });
   assert.equal(run3.run.status, "success");
   assert.equal(run3.run.totalItems, 1, "only the changed address is pushed");
   assert.deepEqual(pushedBatches, [2, 1]);
@@ -1083,13 +1110,17 @@ test("commerce.sync delta skips unchanged items and re-pushes changed ones", asy
 
 test("commerce.sync capabilities are discoverable via capability registry", async () => {
   const dlqListResult = expectOk<{ items: unknown[] }>(
-    await executeCapability("commerce.commerceSyncDeadLetter.list", {
-      tenantId: "019e2889-5cd7-714b-9922-08a75fdfbaac",
-      organizationId: "019e2889-5cd7-714b-9922-08a75fdfbaac",
-      userId: null,
-      actorMode: "test",
-      role: "system",
-    }, {}),
+    await executeCapability(
+      "commerce.commerceSyncDeadLetter.list",
+      {
+        tenantId: "019e2889-5cd7-714b-9922-08a75fdfbaac",
+        organizationId: "019e2889-5cd7-714b-9922-08a75fdfbaac",
+        userId: null,
+        actorMode: "test",
+        role: "system",
+      },
+      {},
+    ),
   );
   assert.ok(Array.isArray(dlqListResult.items));
 });

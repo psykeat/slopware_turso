@@ -7,19 +7,35 @@ import { useCommandList, useCommands } from "../platform/command-registry";
 import { useFocus } from "../platform/focus-manager";
 
 function Command({ children, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="command" {...props}>{children}</div>;
+  return (
+    <div data-slot="command" {...props}>
+      {children}
+    </div>
+  );
 }
 
 function CommandList({ children, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="command-list" {...props}>{children}</div>;
+  return (
+    <div data-slot="command-list" {...props}>
+      {children}
+    </div>
+  );
 }
 
 function CommandGroup({ children, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="command-group" {...props}>{children}</div>;
+  return (
+    <div data-slot="command-group" {...props}>
+      {children}
+    </div>
+  );
 }
 
 function CommandEmpty({ children, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="command-empty" {...props}>{children}</div>;
+  return (
+    <div data-slot="command-empty" {...props}>
+      {children}
+    </div>
+  );
 }
 
 function CommandItem({
@@ -30,12 +46,7 @@ function CommandItem({
   onSelect?: () => void;
 }) {
   return (
-    <button
-      type="button"
-      data-slot="command-item"
-      onClick={onSelect}
-      {...props}
-    >
+    <button type="button" data-slot="command-item" onClick={onSelect} {...props}>
       {children}
     </button>
   );

@@ -46,7 +46,7 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
 
   if (isLoading) {
     return (
-      <table className="w-full table-fixed border-collapse" role="table">
+      <table className="w-full table-fixed border-collapse">
         <thead>
           <tr className="h-8 border-b border-hairline">
             <th className={colHeaderClassLeft} style={{ width: "12%" }}>
@@ -112,7 +112,7 @@ export function StockLedgerTable({ articleId }: { articleId: string }) {
   }
 
   return (
-    <table className="w-full table-fixed border-collapse" role="table">
+    <table className="w-full table-fixed border-collapse">
       <thead>
         <tr className="h-8 border-b border-hairline">
           <th className={colHeaderClassLeft} style={{ width: "12%" }}>

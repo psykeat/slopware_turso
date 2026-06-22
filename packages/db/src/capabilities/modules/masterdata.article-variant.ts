@@ -290,7 +290,6 @@ export const articleVariantPricing = defineCapability({
       input.variantId,
       input.customerId ?? null,
       input.documentDate ?? new Date().toISOString().slice(0, 10),
-      ctx.tenantId,
       {
         deliveryAddressId: input.deliveryAddressId ?? null,
         deliveryCountryCode: input.deliveryCountryCode ?? null,

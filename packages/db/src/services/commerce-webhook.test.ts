@@ -18,6 +18,7 @@ import {
   salesChannel,
   tenant,
 } from "../schema/app.schema";
+import type { CommerceSyncAdapter, ShopSyncBatchResult, ShopwareOrder } from "./commerce-sync";
 import {
   CommerceWebhookLookupError,
   CommerceWebhookService,
@@ -27,7 +28,6 @@ import {
   parseShopwareWebhook,
   verifyShopwareSignature,
 } from "./commerce-webhook";
-import type { CommerceSyncAdapter, ShopSyncBatchResult, ShopwareOrder } from "./commerce-sync";
 import { encryptSecret } from "./secret-crypto";
 
 const SHOP_URL = "http://localhost:8080";
@@ -104,7 +104,11 @@ async function createFixture() {
   return { tenantId, suffix, salesChannelId: channel.salesChannelId, appSecret };
 }
 
-function signedWebhook(appSecret: string, eventName: string, payload: Record<string, unknown> = {}) {
+function signedWebhook(
+  appSecret: string,
+  eventName: string,
+  payload: Record<string, unknown> = {},
+) {
   const rawBody = JSON.stringify({
     source: { url: SHOP_URL, appVersion: "1.0.0", shopId: "shop-1" },
     data: { event: eventName, payload },
@@ -169,8 +173,7 @@ test("ingest rejects unknown shops and invalid signatures", async () => {
   const bad = signedWebhook(appSecret, "checkout.order.placed");
   await assert.rejects(
     ingestShopwareWebhook({ rawBody: bad.rawBody, signature: "deadbeef" }),
-    (err: unknown) =>
-      err instanceof CommerceWebhookValidationError && err.status === 401,
+    (err: unknown) => err instanceof CommerceWebhookValidationError && err.status === 401,
   );
 });
 
@@ -281,7 +284,12 @@ test("processPending imports an order on checkout.order.placed and acknowledges 
   const maps = await db
     .select()
     .from(externalSyncMapping)
-    .where(and(eq(externalSyncMapping.tenantId, tenantId), eq(externalSyncMapping.entityType, "document")));
+    .where(
+      and(
+        eq(externalSyncMapping.tenantId, tenantId),
+        eq(externalSyncMapping.entityType, "document"),
+      ),
+    );
   assert.equal(maps.length, 1);
   assert.equal(maps[0].externalId, order.orderId);
 

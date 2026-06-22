@@ -12,4 +12,3 @@ const code = buildAndSerializeClientSdk(allCapabilities);
 writeFileSync(outputPath, code);
 
 console.log(`Wrote frontend Client SDK: ${outputPath}`);
-

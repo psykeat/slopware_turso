@@ -16,14 +16,13 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import { MailComposeDraftPanel } from "./MailComposeDraftPanel";
-
 import { aiCapabilityRegistry } from "#/lib/ai/ai-capability-registry";
 
 import { AiAssistantState, AiErrorClass } from "./ai-types";
 import { useAiActionApply } from "./hooks/useAiActionApply";
 import { useAiContextResolution } from "./hooks/useAiContextResolution";
 import { useAiTaskStream } from "./hooks/useAiTaskStream";
+import { MailComposeDraftPanel } from "./MailComposeDraftPanel";
 
 class ReviewRenderBoundary extends React.Component<
   {

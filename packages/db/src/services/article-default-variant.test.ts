@@ -35,12 +35,7 @@ test("article creation seeds one default variant and inventory item", async () =
       isActive: articleVariant.isActive,
     })
     .from(articleVariant)
-    .where(
-      and(
-        eq(articleVariant.tenantId, fixture.tenantId),
-        eq(articleVariant.articleId, createdArticleId),
-      ),
-    );
+    .where(eq(articleVariant.articleId, createdArticleId));
 
   assert.equal(variantRows.length, 1);
   assert.equal(variantRows[0]?.optionValueHash, createArticleVariantOptionValueHash([]));
@@ -54,12 +49,7 @@ test("article creation seeds one default variant and inventory item", async () =
       sku: inventoryItem.sku,
     })
     .from(inventoryItem)
-    .where(
-      and(
-        eq(inventoryItem.tenantId, fixture.tenantId),
-        eq(inventoryItem.variantId, variantRows[0]!.variantId),
-      ),
-    );
+    .where(eq(inventoryItem.variantId, variantRows[0]!.variantId));
 
   assert.equal(inventoryRows.length, 1);
   assert.equal(inventoryRows[0]?.sku, variantRows[0]?.sku);
@@ -85,12 +75,7 @@ test("article name changes do not change the default variant SKU", async () => {
       sku: articleVariant.sku,
     })
     .from(articleVariant)
-    .where(
-      and(
-        eq(articleVariant.tenantId, fixture.tenantId),
-        eq(articleVariant.articleId, createdArticleId),
-      ),
-    );
+    .where(eq(articleVariant.articleId, createdArticleId));
   assert.equal(beforeRows.length, 1);
 
   await dataService.patch("article", createdArticleId, {
@@ -103,12 +88,7 @@ test("article name changes do not change the default variant SKU", async () => {
       sku: articleVariant.sku,
     })
     .from(articleVariant)
-    .where(
-      and(
-        eq(articleVariant.tenantId, fixture.tenantId),
-        eq(articleVariant.articleId, createdArticleId),
-      ),
-    );
+    .where(eq(articleVariant.articleId, createdArticleId));
   assert.equal(afterRows.length, 1);
   assert.equal(afterRows[0]?.sku, beforeRows[0]?.sku);
   assert.equal(afterRows[0]?.sku, `${articleNo}-${createArticleVariantOptionValueHash([])}`);

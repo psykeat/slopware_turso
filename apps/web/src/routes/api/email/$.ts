@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { auth } from "@repo/auth/auth";
+import { runInTenantScope } from "@repo/db";
 import { DocumentPdfService } from "@repo/db/services/document-pdf-service";
 import { EmailAccountService } from "@repo/db/services/email/account-service";
 import { EmailDocumentService } from "@repo/db/services/email/document-service";
@@ -98,11 +99,13 @@ async function withEmailContext(
   if (!tenantContext) return new Response("Forbidden", { status: 403 });
 
   const segments = url.pathname.split("/").filter(Boolean).slice(2);
-  return await handler({
-    request,
-    tenantId: tenantContext.tenantId,
-    userId: session.user.id,
-    segments,
+  return await runInTenantScope(tenantContext, async () => {
+    return await handler({
+      request,
+      tenantId: tenantContext.tenantId,
+      userId: session.user.id,
+      segments,
+    });
   });
 }
 
@@ -179,8 +182,7 @@ async function handleMaintenance(request: Request) {
     await EmailSubscriptionService.getAccountsDueForBackstopSync(BACKSTOP_TIER_INTERVALS);
   const backstopJobs: unknown[] = [];
   for (const account of backstopAccounts) {
-    const priority =
-      account.syncPriority === "high" ? 1 : account.activityTier === "warm" ? 2 : 3;
+    const priority = account.syncPriority === "high" ? 1 : account.activityTier === "warm" ? 2 : 3;
     const job = await new EmailJobService(account.tenantId).enqueue({
       jobType: "incremental_sync",
       emailAccountId: account.emailAccountId,

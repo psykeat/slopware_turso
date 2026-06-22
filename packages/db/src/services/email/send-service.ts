@@ -10,7 +10,7 @@ import {
   emailMessage,
   emailOutbox,
   emailThread,
-} from "../../schema/app.schema";
+} from "../../schema/sqlite.schema";
 import { EmailAccountService, EmailAuthorizationError } from "./account-service";
 import { createEmailProviderAdapter } from "./adapters";
 import { EmailJobService } from "./job-service";
@@ -129,7 +129,7 @@ export class EmailSendService {
       await this.accountService.assertGrant(options.accountId, "send");
     }
 
-    const conditions = [eq(emailOutbox.tenantId, this.tenantId)];
+    const conditions: ReturnType<typeof eq>[] = [];
     if (options.accountId) conditions.push(eq(emailOutbox.emailAccountId, options.accountId));
     if (options.status) conditions.push(eq(emailOutbox.status, options.status));
 
@@ -153,7 +153,7 @@ export class EmailSendService {
     await db
       .update(emailOutbox)
       .set({ status: "queued", updatedAt: new Date() })
-      .where(and(eq(emailOutbox.tenantId, this.tenantId), eq(emailOutbox.emailOutboxId, outboxId)));
+      .where(eq(emailOutbox.emailOutboxId, outboxId));
     return await this.jobService.enqueue({
       jobType: "send",
       emailAccountId: outbox.emailAccountId,
@@ -184,9 +184,7 @@ export class EmailSendService {
       await tx
         .update(emailOutbox)
         .set({ providerDraftId: draft.providerDraftId, updatedAt: new Date() })
-        .where(
-          and(eq(emailOutbox.tenantId, this.tenantId), eq(emailOutbox.emailOutboxId, outboxId)),
-        );
+        .where(eq(emailOutbox.emailOutboxId, outboxId));
 
       if (outbox.emailMessageId) {
         await tx
@@ -196,12 +194,7 @@ export class EmailSendService {
             ...(draft.providerMessageId ? { providerMessageId: draft.providerMessageId } : {}),
             updatedAt: new Date(),
           })
-          .where(
-            and(
-              eq(emailMessage.tenantId, this.tenantId),
-              eq(emailMessage.emailMessageId, outbox.emailMessageId),
-            ),
-          );
+          .where(eq(emailMessage.emailMessageId, outbox.emailMessageId));
       }
     });
 
@@ -218,7 +211,7 @@ export class EmailSendService {
     await db
       .update(emailOutbox)
       .set({ status: "sending", lastError: null, updatedAt: new Date() })
-      .where(and(eq(emailOutbox.tenantId, this.tenantId), eq(emailOutbox.emailOutboxId, outboxId)));
+      .where(eq(emailOutbox.emailOutboxId, outboxId));
 
     let sent;
     try {
@@ -235,9 +228,7 @@ export class EmailSendService {
           lastError: error instanceof Error ? error.message : String(error),
           updatedAt: new Date(),
         })
-        .where(
-          and(eq(emailOutbox.tenantId, this.tenantId), eq(emailOutbox.emailOutboxId, outboxId)),
-        );
+        .where(eq(emailOutbox.emailOutboxId, outboxId));
       throw error;
     }
 
@@ -250,9 +241,7 @@ export class EmailSendService {
           lastError: null,
           updatedAt: new Date(),
         })
-        .where(
-          and(eq(emailOutbox.tenantId, this.tenantId), eq(emailOutbox.emailOutboxId, outboxId)),
-        );
+        .where(eq(emailOutbox.emailOutboxId, outboxId));
 
       if (outbox.emailMessageId) {
         if (account.provider === "microsoft") {
@@ -301,7 +290,7 @@ export class EmailSendService {
     await db
       .update(emailOutbox)
       .set({ status: "sending", lastError: null, updatedAt: new Date() })
-      .where(and(eq(emailOutbox.tenantId, this.tenantId), eq(emailOutbox.emailOutboxId, outboxId)));
+      .where(eq(emailOutbox.emailOutboxId, outboxId));
     return outbox;
   }
 
@@ -312,7 +301,7 @@ export class EmailSendService {
     await db
       .update(emailOutbox)
       .set({ status: "failed", lastError: message, updatedAt: new Date() })
-      .where(and(eq(emailOutbox.tenantId, this.tenantId), eq(emailOutbox.emailOutboxId, outboxId)));
+      .where(eq(emailOutbox.emailOutboxId, outboxId));
     return outbox;
   }
 
@@ -326,9 +315,7 @@ export class EmailSendService {
         subject: emailMessage.subject,
       })
       .from(emailMessage)
-      .where(
-        and(eq(emailMessage.tenantId, this.tenantId), eq(emailMessage.emailMessageId, messageId)),
-      )
+      .where(eq(emailMessage.emailMessageId, messageId))
       .limit(1);
     if (!source) return null;
     return await this.saveDraft({
@@ -351,9 +338,7 @@ export class EmailSendService {
         bodyText: emailMessage.bodyText,
       })
       .from(emailMessage)
-      .where(
-        and(eq(emailMessage.tenantId, this.tenantId), eq(emailMessage.emailMessageId, messageId)),
-      )
+      .where(eq(emailMessage.emailMessageId, messageId))
       .limit(1);
     if (!source) return null;
     return await this.saveDraft({
@@ -372,7 +357,6 @@ export class EmailSendService {
       .from(emailIdentity)
       .where(
         and(
-          eq(emailIdentity.tenantId, this.tenantId),
           eq(emailIdentity.emailAccountId, accountId),
           eq(emailIdentity.emailIdentityId, identityId),
           eq(emailIdentity.canSend, true),
@@ -388,14 +372,8 @@ export class EmailSendService {
     const [outbox] = await db
       .select()
       .from(emailOutbox)
-      .innerJoin(
-        emailAccount,
-        and(
-          eq(emailAccount.tenantId, this.tenantId),
-          eq(emailAccount.emailAccountId, emailOutbox.emailAccountId),
-        ),
-      )
-      .where(and(eq(emailOutbox.tenantId, this.tenantId), eq(emailOutbox.emailOutboxId, outboxId)))
+      .innerJoin(emailAccount, eq(emailAccount.emailAccountId, emailOutbox.emailAccountId))
+      .where(eq(emailOutbox.emailOutboxId, outboxId))
       .limit(1);
     if (!outbox) throw new Error("Draft not found");
     return outbox.email_outbox;
@@ -416,9 +394,7 @@ export class EmailSendService {
         lastSyncError: error instanceof Error ? error.message : String(error),
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
-      );
+      .where(eq(emailAccount.emailAccountId, accountId));
   }
 
   private async persistUpdatedCredentials(accountId: string, adapter: EmailProviderAdapter) {
@@ -427,8 +403,6 @@ export class EmailSendService {
     await db
       .update(emailAccount)
       .set({ credentialsEncrypted, status: "connected", updatedAt: new Date() })
-      .where(
-        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
-      );
+      .where(eq(emailAccount.emailAccountId, accountId));
   }
 }

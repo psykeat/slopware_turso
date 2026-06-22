@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { and, db, eq } from "../../index";
-import { emailAccount } from "../../schema/app.schema";
+import { emailAccount } from "../../schema/sqlite.schema";
 import { EmailJobService } from "./job-service";
 import { EmailSyncService } from "./sync-service";
 import type { EmailProvider } from "./types";
@@ -128,9 +128,7 @@ export async function queueWebhookIncrementalSync(
   await db
     .update(emailAccount)
     .set({ activityTier: "hot", lastUserActivityAt: now, updatedAt: now })
-    .where(
-      and(eq(emailAccount.tenantId, account.tenantId), eq(emailAccount.emailAccountId, account.emailAccountId)),
-    );
+    .where(eq(emailAccount.emailAccountId, account.emailAccountId));
 
   // Bucket into 30-second windows to deduplicate bursts of webhook signals
   // for the same account (e.g. Graph sends one notification per message change).

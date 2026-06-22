@@ -10,13 +10,7 @@ import {
 import { cn } from "@repo/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  DownloadIcon,
-  Loader2Icon,
-  PlayIcon,
-  RefreshCwIcon,
-  RotateCwIcon,
-} from "lucide-react";
+import { DownloadIcon, Loader2Icon, PlayIcon, RefreshCwIcon, RotateCwIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -164,7 +158,7 @@ function KpiCard({
       <span className="text-[11px] font-medium tracking-wider text-ink-mute uppercase">
         {label}
       </span>
-      <span className={cn("text-[20px] font-semibold tabular-nums text-ink", tone)}>{value}</span>
+      <span className={cn("text-[20px] font-semibold text-ink tabular-nums", tone)}>{value}</span>
       {hint && <span className="text-[11px] text-ink-mute">{hint}</span>}
     </div>
   );
@@ -241,12 +235,7 @@ function CommerceSyncView() {
         salesChannelId: channelId,
         direction: "push",
         mode: triggerMode,
-        entities: triggerEntities as (
-          | "category"
-          | "address"
-          | "media_asset"
-          | "article"
-        )[],
+        entities: triggerEntities as ("category" | "address" | "media_asset" | "article")[],
         dryRun: triggerDryRun,
         forceFullSync: triggerForceFull,
       });
@@ -383,12 +372,7 @@ function CommerceSyncView() {
             />
             Auto-Refresh (5s)
           </label>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetchRuns()}
-            disabled={!channelId}
-          >
+          <Button variant="outline" size="sm" onClick={() => refetchRuns()} disabled={!channelId}>
             <RefreshCwIcon className={cn("mr-1.5 size-3.5", runsFetching && "animate-spin")} />
             Aktualisieren
           </Button>
@@ -671,10 +655,10 @@ function CommerceSyncView() {
                             {r.mode === "full" ? "Voll" : "Einzeln"}
                             {r.dryRun && " · Probe"}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-ink-secondary">
+                          <td className="px-3 py-2 text-right text-ink-secondary tabular-nums">
                             {r.totalItems}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-green-600">
+                          <td className="px-3 py-2 text-right text-green-600 tabular-nums">
                             {r.succeededItems}
                           </td>
                           <td
@@ -685,7 +669,7 @@ function CommerceSyncView() {
                           >
                             {r.failedItems}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-ink-secondary">
+                          <td className="px-3 py-2 text-right text-ink-secondary tabular-nums">
                             {formatDuration(r.startedAt, r.completedAt)}
                           </td>
                         </tr>
@@ -764,7 +748,7 @@ function CommerceSyncView() {
                       filteredDlq.map((i) => (
                         <tr
                           key={i.itemId}
-                          className="border-b border-hairline/60 last:border-0 align-top hover:bg-canvas-soft/50"
+                          className="border-b border-hairline/60 align-top last:border-0 hover:bg-canvas-soft/50"
                         >
                           <td className="px-3 py-2">
                             <StatusBadge meta={DLQ_STATUS_META[i.status]} />
@@ -777,7 +761,7 @@ function CommerceSyncView() {
                             {i.internalId.slice(0, 8)}…
                           </td>
                           <td className="max-w-md px-3 py-2 text-red-600/90">{i.errorMessage}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-ink-secondary">
+                          <td className="px-3 py-2 text-right text-ink-secondary tabular-nums">
                             {i.attemptCount}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-ink-secondary">

@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "../../index";
-import { emailAccount, emailSubscription } from "../../schema/app.schema";
+import { emailAccount, emailSubscription } from "../../schema/sqlite.schema";
 
 // How many hours before expiry to trigger renewal, per provider and resource.
 // Based on Graph's published max durations (messages/events: ~4230min / ~3 days;
@@ -63,7 +63,6 @@ export class EmailSubscriptionService {
       .set({ status: "renewal_pending", updatedAt: now })
       .where(
         and(
-          eq(emailSubscription.tenantId, this.tenantId),
           eq(emailSubscription.emailAccountId, emailAccountId),
           eq(emailSubscription.resource, resource),
         ),
@@ -81,7 +80,6 @@ export class EmailSubscriptionService {
       })
       .where(
         and(
-          eq(emailSubscription.tenantId, this.tenantId),
           eq(emailSubscription.emailAccountId, emailAccountId),
           eq(emailSubscription.resource, resource),
         ),
@@ -109,7 +107,6 @@ export class EmailSubscriptionService {
       .from(emailSubscription)
       .where(
         and(
-          eq(emailSubscription.tenantId, this.tenantId),
           eq(emailSubscription.emailAccountId, emailAccountId),
           eq(emailSubscription.resource, resource),
         ),
@@ -161,7 +158,10 @@ export class EmailSubscriptionService {
     // Allowlist keys and cast values to integers to prevent sql.raw injection
     const cases = Object.entries(tierIntervals)
       .filter(([tier]) => VALID_TIERS.has(tier))
-      .map(([tier, minutes]) => `WHEN activity_tier = '${tier}' THEN INTERVAL '${Math.floor(Number(minutes))} minutes'`)
+      .map(
+        ([tier, minutes]) =>
+          `WHEN activity_tier = '${tier}' THEN INTERVAL '${Math.floor(Number(minutes))} minutes'`,
+      )
       .join(" ");
 
     return db

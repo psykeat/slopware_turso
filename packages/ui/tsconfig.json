@@ -1,7 +1,10 @@
 {
   "extends": "@repo/tsconfig/base.json",
   "compilerOptions": {
+    "types": ["node"],
     "paths": {
+      "@repo/registry": ["../registry/src/index.ts"],
+      "@repo/registry/*": ["../registry/src/*"],
       "@repo/ui/*": ["./*"],
       "@/*": ["./*"]
     }

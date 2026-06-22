@@ -1,4 +1,5 @@
 import { auth } from "@repo/auth/auth";
+import { runInTenantScope } from "@repo/db";
 import { ImportService } from "@repo/db/services/import-service";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -30,15 +31,18 @@ export const Route = createFileRoute("/api/import/profiles/$profileId/bootstrap"
         }
 
         const schemaCsvText = await request.text();
-        const result = await new ImportService(context.tenantId, session.user.id).bootstrapBuerowareMapping(
-          {
+        const result = await runInTenantScope(context, async () => {
+          return await new ImportService(
+            context.tenantId,
+            session.user.id,
+          ).bootstrapBuerowareMapping({
             profileId: params.profileId,
             tenantConnectorId,
             targetFileName,
             schemaCsvText,
             delimiter,
-          },
-        );
+          });
+        });
 
         return Response.json(result);
       },

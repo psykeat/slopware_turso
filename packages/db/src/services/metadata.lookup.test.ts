@@ -22,7 +22,7 @@ test("country lookup metadata resolves with registries", () => {
       codeColumn: "iso2Code",
       valueColumn: "iso2Code",
       sortColumn: "iso2Code",
-    }
+    },
   ];
   const metadata = resolveLookupMetadata({ lookupTable: "country" }, registries);
 
@@ -41,7 +41,7 @@ test("currency lookup metadata resolves with registries", () => {
       codeColumn: "code",
       valueColumn: "code",
       sortColumn: "code",
-    }
+    },
   ];
   const metadata = resolveLookupMetadata({ lookupTable: "currency" }, registries);
 

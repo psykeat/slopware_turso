@@ -1,5 +1,5 @@
 import { auth } from "@repo/auth/auth";
-import { db } from "@repo/db";
+import { db, runInTenantScope } from "@repo/db";
 import { articleBom } from "@repo/db/schema";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, eq } from "drizzle-orm";
@@ -33,22 +33,18 @@ export const Route = createFileRoute("/api/articles/$articleId/bom/$bomId")({
           return new Response("No fields to update", { status: 400 });
         }
 
-        const [updated] = await db
-          .update(articleBom)
-          .set(updates)
-          .where(
-            and(
-              eq(articleBom.bomId, params.bomId),
-              eq(articleBom.tenantId, context.tenantId),
-              eq(articleBom.archived, false),
-            ),
-          )
-          .returning();
+        return runInTenantScope(context, async () => {
+          const [updated] = await db
+            .update(articleBom)
+            .set(updates)
+            .where(and(eq(articleBom.bomId, params.bomId), eq(articleBom.archived, false)))
+            .returning();
 
-        if (!updated) return new Response("Not found", { status: 404 });
+          if (!updated) return new Response("Not found", { status: 404 });
 
-        return new Response(JSON.stringify({ bom: updated }), {
-          headers: { "content-type": "application/json" },
+          return new Response(JSON.stringify({ bom: updated }), {
+            headers: { "content-type": "application/json" },
+          });
         });
       },
 
@@ -60,22 +56,18 @@ export const Route = createFileRoute("/api/articles/$articleId/bom/$bomId")({
         const context = await resolveTenantContext(request, session.user.id, isSystemAdmin);
         if (!context) return new Response("No active tenant found", { status: 403 });
 
-        const [updated] = await db
-          .update(articleBom)
-          .set({ archived: true })
-          .where(
-            and(
-              eq(articleBom.bomId, params.bomId),
-              eq(articleBom.tenantId, context.tenantId),
-              eq(articleBom.archived, false),
-            ),
-          )
-          .returning();
+        return runInTenantScope(context, async () => {
+          const [updated] = await db
+            .update(articleBom)
+            .set({ archived: true })
+            .where(and(eq(articleBom.bomId, params.bomId), eq(articleBom.archived, false)))
+            .returning();
 
-        if (!updated) return new Response("Not found", { status: 404 });
+          if (!updated) return new Response("Not found", { status: 404 });
 
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { "content-type": "application/json" },
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { "content-type": "application/json" },
+          });
         });
       },
     },

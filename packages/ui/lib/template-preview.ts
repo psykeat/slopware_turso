@@ -12,10 +12,7 @@ function lookup(data: Record<string, unknown>, path: string): unknown {
 }
 
 /** Replaces `{{ path.to.value }}` placeholders with values from `data`. */
-export function renderTemplatePreview(
-  template: string,
-  data: Record<string, unknown>,
-): string {
+export function renderTemplatePreview(template: string, data: Record<string, unknown>): string {
   return template.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, key: string) => {
     const value = lookup(data, key);
     if (value == null) return "";

@@ -1,3 +1,4 @@
+import { runInTenantScope } from "@repo/db";
 import {
   CommerceWebhookLookupError,
   CommerceWebhookService,
@@ -51,7 +52,9 @@ async function handleWebhook(request: Request) {
   // Best-effort synchronous drain. Any failure here is recorded on the event row
   // (with retry backoff), so it does not affect the acknowledgement we send back.
   try {
-    await new CommerceWebhookService(result.tenantId).processPending(result.salesChannelId);
+    await runInTenantScope({ tenantId: result.tenantId }, async () => {
+      await new CommerceWebhookService(result.tenantId).processPending(result.salesChannelId);
+    });
   } catch (error) {
     console.error("Shopware webhook processing failed:", error);
   }

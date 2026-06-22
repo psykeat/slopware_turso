@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "../../index";
-import { emailAccount, emailAccountUserGrant, emailIdentity } from "../../schema/app.schema";
+import { emailAccount, emailAccountUserGrant, emailIdentity } from "../../schema/sqlite.schema";
 import { createEmailProviderAdapter } from "./adapters";
 import type { EmailProvider } from "./types";
 
@@ -37,12 +37,11 @@ export class EmailAccountService {
         emailAccountUserGrant,
         and(
           eq(emailAccountUserGrant.emailAccountId, emailAccount.emailAccountId),
-          eq(emailAccountUserGrant.tenantId, this.tenantId),
           eq(emailAccountUserGrant.userId, this.userId),
           eq(emailAccountUserGrant.canRead, true),
         ),
       )
-      .where(and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.archived, false)));
+      .where(eq(emailAccount.archived, false));
   }
 
   async listIdentities(accountId: string) {
@@ -50,13 +49,7 @@ export class EmailAccountService {
     return await db
       .select()
       .from(emailIdentity)
-      .where(
-        and(
-          eq(emailIdentity.tenantId, this.tenantId),
-          eq(emailIdentity.emailAccountId, accountId),
-          eq(emailIdentity.archived, false),
-        ),
-      );
+      .where(and(eq(emailIdentity.emailAccountId, accountId), eq(emailIdentity.archived, false)));
   }
 
   async connect(provider: EmailProvider, input: Record<string, unknown>) {
@@ -154,9 +147,7 @@ export class EmailAccountService {
     await db
       .update(emailAccount)
       .set({ archived: true, status: "disabled", updatedAt: new Date() })
-      .where(
-        and(eq(emailAccount.tenantId, this.tenantId), eq(emailAccount.emailAccountId, accountId)),
-      );
+      .where(eq(emailAccount.emailAccountId, accountId));
   }
 
   async assertGrant(accountId: string, capability: "read" | "send" | "manage") {
@@ -173,7 +164,6 @@ export class EmailAccountService {
       .from(emailAccountUserGrant)
       .where(
         and(
-          eq(emailAccountUserGrant.tenantId, this.tenantId),
           eq(emailAccountUserGrant.emailAccountId, accountId),
           eq(emailAccountUserGrant.userId, this.userId),
           eq(column, true),
@@ -189,13 +179,7 @@ export class EmailAccountService {
     const rows = await db
       .select()
       .from(emailAccount)
-      .where(
-        and(
-          eq(emailAccount.tenantId, this.tenantId),
-          eq(emailAccount.emailAccountId, accountId),
-          eq(emailAccount.archived, false),
-        ),
-      )
+      .where(and(eq(emailAccount.emailAccountId, accountId), eq(emailAccount.archived, false)))
       .limit(1);
     return rows[0] ?? null;
   }

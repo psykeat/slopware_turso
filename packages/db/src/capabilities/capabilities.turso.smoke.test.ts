@@ -47,7 +47,7 @@ before(async () => {
     sql`insert into article (article_id, article_no, name, bom_type, print_position_texts, created_at) values (${articleId}, 'ART-001', 'Test Article', 'none', 0, ${new Date().getTime()})`,
   );
   await migrationDb.run(
-    sql`insert into article_variant (variant_id, article_id, sku, price, created_at) values (${variantId}, ${articleId}, 'SKU-001', 15.00, ${new Date().getTime()})`,
+    sql`insert into article_variant (variant_id, article_id, sku, price, option_value_hash, created_at) values (${variantId}, ${articleId}, 'SKU-001', 15.00, 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', ${new Date().getTime()})`,
   );
 
   const companyId = "00000000-0000-4000-8000-000000000300";
@@ -257,11 +257,11 @@ test("turso: ledger posting and immutability smoke test", async () => {
     const invEntry = entries.find((e: any) => e.entryType === "inventory");
     assert.ok(invEntry);
     assert.equal(invEntry.variantId, variantId);
-    assert.equal(invEntry.qtyDelta, -10, "Outbound invoice should have negative qtyDelta");
+    assert.equal(Number(invEntry.qtyDelta), -10, "Outbound invoice should have negative qtyDelta");
 
     const accEntry = entries.find((e: any) => e.entryType === "accounting");
     assert.ok(accEntry);
-    assert.equal(accEntry.amountDelta, 150.0, "10 * 15 = 150");
+    assert.equal(Number(accEntry.amountDelta), 150.0, "10 * 15 = 150");
 
     // 5. Test immutability via SQLite triggers (raise abort on update/delete)
     await assert.rejects(
@@ -327,7 +327,7 @@ test("turso: ledger posting and immutability smoke test", async () => {
     const stornoInvEntry = stornoEntries.find((e: any) => e.entryType === "inventory");
     assert.ok(stornoInvEntry);
     assert.equal(
-      stornoInvEntry.qtyDelta,
+      Number(stornoInvEntry.qtyDelta),
       10,
       "Counter-booking for Gutschrift (G) should have positive qtyDelta (returning items to inventory)",
     );
@@ -335,7 +335,7 @@ test("turso: ledger posting and immutability smoke test", async () => {
     const stornoAccEntry = stornoEntries.find((e: any) => e.entryType === "accounting");
     assert.ok(stornoAccEntry);
     assert.equal(
-      stornoAccEntry.amountDelta,
+      Number(stornoAccEntry.amountDelta),
       150.0,
       "Credit note amount value should match original",
     );

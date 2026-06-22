@@ -7,7 +7,7 @@ import {
   country,
   deliveryAddress,
   sellerTaxRegistration,
-} from "../schema/app.schema";
+} from "../schema/sqlite.schema";
 
 export type VatValidationStatus = "missing" | "unknown" | "valid" | "invalid";
 
@@ -111,7 +111,7 @@ export class TaxContextService {
   }
 
   private async resolveSeller(tenantId: string, companyId: string | null) {
-    const conditions = [eq(company.tenantId, tenantId), eq(company.archived, false)];
+    const conditions = [eq(company.archived, false)];
     if (companyId) conditions.push(eq(company.companyId, companyId));
 
     const [row] = await db
@@ -136,7 +136,7 @@ export class TaxContextService {
         countryCode: address.countryCode,
       })
       .from(address)
-      .where(and(eq(address.tenantId, tenantId), eq(address.addressId, customerId)))
+      .where(eq(address.addressId, customerId))
       .limit(1);
 
     return row ?? null;
@@ -151,7 +151,6 @@ export class TaxContextService {
       .from(deliveryAddress)
       .where(
         and(
-          eq(deliveryAddress.tenantId, tenantId),
           eq(deliveryAddress.deliveryAddressId, deliveryAddressId),
           eq(deliveryAddress.archived, false),
         ),
@@ -196,7 +195,6 @@ export class TaxContextService {
       .from(sellerTaxRegistration)
       .where(
         and(
-          eq(sellerTaxRegistration.tenantId, input.tenantId),
           eq(sellerTaxRegistration.archived, false),
           eq(sellerTaxRegistration.registrationType, input.registrationType),
           countryCondition,

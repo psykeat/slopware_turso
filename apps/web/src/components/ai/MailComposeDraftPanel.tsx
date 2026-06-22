@@ -8,7 +8,12 @@ interface MailComposeDraftPanelProps {
   onClose: () => void;
 }
 
-export function MailComposeDraftPanel({ to, subject, context, onClose }: MailComposeDraftPanelProps) {
+export function MailComposeDraftPanel({
+  to,
+  subject,
+  context,
+  onClose,
+}: MailComposeDraftPanelProps) {
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
   const [generatedBody, setGeneratedBody] = useState<string | null>(null);
@@ -71,7 +76,10 @@ export function MailComposeDraftPanel({ to, subject, context, onClose }: MailCom
 
       {/* Instruction input */}
       <div className="space-y-1">
-        <label htmlFor="ai-compose-instruction" className="text-[11px] font-semibold tracking-wider text-ink-mute uppercase">
+        <label
+          htmlFor="ai-compose-instruction"
+          className="text-[11px] font-semibold tracking-wider text-ink-mute uppercase"
+        >
           Hinweis für die KI (optional)
         </label>
         <textarea
@@ -80,7 +88,7 @@ export function MailComposeDraftPanel({ to, subject, context, onClose }: MailCom
           onChange={(e) => setInstruction(e.target.value)}
           placeholder={'z.B. "kurz halten", "formal", "freundlich und persönlich"'}
           rows={2}
-          className="w-full resize-none rounded-md border border-hairline bg-canvas px-3 py-2 text-[12px] text-ink placeholder:text-ink-mute focus:outline-none focus:ring-1 focus:ring-primary/40"
+          className="w-full resize-none rounded-md border border-hairline bg-canvas px-3 py-2 text-[12px] text-ink placeholder:text-ink-mute focus:ring-1 focus:ring-primary/40 focus:outline-none"
         />
       </div>
 

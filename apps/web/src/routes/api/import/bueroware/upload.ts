@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import { auth } from "@repo/auth/auth";
+import { runInTenantScope } from "@repo/db";
 import { ImportService } from "@repo/db/services/import-service";
 import { createFileRoute } from "@tanstack/react-router";
 import { Unzip, UnzipInflate } from "fflate";
@@ -110,19 +111,21 @@ export const Route = createFileRoute("/api/import/bueroware/upload")({
             await rm(incomingPath, { force: true });
           }
 
-          const importService = new ImportService(context.tenantId, session.user.id);
-          const result = await importService.queueBuerowareFile({
-            layoutId,
-            profileId,
-            mappingVersionId,
-            sourceFileName,
-            filePath: sedbPath,
-            isDryRun: true,
-          });
+          return await runInTenantScope(context, async () => {
+            const importService = new ImportService(context.tenantId, session.user.id);
+            const result = await importService.queueBuerowareFile({
+              layoutId,
+              profileId,
+              mappingVersionId,
+              sourceFileName,
+              filePath: sedbPath,
+              isDryRun: true,
+            });
 
-          // Always return the file's data areas so the UI can show the picker when needed.
-          const layouts = await importService.listLayoutsForFile(sourceFileName);
-          return Response.json({ ...result, layouts });
+            // Always return the file's data areas so the UI can show the picker when needed.
+            const layouts = await importService.listLayoutsForFile(sourceFileName);
+            return Response.json({ ...result, layouts });
+          });
         } catch (error) {
           await rm(incomingPath, { force: true });
           await rm(sedbPath, { force: true });

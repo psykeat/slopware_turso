@@ -60,20 +60,23 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const registerCommand = useCallback((command: Command) => {
-    if (!commandsRef.current.find((c) => c.id === command.id)) {
-      commandsRef.current = [...commandsRef.current, command];
-      notifyCommandSubscribers();
-    }
-
-    return () => {
-      const nextCommands = commandsRef.current.filter((c) => c.id !== command.id);
-      if (nextCommands.length !== commandsRef.current.length) {
-        commandsRef.current = nextCommands;
+  const registerCommand = useCallback(
+    (command: Command) => {
+      if (!commandsRef.current.find((c) => c.id === command.id)) {
+        commandsRef.current = [...commandsRef.current, command];
         notifyCommandSubscribers();
       }
-    };
-  }, [notifyCommandSubscribers]);
+
+      return () => {
+        const nextCommands = commandsRef.current.filter((c) => c.id !== command.id);
+        if (nextCommands.length !== commandsRef.current.length) {
+          commandsRef.current = nextCommands;
+          notifyCommandSubscribers();
+        }
+      };
+    },
+    [notifyCommandSubscribers],
+  );
 
   const subscribeToCommands = useCallback((cb: () => void) => {
     commandSubscribers.current.add(cb);
@@ -91,36 +94,30 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const executeCommand = useCallback(
-    (commandId: string) => {
-      const currentFocusState = focusStateRef.current;
-      const command = commandsRef.current.find((c) => c.id === commandId);
-      if (command && (!command.isEnabled || command.isEnabled(currentFocusState))) {
-        command.handler(currentFocusState);
-        executionSubscribers.current.forEach((cb) => cb(commandId));
-      }
-    },
-    [],
-  );
+  const executeCommand = useCallback((commandId: string) => {
+    const currentFocusState = focusStateRef.current;
+    const command = commandsRef.current.find((c) => c.id === commandId);
+    if (command && (!command.isEnabled || command.isEnabled(currentFocusState))) {
+      command.handler(currentFocusState);
+      executionSubscribers.current.forEach((cb) => cb(commandId));
+    }
+  }, []);
 
-  const resolveShortcut = useCallback(
-    (shortcut: string) => {
-      const currentFocusState = focusStateRef.current;
+  const resolveShortcut = useCallback((shortcut: string) => {
+    const currentFocusState = focusStateRef.current;
 
-      return [...commandsRef.current]
-        .map((command, index) => ({ command, index }))
-        .filter(({ command }) => command.shortcut === shortcut)
-        .sort((a, b) => {
-          const scopeDelta =
-            COMMAND_SCOPE_PRIORITY[a.command.scope] - COMMAND_SCOPE_PRIORITY[b.command.scope];
-          if (scopeDelta !== 0) return scopeDelta;
-          return a.index - b.index;
-        })
-        .map(({ command }) => command)
-        .find((command) => !command.isEnabled || command.isEnabled(currentFocusState));
-    },
-    [],
-  );
+    return [...commandsRef.current]
+      .map((command, index) => ({ command, index }))
+      .filter(({ command }) => command.shortcut === shortcut)
+      .sort((a, b) => {
+        const scopeDelta =
+          COMMAND_SCOPE_PRIORITY[a.command.scope] - COMMAND_SCOPE_PRIORITY[b.command.scope];
+        if (scopeDelta !== 0) return scopeDelta;
+        return a.index - b.index;
+      })
+      .map(({ command }) => command)
+      .find((command) => !command.isEnabled || command.isEnabled(currentFocusState));
+  }, []);
 
   // Keyboard shortcut listener
   useEffect(() => {

@@ -159,14 +159,10 @@ test("invalid template definitions fail validation with issue paths", async () =
 test("missing records map to not_found", async () => {
   const { ctx } = await createTenantFixture();
 
-  const result = await executeCapability(
-    "masterdata.articleVariantTemplate.applyToArticle",
-    ctx,
-    {
-      articleId: crypto.randomUUID(),
-      templateId: crypto.randomUUID(),
-    },
-  );
+  const result = await executeCapability("masterdata.articleVariantTemplate.applyToArticle", ctx, {
+    articleId: crypto.randomUUID(),
+    templateId: crypto.randomUUID(),
+  });
   assert.equal(result.ok, false);
   assert.equal(!result.ok && result.error.code, "not_found");
 });

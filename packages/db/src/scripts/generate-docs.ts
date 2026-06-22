@@ -216,7 +216,7 @@ function getZodTypeName(schema: any): string {
   if (schema instanceof z.ZodObject) return "object";
   if (schema instanceof z.ZodRecord) return "record/map";
   if (schema instanceof z.ZodLiteral) return `literal: ${JSON.stringify(schema.value)}`;
-  
+
   if (schema._def && schema._def.innerType) {
     return getZodTypeName(schema._def.innerType);
   }
@@ -302,8 +302,8 @@ function generateCapabilityMarkdown() {
     capMd += `- **Type**: \`${getZodTypeName(capability.output)}\`\n\n`;
 
     capMd += `## Invariants & Side Effects\n`;
-    capMd += `- **Writes Tables**: ${capability.writesTables.length > 0 ? capability.writesTables.map(t => `\`${t}\``).join(", ") : "None"}\n`;
-    capMd += `- **Side Effects**: ${capability.sideEffects.length > 0 ? capability.sideEffects.map(s => `"${s}"`).join(", ") : "None"}\n`;
+    capMd += `- **Writes Tables**: ${capability.writesTables.length > 0 ? capability.writesTables.map((t) => `\`${t}\``).join(", ") : "None"}\n`;
+    capMd += `- **Side Effects**: ${capability.sideEffects.length > 0 ? capability.sideEffects.map((s) => `"${s}"`).join(", ") : "None"}\n`;
     capMd += `- **Idempotent**: ${capability.idempotent ? "Yes" : "No"}\n`;
     capMd += `- **Supports Dry Run**: ${capability.supportsDryRun ? "Yes" : "No"}\n`;
 
@@ -336,8 +336,12 @@ function generateCapabilityMarkdown() {
 
   fs.writeFileSync(CAPABILITIES_MD_PATH_GEMINI, md);
   fs.writeFileSync(CAPABILITIES_MD_PATH_AGENTS, md);
-  console.log(`Generated capability index at ${CAPABILITIES_MD_PATH_GEMINI} and ${CAPABILITIES_MD_PATH_AGENTS}`);
-  console.log(`Generated ${allCapabilities.length} individual capability docs in ${CAPABILITIES_DIR_AGENTS}`);
+  console.log(
+    `Generated capability index at ${CAPABILITIES_MD_PATH_GEMINI} and ${CAPABILITIES_MD_PATH_AGENTS}`,
+  );
+  console.log(
+    `Generated ${allCapabilities.length} individual capability docs in ${CAPABILITIES_DIR_AGENTS}`,
+  );
 }
 
 parseExistingSchema();

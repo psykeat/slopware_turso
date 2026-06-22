@@ -1,12 +1,9 @@
 import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "../index";
-import { address, taxCode, taxRule } from "../schema/app.schema";
+import { address, taxCode, taxRule } from "../schema/sqlite.schema";
 import { TaxContextService } from "./tax-context-service";
-import {
-  TaxPolicyService,
-  type TaxPolicyClassification,
-} from "./tax-policy-service";
+import { TaxPolicyService, type TaxPolicyClassification } from "./tax-policy-service";
 
 export type ResolveTaxInput = {
   tenantId: string;
@@ -84,7 +81,8 @@ export class TaxResolutionService {
       input.billingCountryCode ?? customerContext?.countryCode ?? null,
     );
     const deliveryCountryCode = normalizeCountryCode(input.deliveryCountryCode);
-    const countryCodeUsed = normalizeCountryCode(input.countryCodeOverride) ?? deliveryCountryCode ?? billingCountryCode;
+    const countryCodeUsed =
+      normalizeCountryCode(input.countryCodeOverride) ?? deliveryCountryCode ?? billingCountryCode;
     const articleTaxClassId = input.articleTaxClassId;
 
     if (!articleTaxClassId) {
@@ -114,8 +112,6 @@ export class TaxResolutionService {
       .innerJoin(taxCode, eq(taxRule.taxCodeId, taxCode.taxCodeId))
       .where(
         and(
-          eq(taxRule.tenantId, input.tenantId),
-          eq(taxCode.tenantId, input.tenantId),
           eq(taxRule.articleTaxClassId, articleTaxClassId),
           sql`${taxRule.validFrom} <= ${input.documentDate}::date`,
           sql`(${taxRule.validTo} is null or ${taxRule.validTo} >= ${input.documentDate}::date)`,
@@ -177,7 +173,7 @@ export class TaxResolutionService {
         countryCode: address.countryCode,
       })
       .from(address)
-      .where(and(eq(address.tenantId, tenantId), eq(address.addressId, customerId)))
+      .where(eq(address.addressId, customerId))
       .limit(1);
 
     return customer ?? null;

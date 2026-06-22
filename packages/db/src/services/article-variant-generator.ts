@@ -9,7 +9,7 @@ import {
   articleVariantOptionValue,
   articleVariantTemplate,
   inventoryItem,
-} from "../schema/app.schema";
+} from "../schema/sqlite.schema";
 import {
   createArticleVariantOptionValueHash,
   DEFAULT_VARIANT_OPTION_VALUE_HASH,
@@ -109,7 +109,7 @@ export async function loadVariantAxes(
       sortOrder: articleOption.sortOrder,
     })
     .from(articleOption)
-    .where(and(eq(articleOption.tenantId, tenantId), eq(articleOption.articleId, articleId)))
+    .where(eq(articleOption.articleId, articleId))
     .orderBy(asc(articleOption.sortOrder), asc(articleOption.name), asc(articleOption.optionId));
 
   if (options.length === 0) {
@@ -125,7 +125,7 @@ export async function loadVariantAxes(
     })
     .from(articleOptionValue)
     .innerJoin(articleOption, eq(articleOption.optionId, articleOptionValue.optionId))
-    .where(and(eq(articleOption.tenantId, tenantId), eq(articleOption.articleId, articleId)))
+    .where(eq(articleOption.articleId, articleId))
     .orderBy(
       asc(articleOption.sortOrder),
       asc(articleOption.name),
@@ -173,13 +173,7 @@ async function findVariantByHash(
       sku: articleVariant.sku,
     })
     .from(articleVariant)
-    .where(
-      and(
-        eq(articleVariant.tenantId, tenantId),
-        eq(articleVariant.articleId, articleId),
-        eq(articleVariant.optionValueHash, hash),
-      ),
-    )
+    .where(and(eq(articleVariant.articleId, articleId), eq(articleVariant.optionValueHash, hash)))
     .limit(1);
 
   return row ?? null;
@@ -192,7 +186,7 @@ async function findInventoryItemByVariantId(tx: VariantTx, tenantId: string, var
       sku: inventoryItem.sku,
     })
     .from(inventoryItem)
-    .where(and(eq(inventoryItem.tenantId, tenantId), eq(inventoryItem.variantId, variantId)))
+    .where(eq(inventoryItem.variantId, variantId))
     .limit(1);
 
   return row ?? null;
@@ -232,7 +226,6 @@ async function ensureInventoryItem(
   const [inserted] = await tx
     .insert(inventoryItem)
     .values({
-      tenantId,
       variantId,
       sku,
       tracked: true,
@@ -347,12 +340,7 @@ async function loadTemplateGenerationConfig(
       definition: articleVariantTemplate.definition,
     })
     .from(articleVariantTemplate)
-    .where(
-      and(
-        eq(articleVariantTemplate.tenantId, tenantId),
-        eq(articleVariantTemplate.templateId, templateId),
-      ),
-    )
+    .where(eq(articleVariantTemplate.templateId, templateId))
     .limit(1);
 
   if (!templateRow) {
@@ -405,13 +393,7 @@ async function loadVariantPlanContext(
       articleNo: article.articleNo,
     })
     .from(article)
-    .where(
-      and(
-        eq(article.tenantId, tenantId),
-        eq(article.articleId, articleId),
-        isNull(article.archivedAt),
-      ),
-    )
+    .where(and(eq(article.articleId, articleId), isNull(article.archivedAt)))
     .limit(1);
 
   if (!articleRow) {
@@ -427,7 +409,7 @@ async function loadVariantPlanContext(
   const existingHashRows = await tx
     .select({ optionValueHash: articleVariant.optionValueHash })
     .from(articleVariant)
-    .where(and(eq(articleVariant.tenantId, tenantId), eq(articleVariant.articleId, articleId)));
+    .where(eq(articleVariant.articleId, articleId));
 
   const existingHashes = new Set(existingHashRows.map((row) => row.optionValueHash));
 
@@ -443,7 +425,6 @@ async function loadVariantPlanContext(
       .from(articleVariant)
       .where(
         and(
-          eq(articleVariant.tenantId, tenantId),
           eq(articleVariant.articleId, articleId),
           eq(articleVariant.optionValueHash, DEFAULT_VARIANT_OPTION_VALUE_HASH),
         ),
@@ -518,13 +499,13 @@ async function resolveCreateSkus(
   const variantSkuRows = await tx
     .select({ sku: articleVariant.sku })
     .from(articleVariant)
-    .where(and(eq(articleVariant.tenantId, tenantId), inArray(articleVariant.sku, allCandidates)));
+    .where(inArray(articleVariant.sku, allCandidates));
   for (const row of variantSkuRows) taken.add(row.sku);
 
   const inventorySkuRows = await tx
     .select({ sku: inventoryItem.sku })
     .from(inventoryItem)
-    .where(and(eq(inventoryItem.tenantId, tenantId), inArray(inventoryItem.sku, allCandidates)));
+    .where(inArray(inventoryItem.sku, allCandidates));
   for (const row of inventorySkuRows) taken.add(row.sku);
 
   for (const plan of createPlans) {
@@ -608,7 +589,6 @@ export async function generateArticleVariantsInTransaction(
       const [insertedVariant] = await tx
         .insert(articleVariant)
         .values({
-          tenantId,
           articleId,
           sku: plan.sku,
           optionValueHash: plan.optionValueHash,
@@ -705,10 +685,7 @@ export async function archiveArticleVariantsInTransaction(
   articleId: string,
   variantIds?: string[],
 ): Promise<ArchiveArticleVariantsResult> {
-  const baseCondition = and(
-    eq(articleVariant.tenantId, tenantId),
-    eq(articleVariant.articleId, articleId),
-  );
+  const baseCondition = and(eq(articleVariant.articleId, articleId));
 
   const whereCondition =
     variantIds && variantIds.length > 0
@@ -727,12 +704,7 @@ export async function archiveArticleVariantsInTransaction(
     await tx
       .update(inventoryItem)
       .set({ tracked: false })
-      .where(
-        and(
-          eq(inventoryItem.tenantId, tenantId),
-          inArray(inventoryItem.variantId, updatedVariantIds),
-        ),
-      );
+      .where(inArray(inventoryItem.variantId, updatedVariantIds));
   }
 
   return { archivedVariants: updatedVariants.length };

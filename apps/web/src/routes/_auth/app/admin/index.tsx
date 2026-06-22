@@ -122,11 +122,7 @@ function AdminView() {
 
   const getRowId = useCallback(
     (row: any): string =>
-      row[`${selectedKey}Id`] ??
-      row.id ??
-      row.organizationId ??
-      row.companyId ??
-      row.userTenantId,
+      row[`${selectedKey}Id`] ?? row.id ?? row.organizationId ?? row.companyId ?? row.userTenantId,
     [selectedKey],
   );
 
@@ -300,7 +296,15 @@ function AdminView() {
       </Dialog>
 
       {/* Edit dialog */}
-      <Dialog open={showEdit} onOpenChange={(open) => { if (!open) { setShowEdit(false); restoreGrid(); } }}>
+      <Dialog
+        open={showEdit}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowEdit(false);
+            restoreGrid();
+          }
+        }}
+      >
         <DialogContent
           className={cn(
             "sw-root overflow-hidden p-0",
@@ -310,7 +314,10 @@ function AdminView() {
           {selectedKey === "user" && activeId ? (
             <UserManagementView
               userId={activeId}
-              onCancel={() => { setShowEdit(false); restoreGrid(); }}
+              onCancel={() => {
+                setShowEdit(false);
+                restoreGrid();
+              }}
               onSaved={() => {
                 setShowEdit(false);
                 queryClient.invalidateQueries({ queryKey: ["admin", "data", selectedKey] });
@@ -323,7 +330,10 @@ function AdminView() {
               recordId={activeId}
               mode="edit"
               title={`${t("actions.edit")} ${viewLabel}`}
-              onCancel={() => { setShowEdit(false); restoreGrid(); }}
+              onCancel={() => {
+                setShowEdit(false);
+                restoreGrid();
+              }}
               onSaved={(record: any) => {
                 setShowEdit(false);
                 queryClient.invalidateQueries({ queryKey: ["admin", "data", selectedKey] });
@@ -337,7 +347,15 @@ function AdminView() {
       </Dialog>
 
       {/* Delete confirm */}
-      <Dialog open={deleteConfirm} onOpenChange={(open) => { if (!open) { setDeleteConfirm(false); restoreGrid(); } }}>
+      <Dialog
+        open={deleteConfirm}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteConfirm(false);
+            restoreGrid();
+          }
+        }}
+      >
         <DialogContent className="sw-root max-w-sm">
           <div className="flex flex-col gap-5 p-6">
             <div>
@@ -350,7 +368,10 @@ function AdminView() {
               <button
                 type="button"
                 className="h-8 rounded border border-hairline px-4 text-[13px] hover:bg-canvas-soft"
-                onClick={() => { setDeleteConfirm(false); restoreGrid(); }}
+                onClick={() => {
+                  setDeleteConfirm(false);
+                  restoreGrid();
+                }}
               >
                 Abbrechen
               </button>

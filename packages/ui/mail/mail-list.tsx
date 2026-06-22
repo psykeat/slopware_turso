@@ -1,4 +1,8 @@
-export function MailLabels({ labels }: { labels: Array<{ id?: string; name?: string; color?: string }> }) {
+export function MailLabels({
+  labels,
+}: {
+  labels: Array<{ id?: string; name?: string; color?: string }>;
+}) {
   if (!labels?.length) return null;
   return (
     <div className="flex gap-1">

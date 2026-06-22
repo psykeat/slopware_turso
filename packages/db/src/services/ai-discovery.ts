@@ -1,13 +1,9 @@
-import { and, eq, getColumns, isNull, or } from "drizzle-orm";
+import { and, eq, getColumns } from "drizzle-orm";
 
+import { actionInputJsonSchema, listActions } from "../actions";
 import { db } from "../index";
-import {
-  entityCommands,
-  helperTableRegistry,
-  schemaAnnotations,
-  tenantFields,
-} from "../schema/app.schema";
 import * as schema from "../schema/index";
+import { helperTableRegistry, schemaAnnotations, tenantFields } from "../schema/sqlite.schema";
 import { resolveLookupTable } from "./metadata";
 
 export interface SemanticEntity {
@@ -54,8 +50,8 @@ export interface SemanticCommand {
   entityName: string;
   inputSchema: Record<string, any>;
   writesTables: string[];
-  /** Set when the command is executable through the capability registry. */
-  capabilityKey?: string | null;
+  /** Set when the command is executable through the registry action runtime. */
+  actionKey?: string | null;
 }
 
 // Built-in business-focused defaulting relationship mappings (Semantic Relationship Catalog)
@@ -135,7 +131,8 @@ const BOOTSTRAPPED_COMMANDS: Array<Omit<SemanticCommand, "entityName"> & { entit
         articleId: {
           type: "string",
           format: "uuid",
-          description: "Artikelstamm, aus dem die operative Varianten- und Lagerstruktur erzeugt wird.",
+          description:
+            "Artikelstamm, aus dem die operative Varianten- und Lagerstruktur erzeugt wird.",
         },
       },
     },
@@ -407,8 +404,7 @@ export class AIDiscoveryService {
         entityName: "inventoryLevel",
         businessName: "Lagerbestand",
         module: "Logistics",
-        description:
-          "Bestandsmenge pro Lagerort für einen operativen Lagerartikel.",
+        description: "Bestandsmenge pro Lagerort für einen operativen Lagerartikel.",
         scopes: ["erp_documents", "sales", "purchase", "logistics"],
       },
       {
@@ -599,44 +595,29 @@ export class AIDiscoveryService {
    * Compiles the permitted commands matching the requested taskScope.
    */
   static async getSemanticCommandCatalog(
-    tenantId: string,
+    _tenantId: string,
     _taskScope: string[],
   ): Promise<SemanticCommand[]> {
-    // 1. Read registered commands from the DB: tenant-scoped rows plus the
-    // global capability-registry projection (tenant rows win on key clashes).
-    const dbCommands = await db
-      .select()
-      .from(entityCommands)
-      .where(
-        and(
-          eq(entityCommands.commandState, "published"),
-          or(eq(entityCommands.tenantId, tenantId), isNull(entityCommands.tenantId)),
-        ),
-      );
-
     const seenCommands = new Set<string>();
     const commands: SemanticCommand[] = [];
-    for (const c of [...dbCommands].sort((a, b) =>
-      a.tenantId === b.tenantId ? 0 : a.tenantId ? -1 : 1,
-    )) {
-      if (c.visibility === "hidden") continue;
-      const dedupeKey = `${c.entityName}::${c.commandKey}`;
+
+    for (const action of listActions()) {
+      if (action.exposure.llm === "hidden") continue;
+      const dedupeKey = `${action.entityName}::${action.operation}`;
       if (seenCommands.has(dedupeKey)) continue;
       seenCommands.add(dedupeKey);
       commands.push({
-        commandKey: c.commandKey,
-        label: (c.label as any).de || (c.label as any).en || c.commandKey,
-        description: c.description ? (c.description as any).de || (c.description as any).en : "",
-        entityName: c.entityName,
-        inputSchema: c.inputSchema as Record<string, any>,
-        writesTables: c.writesTables as string[],
-        // Set for commands backed by the capability registry: executable via
-        // POST /api/capabilities/{capabilityKey}/execute.
-        capabilityKey: c.handlerkey ?? null,
+        commandKey: action.operation,
+        label: action.summary.de || action.summary.en || action.operation,
+        description: action.description?.de || action.description?.en || "",
+        entityName: action.entityName,
+        inputSchema: actionInputJsonSchema(action),
+        writesTables: action.writesTables,
+        actionKey: action.key,
       });
     }
 
-    // 2. Supplement with bootstrapped commands matching the scopes
+    // Supplement with legacy planning commands that do not yet have registry actions.
     for (const bCmd of BOOTSTRAPPED_COMMANDS) {
       if (!commands.some((c) => c.commandKey === bCmd.commandKey)) {
         commands.push({

@@ -207,7 +207,6 @@ function orderColumns<T>(columns: ColumnDef<T>[], order: string[]) {
   return [...ordered, ...remaining];
 }
 
-
 function isSameColumnOrder(left: string[] | null, right: string[] | null) {
   if (left === right) return true;
   if (!left || !right) return false;

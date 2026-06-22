@@ -1,5 +1,22 @@
 export { defineEntity, defineField } from "./define";
 export {
+  listEntityActionEntries,
+  listEntityActions,
+  resolveEntityDeleteAction,
+  resolveEntityGetAction,
+  resolveEntityListAction,
+  resolveEntitySaveAction,
+} from "./entity-actions";
+export { entityActionManifest } from "./actions";
+export { UnsupportedEntityOperationError } from "./action-types";
+export type {
+  EntityActionEntry,
+  EntityActionManifest,
+  EntityActionOperation,
+  EntityListOptions,
+  ResolvedEntityAction,
+} from "./action-types";
+export {
   discoverEntities,
   explainConstraint,
   generateFixture,

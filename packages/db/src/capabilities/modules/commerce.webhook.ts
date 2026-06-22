@@ -78,7 +78,12 @@ export const commerceWebhookEventProcess = defineCapability({
     failed: z.number().int(),
     attempted: z.number().int(),
   }),
-  writesTables: ["commerceWebhookEvent", "commerceSyncRun", "commerceSyncRunStep", "externalSyncMapping"],
+  writesTables: [
+    "commerceWebhookEvent",
+    "commerceSyncRun",
+    "commerceSyncRunStep",
+    "externalSyncMapping",
+  ],
   sideEffects: ["may pull orders from the configured commerce platform"],
   idempotent: false,
   supportsDryRun: false,
@@ -90,7 +95,4 @@ export const commerceWebhookEventProcess = defineCapability({
   },
 });
 
-export const commerceWebhookCapabilities = [
-  commerceWebhookEventList,
-  commerceWebhookEventProcess,
-];
+export const commerceWebhookCapabilities = [commerceWebhookEventList, commerceWebhookEventProcess];

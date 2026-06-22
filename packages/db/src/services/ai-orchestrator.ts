@@ -1726,10 +1726,7 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
     ) {
       const { DocumentService } = await import("./document-service");
       const docSvc = new DocumentService();
-      const candidates = await docSvc.getConversionCandidates(
-        finalDocumentId as string,
-        params.tenantId,
-      );
+      const candidates = await docSvc.getConversionCandidates(finalDocumentId as string);
       if (candidates.length === 0) {
         throw new Error("Keine Zielgruppe für die Wandlung dieses Belegs gefunden.");
       }
@@ -1738,7 +1735,6 @@ ${params.customInstructions ? `### Additional Instructions:\n${params.customInst
       const result = await docSvc.convertDocument(
         finalDocumentId as string,
         params.userId,
-        params.tenantId,
         candidate.documentGroupId,
       );
       if (!result.success || !result.newDocumentId) {

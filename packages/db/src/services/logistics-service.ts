@@ -9,7 +9,7 @@ import {
   address,
   deliveryAddress,
   addressContact,
-} from "../schema/app.schema";
+} from "../schema/sqlite.schema";
 
 const SHIPMENT_STATUSES = new Set(["open", "exported", "label_created", "shipped", "cancelled"]);
 
@@ -109,7 +109,7 @@ export class LogisticsService {
     const [doc] = await db
       .select()
       .from(document)
-      .where(and(eq(document.tenantId, tenantId), eq(document.documentId, documentId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
 
     if (!doc) {
@@ -129,12 +129,7 @@ export class LogisticsService {
       const [delAddr] = await db
         .select()
         .from(deliveryAddress)
-        .where(
-          and(
-            eq(deliveryAddress.tenantId, tenantId),
-            eq(deliveryAddress.deliveryAddressId, doc.deliveryAddressId),
-          ),
-        )
+        .where(eq(deliveryAddress.deliveryAddressId, doc.deliveryAddressId))
         .limit(1);
 
       if (delAddr) {
@@ -147,7 +142,7 @@ export class LogisticsService {
         const [addr] = await db
           .select()
           .from(address)
-          .where(and(eq(address.tenantId, tenantId), eq(address.addressId, delAddr.addressId)))
+          .where(eq(address.addressId, delAddr.addressId))
           .limit(1);
 
         if (addr) {
@@ -162,12 +157,7 @@ export class LogisticsService {
           const [contact] = await db
             .select()
             .from(addressContact)
-            .where(
-              and(
-                eq(addressContact.tenantId, tenantId),
-                eq(addressContact.addressId, addr.addressId),
-              ),
-            )
+            .where(eq(addressContact.addressId, addr.addressId))
             .orderBy(desc(addressContact.isPrimary), desc(addressContact.createdAt))
             .limit(1);
 
@@ -327,21 +317,14 @@ export class LogisticsService {
     const [existingShipment] = await db
       .select()
       .from(documentShipment)
-      .where(
-        and(eq(documentShipment.tenantId, tenantId), eq(documentShipment.documentId, documentId)),
-      )
+      .where(eq(documentShipment.documentId, documentId))
       .limit(1);
 
     if (existingShipment) {
       const packages = await db
         .select()
         .from(documentShipmentPackage)
-        .where(
-          and(
-            eq(documentShipmentPackage.tenantId, tenantId),
-            eq(documentShipmentPackage.documentShipmentId, existingShipment.documentShipmentId),
-          ),
-        )
+        .where(eq(documentShipmentPackage.documentShipmentId, existingShipment.documentShipmentId))
         .orderBy(documentShipmentPackage.seq);
 
       return {
@@ -362,9 +345,7 @@ export class LogisticsService {
     const [shipment] = await db
       .select()
       .from(documentShipment)
-      .where(
-        and(eq(documentShipment.tenantId, tenantId), eq(documentShipment.documentId, documentId)),
-      )
+      .where(eq(documentShipment.documentId, documentId))
       .limit(1);
 
     if (!shipment) return null;
@@ -372,12 +353,7 @@ export class LogisticsService {
     const packages = await db
       .select()
       .from(documentShipmentPackage)
-      .where(
-        and(
-          eq(documentShipmentPackage.tenantId, tenantId),
-          eq(documentShipmentPackage.documentShipmentId, shipment.documentShipmentId),
-        ),
-      )
+      .where(eq(documentShipmentPackage.documentShipmentId, shipment.documentShipmentId))
       .orderBy(documentShipmentPackage.seq);
 
     return {
@@ -403,9 +379,7 @@ export class LogisticsService {
     const [existingShipment] = await db
       .select()
       .from(documentShipment)
-      .where(
-        and(eq(documentShipment.tenantId, tenantId), eq(documentShipment.documentId, documentId)),
-      )
+      .where(eq(documentShipment.documentId, documentId))
       .limit(1);
 
     if (!existingShipment) {
@@ -527,9 +501,7 @@ export class LogisticsService {
         ...nextShipment,
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(documentShipment.tenantId, tenantId), eq(documentShipment.documentId, documentId)),
-      )
+      .where(eq(documentShipment.documentId, documentId))
       .returning();
 
     return updatedShipment;
@@ -548,12 +520,7 @@ export class LogisticsService {
       // Delete existing packages for the shipment
       await tx
         .delete(documentShipmentPackage)
-        .where(
-          and(
-            eq(documentShipmentPackage.tenantId, tenantId),
-            eq(documentShipmentPackage.documentShipmentId, documentShipmentId),
-          ),
-        );
+        .where(eq(documentShipmentPackage.documentShipmentId, documentShipmentId));
 
       // Insert new packages
       if (normalizedLines.length > 0) {
@@ -571,12 +538,7 @@ export class LogisticsService {
       return await tx
         .select()
         .from(documentShipmentPackage)
-        .where(
-          and(
-            eq(documentShipmentPackage.tenantId, tenantId),
-            eq(documentShipmentPackage.documentShipmentId, documentShipmentId),
-          ),
-        )
+        .where(eq(documentShipmentPackage.documentShipmentId, documentShipmentId))
         .orderBy(documentShipmentPackage.seq);
     });
   }
@@ -596,7 +558,7 @@ export class LogisticsService {
       const [doc] = await db
         .select({ documentNo: document.documentNo })
         .from(document)
-        .where(and(eq(document.tenantId, tenantId), eq(document.documentId, documentId)))
+        .where(eq(document.documentId, documentId))
         .limit(1);
 
       if (!doc) {
@@ -670,12 +632,7 @@ export class LogisticsService {
           exportedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(
-          and(
-            eq(documentShipment.tenantId, tenantId),
-            inArray(documentShipment.documentShipmentId, shipmentIds),
-          ),
-        );
+        .where(inArray(documentShipment.documentShipmentId, shipmentIds));
     }
 
     return csvRows.join("\r\n");
@@ -752,19 +709,14 @@ export class LogisticsService {
       const [doc] = await db
         .select({ documentId: document.documentId })
         .from(document)
-        .where(and(eq(document.tenantId, tenantId), eq(document.documentNo, documentNo)))
+        .where(eq(document.documentNo, documentNo))
         .limit(1);
 
       if (doc) {
         const [shipment] = await db
           .select()
           .from(documentShipment)
-          .where(
-            and(
-              eq(documentShipment.tenantId, tenantId),
-              eq(documentShipment.documentId, doc.documentId),
-            ),
-          )
+          .where(eq(documentShipment.documentId, doc.documentId))
           .limit(1);
 
         if (shipment) {
@@ -776,12 +728,7 @@ export class LogisticsService {
               labelCreatedAt: new Date(),
               updatedAt: new Date(),
             })
-            .where(
-              and(
-                eq(documentShipment.tenantId, tenantId),
-                eq(documentShipment.documentShipmentId, shipment.documentShipmentId),
-              ),
-            );
+            .where(eq(documentShipment.documentShipmentId, shipment.documentShipmentId));
 
           updatedCount++;
         }

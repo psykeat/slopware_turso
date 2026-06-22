@@ -319,7 +319,6 @@ test("resolveVariantPricing returns a real tax code, not the article tax class i
     fixture.variantId,
     fixture.customerId,
     "2026-06-17",
-    fixture.tenantId,
   );
 
   assert.equal(result.taxCodeId, fixture.specificTaxCodeId);
@@ -380,7 +379,6 @@ test("resolveVariantPricing resolves delivery address country server-side", asyn
     fixture.variantId,
     fixture.customerId,
     "2026-06-17",
-    fixture.tenantId,
     {
       billingCountryCode: "AT",
       deliveryAddressId: fixture.deliveryAddressId,
@@ -400,7 +398,6 @@ test("resolveVariantPricing ignores delivery addresses from another tenant", asy
     fixture.variantId,
     fixture.customerId,
     "2026-06-17",
-    fixture.tenantId,
     {
       billingCountryCode: "AT",
       deliveryAddressId: fixture.foreignDeliveryAddressId,

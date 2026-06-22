@@ -3,8 +3,13 @@ import { isDeepStrictEqual } from "node:util";
 import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "../index";
-import { metadataHistory, tenantFields, tenantGroups, tenantLayouts } from "../schema/app.schema";
 import * as schema from "../schema/index";
+import {
+  metadataHistory,
+  tenantFields,
+  tenantGroups,
+  tenantLayouts,
+} from "../schema/sqlite.schema";
 import {
   MetadataResolver,
   type DesignerConflictState,
@@ -1191,9 +1196,10 @@ export class MetadataWriter {
     const suggestedRemaps = this.suggestRemaps(currentContract, normalizedPatch);
 
     return await db.transaction(async (tx) => {
-      const initialStatus = suggestedRemaps.length > 0 || currentContract.reconciliationRequired
-        ? "needs_review"
-        : "committed";
+      const initialStatus =
+        suggestedRemaps.length > 0 || currentContract.reconciliationRequired
+          ? "needs_review"
+          : "committed";
       await this.appendDesignerPatchHistory(tx, entityName, normalizedPatch, initialStatus);
       const execution = await this.executePatch(tx, entityName, surface, normalizedPatch);
       const updatedContract = await this.getResolver().getDesignerSurface(entityName, surface);

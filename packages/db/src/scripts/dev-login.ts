@@ -1,5 +1,4 @@
 import "./load-env";
-
 import { CapabilityClient } from "../capabilities/http/capability-client";
 import { closeDb } from "../index";
 import { linkUserToBaseTenant } from "../test-support/fixtures";
@@ -26,7 +25,10 @@ async function main() {
 
   await linkUserToBaseTenant(DEV_USER.email);
 
-  const client = await CapabilityClient.login({ email: DEV_USER.email, password: DEV_USER.password });
+  const client = await CapabilityClient.login({
+    email: DEV_USER.email,
+    password: DEV_USER.password,
+  });
 
   console.error(`Signed in as ${DEV_USER.email}, bound to the base tenant.`);
   console.error(`curl -H 'cookie: ${client.cookieHeader}' ${baseUrl}/api/me`);

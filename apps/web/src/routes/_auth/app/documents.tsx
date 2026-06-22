@@ -1035,7 +1035,9 @@ function DocumentsModule() {
       offset: (gridState.queryParams.page - 1) * gridState.queryParams.limit,
       orderBy: gridState.queryParams.orderBy || undefined,
       search: gridState.queryParams.search || undefined,
-      filterRules: gridState.queryParams.filters as Array<{ col: string; op: string; val: string }> | undefined,
+      filterRules: gridState.queryParams.filters as
+        | Array<{ col: string; op: string; val: string }>
+        | undefined,
       withTotal: true,
     },
     {
@@ -2032,9 +2034,9 @@ function DocumentsModule() {
                       label: "Versand-CSV (DHL GKP)",
                       onClick: async (keys: string[]) => {
                         try {
-                          const csvText = await capability(
-                            "logistics.documentShipment.exportCsv",
-                          )({ documentIds: keys });
+                          const csvText = await capability("logistics.documentShipment.exportCsv")({
+                            documentIds: keys,
+                          });
                           const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
                           const url = URL.createObjectURL(blob);
                           const link = document.createElement("a");

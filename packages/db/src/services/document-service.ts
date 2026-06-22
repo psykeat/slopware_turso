@@ -145,7 +145,25 @@ const TYPE_LABELS: Record<string, string> = {
 
 const toDateOrNull = (value: string | Date | null | undefined): Date | null => {
   if (value == null) return null;
-  return value instanceof Date ? value : new Date(value);
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) {
+    if (typeof value === "string" && /^\d+$/.test(value)) {
+      const parsedNum = new Date(Number(value));
+      if (!isNaN(parsedNum.getTime())) return parsedNum;
+    }
+    return null;
+  }
+  return d;
+};
+
+const formatDateOnly = (value: string | Date | null | undefined): string | null => {
+  if (value == null) return null;
+  const d = toDateOrNull(value);
+  if (!d || isNaN(d.getTime())) return null;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 };
 
 export const DIRECTION_FROM_TYPE: Record<string, string> = {
@@ -888,13 +906,7 @@ async function recalculateDocumentTotals(
       totalWeightKg: sql<string | null>`nullif(sum(${s.documentLine.lineWeightKg}), 0)`,
     })
     .from(s.documentLine)
-    .where(
-      and(
-        eq(s.documentLine.tenantId, tenantId),
-        eq(s.documentLine.documentId, documentId),
-        isNull(s.documentLine.archivedAt),
-      ),
-    );
+    .where(and(eq(s.documentLine.documentId, documentId), isNull(s.documentLine.archivedAt)));
 
   return {
     totalNet: totals?.totalNet ?? "0",
@@ -1133,7 +1145,7 @@ async function postFinancialJournalEntries(
     const rows = (await tx.execute(sql`
       select article_group_id as "articleGroupId"
       from article
-      where ${activePersistence.provider === "turso" ? sql`article_id = ${articleId}` : sql`tenant_id = ${tenantId} and article_id = ${articleId}`}
+      where article_id = ${articleId}
       limit 1
     `)) as Array<{ articleGroupId: string | null }>;
     articleGroupById.set(articleId, rows[0]?.articleGroupId ?? null);
@@ -1206,7 +1218,6 @@ async function postFinancialJournalEntries(
   const [entry] = await tx
     .insert(journalEntry)
     .values({
-      tenantId,
       companyId: doc.companyId,
       postingDate,
       sourceDocumentId: doc.documentId,
@@ -1216,7 +1227,6 @@ async function postFinancialJournalEntries(
 
   await tx.insert(journalLine).values(
     journalLines.map((jl) => ({
-      tenantId,
       companyId: doc.companyId,
       journalEntryId: entry.journalEntryId,
       glAccountId: jl.glAccountId,
@@ -1258,7 +1268,6 @@ async function postProductionDocumentLine(
   await tx
     .insert(inventoryBalance)
     .values({
-      tenantId,
       companyId: doc.companyId,
       warehouseId,
       articleId: resolvedArticleId,
@@ -1268,11 +1277,7 @@ async function postProductionDocumentLine(
       availableQty: String(signedQty),
     })
     .onConflictDoUpdate({
-      target: [
-        inventoryBalance.tenantId,
-        inventoryBalance.warehouseId,
-        inventoryBalance.inventoryItemId,
-      ],
+      target: [inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
       set: {
         onHandQty: sql`${inventoryBalance.onHandQty} + ${signedQty}`,
         availableQty: sql`${inventoryBalance.onHandQty} + ${signedQty} - ${inventoryBalance.reservedQty}`,
@@ -1291,7 +1296,6 @@ async function postProductionDocumentLine(
       const [movement] = await tx
         .insert(inventoryMovement)
         .values({
-          tenantId,
           companyId: doc.companyId,
           warehouseId,
           inventoryItemId,
@@ -1318,7 +1322,6 @@ async function postProductionDocumentLine(
     }
   } else {
     await tx.insert(inventoryMovement).values({
-      tenantId,
       companyId: doc.companyId,
       warehouseId,
       inventoryItemId,
@@ -1361,7 +1364,6 @@ async function postTransferDocumentLine(
   await tx
     .insert(inventoryBalance)
     .values({
-      tenantId,
       companyId: doc.companyId,
       warehouseId: sourceWh,
       articleId: resolvedArticleId,
@@ -1371,11 +1373,7 @@ async function postTransferDocumentLine(
       availableQty: String(-qty),
     })
     .onConflictDoUpdate({
-      target: [
-        inventoryBalance.tenantId,
-        inventoryBalance.warehouseId,
-        inventoryBalance.inventoryItemId,
-      ],
+      target: [inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
       set: {
         onHandQty: sql`${inventoryBalance.onHandQty} - ${qty}`,
         availableQty: sql`${inventoryBalance.onHandQty} - ${qty} - ${inventoryBalance.reservedQty}`,
@@ -1385,7 +1383,6 @@ async function postTransferDocumentLine(
   await tx
     .insert(inventoryBalance)
     .values({
-      tenantId,
       companyId: doc.companyId,
       warehouseId: targetWh,
       articleId: resolvedArticleId,
@@ -1395,11 +1392,7 @@ async function postTransferDocumentLine(
       availableQty: String(qty),
     })
     .onConflictDoUpdate({
-      target: [
-        inventoryBalance.tenantId,
-        inventoryBalance.warehouseId,
-        inventoryBalance.inventoryItemId,
-      ],
+      target: [inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
       set: {
         onHandQty: sql`${inventoryBalance.onHandQty} + ${qty}`,
         availableQty: sql`${inventoryBalance.onHandQty} + ${qty} - ${inventoryBalance.reservedQty}`,
@@ -1419,7 +1412,6 @@ async function postTransferDocumentLine(
       const [sourceMovement] = await tx
         .insert(inventoryMovement)
         .values({
-          tenantId,
           companyId: doc.companyId,
           warehouseId: sourceWh,
           inventoryItemId,
@@ -1437,7 +1429,6 @@ async function postTransferDocumentLine(
       const [targetMovement] = await tx
         .insert(inventoryMovement)
         .values({
-          tenantId,
           companyId: doc.companyId,
           warehouseId: targetWh,
           inventoryItemId,
@@ -1461,7 +1452,6 @@ async function postTransferDocumentLine(
         const [createdSerial] = await tx
           .insert(serialNumber)
           .values({
-            tenantId,
             articleId: resolvedArticleId,
             serialNo: tracking.serialNo,
             status: "in_stock",
@@ -1477,7 +1467,6 @@ async function postTransferDocumentLine(
             .from(serialNumber)
             .where(
               and(
-                eq(serialNumber.tenantId, tenantId),
                 eq(serialNumber.articleId, resolvedArticleId),
                 eq(serialNumber.serialNo, tracking.serialNo),
               ),
@@ -1507,7 +1496,6 @@ async function postTransferDocumentLine(
     }
   } else {
     await tx.insert(inventoryMovement).values({
-      tenantId,
       companyId: doc.companyId,
       warehouseId: sourceWh,
       inventoryItemId,
@@ -1522,7 +1510,6 @@ async function postTransferDocumentLine(
     });
 
     await tx.insert(inventoryMovement).values({
-      tenantId,
       companyId: doc.companyId,
       warehouseId: targetWh,
       inventoryItemId,
@@ -1570,7 +1557,6 @@ async function postStandardDocumentLine(
       .from(inventoryBalance)
       .where(
         and(
-          eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
           eq(inventoryBalance.inventoryItemId, inventoryItemId),
         ),
@@ -1595,7 +1581,6 @@ async function postStandardDocumentLine(
   await tx
     .insert(inventoryBalance)
     .values({
-      tenantId,
       companyId: doc.companyId,
       warehouseId,
       articleId: resolvedArticleId,
@@ -1603,11 +1588,7 @@ async function postStandardDocumentLine(
       ...inventorySeedValues,
     })
     .onConflictDoUpdate({
-      target: [
-        inventoryBalance.tenantId,
-        inventoryBalance.warehouseId,
-        inventoryBalance.inventoryItemId,
-      ],
+      target: [inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
       set: balanceUpdate,
     });
 
@@ -1622,7 +1603,6 @@ async function postStandardDocumentLine(
       const [movement] = await tx
         .insert(inventoryMovement)
         .values({
-          tenantId,
           companyId: doc.companyId,
           warehouseId,
           inventoryItemId,
@@ -1641,7 +1621,6 @@ async function postStandardDocumentLine(
       if (movement?.inventoryMovementId) {
         await applyTrackingForSingleRow(
           tx,
-          tenantId,
           movement.inventoryMovementId,
           { ...line, articleId: resolvedArticleId } as DocumentPostingLineWithArticle,
           movementType,
@@ -1651,7 +1630,6 @@ async function postStandardDocumentLine(
     }
   } else {
     await tx.insert(inventoryMovement).values({
-      tenantId,
       companyId: doc.companyId,
       warehouseId,
       inventoryItemId,
@@ -1676,7 +1654,6 @@ async function postStandardDocumentLine(
       .from(inventoryBalance)
       .where(
         and(
-          eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
           eq(inventoryBalance.inventoryItemId, inventoryItemId),
         ),
@@ -1697,16 +1674,14 @@ async function postStandardDocumentLine(
       .set({ gldCost: String(newAvgCost) })
       .where(
         and(
-          eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
           eq(inventoryBalance.inventoryItemId, inventoryItemId),
         ),
       );
 
-    const fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
+    const fiscalPeriodId = await resolveFiscalPeriodId(doc.companyId, doc.documentDate);
 
     await tx.insert(factPurchaseEvent).values({
-      tenantId,
       companyId: doc.companyId,
       sourceDocumentId: doc.documentId,
       sourceDocumentLineId: line.documentLineId,
@@ -1731,7 +1706,6 @@ async function postStandardDocumentLine(
       .from(inventoryBalance)
       .where(
         and(
-          eq(inventoryBalance.tenantId, tenantId),
           eq(inventoryBalance.warehouseId, warehouseId),
           eq(inventoryBalance.inventoryItemId, inventoryItemId),
         ),
@@ -1741,10 +1715,9 @@ async function postStandardDocumentLine(
     const avgCost = Number(balances[0]?.gldPurchase ?? 0);
     const lineQty = qty;
     const linePrice = lineNetPrice;
-    const fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
+    const fiscalPeriodId = await resolveFiscalPeriodId(doc.companyId, doc.documentDate);
 
     await tx.insert(factPurchaseEvent).values({
-      tenantId,
       companyId: doc.companyId,
       sourceDocumentId: doc.documentId,
       sourceDocumentLineId: line.documentLineId,
@@ -1771,7 +1744,6 @@ async function postStandardDocumentLine(
         .from(inventoryBalance)
         .where(
           and(
-            eq(inventoryBalance.tenantId, tenantId),
             eq(inventoryBalance.warehouseId, warehouseId),
             eq(inventoryBalance.inventoryItemId, inventoryItemId),
           ),
@@ -1780,11 +1752,10 @@ async function postStandardDocumentLine(
 
       const gldPurchase = Number(balance[0]?.gldPurchase ?? 0);
       cogsDelta = String(gldPurchase * Math.abs(qty));
-      fiscalPeriodId = await resolveFiscalPeriodId(tenantId, doc.companyId, doc.documentDate);
+      fiscalPeriodId = await resolveFiscalPeriodId(doc.companyId, doc.documentDate);
     }
 
     await tx.insert(factSalesEvent).values({
-      tenantId,
       companyId: doc.companyId,
       sourceDocumentId: doc.documentId,
       sourceDocumentLineId: line.documentLineId,
@@ -1852,44 +1823,40 @@ async function postDocumentLine(
 }
 
 export class DocumentService {
-  async createDocumentLine(
-    tenantId: string,
-    data: {
-      documentId: string;
-      lineNo: number;
-      variantId?: string | null;
-      articleTextSnapshot?: string | null;
-      langText?: string | null;
-      langTextSourceEntity?: string | null;
-      langTextSourceId?: string | null;
-      langTextSourceField?: string | null;
-      langTextLinkedAt?: string | null;
-      langTextOverriddenAt?: string | null;
-      quantity: string | number;
-      unit?: string | null;
-      netPrice: string | number;
-      discountPercentage?: string | number | null;
-      taxCodeId?: string | null;
-      taxAmount?: string | number | null;
-      lineTotalNet?: string | number | null;
-      warehouseId?: string | null;
-      costCenterId?: string | null;
-      movementType?: string | null;
-      lineType?: string | null;
-      bomGroupId?: string | null;
-    },
-  ): Promise<unknown[]> {
+  async createDocumentLine(data: {
+    documentId: string;
+    lineNo: number;
+    variantId?: string | null;
+    articleTextSnapshot?: string | null;
+    langText?: string | null;
+    langTextSourceEntity?: string | null;
+    langTextSourceId?: string | null;
+    langTextSourceField?: string | null;
+    langTextLinkedAt?: string | null;
+    langTextOverriddenAt?: string | null;
+    quantity: string | number;
+    unit?: string | null;
+    netPrice: string | number;
+    discountPercentage?: string | number | null;
+    taxCodeId?: string | null;
+    taxAmount?: string | number | null;
+    lineTotalNet?: string | number | null;
+    warehouseId?: string | null;
+    costCenterId?: string | null;
+    movementType?: string | null;
+    lineType?: string | null;
+    bomGroupId?: string | null;
+  }): Promise<unknown[]> {
     return await db.transaction(async (tx) => {
       const [doc] = await tx
         .select()
         .from(document)
-        .where(and(eq(document.documentId, data.documentId), eq(document.tenantId, tenantId)))
+        .where(eq(document.documentId, data.documentId))
         .limit(1);
 
       if (!doc) throw new Error("Document not found");
 
       const baseLine = {
-        tenantId,
         documentId: data.documentId,
         lineNo: Number(data.lineNo),
         variantId: data.variantId ?? null,
@@ -1922,7 +1889,7 @@ export class DocumentService {
 
       if (!baseLine.variantId || baseLine.lineType !== "article") {
         const inserted = await tx.insert(documentLine).values(baseLine).returning();
-        await persistDocumentTotals(tx, tenantId, data.documentId, new Date());
+        await persistDocumentTotals(tx, data.documentId, new Date());
         return inserted;
       }
 
@@ -1931,7 +1898,7 @@ export class DocumentService {
           bomType: article.bomType,
         })
         .from(article)
-        .where(and(eq(article.articleId, baseLine.variantId), eq(article.tenantId, tenantId)))
+        .where(eq(article.articleId, baseLine.variantId))
         .limit(1);
 
       const shouldExpandSalesBom =
@@ -1941,7 +1908,7 @@ export class DocumentService {
 
       if (!shouldExpandSalesBom && !shouldExpandProductionBom) {
         const inserted = await tx.insert(documentLine).values(baseLine).returning();
-        await persistDocumentTotals(tx, tenantId, data.documentId, new Date());
+        await persistDocumentTotals(tx, data.documentId, new Date());
         return inserted;
       }
 
@@ -1966,11 +1933,7 @@ export class DocumentService {
         .leftJoin(bomBaseUnit, eq(bomBaseUnit.unitId, article.baseUnitId))
         .leftJoin(bomSalesUnit, eq(bomSalesUnit.unitId, article.salesUnitId))
         .where(
-          and(
-            eq(articleBom.tenantId, tenantId),
-            eq(articleBom.headerArticleId, baseLine.variantId),
-            eq(articleBom.archived, false),
-          ),
+          and(eq(articleBom.headerArticleId, baseLine.variantId), eq(articleBom.archived, false)),
         )
         .orderBy(asc(articleBom.sortOrder));
 
@@ -1981,7 +1944,7 @@ export class DocumentService {
       await tx.execute(sql`
         UPDATE ${documentLine}
         SET line_no = line_no + ${components.length}
-        WHERE ${activePersistence.provider === "turso" ? sql`1=1` : sql`tenant_id = ${tenantId}`}
+        WHERE 1=1
           AND document_id = ${data.documentId}
           AND line_no > ${baseLine.lineNo}
       `);
@@ -1999,7 +1962,6 @@ export class DocumentService {
             const componentQty = Number(component.quantity);
             const scrapFactor = 1 + Number(component.scrapPercentage ?? 0) / 100;
             return {
-              tenantId,
               documentId: data.documentId,
               lineNo: baseLine.lineNo + index + 1,
               articleId: component.componentArticleId,
@@ -2028,7 +1990,7 @@ export class DocumentService {
         )
         .returning();
 
-      await persistDocumentTotals(tx, tenantId, data.documentId, new Date());
+      await persistDocumentTotals(tx, data.documentId, new Date());
       return [insertedHeader, ...insertedComponents];
     });
   }
@@ -2036,7 +1998,6 @@ export class DocumentService {
   async postDocument(
     documentId: string,
     userId: string,
-    tenantId: string,
   ): Promise<{ success: boolean; document: unknown }> {
     if (activePersistence.provider === "turso") {
       const sqliteSchema = await import("../schema/sqlite.schema");
@@ -2124,14 +2085,13 @@ export class DocumentService {
       return result;
     }
 
+    let docTenantId = "";
     const result = await db.transaction(async (tx) => {
-      const whereClause =
-        activePersistence.provider === "turso"
-          ? sql`document_id = ${documentId}`
-          : sql`document_id = ${documentId} and tenant_id = ${tenantId}`;
+      const whereClause = sql`document_id = ${documentId}`;
       const forUpdateClause = activePersistence.provider === "turso" ? sql`` : sql`for update`;
       const docRows = (await tx.execute(sql`
         select
+          tenant_id as "tenantId",
           document_id as "documentId",
           company_id as "companyId",
           document_type as "documentType",
@@ -2179,8 +2139,9 @@ export class DocumentService {
         where ${whereClause}
         limit 1
         ${forUpdateClause}
-      `)) as Array<DocumentPostingDoc & { status: string }>;
+      `)) as Array<DocumentPostingDoc & { status: string; tenantId: string }>;
       const [doc] = docRows;
+      if (doc) docTenantId = doc.tenantId;
 
       if (!doc) throw new Error("Document not found");
       if (doc.status !== "draft") throw new Error("Document must be in draft status to post");
@@ -2206,15 +2167,15 @@ export class DocumentService {
         }),
       );
 
-      const articleIds = [
+      const uniqueArticleIds = [
         ...new Set(postingLines.map((line) => line.articleId).filter((id): id is string => !!id)),
       ];
       const articleTrackingModeById = new Map<string, string | null>();
-      for (const articleId of articleIds) {
+      for (const articleId of uniqueArticleIds) {
         const rows = (await tx.execute(sql`
           select tracking_mode as "trackingMode"
           from article
-          where ${activePersistence.provider === "turso" ? sql`article_id = ${articleId}` : sql`tenant_id = ${tenantId} and article_id = ${articleId}`}
+          where article_id = ${articleId}
           limit 1
         `)) as Array<{ trackingMode: string | null }>;
         articleTrackingModeById.set(articleId, rows[0]?.trackingMode ?? null);
@@ -2225,7 +2186,7 @@ export class DocumentService {
             require_serial_tracking as "requireSerialTracking",
             require_batch_tracking as "requireBatchTracking"
           from document_group
-          where ${activePersistence.provider === "turso" ? sql`document_group_id = ${doc.documentGroupId}` : sql`tenant_id = ${tenantId} and document_group_id = ${doc.documentGroupId}`}
+          where document_group_id = ${doc.documentGroupId}
           limit 1
         `)) as Array<{ requireSerialTracking: boolean; requireBatchTracking: boolean }>)
         : [null];
@@ -2266,7 +2227,6 @@ export class DocumentService {
         const trackingRows = trackingByLine.get(line.documentLineId) ?? [];
         await postDocumentLine(
           tx,
-          tenantId,
           doc as DocumentPostingDoc,
           line,
           movementType,
@@ -2276,13 +2236,7 @@ export class DocumentService {
         );
       }
 
-      await postFinancialJournalEntries(
-        tx,
-        tenantId,
-        doc as DocumentPostingDoc,
-        movementType,
-        postingLines,
-      );
+      await postFinancialJournalEntries(tx, doc as DocumentPostingDoc, movementType, postingLines);
 
       await tx
         .update(documentLine)
@@ -2292,7 +2246,7 @@ export class DocumentService {
           langTextSourceField: null,
           langTextLinkedAt: null,
         })
-        .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)));
+        .where(eq(documentLine.documentId, documentId));
 
       const updatedDoc = {
         ...doc,
@@ -2326,11 +2280,11 @@ export class DocumentService {
           stornoTextSourceField: null,
           stornoTextLinkedAt: null,
         })
-        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+        .where(eq(document.documentId, documentId));
       return { success: true, document: updatedDoc };
     });
 
-    queueStatisticsMVRefresh(tenantId);
+    queueStatisticsMVRefresh(docTenantId);
 
     return result;
   }
@@ -2338,7 +2292,6 @@ export class DocumentService {
   async stornoDocument(
     documentId: string,
     userId: string,
-    tenantId: string,
   ): Promise<{ success: boolean; stornoDocumentId: string }> {
     if (activePersistence.provider === "turso") {
       const sqliteSchema = await import("../schema/sqlite.schema");
@@ -2386,7 +2339,7 @@ export class DocumentService {
           status: "draft",
           customerId: doc.customerId,
           currencyId: doc.currencyId,
-          documentDate: now,
+          documentDate: formatDateOnly(now)!,
           versionNo: 1,
           transactionId: stornoTransactionId,
           parentDocumentId: documentId,
@@ -2418,7 +2371,7 @@ export class DocumentService {
       });
 
       if (newDoc) {
-        await this.postDocument(newDoc.documentId, userId, tenantId);
+        await this.postDocument(newDoc.documentId, userId);
       }
 
       return { success: true, stornoDocumentId: newDoc.documentId };
@@ -2427,7 +2380,7 @@ export class DocumentService {
     const [doc] = await db
       .select()
       .from(document)
-      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
 
     if (!doc) throw new Error("Document not found");
@@ -2458,12 +2411,7 @@ export class DocumentService {
         const [grp] = await tx
           .select()
           .from(documentGroup)
-          .where(
-            and(
-              eq(documentGroup.documentGroupId, doc.documentGroupId),
-              eq(documentGroup.tenantId, tenantId),
-            ),
-          )
+          .where(eq(documentGroup.documentGroupId, doc.documentGroupId))
           .limit(1);
 
         if (grp?.numberSequenceId) {
@@ -2486,7 +2434,6 @@ export class DocumentService {
       const [createdDoc] = await tx
         .insert(document)
         .values({
-          tenantId,
           companyId: doc.companyId,
           documentType: reversalType,
           documentDirection: doc.documentDirection,
@@ -2541,7 +2488,6 @@ export class DocumentService {
         const [insertedLine] = await tx
           .insert(documentLine)
           .values({
-            tenantId,
             documentId: createdDoc.documentId,
             lineNo: l.lineNo,
             variantId: l.variantId,
@@ -2585,9 +2531,9 @@ export class DocumentService {
           stornoDocumentId: createdDoc.documentId,
           updatedAt: now,
         })
-        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+        .where(eq(document.documentId, documentId));
 
-      await persistDocumentTotals(tx, tenantId, createdDoc.documentId, now);
+      await persistDocumentTotals(tx, createdDoc.documentId, now);
 
       return [createdDoc];
     });
@@ -2597,14 +2543,13 @@ export class DocumentService {
 
   async getConversionCandidates(
     documentId: string,
-    tenantId: string,
   ): Promise<
     Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }>
   > {
     const [doc] = await db
       .select()
       .from(document)
-      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
 
     if (!doc) throw new Error("Document not found");
@@ -2613,12 +2558,7 @@ export class DocumentService {
     const [sourceGroup] = await db
       .select()
       .from(documentGroup)
-      .where(
-        and(
-          eq(documentGroup.documentGroupId, doc.documentGroupId),
-          eq(documentGroup.tenantId, tenantId),
-        ),
-      )
+      .where(eq(documentGroup.documentGroupId, doc.documentGroupId))
       .limit(1);
 
     if (!sourceGroup) throw new Error("Source group not found");
@@ -2627,12 +2567,7 @@ export class DocumentService {
       const [targetGroup] = await db
         .select()
         .from(documentGroup)
-        .where(
-          and(
-            eq(documentGroup.documentGroupId, sourceGroup.nextGroupId),
-            eq(documentGroup.tenantId, tenantId),
-          ),
-        )
+        .where(eq(documentGroup.documentGroupId, sourceGroup.nextGroupId))
         .limit(1);
       if (!targetGroup) throw new Error("Configured next group not found");
       return [
@@ -2651,13 +2586,7 @@ export class DocumentService {
     const candidates = await db
       .select()
       .from(documentGroup)
-      .where(
-        and(
-          eq(documentGroup.tenantId, tenantId),
-          eq(documentGroup.documentType, nextType),
-          eq(documentGroup.archived, false),
-        ),
-      );
+      .where(and(eq(documentGroup.documentType, nextType), eq(documentGroup.archived, false)));
 
     if (candidates.length === 0) throw new Error("Keine Zielgruppe gefunden");
 
@@ -2671,14 +2600,13 @@ export class DocumentService {
 
   async getDuplicateCandidates(
     documentId: string,
-    tenantId: string,
   ): Promise<
     Array<{ documentGroupId: string; name: string; documentType: string; groupNumber: number }>
   > {
     const [doc] = await db
       .select()
       .from(document)
-      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
 
     if (!doc) throw new Error("Document not found");
@@ -2687,12 +2615,7 @@ export class DocumentService {
       ? await db
           .select()
           .from(documentGroup)
-          .where(
-            and(
-              eq(documentGroup.documentGroupId, doc.documentGroupId),
-              eq(documentGroup.tenantId, tenantId),
-            ),
-          )
+          .where(eq(documentGroup.documentGroupId, doc.documentGroupId))
           .limit(1)
       : [null];
 
@@ -2705,11 +2628,7 @@ export class DocumentService {
       .select()
       .from(documentGroup)
       .where(
-        and(
-          eq(documentGroup.tenantId, tenantId),
-          inArray(documentGroup.documentType, allowedTypes),
-          eq(documentGroup.archived, false),
-        ),
+        and(inArray(documentGroup.documentType, allowedTypes), eq(documentGroup.archived, false)),
       );
 
     return candidates
@@ -2730,13 +2649,12 @@ export class DocumentService {
   async convertDocument(
     documentId: string,
     userId: string,
-    tenantId: string,
     targetGroupId: string,
   ): Promise<{ success: boolean; newDocumentId: string }> {
     const [doc] = await db
       .select()
       .from(document)
-      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
 
     if (!doc) throw new Error("Document not found");
@@ -2747,9 +2665,7 @@ export class DocumentService {
     const [targetGroup] = await db
       .select()
       .from(documentGroup)
-      .where(
-        and(eq(documentGroup.documentGroupId, targetGroupId), eq(documentGroup.tenantId, tenantId)),
-      )
+      .where(eq(documentGroup.documentGroupId, targetGroupId))
       .limit(1);
 
     if (!targetGroup) throw new Error("Target document group not found");
@@ -2780,7 +2696,6 @@ export class DocumentService {
       const [newDoc] = await tx
         .insert(document)
         .values({
-          tenantId,
           companyId: doc.companyId,
           documentType: targetGroup.documentType,
           documentDirection: targetGroup.direction ?? doc.documentDirection,
@@ -2837,12 +2752,9 @@ export class DocumentService {
             })
             .from(documentLineAllocation)
             .where(
-              and(
-                eq(documentLineAllocation.tenantId, tenantId),
-                inArray(
-                  documentLineAllocation.sourceDocumentLineId,
-                  lines.map((l) => l.documentLineId),
-                ),
+              inArray(
+                documentLineAllocation.sourceDocumentLineId,
+                lines.map((l) => l.documentLineId),
               ),
             )
         : [];
@@ -2866,7 +2778,6 @@ export class DocumentService {
         const [insertedLine] = await tx
           .insert(documentLine)
           .values({
-            tenantId,
             documentId: newDoc.documentId,
             lineNo: line.lineNo,
             variantId: line.variantId || null,
@@ -2906,7 +2817,6 @@ export class DocumentService {
       }
 
       const allocationInserts: Array<{
-        tenantId: string;
         sourceDocumentLineId: string;
         targetDocumentLineId: string;
         allocatedQty: string;
@@ -2919,7 +2829,6 @@ export class DocumentService {
         const allocatedQty = allocationTotals.get(sourceLine.documentLineId) ?? 0;
         const remainingQty = Math.max(sourceQty - allocatedQty, 0);
         allocationInserts.push({
-          tenantId,
           sourceDocumentLineId: sourceLine.documentLineId,
           targetDocumentLineId: pair.targetLineId,
           allocatedQty: String(remainingQty),
@@ -2935,7 +2844,7 @@ export class DocumentService {
       await tx
         .update(document)
         .set({ status: "archived", archivedAt: now, updatedAt: now })
-        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+        .where(eq(document.documentId, documentId));
 
       if (insertedLines.length === 0) {
         throw new Error("No remaining lines to convert");
@@ -2945,14 +2854,17 @@ export class DocumentService {
     });
   }
 
-  async getDocumentTree(tenantId: string, companyId?: string): Promise<TreeSection[]> {
-    const conditions = [eq(documentGroup.tenantId, tenantId)];
+  async getDocumentTree(companyId?: string): Promise<TreeSection[]> {
+    const conditions: any[] = [];
     if (companyId) conditions.push(eq(documentGroup.companyId, companyId));
 
-    const groups = await db
-      .select()
-      .from(documentGroup)
-      .where(and(...conditions));
+    const groups =
+      conditions.length > 0
+        ? await db
+            .select()
+            .from(documentGroup)
+            .where(and(...conditions))
+        : await db.select().from(documentGroup);
 
     // direction → documentType → groups[]
     const byDirection = new Map<string, Map<string, typeof groups>>();
@@ -3019,11 +2931,11 @@ export class DocumentService {
     return sections;
   }
 
-  async getDocumentAuditTrail(documentId: string, tenantId: string): Promise<DocumentAuditTrail> {
+  async getDocumentAuditTrail(documentId: string): Promise<DocumentAuditTrail> {
     const [seed] = await db
       .select()
       .from(document)
-      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
 
     if (!seed) throw new Error("Document not found");
@@ -3040,7 +2952,6 @@ export class DocumentService {
         .from(document)
         .where(
           and(
-            eq(document.tenantId, tenantId),
             or(
               inArray(document.transactionId, Array.from(knownTransactionIds)),
               inArray(document.parentDocumentId, Array.from(knownIds)),
@@ -3131,7 +3042,7 @@ export class DocumentService {
       }
     }
 
-    const productionFacts = await this.getProductionFactTrace(documentId, tenantId);
+    const productionFacts = await this.getProductionFactTrace(documentId);
 
     return {
       currentDocumentId: seed.documentId,
@@ -3142,14 +3053,11 @@ export class DocumentService {
     };
   }
 
-  async getProductionFactTrace(
-    documentId: string,
-    tenantId: string,
-  ): Promise<ProductionFactTraceRow[]> {
+  async getProductionFactTrace(documentId: string): Promise<ProductionFactTraceRow[]> {
     const [doc] = await db
       .select()
       .from(document)
-      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
 
     if (!doc) throw new Error("Document not found");
@@ -3159,7 +3067,7 @@ export class DocumentService {
       db
         .select()
         .from(documentLine)
-        .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)))
+        .where(eq(documentLine.documentId, documentId))
         .orderBy(asc(documentLine.lineNo)),
       db
         .select()
@@ -3167,7 +3075,6 @@ export class DocumentService {
         .where(
           and(
             eq(inventoryMovement.sourceDocumentId, documentId),
-            eq(inventoryMovement.tenantId, tenantId),
             eq(inventoryMovement.referenceText, doc.documentNo),
           ),
         )
@@ -3214,7 +3121,6 @@ export class DocumentService {
     variantId: string,
     customerId: string | null,
     documentDate: string,
-    tenantId: string,
     taxContext: ResolveVariantPricingContext = {},
   ): Promise<{
     unitPrice: string;
@@ -3230,7 +3136,7 @@ export class DocumentService {
     const articleTaxRows = (await db.execute(sql`
       select tax_class_id as "taxClassId"
       from article
-      where ${activePersistence.provider === "turso" ? sql`article_id = ${articleId}` : sql`tenant_id = ${tenantId} and article_id = ${articleId}`}
+      where article_id = ${articleId}
       limit 1
     `)) as Array<{ taxClassId: string | null }>;
     const articleTaxContext = articleTaxRows[0] ?? null;
@@ -3243,7 +3149,7 @@ export class DocumentService {
       const activeLists = await db
         .select({ priceListId: priceList.priceListId })
         .from(priceList)
-        .where(and(eq(priceList.tenantId, tenantId), eq(priceList.archived, false)));
+        .where(eq(priceList.archived, false));
 
       if (activeLists.length > 0) {
         const priceListIds = activeLists.map((p) => p.priceListId);
@@ -3252,7 +3158,6 @@ export class DocumentService {
           .from(priceListItem)
           .where(
             and(
-              eq(priceListItem.tenantId, tenantId),
               eq(priceListItem.variantId, variantId),
               inArray(priceListItem.priceListId, priceListIds),
             ),
@@ -3266,11 +3171,11 @@ export class DocumentService {
     }
 
     const deliveryAddressCountryCode = taxContext.deliveryAddressId
-      ? await this.resolveDeliveryAddressCountryCode(tenantId, taxContext.deliveryAddressId)
+      ? await this.resolveDeliveryAddressCountryCode(taxContext.deliveryAddressId)
       : null;
 
     const resolvedTax = await new TaxResolutionService().resolveTaxCode({
-      tenantId,
+      tenantId: "",
       documentDate,
       customerId,
       billingCountryCode: taxContext.billingCountryCode ?? null,
@@ -3291,7 +3196,6 @@ export class DocumentService {
   }
 
   private async resolveDeliveryAddressCountryCode(
-    tenantId: string,
     deliveryAddressId: string,
   ): Promise<string | null> {
     const [row] = await db
@@ -3299,7 +3203,6 @@ export class DocumentService {
       .from(deliveryAddress)
       .where(
         and(
-          eq(deliveryAddress.tenantId, tenantId),
           eq(deliveryAddress.deliveryAddressId, deliveryAddressId),
           eq(deliveryAddress.archived, false),
         ),
@@ -3313,15 +3216,12 @@ export class DocumentService {
     documentLineId: string,
     qtyDelta: number,
     userId: string,
-    tenantId: string,
   ): Promise<{ success: boolean }> {
     return await db.transaction(async (tx) => {
       const [line] = await tx
         .select()
         .from(documentLine)
-        .where(
-          and(eq(documentLine.documentLineId, documentLineId), eq(documentLine.tenantId, tenantId)),
-        )
+        .where(eq(documentLine.documentLineId, documentLineId))
         .limit(1);
 
       if (!line) throw new Error("Document line not found");
@@ -3329,7 +3229,7 @@ export class DocumentService {
       const [doc] = await tx
         .select()
         .from(document)
-        .where(and(eq(document.documentId, line.documentId), eq(document.tenantId, tenantId)))
+        .where(eq(document.documentId, line.documentId))
         .limit(1);
 
       if (!doc) throw new Error("Parent document not found");
@@ -3348,7 +3248,6 @@ export class DocumentService {
       await tx
         .insert(inventoryBalance)
         .values({
-          tenantId,
           companyId: doc.companyId,
           warehouseId,
           articleId,
@@ -3358,11 +3257,7 @@ export class DocumentService {
           availableQty: String(effectiveQty),
         })
         .onConflictDoUpdate({
-          target: [
-            inventoryBalance.tenantId,
-            inventoryBalance.warehouseId,
-            inventoryBalance.inventoryItemId,
-          ],
+          target: [inventoryBalance.warehouseId, inventoryBalance.inventoryItemId],
           set: {
             onHandQty: sql`${inventoryBalance.onHandQty} + ${effectiveQty}`,
             availableQty: sql`${inventoryBalance.onHandQty} + ${effectiveQty} - ${inventoryBalance.reservedQty}`,
@@ -3370,7 +3265,6 @@ export class DocumentService {
         });
 
       await tx.insert(inventoryMovement).values({
-        tenantId,
         companyId: doc.companyId,
         warehouseId,
         inventoryItemId,
@@ -3388,7 +3282,6 @@ export class DocumentService {
   }
 
   async saveDocumentDraft(
-    tenantId: string,
     _userId: string,
     data: SaveDocumentDraftInput,
   ): Promise<{ success: boolean; documentId: string; documentNo: string }> {
@@ -3414,7 +3307,7 @@ export class DocumentService {
         let q = tx
           .select()
           .from(s.document)
-          .where(and(eq(s.document.documentId, existingDocId), eq(s.document.tenantId, tenantId)))
+          .where(eq(s.document.documentId, existingDocId))
           .limit(1);
 
         if (activePersistence.provider === "postgres") {
@@ -3446,11 +3339,7 @@ export class DocumentService {
           })
           .from(s.documentLine)
           .where(
-            and(
-              eq(s.documentLine.documentId, existingDocId),
-              eq(s.documentLine.tenantId, tenantId),
-              isNull(s.documentLine.archivedAt),
-            ),
+            and(eq(s.documentLine.documentId, existingDocId), isNull(s.documentLine.archivedAt)),
           );
 
         const existingLineIds = existingLines.map((line) => line.documentLineId);
@@ -3467,7 +3356,6 @@ export class DocumentService {
             .set({ archivedAt: now })
             .where(
               and(
-                eq(s.documentLine.tenantId, tenantId),
                 eq(s.documentLine.documentId, existingDocId),
                 inArray(s.documentLine.documentLineId, [...linesToArchive]),
               ),
@@ -3507,7 +3395,6 @@ export class DocumentService {
         }> = [];
 
         const insertValues: Array<{
-          tenantId: string;
           documentId: string;
           lineNo: number;
           variantId: string | null;
@@ -3586,7 +3473,6 @@ export class DocumentService {
             updateValues.push({ documentLineId: line.documentLineId, ...normalized });
           } else {
             insertValues.push({
-              tenantId,
               documentId: existingDocId,
               transactionId: currentDocRecord.transactionId,
               ...normalized,
@@ -3626,12 +3512,7 @@ export class DocumentService {
               lineWeightKg: row.lineWeightKg,
               archivedAt: null,
             })
-            .where(
-              and(
-                eq(s.documentLine.tenantId, tenantId),
-                eq(s.documentLine.documentLineId, row.documentLineId),
-              ),
-            );
+            .where(eq(s.documentLine.documentLineId, row.documentLineId));
         }
 
         if (insertValues.length > 0) {
@@ -3644,7 +3525,9 @@ export class DocumentService {
             documentGroupId: data.documentGroupId ?? lockedDoc.documentGroupId,
             documentType: data.documentType ?? lockedDoc.documentType,
             documentDirection: data.documentDirection ?? lockedDoc.documentDirection,
-            documentDate: toDateOrNull(data.documentDate ?? lockedDoc.documentDate),
+            documentDate:
+              formatDateOnly(data.documentDate ?? lockedDoc.documentDate) ??
+              formatDateOnly(new Date())!,
             customerId: data.customerId ?? null,
             billingAddress: data.billingAddress ?? null,
             deliveryAddress: data.deliveryAddress ?? null,
@@ -3694,12 +3577,12 @@ export class DocumentService {
             shippingMethodId: data.shippingMethodId ?? null,
             updatedAt: now,
           })
-          .where(and(eq(s.document.documentId, existingDocId), eq(s.document.tenantId, tenantId)))
+          .where(eq(s.document.documentId, existingDocId))
           .returning({ documentId: s.document.documentId, documentNo: s.document.documentNo });
 
         if (!updatedDoc) throw new Error("Document update failed");
 
-        await persistDocumentTotals(tx, tenantId, updatedDoc.documentId, now);
+        await persistDocumentTotals(tx, updatedDoc.documentId, now);
 
         return {
           success: true,
@@ -3711,12 +3594,7 @@ export class DocumentService {
       const [group] = await tx
         .select()
         .from(s.documentGroup)
-        .where(
-          and(
-            eq(s.documentGroup.documentGroupId, data.documentGroupId ?? ""),
-            eq(s.documentGroup.tenantId, tenantId),
-          ),
-        )
+        .where(eq(s.documentGroup.documentGroupId, data.documentGroupId ?? ""))
         .limit(1);
 
       if (!group) throw new Error("Document group not found");
@@ -3733,7 +3611,6 @@ export class DocumentService {
             currencyId: s.company.currencyId,
           })
           .from(s.company)
-          .where(eq(s.company.tenantId, tenantId))
           .limit(1);
         if (!co) throw new Error("No company found for tenant");
         companyId = co.companyId;
@@ -3780,14 +3657,14 @@ export class DocumentService {
       const [newDoc] = await tx
         .insert(s.document)
         .values({
-          tenantId,
           companyId,
           documentType: data.documentType ?? group.documentType,
           documentDirection: data.documentDirection ?? group.direction ?? "OUTBOUND",
           documentGroupId: group.documentGroupId,
           documentNo,
           status: "draft",
-          documentDate: toDateOrNull(data.documentDate ?? new Date()) ?? new Date(),
+          documentDate:
+            formatDateOnly(data.documentDate ?? new Date()) ?? formatDateOnly(new Date())!,
           customerId: data.customerId ?? null,
           billingAddress: data.billingAddress ?? null,
           deliveryAddress: data.deliveryAddress ?? null,
@@ -3849,7 +3726,6 @@ export class DocumentService {
 
         const qty = String(line.quantity);
         insertValues.push({
-          tenantId,
           documentId: newDoc.documentId,
           lineNo: Number(line.lineNo),
           articleId: resolvedTruth.articleId,
@@ -3883,65 +3759,57 @@ export class DocumentService {
         await tx.insert(s.documentLine).values(insertValues);
       }
 
-      await persistDocumentTotals(tx, tenantId, newDoc.documentId, now);
+      await persistDocumentTotals(tx, newDoc.documentId, now);
 
       return { success: true, documentId: newDoc.documentId, documentNo: newDoc.documentNo };
     });
   }
 
-  async createDocument(
-    tenantId: string,
-    data: {
-      documentGroupId: string;
-      documentType: string;
-      documentDirection: string;
-      documentDate: string;
-      status: string;
-      customerId?: string | null;
-      billingAddress?: unknown;
-      deliveryAddress?: unknown;
-      deliveryAddressId?: string | null;
-      noteText?: string | null;
-      noteTextSourceEntity?: string | null;
-      noteTextSourceId?: string | null;
-      noteTextSourceField?: string | null;
-      noteTextLinkedAt?: string | null;
-      noteTextOverriddenAt?: string | null;
-      preText?: string | null;
-      preTextSourceEntity?: string | null;
-      preTextSourceId?: string | null;
-      preTextSourceField?: string | null;
-      preTextLinkedAt?: string | null;
-      preTextOverriddenAt?: string | null;
-      postText?: string | null;
-      postTextSourceEntity?: string | null;
-      postTextSourceId?: string | null;
-      postTextSourceField?: string | null;
-      postTextLinkedAt?: string | null;
-      postTextOverriddenAt?: string | null;
-      stornoText?: string | null;
-      stornoTextSourceEntity?: string | null;
-      stornoTextSourceId?: string | null;
-      stornoTextSourceField?: string | null;
-      stornoTextLinkedAt?: string | null;
-      stornoTextOverriddenAt?: string | null;
-      customAttributes?: unknown;
-      currencyId?: string | null;
-      warehouseId?: string | null;
-      paymentTermId?: string | null;
-      shippingMethodId?: string | null;
-    },
-  ): Promise<{ documentId: string; documentNo: string; status: string }> {
+  async createDocument(data: {
+    documentGroupId: string;
+    documentType: string;
+    documentDirection: string;
+    documentDate: string;
+    status: string;
+    customerId?: string | null;
+    billingAddress?: unknown;
+    deliveryAddress?: unknown;
+    deliveryAddressId?: string | null;
+    noteText?: string | null;
+    noteTextSourceEntity?: string | null;
+    noteTextSourceId?: string | null;
+    noteTextSourceField?: string | null;
+    noteTextLinkedAt?: string | null;
+    noteTextOverriddenAt?: string | null;
+    preText?: string | null;
+    preTextSourceEntity?: string | null;
+    preTextSourceId?: string | null;
+    preTextSourceField?: string | null;
+    preTextLinkedAt?: string | null;
+    preTextOverriddenAt?: string | null;
+    postText?: string | null;
+    postTextSourceEntity?: string | null;
+    postTextSourceId?: string | null;
+    postTextSourceField?: string | null;
+    postTextLinkedAt?: string | null;
+    postTextOverriddenAt?: string | null;
+    stornoText?: string | null;
+    stornoTextSourceEntity?: string | null;
+    stornoTextSourceId?: string | null;
+    stornoTextSourceField?: string | null;
+    stornoTextLinkedAt?: string | null;
+    stornoTextOverriddenAt?: string | null;
+    customAttributes?: unknown;
+    currencyId?: string | null;
+    warehouseId?: string | null;
+    paymentTermId?: string | null;
+    shippingMethodId?: string | null;
+  }): Promise<{ documentId: string; documentNo: string; status: string }> {
     const s = getSchema();
     const [grp] = await db
       .select()
       .from(s.documentGroup)
-      .where(
-        and(
-          eq(s.documentGroup.documentGroupId, data.documentGroupId),
-          eq(s.documentGroup.tenantId, tenantId),
-        ),
-      )
+      .where(eq(s.documentGroup.documentGroupId, data.documentGroupId))
       .limit(1);
 
     if (!grp) throw new Error("Document group not found");
@@ -3956,7 +3824,6 @@ export class DocumentService {
           defaultWarehouseId: s.company.defaultWarehouseId,
         })
         .from(s.company)
-        .where(eq(s.company.tenantId, tenantId))
         .limit(1);
       if (!co) throw new Error("No company found for tenant");
       companyId = co.companyId;
@@ -3999,14 +3866,13 @@ export class DocumentService {
       const [newDoc] = await tx
         .insert(s.document)
         .values({
-          tenantId,
           companyId,
           documentType: data.documentType,
           documentDirection: data.documentDirection,
           documentGroupId: data.documentGroupId,
           documentNo,
           status: data.status,
-          documentDate: toDateOrNull(data.documentDate) ?? new Date(),
+          documentDate: formatDateOnly(data.documentDate) ?? formatDateOnly(new Date())!,
           customerId: data.customerId ?? null,
           billingAddress: data.billingAddress ?? null,
           deliveryAddress: data.deliveryAddress ?? null,
@@ -4055,13 +3921,12 @@ export class DocumentService {
   async duplicateDocument(
     documentId: string,
     userId: string,
-    tenantId: string,
     targetGroupId: string,
   ): Promise<{ documentId: string; documentNo: string }> {
     const [src] = await db
       .select()
       .from(document)
-      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
     if (!src) throw new Error("Document not found");
 
@@ -4069,11 +3934,7 @@ export class DocumentService {
       .select()
       .from(documentGroup)
       .where(
-        and(
-          eq(documentGroup.documentGroupId, targetGroupId),
-          eq(documentGroup.tenantId, tenantId),
-          eq(documentGroup.archived, false),
-        ),
+        and(eq(documentGroup.documentGroupId, targetGroupId), eq(documentGroup.archived, false)),
       )
       .limit(1);
 
@@ -4083,12 +3944,7 @@ export class DocumentService {
       ? await db
           .select()
           .from(documentGroup)
-          .where(
-            and(
-              eq(documentGroup.documentGroupId, src.documentGroupId),
-              eq(documentGroup.tenantId, tenantId),
-            ),
-          )
+          .where(eq(documentGroup.documentGroupId, src.documentGroupId))
           .limit(1)
           .then((rows) => rows[0] ?? null)
       : null;
@@ -4129,7 +3985,6 @@ export class DocumentService {
       const [newDoc] = await tx
         .insert(document)
         .values({
-          tenantId: src.tenantId,
           companyId: src.companyId,
           documentType: targetGroup.documentType,
           documentDirection: targetDirection,
@@ -4182,7 +4037,6 @@ export class DocumentService {
           // loadActiveDocumentLines projects no tenant_id/transaction_id;
           // both must come from the surrounding duplicate context.
           lines.map((l) => ({
-            tenantId,
             documentId: newDoc.documentId,
             transactionId: newDoc.transactionId,
             lineNo: l.lineNo,
@@ -4217,12 +4071,7 @@ export class DocumentService {
             articleId: documentLine.variantId,
           })
           .from(documentLine)
-          .where(
-            and(
-              eq(documentLine.tenantId, tenantId),
-              eq(documentLine.documentId, newDoc.documentId),
-            ),
-          );
+          .where(eq(documentLine.documentId, newDoc.documentId));
 
         const insertedLineByKey = new Map(
           insertedRows.map((row) => [String(row.lineNo), row.documentLineId]),
@@ -4240,7 +4089,7 @@ export class DocumentService {
         await copyDocumentLineTrackingRowsBulk(tx, insertedLinePairs);
       }
 
-      await persistDocumentTotals(tx, tenantId, newDoc.documentId, new Date());
+      await persistDocumentTotals(tx, newDoc.documentId, new Date());
 
       return { documentId: newDoc.documentId, documentNo: newDoc.documentNo };
     });
@@ -4248,12 +4097,11 @@ export class DocumentService {
 
   async deletePostedDocument(
     documentId: string,
-    tenantId: string,
   ): Promise<{ deleted: boolean; archived: boolean; cancelled: boolean; fkViolation?: boolean }> {
     const [doc] = await db
       .select()
       .from(document)
-      .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)))
+      .where(eq(document.documentId, documentId))
       .limit(1);
 
     if (!doc) throw new Error("Document not found");
@@ -4265,7 +4113,7 @@ export class DocumentService {
     const lines = await db
       .select()
       .from(documentLine)
-      .where(and(eq(documentLine.documentId, documentId), eq(documentLine.tenantId, tenantId)));
+      .where(eq(documentLine.documentId, documentId));
     const lineIds = lines.map((line) => line.documentLineId);
 
     if (doc.status === "draft") {
@@ -4274,12 +4122,9 @@ export class DocumentService {
           await tx
             .delete(documentLineAllocation)
             .where(
-              and(
-                eq(documentLineAllocation.tenantId, tenantId),
-                or(
-                  inArray(documentLineAllocation.sourceDocumentLineId, lineIds),
-                  inArray(documentLineAllocation.targetDocumentLineId, lineIds),
-                ),
+              or(
+                inArray(documentLineAllocation.sourceDocumentLineId, lineIds),
+                inArray(documentLineAllocation.targetDocumentLineId, lineIds),
               ),
             );
         }
@@ -4288,25 +4133,21 @@ export class DocumentService {
           const [parent] = await tx
             .select()
             .from(document)
-            .where(
-              and(eq(document.documentId, doc.parentDocumentId), eq(document.tenantId, tenantId)),
-            )
+            .where(eq(document.documentId, doc.parentDocumentId))
             .limit(1);
 
           if (parent?.archivedAt) {
             await tx
               .update(document)
               .set({ status: "draft", archivedAt: null, updatedAt: new Date() })
-              .where(
-                and(eq(document.documentId, parent.documentId), eq(document.tenantId, tenantId)),
-              );
+              .where(eq(document.documentId, parent.documentId));
           }
         }
 
         await tx
           .update(document)
           .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
-          .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+          .where(eq(document.documentId, documentId));
       });
       return { deleted: false, archived: false, cancelled: true };
     }
@@ -4315,12 +4156,7 @@ export class DocumentService {
       const movements = await tx
         .select()
         .from(inventoryMovement)
-        .where(
-          and(
-            eq(inventoryMovement.tenantId, tenantId),
-            eq(inventoryMovement.sourceDocumentId, documentId),
-          ),
-        )
+        .where(eq(inventoryMovement.sourceDocumentId, documentId))
         .orderBy(asc(inventoryMovement.createdAt), asc(inventoryMovement.inventoryMovementId));
 
       for (const movement of movements) {
@@ -4338,7 +4174,6 @@ export class DocumentService {
             .set(set)
             .where(
               and(
-                eq(inventoryBalance.tenantId, tenantId),
                 eq(inventoryBalance.warehouseId, warehouseId),
                 eq(inventoryBalance.inventoryItemId, movement.inventoryItemId),
               ),
@@ -4441,17 +4276,11 @@ export class DocumentService {
                 CASE WHEN consumed_movement_id = ${movement.inventoryMovementId} THEN NULL ELSE consumed_movement_id END
               `,
             })
-            .where(
-              and(
-                eq(serialNumber.tenantId, tenantId),
-                eq(serialNumber.serialNumberId, movement.serialNumberId),
-              ),
-            );
+            .where(eq(serialNumber.serialNumberId, movement.serialNumberId));
         }
 
         const inventoryItemId = await ensureVariantInventoryItemId(tx, movement.variantId);
         await tx.insert(inventoryMovement).values({
-          tenantId,
           companyId: doc.companyId,
           warehouseId,
           inventoryItemId,
@@ -4472,12 +4301,9 @@ export class DocumentService {
         await tx
           .delete(documentLineAllocation)
           .where(
-            and(
-              eq(documentLineAllocation.tenantId, tenantId),
-              or(
-                inArray(documentLineAllocation.sourceDocumentLineId, lineIds),
-                inArray(documentLineAllocation.targetDocumentLineId, lineIds),
-              ),
+            or(
+              inArray(documentLineAllocation.sourceDocumentLineId, lineIds),
+              inArray(documentLineAllocation.targetDocumentLineId, lineIds),
             ),
           );
       }
@@ -4486,38 +4312,33 @@ export class DocumentService {
         const [parent] = await tx
           .select()
           .from(document)
-          .where(
-            and(eq(document.documentId, doc.parentDocumentId), eq(document.tenantId, tenantId)),
-          )
+          .where(eq(document.documentId, doc.parentDocumentId))
           .limit(1);
 
         if (parent?.archivedAt) {
           await tx
             .update(document)
             .set({ status: "draft", archivedAt: null, updatedAt: new Date() })
-            .where(
-              and(eq(document.documentId, parent.documentId), eq(document.tenantId, tenantId)),
-            );
+            .where(eq(document.documentId, parent.documentId));
         }
       }
 
       await tx
         .update(document)
         .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(document.documentId, documentId), eq(document.tenantId, tenantId)));
+        .where(eq(document.documentId, documentId));
     });
 
-    queueStatisticsMVRefresh(tenantId);
+    queueStatisticsMVRefresh((doc as any).tenantId ?? "");
 
     return { deleted: false, archived: false, cancelled: true };
   }
 
   async deleteDocument(
     documentId: string,
-    tenantId: string,
   ): Promise<{ deleted: boolean; archived: boolean; cancelled?: boolean; fkViolation?: boolean }> {
     try {
-      return await this.deletePostedDocument(documentId, tenantId);
+      return await this.deletePostedDocument(documentId);
     } catch (err: any) {
       if (err.code === "23503" || err.cause?.code === "23503")
         return { deleted: false, archived: false, fkViolation: true };

@@ -27,7 +27,10 @@ const moduleFunctionCoverage: Record<string, Record<string, string | null>> = {
   },
 };
 
-const classMethodCoverage: Record<string, { ctor: object; methods: Record<string, string | null> }> = {
+const classMethodCoverage: Record<
+  string,
+  { ctor: object; methods: Record<string, string | null> }
+> = {
   DataService: {
     ctor: DataService,
     methods: {

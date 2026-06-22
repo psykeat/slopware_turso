@@ -284,11 +284,14 @@ function reduceAIPlanningCatalogsForPrompt(params: {
     selectedFieldsMap[entity.entityName] = scoredFields.length > 0 ? scoredFields : fields;
   }
 
-  const entityCommands = params.commands.filter(
+  const entityScopedCommands = params.commands.filter(
     (command) =>
       selectedEntityNames.has(command.entityName) || requiredCommandKeys.has(command.commandKey),
   );
-  const selectedCommands = [...scoredCommands.map(withoutPlanningScore), ...entityCommands].filter(
+  const selectedCommands = [
+    ...scoredCommands.map(withoutPlanningScore),
+    ...entityScopedCommands,
+  ].filter(
     (command, index, commands) =>
       commands.findIndex((candidate) => candidate.commandKey === command.commandKey) === index,
   );
@@ -1104,10 +1107,7 @@ ${JSON.stringify(promptCatalogs.commands, null, 2)}
 
               let targetGroupId = payload.targetGroupId;
               if (!targetGroupId) {
-                const candidates = await docSvc.getConversionCandidates(
-                  payload.sourceDocumentId,
-                  params.tenantId,
-                );
+                const candidates = await docSvc.getConversionCandidates(payload.sourceDocumentId);
                 if (candidates.length === 0) {
                   throw new Error("Keine Zielgruppe für die Wandlung dieses Belegs gefunden.");
                 }
@@ -1124,7 +1124,6 @@ ${JSON.stringify(promptCatalogs.commands, null, 2)}
               const result = await docSvc.convertDocument(
                 payload.sourceDocumentId,
                 params.userId,
-                params.tenantId,
                 targetGroupId,
               );
 

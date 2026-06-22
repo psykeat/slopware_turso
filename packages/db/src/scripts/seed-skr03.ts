@@ -8,7 +8,6 @@ import { eq, sql } from "drizzle-orm";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
 import { isScriptEntry } from "./script-main";

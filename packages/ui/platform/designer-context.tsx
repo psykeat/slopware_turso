@@ -934,10 +934,12 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
     closeInProgressRef.current = true;
 
     try {
-      const dirtySurfaces = (Object.entries(runtimeState.surfaces) as [
-        DesignerSurface,
-        DesignerSurfaceState | undefined,
-      ][]).filter(([, bucket]) => !!bucket && bucket.draftPatchOps.length > 0);
+      const dirtySurfaces = (
+        Object.entries(runtimeState.surfaces) as [
+          DesignerSurface,
+          DesignerSurfaceState | undefined,
+        ][]
+      ).filter(([, bucket]) => !!bucket && bucket.draftPatchOps.length > 0);
 
       if (dirtySurfaces.length > 0) {
         const targetSurface =
@@ -1378,7 +1380,9 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
           ),
         );
         const hasExplicitFrames = explicitFrameKeys.length > 0;
-        const primaryFrameId = hasExplicitFrames ? explicitFrameKeys[0] : nextDraftId("group-frame");
+        const primaryFrameId = hasExplicitFrames
+          ? explicitFrameKeys[0]
+          : nextDraftId("group-frame");
         const frameNodes = hasExplicitFrames
           ? explicitFrameKeys.map((frameKey, index) =>
               createSurfaceNode(
@@ -1588,20 +1592,17 @@ export function DesignerProvider({ children }: { children: React.ReactNode }) {
       label: { en: "Close Designer", de: "Designer schließen" },
       shortcut: "Escape",
       isEnabled: (state) => state.area === "designer" || isDesignMode,
-      handler: async () => { closeDesignMode(); },
+      handler: async () => {
+        closeDesignMode();
+      },
     });
 
     return () => {
       unregisterToggle();
       unregisterClose();
     };
-  // eslint-disable-next-line
-  }, [
-    closeDesignMode,
-    isDesignMode,
-    registerCommand,
-    toggleDesignMode,
-  ]);
+    // eslint-disable-next-line
+  }, [closeDesignMode, isDesignMode, registerCommand, toggleDesignMode]);
 
   const value = useMemo(
     () => ({

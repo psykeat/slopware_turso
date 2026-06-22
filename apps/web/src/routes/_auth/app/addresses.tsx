@@ -115,11 +115,14 @@ function AddressContactsSection({
     [],
   );
 
-  const getContactLabel = useCallback((contact: any) => {
-    const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
-    const tail = contact.roleFunction ? ` · ${contact.roleFunction}` : "";
-    return `${name || contact.email || contact.phoneMobile || fallbackContactLabel}${tail}`;
-  }, [fallbackContactLabel]);
+  const getContactLabel = useCallback(
+    (contact: any) => {
+      const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+      const tail = contact.roleFunction ? ` · ${contact.roleFunction}` : "";
+      return `${name || contact.email || contact.phoneMobile || fallbackContactLabel}${tail}`;
+    },
+    [fallbackContactLabel],
+  );
 
   const selectedContact = useMemo(() => {
     if (!selectedContactId) return null;
@@ -215,11 +218,21 @@ function AddressContactsSection({
           }}
           columns={[
             { key: "firstName", header: t("addressView.contacts.firstName"), type: "text" },
-            { key: "lastName", header: t("addressView.contacts.lastName"), type: "text", required: true },
+            {
+              key: "lastName",
+              header: t("addressView.contacts.lastName"),
+              type: "text",
+              required: true,
+            },
             { key: "email", header: t("addressView.contacts.email"), type: "text" },
             { key: "phoneMobile", header: t("addressView.contacts.phoneMobile"), type: "text" },
             { key: "roleFunction", header: t("addressView.contacts.roleFunction"), type: "text" },
-            { key: "isPrimary", header: t("addressView.contacts.primary"), type: "boolean", width: "60px" },
+            {
+              key: "isPrimary",
+              header: t("addressView.contacts.primary"),
+              type: "boolean",
+              width: "60px",
+            },
           ]}
         />
         <ContactNotizEditor
@@ -295,7 +308,8 @@ function AddressesModule() {
       orderBy: gridState.queryParams.orderBy || undefined,
       search: gridState.queryParams.search || undefined,
       filterRules: [
-        ...((gridState.queryParams.filters as Array<{ col: string; op: string; val: string }>) ?? []),
+        ...((gridState.queryParams.filters as Array<{ col: string; op: string; val: string }>) ??
+          []),
         ...(selectedCategoryId
           ? [{ col: "addressCategoryId", op: "eq", val: selectedCategoryId }]
           : []),
@@ -726,7 +740,15 @@ function AddressesModule() {
         ),
       },
     ],
-    [selectedAddress, activeAddressId, contacts, deliveryAddresses, addressStats, t, addressLangtextFields],
+    [
+      selectedAddress,
+      activeAddressId,
+      contacts,
+      deliveryAddresses,
+      addressStats,
+      t,
+      addressLangtextFields,
+    ],
   );
 
   const selectCategoryNode = useCallback(
@@ -1017,7 +1039,12 @@ function AddressesModule() {
                         required: true,
                         width: "80px",
                       },
-                      { key: "city", header: t("addressView.tables.city"), type: "text", required: true },
+                      {
+                        key: "city",
+                        header: t("addressView.tables.city"),
+                        type: "text",
+                        required: true,
+                      },
                       {
                         key: "countryCode",
                         header: t("addressView.tables.country"),
@@ -1044,10 +1071,20 @@ function AddressesModule() {
                     parentKey={{ addressId: record.addressId as string }}
                     keyColumn="bankAccountId"
                     columns={[
-                      { key: "iban", header: t("addressView.tables.iban"), type: "text", required: true },
+                      {
+                        key: "iban",
+                        header: t("addressView.tables.iban"),
+                        type: "text",
+                        required: true,
+                      },
                       { key: "bic", header: t("addressView.tables.bic"), type: "text" },
                       { key: "bankName", header: t("addressView.tables.bank"), type: "text" },
-                      { key: "isDefault", header: t("addressView.tables.default"), type: "boolean", width: "60px" },
+                      {
+                        key: "isDefault",
+                        header: t("addressView.tables.default"),
+                        type: "boolean",
+                        width: "60px",
+                      },
                     ]}
                   />
                 </div>

@@ -54,7 +54,10 @@ export const importBatchGet = defineCapability({
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const result = await service(ctx).getBatch(input.batchId);
-    return result as { batch: z.output<typeof looseRowSchema>; rows: z.output<typeof looseRowSchema>[] };
+    return result as {
+      batch: z.output<typeof looseRowSchema>;
+      rows: z.output<typeof looseRowSchema>[];
+    };
   },
 });
 
@@ -566,7 +569,10 @@ export const importProfileMappingsGet = defineCapability({
   entityName: "importProfile",
   operation: "mappings",
   kind: "read",
-  summary: { en: "Get connector mappings for a profile", de: "Connector-Mappings eines Profils lesen" },
+  summary: {
+    en: "Get connector mappings for a profile",
+    de: "Connector-Mappings eines Profils lesen",
+  },
   input: z.object({
     profileId: z.uuid(),
     tenantConnectorId: z.uuid(),
@@ -580,10 +586,9 @@ export const importProfileMappingsGet = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => ({
-    items: (await service(ctx).getMappings(
-      input.tenantConnectorId,
-      input.profileId,
-    )) as z.output<typeof looseRowSchema>[],
+    items: (await service(ctx).getMappings(input.tenantConnectorId, input.profileId)) as z.output<
+      typeof looseRowSchema
+    >[],
   }),
 });
 
@@ -592,7 +597,10 @@ export const importProfileSaveMappings = defineCapability({
   entityName: "importProfile",
   operation: "saveMappings",
   kind: "update",
-  summary: { en: "Replace connector mappings for a profile", de: "Connector-Mappings eines Profils ersetzen" },
+  summary: {
+    en: "Replace connector mappings for a profile",
+    de: "Connector-Mappings eines Profils ersetzen",
+  },
   input: z.object({
     profileId: z.uuid(),
     tenantConnectorId: z.uuid(),
@@ -617,7 +625,10 @@ export const importProfileActivateMapping = defineCapability({
   entityName: "importProfile",
   operation: "activateMapping",
   kind: "process",
-  summary: { en: "Activate the current mapping as a version", de: "Aktuelles Mapping als Version aktivieren" },
+  summary: {
+    en: "Activate the current mapping as a version",
+    de: "Aktuelles Mapping als Version aktivieren",
+  },
   input: z.object({
     profileId: z.uuid(),
     tenantConnectorId: z.uuid(),

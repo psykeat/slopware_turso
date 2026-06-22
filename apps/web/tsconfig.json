@@ -7,6 +7,8 @@
       // https://github.com/mugnavo/tanstarter/pull/77
       // https://github.com/mugnavo/tanstarter/pull/76
       "#/*": ["./src/*"],
+      "@repo/registry": ["../../packages/registry/src/index.ts"],
+      "@repo/registry/*": ["../../packages/registry/src/*"],
 
       // for shadcn CLI
       "@repo/ui/*": ["../../packages/ui/*"]

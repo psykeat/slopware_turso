@@ -1,8 +1,8 @@
-import { BubbleMenu, EditorContent, useEditor } from "@tiptap/react";
 import { Color } from "@tiptap/extension-color";
 import TextStyle from "@tiptap/extension-text-style";
-import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
+import { BubbleMenu, EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import {
   BoldIcon,
   CheckIcon,
@@ -360,7 +360,7 @@ export function LangtextEditor({
           }}
         />
         {!selectedHtml && !editor?.getText() ? (
-          <div className="pointer-events-none absolute left-3 top-3 text-[13px] leading-6 text-ink-mute">
+          <div className="pointer-events-none absolute top-3 left-3 text-[13px] leading-6 text-ink-mute">
             {placeholder}
           </div>
         ) : null}

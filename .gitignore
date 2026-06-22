@@ -41,3 +41,7 @@ zero-mail-reference/
 
 # Storage
 storage/
+
+# Local libSQL/Turso dev databases
+.local-data/
+*.db

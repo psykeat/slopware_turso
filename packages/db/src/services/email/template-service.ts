@@ -5,7 +5,7 @@ import {
   emailTemplate,
   emailTemplateBinding,
   emailTemplateRenderLog,
-} from "../../schema/app.schema";
+} from "../../schema/sqlite.schema";
 
 function lookup(data: Record<string, unknown>, path: string): unknown {
   return path.split(".").reduce<unknown>((current, part) => {
@@ -107,7 +107,6 @@ export class EmailTemplateService {
       .from(emailTemplate)
       .where(
         and(
-          eq(emailTemplate.tenantId, this.tenantId),
           eq(emailTemplate.emailTemplateId, templateId),
           eq(emailTemplate.category, category),
           eq(emailTemplate.archived, false),
@@ -133,7 +132,6 @@ export class EmailTemplateService {
       )
       .where(
         and(
-          eq(emailTemplateBinding.tenantId, this.tenantId),
           eq(emailTemplate.category, input.category?.trim() || "document"),
           eq(emailTemplateBinding.archived, false),
           eq(emailTemplate.archived, false),

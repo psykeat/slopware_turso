@@ -124,6 +124,18 @@ Für Kerntabellen gilt:
 SQLite/libSQL limitiert die Anzahl der maximalen SQL-Variablen in einem Statement (`SQLITE_LIMIT_VARIABLE_NUMBER`, standardmäßig max. 32.766).
 Bei der Nutzung von Drizzle-Bulk-Inserts (`db.insert().values()`) müssen Datensätze daher in Chunks von **maximal 2.000 Zeilen** aufgeteilt werden, um Abstürze zu verhindern (2.000 Zeilen × Spaltenanzahl < Limit).
 
+### SQLite Datums-Serialisierung & Formatierung (Best Practice)
+
+SQLite besitzt keinen nativen Datums-Datentyp. Datumsfelder werden als Text (`text`) gespeichert.
+
+- **Problem**: Bei Übergabe von rohen JavaScript `Date`-Objekten an libSQL/SQLite kann es zur Serialisierung von lokalisierten Datums-Strings (inklusive Zeitzonen) kommen, was beim Wiedereinlesen zu `Invalid Date` Laufzeitfehlern führt.
+- **Lösung**: Datumsangaben müssen vor dem Schreiben über einen standardisierten Datumsformatter (z. B. `formatDateOnly` Helper) in das Format `YYYY-MM-DD` überführt werden.
+
+### SQLite Numerische Vergleiche in Tests (Decimal / Numeric)
+
+- Drizzle bildet SQLite `numeric` bzw. `decimal` Spaltentypen in JavaScript als `string` ab.
+- Bei Assertions in Tests, die numerische Abweichungen oder Deltas prüfen, müssen diese Werte vor dem Vergleich explizit nach `Number(...)` gecastet werden, um String-Vergleichsfehler zu vermeiden.
+
 ---
 
 ## Posting- und Ledger-Logik (Immutable Ledger)
@@ -231,7 +243,7 @@ Als zentrale _Single Source of Truth_ (SSOT) des ERP-Systems dient ein deklarati
 
 ---
 
-## Migrationsstatus: Postgres → Turso (Stand 2026-06-21)
+## Migrationsstatus: Postgres → Turso (Stand 2026-06-22)
 
 ### ✅ Abgeschlossen
 
@@ -240,6 +252,8 @@ Als zentrale _Single Source of Truth_ (SSOT) des ERP-Systems dient ein deklarati
 - `DataService` — Constructor ohne Parameter, keine Tenant-Filter, kein `tenantId` in Inserts
 - `runEntityList` — `tenantId` Parameter entfernt, alle ~30 Capability-Module aktualisiert
 - `document-service.ts` — alle privaten Hilfsfunktionen tenant-frei (7 Funktionen, 14 Call-Sites)
+- Public API `DocumentService`-Methodensignaturen: `tenantId: string` aus allen 16 öffentlichen Methodensignaturen und Call-Sites entfernt
+- AI-Memory/Session-Filter (`apps/web/src/routes/api/ai/$.ts` und `apps/web/src/routes/api/email/$.ts`): SQL-Filter mit `eq(col.tenantId, ...)` vollständig entfernt und Routen in `runInTenantScope` gewrappt
 - Capability-Execution ohne Capability-RLS-Logik
 - Capability-Module importieren `sqlite.schema.ts` statt `app.schema.ts`
 - Registry und SDK neu generiert
@@ -247,9 +261,7 @@ Als zentrale _Single Source of Truth_ (SSOT) des ERP-Systems dient ein deklarati
 
 ### 🔄 Verbleibende Restposten
 
-- Public API `DocumentService`-Methodensignaturen: `tenantId: string` ist noch als erster Parameter vorhanden (wird intern nicht mehr für SQL genutzt, aber die öffentliche Signatur ist noch nicht bereinigt)
 - `apps/web` Legacy-API-Routen: noch auf Postgres-Pfad (siehe Triage unten)
-- `apps/web/src/routes/api/ai/$.ts`: AI-Memory/Session-Filter noch mit `eq(col.tenantId, ...)` — zukünftig zu bereinigen
 
 ---
 
@@ -302,24 +314,6 @@ Diese Routen importieren `@repo/db/schema` (Postgres-Schema) und filtern aktiv m
 
 **Migrationspfad:** Diese Routen werden schrittweise durch Capability-Aufrufe (`executeAction`, `runEntityList` etc.) ersetzt. Der Tenant-Filter entfällt automatisch, wenn die Route auf die Capability-Runtime umgestellt wird.
 
-### Kategorie C — Turso-native Tabellen, noch mit tenantId-Filtern (⚠️ zu bereinigen)
+### Kategorie C — Turso-native Tabellen, ehemals mit tenantId-Filtern (✅ Bereinigt)
 
-`routes/api/ai/$.ts` enthält **sowohl** legitimes Routing-`tenantId` (LLM-Config, Sitzungskontext) **als auch** aktive SQL-Filter auf Turso-nativen Tabellen (`aiMemory`, `aiSession`, `emailThread`, `emailMessage`, `tenantLlmConfig`, `article`). Diese Filter sind mit dem Database-per-Tenant-Ansatz redundant und müssen bereinigt werden.
-
-Betroffene Stellen in `routes/api/ai/$.ts`:
-
-```
-L133   eq(tenantLlmConfig.tenantId, tenantId)
-L250   eq(emailThread.tenantId, tenantId)
-L262   eq(emailMessage.tenantId, tenantId)
-L292   eq(aiMemory.tenantId, tenantId)
-L343   eq(aiSession.tenantId, tenantId)
-L495   eq(company.tenantId, tenantId)
-L505   eq(tenantLlmConfig.tenantId, tenantId)
-L636   eq(company.tenantId, tenantId)
-L813   eq(emailThread.tenantId, tenantId)
-L1343  eq(article.tenantId, tenantId)
-L1496  eq(aiMemory.tenantId, tenantId)
-L1515  eq(aiMemory.tenantId, tenantId)
-L1597  eq(aiMemory.tenantId, tenantId)
-```
+Die ehemals in `routes/api/ai/$.ts` und `routes/api/email/$.ts` vorhandenen redundant filtrierten SQL-Abfragen auf Turso-nativen Tabellen (`aiMemory`, `aiSession`, `emailThread`, `emailMessage`, `tenantLlmConfig`, `article`) wurden vollständig bereinigt. Die Routen wurden in `runInTenantScope`-Blöcke gewrappt, wodurch der Tenant-Kontext auf Datenbank-Verbindungsebene gesteuert wird.

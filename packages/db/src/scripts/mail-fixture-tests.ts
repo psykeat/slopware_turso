@@ -15,7 +15,7 @@ import {
   emailAccountUserGrant,
   emailAttachment,
   emailIdentity,
-    // @ts-ignore
+  // @ts-ignore
   emailJob,
   emailLabel,
   emailMessage,

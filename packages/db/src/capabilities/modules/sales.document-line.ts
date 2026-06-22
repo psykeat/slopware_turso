@@ -150,8 +150,7 @@ export const documentLineCreate = defineCapability({
   schemaVersion: 1,
   handler: async (ctx, input) => {
     const lines = await new DocumentService().createDocumentLine(
-      ctx.tenantId,
-      input as Parameters<DocumentService["createDocumentLine"]>[1],
+      input as Parameters<DocumentService["createDocumentLine"]>[0],
     );
     return { lines: lines as z.output<typeof looseRowSchema>[] };
   },
@@ -319,12 +318,7 @@ export const documentLineDelta = defineCapability({
   schemaVersion: 1,
   handler: async (ctx, input) => {
     if (!ctx.userId) throw new CapabilityError("forbidden", "User id required");
-    return new DocumentService().applyDeltaEffect(
-      input.documentLineId,
-      input.qtyDelta,
-      ctx.userId,
-      ctx.tenantId,
-    );
+    return new DocumentService().applyDeltaEffect(input.documentLineId, input.qtyDelta, ctx.userId);
   },
 });
 

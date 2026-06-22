@@ -238,7 +238,7 @@ export const documentCreate = defineCapability({
     },
   },
   schemaVersion: 1,
-  handler: async (ctx, input) => new DocumentService().createDocument(ctx.tenantId, input),
+  handler: async (ctx, input) => new DocumentService().createDocument(input),
 });
 
 export const documentSaveDraft = defineCapability({
@@ -260,8 +260,7 @@ export const documentSaveDraft = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) =>
-    new DocumentService().saveDocumentDraft(ctx.tenantId, ctx.userId ?? "", input),
+  handler: async (ctx, input) => new DocumentService().saveDocumentDraft(ctx.userId ?? "", input),
 });
 
 export const documentPost = defineCapability({
@@ -300,7 +299,7 @@ export const documentPost = defineCapability({
   schemaVersion: 1,
   handler: async (ctx, input) => {
     if (!ctx.userId) throw new CapabilityError("forbidden", "User id required");
-    return new DocumentService().postDocument(input.documentId, ctx.userId, ctx.tenantId);
+    return new DocumentService().postDocument(input.documentId, ctx.userId);
   },
 });
 
@@ -332,7 +331,7 @@ export const documentStorno = defineCapability({
   schemaVersion: 1,
   handler: async (ctx, input) => {
     if (!ctx.userId) throw new CapabilityError("forbidden", "User id required");
-    return new DocumentService().stornoDocument(input.documentId, ctx.userId, ctx.tenantId);
+    return new DocumentService().stornoDocument(input.documentId, ctx.userId);
   },
 });
 
@@ -397,7 +396,6 @@ export const documentDuplicate = defineCapability({
     return new DocumentService().duplicateDocument(
       input.documentId,
       ctx.userId,
-      ctx.tenantId,
       input.targetGroupId,
     );
   },
@@ -437,12 +435,7 @@ export const documentConvert = defineCapability({
   schemaVersion: 1,
   handler: async (ctx, input) => {
     if (!ctx.userId) throw new CapabilityError("forbidden", "User id required");
-    return new DocumentService().convertDocument(
-      input.documentId,
-      ctx.userId,
-      ctx.tenantId,
-      input.targetGroupId,
-    );
+    return new DocumentService().convertDocument(input.documentId, ctx.userId, input.targetGroupId);
   },
 });
 
@@ -477,8 +470,7 @@ export const documentDelete = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "confirm", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) =>
-    new DocumentService().deleteDocument(input.documentId, ctx.tenantId),
+  handler: async (ctx, input) => new DocumentService().deleteDocument(input.documentId),
 });
 
 const targetGroupCandidateSchema = z.object({
@@ -517,7 +509,7 @@ export const documentConvertCandidates = defineCapability({
   },
   schemaVersion: 1,
   handler: async (ctx, input) => ({
-    candidates: await new DocumentService().getConversionCandidates(input.documentId, ctx.tenantId),
+    candidates: await new DocumentService().getConversionCandidates(input.documentId),
   }),
 });
 
@@ -540,7 +532,7 @@ export const documentDuplicateCandidates = defineCapability({
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
   handler: async (ctx, input) => ({
-    candidates: await new DocumentService().getDuplicateCandidates(input.documentId, ctx.tenantId),
+    candidates: await new DocumentService().getDuplicateCandidates(input.documentId),
   }),
 });
 
@@ -559,8 +551,7 @@ export const documentTree = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) =>
-    new DocumentService().getDocumentTree(ctx.tenantId, input.companyId),
+  handler: async (ctx, input) => new DocumentService().getDocumentTree(input.companyId),
 });
 
 export const documentAudit = defineCapability({
@@ -578,8 +569,7 @@ export const documentAudit = defineCapability({
   minRole: "tenant_user",
   exposure: { llm: "safe", http: true },
   schemaVersion: 1,
-  handler: async (ctx, input) =>
-    new DocumentService().getDocumentAuditTrail(input.documentId, ctx.tenantId),
+  handler: async (ctx, input) => new DocumentService().getDocumentAuditTrail(input.documentId),
 });
 
 export const documentShipment = defineCapability({
@@ -624,12 +614,7 @@ export const documentDelta = defineCapability({
   schemaVersion: 1,
   handler: async (ctx, input) => {
     if (!ctx.userId) throw new CapabilityError("forbidden", "User id required");
-    return new DocumentService().applyDeltaEffect(
-      input.documentLineId,
-      input.qtyDelta,
-      ctx.userId,
-      ctx.tenantId,
-    );
+    return new DocumentService().applyDeltaEffect(input.documentLineId, input.qtyDelta, ctx.userId);
   },
 });
 
@@ -680,7 +665,6 @@ export const documentPricing = defineCapability({
       input.variantId,
       input.customerId ?? null,
       input.documentDate ?? new Date().toISOString().slice(0, 10),
-      ctx.tenantId,
       {
         deliveryAddressId: input.deliveryAddressId ?? null,
         deliveryCountryCode: input.deliveryCountryCode ?? null,

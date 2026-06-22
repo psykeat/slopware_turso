@@ -133,7 +133,11 @@ export const ColorSelector = ({ open, onOpenChange }: ColorSelectorProps) => {
               onSelect={() => {
                 // editor.commands.unsetColor();
                 if (name !== "Default") {
-                  editor.chain().focus().setColor(color || "").run();
+                  editor
+                    .chain()
+                    .focus()
+                    .setColor(color || "")
+                    .run();
                 }
               }}
               className="flex cursor-pointer items-center justify-between px-2 py-1 text-sm hover:bg-accent"

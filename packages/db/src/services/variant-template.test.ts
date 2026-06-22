@@ -245,10 +245,10 @@ test("template-driven generation applies exclusions, SKU pattern, and surcharges
   const excludedPlan = preview.combinations.find((plan) => plan.status === "excluded");
   assert.ok(excludedPlan);
   assert.equal(excludedPlan.excludedByRuleId, "no-rot-xl");
-  assert.deepEqual(
-    excludedPlan.optionValues.map((optionValue) => optionValue.value).sort(),
-    ["Rot", "XL"],
-  );
+  assert.deepEqual(excludedPlan.optionValues.map((optionValue) => optionValue.value).sort(), [
+    "Rot",
+    "XL",
+  ]);
 
   const result = await generateArticleVariants(fixture.tenantId, fixture.articleId, {
     templateId: template.templateId,
@@ -353,11 +353,12 @@ test("pattern SKU collisions fall back to a hash suffix", async () => {
       ),
     );
 
-  const collidedRow = variantRows.find((row) =>
-    row.sku.startsWith(`${fixture.articleNo}-NV-M-`),
-  );
+  const collidedRow = variantRows.find((row) => row.sku.startsWith(`${fixture.articleNo}-NV-M-`));
   assert.ok(collidedRow, "collided SKU should carry a hash suffix");
-  assert.equal(collidedRow.sku, `${fixture.articleNo}-NV-M-${collidedRow.optionValueHash.slice(0, 8)}`);
+  assert.equal(
+    collidedRow.sku,
+    `${fixture.articleNo}-NV-M-${collidedRow.optionValueHash.slice(0, 8)}`,
+  );
 });
 
 test("copyVariantAxesFromArticle copies axes into another article", async () => {

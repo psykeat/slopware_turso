@@ -65,13 +65,16 @@ export class TaxPolicyService {
         classification: "intra-community-b2b",
         effectiveCustomerTaxClassId: context.customerTaxClassId,
         taxCountryCode: context.taxCountryCode,
-        reason: "EU cross-border B2B customer has a valid VAT ID; intra-community tax policy applies.",
+        reason:
+          "EU cross-border B2B customer has a valid VAT ID; intra-community tax policy applies.",
         warnings,
       };
     }
 
     if (context.customerVatStatus !== "valid") {
-      warnings.push(`Customer VAT ID status is ${context.customerVatStatus}; intra-community B2B tax-free policy is not allowed.`);
+      warnings.push(
+        `Customer VAT ID status is ${context.customerVatStatus}; intra-community B2B tax-free policy is not allowed.`,
+      );
     }
 
     if (context.hasActiveOssRegistration) {
@@ -79,7 +82,8 @@ export class TaxPolicyService {
         classification: "eu-b2c-oss",
         effectiveCustomerTaxClassId: null,
         taxCountryCode: context.taxCountryCode,
-        reason: "EU cross-border B2C customer with active OSS registration; destination-country tax policy applies.",
+        reason:
+          "EU cross-border B2C customer with active OSS registration; destination-country tax policy applies.",
         warnings,
       };
     }
@@ -90,7 +94,8 @@ export class TaxPolicyService {
       classification: "eu-b2c-non-oss",
       effectiveCustomerTaxClassId: null,
       taxCountryCode: context.taxCountryCode,
-      reason: "EU cross-border B2C customer without active OSS registration; explicit fallback tax rule is required.",
+      reason:
+        "EU cross-border B2C customer without active OSS registration; explicit fallback tax rule is required.",
       warnings,
     };
   }

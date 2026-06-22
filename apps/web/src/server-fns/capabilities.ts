@@ -1,23 +1,21 @@
+import { executeAction } from "@repo/db/actions";
+import type {
+  ActionInput,
+  ActionKey,
+  ActionMeta,
+  ActionOutput,
+  ActionResult,
+} from "@repo/db/actions";
+import type { CapabilityErrorCode, CapabilityIssue } from "@repo/db/capabilities";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { executeCapability } from "@repo/db/capabilities";
-import type {
-  CapabilityErrorCode,
-  CapabilityInput,
-  CapabilityIssue,
-  CapabilityKey,
-  CapabilityMeta,
-  CapabilityOutput,
-  CapabilityResult,
-} from "@repo/db/capabilities";
-
 import { capabilityContext } from "./context";
 
-// One generic server function for all capabilities instead of one RPC per
-// capability key. Type safety comes from the `capability(key)` factory below,
+// One generic server function for all registry actions instead of one RPC per
+// action key. Type safety comes from the `capability(key)` compatibility factory below,
 // whose generics resolve against the type-only CapabilityIndex — the server
-// re-validates with the real zod schema inside executeCapability anyway.
+// re-validates with the real zod schema inside executeAction anyway.
 export const $executeCapability = createServerFn({ method: "POST" })
   .middleware([capabilityContext])
   .inputValidator(
@@ -29,7 +27,7 @@ export const $executeCapability = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, context }) =>
-    executeCapability(
+    executeAction(
       data.key,
       {
         ...context.executionCtx,
@@ -60,24 +58,21 @@ export interface CapabilityCallOptions {
 
 // Full envelope variant — used by the mutation hook, which needs meta
 // (entityName/writesTables) to invalidate cached reads.
-export async function callCapability<K extends CapabilityKey>(
+export async function callCapability<K extends ActionKey>(
   key: K,
-  input: CapabilityInput<K>,
+  input: ActionInput<K>,
   opts?: CapabilityCallOptions,
-): Promise<{ data: CapabilityOutput<K>; meta: CapabilityMeta }> {
+): Promise<{ data: ActionOutput<K>; meta: ActionMeta }> {
   const result = (await $executeCapability({
     data: { key, input, dryRun: opts?.dryRun },
-  })) as CapabilityResult<CapabilityOutput<K>>;
+  })) as ActionResult<ActionOutput<K>>;
   if (!result.ok) throw new CapabilityClientError(result.error);
   return { data: result.data, meta: result.meta };
 }
 
 // Typed convenience: `await capability("sales.document.post")({ documentId })`.
-export function capability<K extends CapabilityKey>(key: K) {
-  return async (
-    input: CapabilityInput<K>,
-    opts?: CapabilityCallOptions,
-  ): Promise<CapabilityOutput<K>> => {
+export function capability<K extends ActionKey>(key: K) {
+  return async (input: ActionInput<K>, opts?: CapabilityCallOptions): Promise<ActionOutput<K>> => {
     const { data } = await callCapability(key, input, opts);
     return data;
   };

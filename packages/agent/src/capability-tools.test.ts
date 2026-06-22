@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { capabilityInputJsonSchema, type AnyCapability } from "@repo/db/capabilities";
+import { actionInputJsonSchema, type AnyRegistryBackedAction } from "@repo/db/actions";
 
 import {
   buildCapabilityTools,
@@ -40,7 +40,7 @@ test("tool names are unique and follow the snake/camel pattern", () => {
 
 test("no tool input schema exposes tenantId", () => {
   for (const capability of listAiCapabilities({ activeByDefaultOnly: false })) {
-    const schema = capabilityInputJsonSchema(capability) as {
+    const schema = actionInputJsonSchema(capability) as {
       properties?: Record<string, unknown>;
     };
     assert.ok(
@@ -101,10 +101,7 @@ test("buildCapabilityTools delegates to executeCapability for unknown ctx safely
     handler?: (input: unknown) => Promise<unknown>;
     server?: { handler?: (input: unknown) => Promise<unknown> };
   };
-  const invoke =
-    typeof tool.handler === "function"
-      ? tool.handler
-      : tool.server?.handler;
+  const invoke = typeof tool.handler === "function" ? tool.handler : tool.server?.handler;
   if (typeof invoke !== "function") return; // shape-tolerant: skip if internal shape differs
   const result = (await invoke({ articleId: "not-a-uuid" })) as {
     ok: boolean;
@@ -130,10 +127,7 @@ test("overlay selector: reads are global, writes are scoped to the focus group",
   assert.ok(keys.has("sales.document.get"), "cross-group read must be in the backbone");
 
   // ...but a foreign-group WRITE (confirm) is not writable from the mail focus.
-  assert.ok(
-    !keys.has("sales.document.post"),
-    "out-of-focus confirm write must not be selected",
-  );
+  assert.ok(!keys.has("sales.document.post"), "out-of-focus confirm write must not be selected");
 
   // The focused group's own write IS available.
   assert.ok(
@@ -159,7 +153,7 @@ test("buildOverlayTools marks focused-group confirm writes as needsApproval", ()
   assert.equal(confirmSend!.needsApproval, true);
 });
 
-function findCapability(key: string): AnyCapability {
+function findCapability(key: string): AnyRegistryBackedAction {
   const found = listAiCapabilities({ activeByDefaultOnly: false }).find((c) => c.key === key);
   assert.ok(found, `missing ${key}`);
   return found;

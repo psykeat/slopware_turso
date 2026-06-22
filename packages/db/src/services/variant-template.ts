@@ -6,7 +6,7 @@ import {
   articleOption,
   articleOptionValue,
   articleVariantTemplate,
-} from "../schema/app.schema";
+} from "../schema/sqlite.schema";
 import { loadVariantAxes } from "./article-variant-generator";
 import {
   normalizeAxisName,
@@ -77,7 +77,7 @@ export async function listVariantTemplates(
   tenantId: string,
   opts?: { includeArchived?: boolean },
 ): Promise<VariantTemplateRecord[]> {
-  const conditions = [eq(articleVariantTemplate.tenantId, tenantId)];
+  const conditions: ReturnType<typeof eq>[] = [];
   if (!opts?.includeArchived) {
     conditions.push(eq(articleVariantTemplate.archived, false));
   }
@@ -85,7 +85,7 @@ export async function listVariantTemplates(
   const rows = await db
     .select(templateSelection)
     .from(articleVariantTemplate)
-    .where(and(...conditions))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(asc(articleVariantTemplate.label), asc(articleVariantTemplate.templateId));
 
   return rows.map(toTemplateRecord);
@@ -98,12 +98,7 @@ export async function getVariantTemplate(
   const [row] = await db
     .select(templateSelection)
     .from(articleVariantTemplate)
-    .where(
-      and(
-        eq(articleVariantTemplate.tenantId, tenantId),
-        eq(articleVariantTemplate.templateId, templateId),
-      ),
-    )
+    .where(eq(articleVariantTemplate.templateId, templateId))
     .limit(1);
 
   return row ? toTemplateRecord(row) : null;
@@ -156,12 +151,7 @@ export async function updateVariantTemplate(
   const [row] = await db
     .update(articleVariantTemplate)
     .set(updates)
-    .where(
-      and(
-        eq(articleVariantTemplate.tenantId, tenantId),
-        eq(articleVariantTemplate.templateId, templateId),
-      ),
-    )
+    .where(eq(articleVariantTemplate.templateId, templateId))
     .returning(templateSelection);
 
   if (!row) {
@@ -188,7 +178,7 @@ async function assertArticleExists(tx: VariantTx, tenantId: string, articleId: s
   const [row] = await tx
     .select({ articleId: article.articleId })
     .from(article)
-    .where(and(eq(article.tenantId, tenantId), eq(article.articleId, articleId)))
+    .where(eq(article.articleId, articleId))
     .limit(1);
 
   if (!row) {
@@ -218,7 +208,7 @@ async function mergeAxesIntoArticle(
       sortOrder: articleOption.sortOrder,
     })
     .from(articleOption)
-    .where(and(eq(articleOption.tenantId, tenantId), eq(articleOption.articleId, articleId)));
+    .where(eq(articleOption.articleId, articleId));
 
   const optionsByNormalizedName = new Map(
     existingOptions.map((option) => [normalizeAxisName(option.name), option]),
@@ -234,9 +224,7 @@ async function mergeAxesIntoArticle(
         await tx
           .update(articleOption)
           .set({ sortOrder: axis.sortOrder })
-          .where(
-            and(eq(articleOption.tenantId, tenantId), eq(articleOption.optionId, option.optionId)),
-          );
+          .where(eq(articleOption.optionId, option.optionId));
       }
     } else {
       const [inserted] = await tx
@@ -267,11 +255,7 @@ async function mergeAxesIntoArticle(
           })
           .from(articleOption)
           .where(
-            and(
-              eq(articleOption.tenantId, tenantId),
-              eq(articleOption.articleId, articleId),
-              eq(articleOption.name, axis.name.trim()),
-            ),
+            and(eq(articleOption.articleId, articleId), eq(articleOption.name, axis.name.trim())),
           )
           .limit(1);
         if (!existing) continue;
@@ -288,12 +272,7 @@ async function mergeAxesIntoArticle(
         sortOrder: articleOptionValue.sortOrder,
       })
       .from(articleOptionValue)
-      .where(
-        and(
-          eq(articleOptionValue.tenantId, tenantId),
-          eq(articleOptionValue.optionId, option.optionId),
-        ),
-      );
+      .where(eq(articleOptionValue.optionId, option.optionId));
 
     const valuesByNormalizedValue = new Map(
       existingValues.map((value) => [normalizeAxisValue(value.value), value]),
@@ -309,12 +288,7 @@ async function mergeAxesIntoArticle(
           await tx
             .update(articleOptionValue)
             .set({ sortOrder: axisValue.sortOrder })
-            .where(
-              and(
-                eq(articleOptionValue.tenantId, tenantId),
-                eq(articleOptionValue.valueId, existingValue.valueId),
-              ),
-            );
+            .where(eq(articleOptionValue.valueId, existingValue.valueId));
         }
         continue;
       }

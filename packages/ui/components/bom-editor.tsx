@@ -69,10 +69,10 @@ export function BomEditor({ articleId }: BomEditorProps) {
         setShowDropdown(false);
         return;
       }
-      const { data } = await executeCapability<{ items: unknown[] }>(
-        "masterdata.article.search",
-        { q: addSearch, limit: 8 },
-      );
+      const { data } = await executeCapability<{ items: unknown[] }>("masterdata.article.search", {
+        q: addSearch,
+        limit: 8,
+      });
       setSearchResults(data.items as never[]);
       setShowDropdown(data.items.length > 0);
     }, 200);

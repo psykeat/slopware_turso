@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "../index";
-import { aiTurn, aiToolCall } from "../schema/app.schema";
+import { aiTurn, aiToolCall } from "../schema/sqlite.schema";
 
 export async function createAiTurn(params: { sessionId: string; role: string; message: string }) {
   const [row] = await db

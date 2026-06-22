@@ -64,9 +64,9 @@ async function main() {
     }
 
     // Resolve concrete id arrays once, then delete everything keyed off them.
-    const tenantIds = (
-      await sql.unsafe(`select tenant_id from tenant where ${TEST_TENANT}`)
-    ).map((r) => r.tenant_id as string);
+    const tenantIds = (await sql.unsafe(`select tenant_id from tenant where ${TEST_TENANT}`)).map(
+      (r) => r.tenant_id as string,
+    );
     const orgIds = (
       await sql.unsafe(`select organization_id from organization where ${TEST_ORG}`)
     ).map((r) => r.organization_id as string);
@@ -93,10 +93,9 @@ async function main() {
       await tx.unsafe(`set local session_replication_role = replica`);
 
       for (const table of tenantTables) {
-        const res = await tx.unsafe(
-          `delete from "${table}" where tenant_id::text = any($1)`,
-          [tenantIds],
-        );
+        const res = await tx.unsafe(`delete from "${table}" where tenant_id::text = any($1)`, [
+          tenantIds,
+        ]);
         deleted += res.count ?? 0;
       }
       for (const table of userTables) {

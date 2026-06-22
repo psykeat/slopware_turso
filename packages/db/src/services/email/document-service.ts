@@ -1,7 +1,13 @@
 import { and, eq } from "drizzle-orm";
 
 import { db } from "../../index";
-import { address, addressContact, company, document, emailIdentity } from "../../schema/app.schema";
+import {
+  address,
+  addressContact,
+  company,
+  document,
+  emailIdentity,
+} from "../../schema/sqlite.schema";
 import { EmailSendService } from "./send-service";
 import { EmailTemplateService } from "./template-service";
 import type { EmailAddress } from "./types";
@@ -42,7 +48,6 @@ export class EmailDocumentService {
       .leftJoin(
         addressContact,
         and(
-          eq(addressContact.tenantId, this.tenantId),
           eq(addressContact.addressId, document.customerId),
           eq(addressContact.isPrimary, true),
           eq(addressContact.archived, false),
@@ -50,9 +55,7 @@ export class EmailDocumentService {
       )
       .where(
         and(
-          eq(document.tenantId, this.tenantId),
           eq(document.documentId, input.documentId),
-          eq(emailIdentity.tenantId, this.tenantId),
           eq(emailIdentity.canSend, true),
           eq(emailIdentity.archived, false),
         ),

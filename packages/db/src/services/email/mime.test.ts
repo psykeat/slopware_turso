@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,7 +18,9 @@ afterEach(async () => {
   }
   previousStoragePath = undefined;
 
-  await Promise.all(cleanupPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+  await Promise.all(
+    cleanupPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })),
+  );
 });
 
 test("loadDraftAttachment reads document PDFs from STORAGE_PATH", async () => {

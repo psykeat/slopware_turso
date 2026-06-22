@@ -1,5 +1,4 @@
 import "@tanstack/react-start/server-only";
-
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { and, asc, desc, eq, isNull, lte, or } from "drizzle-orm";
@@ -98,11 +97,7 @@ export function parseShopwareWebhook(rawBody: string): ParsedShopwareWebhook {
   const data =
     body.data && typeof body.data === "object" ? (body.data as Record<string, unknown>) : {};
   const eventName =
-    typeof data.event === "string"
-      ? data.event
-      : typeof body.event === "string"
-        ? body.event
-        : "";
+    typeof data.event === "string" ? data.event : typeof body.event === "string" ? body.event : "";
   if (!eventName) throw new CommerceWebhookValidationError("Webhook is missing an event name");
   const payload =
     data.payload && typeof data.payload === "object"
@@ -250,10 +245,7 @@ export class CommerceWebhookService {
           eq(commerceWebhookEvent.tenantId, this.tenantId),
           eq(commerceWebhookEvent.salesChannelId, salesChannelId),
           eq(commerceWebhookEvent.status, "pending"),
-          or(
-            isNull(commerceWebhookEvent.nextRetryAt),
-            lte(commerceWebhookEvent.nextRetryAt, now),
-          ),
+          or(isNull(commerceWebhookEvent.nextRetryAt), lte(commerceWebhookEvent.nextRetryAt, now)),
         ),
       )
       .orderBy(asc(commerceWebhookEvent.receivedAt))

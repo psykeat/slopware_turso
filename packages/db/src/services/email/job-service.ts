@@ -1,7 +1,7 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 
 import { db } from "../../index";
-import { emailJob } from "../../schema/app.schema";
+import { emailJob } from "../../schema/sqlite.schema";
 import type { EmailJobType } from "./types";
 
 const TIER_PRIORITY: Record<string, number> = { hot: 1, warm: 2, cold: 3, dormant: 3 };
@@ -41,9 +41,7 @@ async function runJobInBackground(
     await db
       .update(emailJob)
       .set({ status: "done", lockedAt: null, lockedBy: null, updatedAt: new Date() })
-      .where(
-        and(eq(emailJob.emailJobId, jobId), eq(emailJob.lockedBy, "inline-worker")),
-      );
+      .where(and(eq(emailJob.emailJobId, jobId), eq(emailJob.lockedBy, "inline-worker")));
   } catch (err) {
     console.error("[EmailJobService] background job failed", err);
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -51,9 +49,7 @@ async function runJobInBackground(
     const [current] = await db
       .select({ attempts: emailJob.attempts, maxAttempts: emailJob.maxAttempts })
       .from(emailJob)
-      .where(
-        and(eq(emailJob.emailJobId, jobId), eq(emailJob.lockedBy, "inline-worker")),
-      )
+      .where(and(eq(emailJob.emailJobId, jobId), eq(emailJob.lockedBy, "inline-worker")))
       .limit(1);
 
     if (current) {
@@ -72,9 +68,7 @@ async function runJobInBackground(
           lastError: errorMessage,
           updatedAt: new Date(),
         })
-        .where(
-          and(eq(emailJob.emailJobId, jobId), eq(emailJob.lockedBy, "inline-worker")),
-        );
+        .where(and(eq(emailJob.emailJobId, jobId), eq(emailJob.lockedBy, "inline-worker")));
     }
   }
 }
@@ -116,12 +110,7 @@ export class EmailJobService {
       const [existing] = await db
         .select()
         .from(emailJob)
-        .where(
-          and(
-            eq(emailJob.tenantId, this.tenantId),
-            eq(emailJob.idempotencyKey, input.idempotencyKey),
-          ),
-        )
+        .where(eq(emailJob.idempotencyKey, input.idempotencyKey))
         .limit(1);
       return existing ?? null;
     }
@@ -141,20 +130,11 @@ export class EmailJobService {
   }
 
   async list() {
-    return db
-      .select()
-      .from(emailJob)
-      .where(eq(emailJob.tenantId, this.tenantId))
-      .orderBy(emailJob.createdAt)
-      .limit(100);
+    return db.select().from(emailJob).orderBy(emailJob.createdAt).limit(100);
   }
 
   async get(jobId: string) {
-    const [row] = await db
-      .select()
-      .from(emailJob)
-      .where(and(eq(emailJob.tenantId, this.tenantId), eq(emailJob.emailJobId, jobId)))
-      .limit(1);
+    const [row] = await db.select().from(emailJob).where(eq(emailJob.emailJobId, jobId)).limit(1);
     return row ?? null;
   }
 
@@ -170,8 +150,7 @@ export class EmailJobService {
       .where(
         sql`email_job_id = (
           SELECT email_job_id FROM email_job
-          WHERE tenant_id = ${this.tenantId}
-            AND (status = 'queued' OR (status = 'processing' AND locked_at < ${staleThreshold.toISOString()}))
+          WHERE (status = 'queued' OR (status = 'processing' AND locked_at < ${staleThreshold.toISOString()}))
             AND run_after <= ${now.toISOString()}
           ORDER BY priority ASC, run_after ASC, created_at ASC
           LIMIT 1
@@ -197,12 +176,7 @@ export class EmailJobService {
         runAfter: sql`CASE WHEN ${emailJob.attempts} + 1 >= ${emailJob.maxAttempts} THEN ${emailJob.runAfter} ELSE now() + INTERVAL '1 minute' END`,
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(emailJob.status, "processing"),
-          lt(emailJob.lockedAt, staleThreshold),
-        ),
-      )
+      .where(and(eq(emailJob.status, "processing"), lt(emailJob.lockedAt, staleThreshold)))
       .returning({ emailJobId: emailJob.emailJobId });
     return rows.length;
   }

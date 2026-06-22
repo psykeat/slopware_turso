@@ -11,13 +11,7 @@ import { cn } from "@repo/ui/lib/utils";
 import { useActionBar } from "@repo/ui/platform/action-bar-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  PlusIcon,
-  SaveIcon,
-  WifiIcon,
-  WifiOffIcon,
-  Loader2Icon,
-} from "lucide-react";
+import { PlusIcon, SaveIcon, WifiIcon, WifiOffIcon, Loader2Icon } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -257,10 +251,7 @@ function SalesChannelsView() {
 
                 <div className="flex flex-col gap-1.5">
                   <Label>Plattform</Label>
-                  <Select
-                    value={formPlatform}
-                    onValueChange={(v) => v && setFormPlatform(v)}
-                  >
+                  <Select value={formPlatform} onValueChange={(v) => v && setFormPlatform(v)}>
                     <SelectTrigger className="h-8 text-[13px]">
                       <SelectValue />
                     </SelectTrigger>
@@ -362,8 +353,7 @@ function SalesChannelsView() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <Label>
-                    Master Data Policy{" "}
-                    <span className="text-[10px] text-ink-mute">(optional)</span>
+                    Master Data Policy <span className="text-[10px] text-ink-mute">(optional)</span>
                   </Label>
                   <input
                     type="text"
@@ -392,9 +382,7 @@ function SalesChannelsView() {
 
             <div className="flex justify-end">
               <Button
-                onClick={() =>
-                  isCreating ? createMutation.mutate() : updateMutation.mutate()
-                }
+                onClick={() => (isCreating ? createMutation.mutate() : updateMutation.mutate())}
                 disabled={!formName || !formApiUrl || isPending}
                 size="sm"
               >

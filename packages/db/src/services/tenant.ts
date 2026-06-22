@@ -1,18 +1,7 @@
 import { asc, desc, eq, and } from "drizzle-orm";
 
-import { db } from "../index";
-import {
-  tenant,
-  organization,
-  userTenant,
-  company,
-  address,
-  article,
-  documentType,
-  documentGroup,
-  unit,
-} from "../schema/app.schema";
-import { user } from "../schema/auth.schema";
+import { configDb as db } from "../persistence/config";
+import { tenant, organization, userTenant, user } from "../schema/config.schema";
 
 export async function initializeDefaultTenant(userId: string, name: string) {
   return await db.transaction(async (tx) => {
@@ -35,72 +24,11 @@ export async function initializeDefaultTenant(userId: string, name: string) {
       })
       .returning();
 
-    // 3. Create Company (Mandatory for Documents)
-    const [comp] = await tx
-      .insert(company)
-      .values({
-        tenantId: t.tenantId,
-        name: `${name}'s Company`,
-        companyNo: "1000",
-        countryCode: "DE",
-        currencyId: "EUR",
-      })
-      .returning();
-
-    // 4. Link User to Tenant
+    // 3. Link User to Tenant
     await tx.insert(userTenant).values({
       userId,
       tenantId: t.tenantId,
       role: "owner",
-    });
-
-    // 5. Seed Sample Business Data
-    await tx
-      .insert(unit)
-      .values({
-        tenantId: t.tenantId,
-        code: "pcs",
-        name: { en: "Pieces", de: "Stück" },
-      })
-      .onConflictDoNothing();
-
-    const [pcsUnit] = await tx
-      .select({ unitId: unit.unitId })
-      .from(unit)
-      .where(and(eq(unit.tenantId, t.tenantId), eq(unit.code, "pcs")))
-      .limit(1);
-
-    await tx.insert(address).values({
-      tenantId: t.tenantId,
-      addressNo: "10000",
-      isCustomer: true,
-      companyName: "Sample Customer",
-      addressLine1: "Main Street 1",
-      city: "Berlin",
-      postalCode: "10115",
-      countryCode: "DE",
-    });
-
-    await tx.insert(article).values({
-      tenantId: t.tenantId,
-      articleNo: "ART-001",
-      name: "Sample Product",
-      baseUnitId: pcsUnit?.unitId ?? null,
-    });
-
-    await tx.insert(documentType).values({
-      tenantId: t.tenantId,
-      code: "INV",
-      name: "Invoice",
-      movementType: "L",
-    });
-
-    await tx.insert(documentGroup).values({
-      tenantId: t.tenantId,
-      companyId: comp.companyId,
-      name: "Standard Invoices",
-      documentType: "L",
-      groupNumber: 1,
     });
 
     return t;

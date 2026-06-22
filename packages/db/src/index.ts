@@ -1,11 +1,13 @@
-import { postgresPersistence } from "./persistence/postgres";
 import { tursoPersistence } from "./persistence/turso";
 import type { PersistenceRuntime } from "./persistence/types";
 
-const provider = (process.env.PERSISTENCE_PROVIDER || "postgres") as "postgres" | "turso";
+const provider = process.env.PERSISTENCE_PROVIDER ?? "turso";
 
-export const activePersistence: PersistenceRuntime<any> =
-  provider === "turso" ? tursoPersistence : postgresPersistence;
+if (provider !== "turso") {
+  console.warn(`[db] Ignoring unsupported PERSISTENCE_PROVIDER="${provider}"; using turso.`);
+}
+
+export const activePersistence: PersistenceRuntime<any> = tursoPersistence;
 
 type AnyQuery = PromiseLike<any[]> & {
   from(...args: any[]): AnyQuery;

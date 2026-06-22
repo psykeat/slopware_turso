@@ -33,7 +33,7 @@ export function InventoryBalanceTable({ articleId }: { articleId: string }) {
 
   if (isLoading) {
     return (
-      <table className="w-full table-fixed border-collapse" role="table">
+      <table className="w-full table-fixed border-collapse">
         <thead>
           <tr className="h-8 border-b border-hairline">
             <th className={colHeaderClassLeft} style={{ width: "30%" }}>
@@ -93,7 +93,7 @@ export function InventoryBalanceTable({ articleId }: { articleId: string }) {
   const showTotal = rows.length > 1;
 
   return (
-    <table className="w-full table-fixed border-collapse" role="table">
+    <table className="w-full table-fixed border-collapse">
       <thead>
         <tr className="h-8 border-b border-hairline">
           <th className={colHeaderClassLeft} style={{ width: "30%" }}>

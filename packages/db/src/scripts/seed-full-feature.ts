@@ -1,16 +1,17 @@
 import "./load-env";
 import { execSync } from "node:child_process";
+import crypto from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { eq, and } from "drizzle-orm";
-import crypto from "node:crypto";
 
+import { eq, and } from "drizzle-orm";
+
+import { executeCapability, type ExecutionContext } from "../capabilities/index";
 import { db, closeDb } from "../index";
 import * as schema from "../schema/app.schema";
 import { user } from "../schema/auth.schema";
-import { executeCapability, type ExecutionContext } from "../capabilities/index";
 import { getContextForTenant } from "../test-support/fixtures";
 import { isScriptEntry } from "./script-main";
 
@@ -33,7 +34,9 @@ async function main() {
   execSync("npx tsx " + path.resolve(__dirname, "seed-austrian-taxes.ts"), { stdio: "inherit" });
 
   console.log("Running Document Sequences & groups (incl. p + q)...");
-  execSync("npx tsx " + path.resolve(__dirname, "seed-document-sequences.ts"), { stdio: "inherit" });
+  execSync("npx tsx " + path.resolve(__dirname, "seed-document-sequences.ts"), {
+    stdio: "inherit",
+  });
 
   console.log("Running Document Email Templates...");
   execSync("npx tsx " + path.resolve(__dirname, "seed-email-templates.ts"), { stdio: "inherit" });
@@ -67,31 +70,42 @@ async function main() {
 export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   // Resolve units
   const units = await db.select().from(schema.unit).where(eq(schema.unit.tenantId, ctx.tenantId));
-  const unitMap = new Map(units.map(u => [u.code, u.unitId]));
+  const unitMap = new Map(units.map((u) => [u.code, u.unitId]));
 
   // Resolve article groups
-  const articleGroups = await db.select().from(schema.articleGroup).where(eq(schema.articleGroup.tenantId, ctx.tenantId));
-  const prdGroup = articleGroups.find(g => g.code === "PRD");
+  const articleGroups = await db
+    .select()
+    .from(schema.articleGroup)
+    .where(eq(schema.articleGroup.tenantId, ctx.tenantId));
+  const prdGroup = articleGroups.find((g) => g.code === "PRD");
   console.log(`Resolved product article group: ${prdGroup?.articleGroupId}`);
 
-  const baseCompany = await db.select().from(schema.company).where(eq(schema.company.tenantId, ctx.tenantId)).limit(1).then(rows => rows[0]);
+  const baseCompany = await db
+    .select()
+    .from(schema.company)
+    .where(eq(schema.company.tenantId, ctx.tenantId))
+    .limit(1)
+    .then((rows) => rows[0]);
 
   // 3. Seed Cost Centers
   console.log("Seeding Cost Centers...");
-  await db.insert(schema.costCenter).values([
-    {
-      tenantId: ctx.tenantId,
-      companyId: baseCompany.companyId,
-      code: "CC-ADMIN",
-      name: "Administration",
-    },
-    {
-      tenantId: ctx.tenantId,
-      companyId: baseCompany.companyId,
-      code: "CC-SALES",
-      name: "Sales Department",
-    }
-  ]).onConflictDoNothing();
+  await db
+    .insert(schema.costCenter)
+    .values([
+      {
+        tenantId: ctx.tenantId,
+        companyId: baseCompany.companyId,
+        code: "CC-ADMIN",
+        name: "Administration",
+      },
+      {
+        tenantId: ctx.tenantId,
+        companyId: baseCompany.companyId,
+        code: "CC-SALES",
+        name: "Sales Department",
+      },
+    ])
+    .onConflictDoNothing();
 
   // 4. Seed Agents
   console.log("Seeding Agents...");
@@ -100,56 +114,71 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   if (!ctx.userId) {
     ctx.userId = adminUserId ?? "system";
   }
-  await db.insert(schema.agent).values({
-    tenantId: ctx.tenantId,
-    agentNo: "AG-001",
-    name: "Agent Alice Smith",
-    commissionRate: "5.00",
-    userId: adminUserId,
-  }).onConflictDoNothing();
+  await db
+    .insert(schema.agent)
+    .values({
+      tenantId: ctx.tenantId,
+      agentNo: "AG-001",
+      name: "Agent Alice Smith",
+      commissionRate: "5.00",
+      userId: adminUserId,
+    })
+    .onConflictDoNothing();
 
   // 5. Seed Discount Groups
   console.log("Seeding Discount Groups...");
-  await db.insert(schema.discountGroup).values({
-    tenantId: ctx.tenantId,
-    name: "Standard 10% Discount",
-    percentage: "10.00",
-  }).onConflictDoNothing();
+  await db
+    .insert(schema.discountGroup)
+    .values({
+      tenantId: ctx.tenantId,
+      name: "Standard 10% Discount",
+      percentage: "10.00",
+    })
+    .onConflictDoNothing();
 
   // 6. Seed Industries
   console.log("Seeding Industries...");
-  await db.insert(schema.industry).values([
-    {
-      tenantId: ctx.tenantId,
-      name: { en: "Technology", de: "Technologie" },
-    },
-    {
-      tenantId: ctx.tenantId,
-      name: { en: "Automotive", de: "Automobilindustrie" },
-    }
-  ]).onConflictDoNothing();
+  await db
+    .insert(schema.industry)
+    .values([
+      {
+        tenantId: ctx.tenantId,
+        name: { en: "Technology", de: "Technologie" },
+      },
+      {
+        tenantId: ctx.tenantId,
+        name: { en: "Automotive", de: "Automobilindustrie" },
+      },
+    ])
+    .onConflictDoNothing();
 
   // 7. Seed Price Lists
   console.log("Seeding Price Lists...");
-  await db.insert(schema.priceList).values({
-    tenantId: ctx.tenantId,
-    name: "Wholesale Prices",
-    currencyId: "EUR",
-    isNet: true,
-  }).onConflictDoNothing();
+  await db
+    .insert(schema.priceList)
+    .values({
+      tenantId: ctx.tenantId,
+      name: "Wholesale Prices",
+      currencyId: "EUR",
+      isNet: true,
+    })
+    .onConflictDoNothing();
 
   // 8. Seed Shipping Methods
   console.log("Seeding Shipping Methods...");
-  await db.insert(schema.shippingMethod).values([
-    {
-      tenantId: ctx.tenantId,
-      name: { en: "DHL Standard", de: "DHL Standard" },
-    },
-    {
-      tenantId: ctx.tenantId,
-      name: { en: "Express Delivery", de: "Express-Lieferung" },
-    }
-  ]).onConflictDoNothing();
+  await db
+    .insert(schema.shippingMethod)
+    .values([
+      {
+        tenantId: ctx.tenantId,
+        name: { en: "DHL Standard", de: "DHL Standard" },
+      },
+      {
+        tenantId: ctx.tenantId,
+        name: { en: "Express Delivery", de: "Express-Lieferung" },
+      },
+    ])
+    .onConflictDoNothing();
 
   // 9. Seed Payment Terms (Zahlungsbedingungen)
   console.log("Setting up Payment Terms...");
@@ -186,15 +215,23 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
 
   // 10. Create CRM Contact Persons (Ansprechpartner)
   console.log("Creating Contact Persons...");
-  const addresses = await db.select().from(schema.address).where(eq(schema.address.tenantId, ctx.tenantId));
-  const acmeAddr = addresses.find(a => a.companyName?.includes("Acme"));
-  const techcorpAddr = addresses.find(a => a.companyName?.includes("TechCorp"));
+  const addresses = await db
+    .select()
+    .from(schema.address)
+    .where(eq(schema.address.tenantId, ctx.tenantId));
+  const acmeAddr = addresses.find((a) => a.companyName?.includes("Acme"));
+  const techcorpAddr = addresses.find((a) => a.companyName?.includes("TechCorp"));
 
   if (acmeAddr) {
     const [existingContact] = await db
       .select()
       .from(schema.addressContact)
-      .where(and(eq(schema.addressContact.tenantId, ctx.tenantId), eq(schema.addressContact.addressId, acmeAddr.addressId)))
+      .where(
+        and(
+          eq(schema.addressContact.tenantId, ctx.tenantId),
+          eq(schema.addressContact.addressId, acmeAddr.addressId),
+        ),
+      )
       .limit(1);
     if (!existingContact) {
       await executeCapability("masterdata.addressContact.create", ctx, {
@@ -216,7 +253,12 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     const [existingContact] = await db
       .select()
       .from(schema.addressContact)
-      .where(and(eq(schema.addressContact.tenantId, ctx.tenantId), eq(schema.addressContact.addressId, techcorpAddr.addressId)))
+      .where(
+        and(
+          eq(schema.addressContact.tenantId, ctx.tenantId),
+          eq(schema.addressContact.addressId, techcorpAddr.addressId),
+        ),
+      )
       .limit(1);
     if (!existingContact) {
       await executeCapability("masterdata.addressContact.create", ctx, {
@@ -241,11 +283,11 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     .where(
       and(
         eq(schema.articleVariantTemplate.tenantId, ctx.tenantId),
-        eq(schema.articleVariantTemplate.slug, "t-shirt")
-      )
+        eq(schema.articleVariantTemplate.slug, "t-shirt"),
+      ),
     )
     .limit(1)
-    .then(rows => rows[0]);
+    .then((rows) => rows[0]);
 
   let templateId = existingTemplates?.templateId;
 
@@ -265,8 +307,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
             values: [
               { value: "Red", sortOrder: 1, skuCode: "RD" },
               { value: "Blue", sortOrder: 2, skuCode: "BL" },
-              { value: "Green", sortOrder: 3, skuCode: "GR" }
-            ]
+              { value: "Green", sortOrder: 3, skuCode: "GR" },
+            ],
           },
           {
             name: "Size",
@@ -274,16 +316,16 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
             values: [
               { value: "S", sortOrder: 1, skuCode: "S" },
               { value: "M", sortOrder: 2, skuCode: "M" },
-              { value: "L", sortOrder: 3, skuCode: "L" }
-            ]
-          }
+              { value: "L", sortOrder: 3, skuCode: "L" },
+            ],
+          },
         ],
         skuPattern: "{articleNo}-{axis:Color}-{axis:Size}",
         defaults: {
           priceMode: "inherit",
-          weightMode: "inherit"
-        }
-      }
+          weightMode: "inherit",
+        },
+      },
     });
 
     if (!res.ok) {
@@ -315,10 +357,14 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
 
   // Apply template
   console.log("Applying variant template to ART-TSHIRT...");
-  const applyRes = await executeCapability("masterdata.articleVariantTemplate.applyToArticle", ctx, {
-    articleId,
-    templateId,
-  });
+  const applyRes = await executeCapability(
+    "masterdata.articleVariantTemplate.applyToArticle",
+    ctx,
+    {
+      articleId,
+      templateId,
+    },
+  );
   if (!applyRes.ok) {
     throw new Error(`Failed to apply variant template: ${JSON.stringify(applyRes.error)}`);
   }
@@ -342,8 +388,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     .where(
       and(
         eq(schema.articleVariant.tenantId, ctx.tenantId),
-        eq(schema.articleVariant.articleId, articleId)
-      )
+        eq(schema.articleVariant.articleId, articleId),
+      ),
     );
   console.log(`Found ${variants.length} total variants for ART-TSHIRT in DB.`);
 
@@ -352,14 +398,22 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   const [wholesalePl] = await db
     .select({ priceListId: schema.priceList.priceListId })
     .from(schema.priceList)
-    .where(and(eq(schema.priceList.tenantId, ctx.tenantId), eq(schema.priceList.name, "Wholesale Prices")))
+    .where(
+      and(
+        eq(schema.priceList.tenantId, ctx.tenantId),
+        eq(schema.priceList.name, "Wholesale Prices"),
+      ),
+    )
     .limit(1);
   if (wholesalePl && variants.length > 0) {
     await db
       .insert(schema.priceListItem)
       .values(
         variants
-          .filter((v) => !v.sku.endsWith("-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"))
+          .filter(
+            (v) =>
+              !v.sku.endsWith("-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+          )
           .map((v) => ({
             tenantId: ctx.tenantId,
             priceListId: wholesalePl.priceListId,
@@ -384,8 +438,20 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   await mkdir(imageDir, { recursive: true });
 
   const imageSeeds = [
-    { id: crypto.randomUUID(), file: "tshirt-cover.png", alt: "T-Shirt Hauptbild", cover: true, sortOrder: 0 },
-    { id: crypto.randomUUID(), file: "tshirt-gallery.png", alt: "T-Shirt Detailbild", cover: false, sortOrder: 1 },
+    {
+      id: crypto.randomUUID(),
+      file: "tshirt-cover.png",
+      alt: "T-Shirt Hauptbild",
+      cover: true,
+      sortOrder: 0,
+    },
+    {
+      id: crypto.randomUUID(),
+      file: "tshirt-gallery.png",
+      alt: "T-Shirt Detailbild",
+      cover: false,
+      sortOrder: 1,
+    },
   ];
 
   for (const img of imageSeeds) {
@@ -416,14 +482,16 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
       await db
         .update(schema.article)
         .set({ primaryImageId: inserted.articleImageId })
-        .where(and(eq(schema.article.tenantId, ctx.tenantId), eq(schema.article.articleId, articleId)));
+        .where(
+          and(eq(schema.article.tenantId, ctx.tenantId), eq(schema.article.articleId, articleId)),
+        );
     }
   }
   console.log(`Seeded ${imageSeeds.length} article images for ART-TSHIRT.`);
 
   // 13. Seed Serial and Batch Tracked Articles + Goods Receipt (WE-Rechnung)
   console.log("Creating Serial and Batch Tracked Articles...");
-  
+
   // Serial Article
   const serialArticleRes = await executeCapability("masterdata.article.upsert", ctx, {
     articleNo: "ART-SERIAL",
@@ -438,7 +506,11 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     throw new Error(`Failed to create serial article: ${JSON.stringify(serialArticleRes.error)}`);
   }
   const serialArticleId = serialArticleRes.data.article.articleId;
-  const [serialVariant] = await db.select().from(schema.articleVariant).where(eq(schema.articleVariant.articleId, serialArticleId)).limit(1);
+  const [serialVariant] = await db
+    .select()
+    .from(schema.articleVariant)
+    .where(eq(schema.articleVariant.articleId, serialArticleId))
+    .limit(1);
 
   // Batch Article
   const batchArticleRes = await executeCapability("masterdata.article.upsert", ctx, {
@@ -454,11 +526,18 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     throw new Error(`Failed to create batch article: ${JSON.stringify(batchArticleRes.error)}`);
   }
   const batchArticleId = batchArticleRes.data.article.articleId;
-  const [batchVariant] = await db.select().from(schema.articleVariant).where(eq(schema.articleVariant.articleId, batchArticleId)).limit(1);
+  const [batchVariant] = await db
+    .select()
+    .from(schema.articleVariant)
+    .where(eq(schema.articleVariant.articleId, batchArticleId))
+    .limit(1);
 
   // Resolve Inbound Invoice document group ("r" = WE-Rechnung)
-  const docGroups = await db.select().from(schema.documentGroup).where(eq(schema.documentGroup.tenantId, ctx.tenantId));
-  const inboundGroup = docGroups.find(dg => dg.documentType === "r");
+  const docGroups = await db
+    .select()
+    .from(schema.documentGroup)
+    .where(eq(schema.documentGroup.tenantId, ctx.tenantId));
+  const inboundGroup = docGroups.find((dg) => dg.documentType === "r");
   if (!inboundGroup) {
     throw new Error("Could not find Inbound Invoice (WE-Rechnung) document group.");
   }
@@ -474,7 +553,9 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   }
   const supplier = suppliers[0];
 
-  console.log(`Creating Goods Receipt / Inbound Invoice from Supplier: ${supplier.companyName} (${supplier.addressId})`);
+  console.log(
+    `Creating Goods Receipt / Inbound Invoice from Supplier: ${supplier.companyName} (${supplier.addressId})`,
+  );
   const inboundCreateRes = await executeCapability("sales.document.create", ctx, {
     documentGroupId: inboundGroup.documentGroupId,
     documentType: "r",
@@ -484,7 +565,9 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     paymentTermId: net14Id,
   });
   if (!inboundCreateRes.ok) {
-    throw new Error(`Failed to create inbound invoice document: ${JSON.stringify(inboundCreateRes.error)}`);
+    throw new Error(
+      `Failed to create inbound invoice document: ${JSON.stringify(inboundCreateRes.error)}`,
+    );
   }
   const inboundId = inboundCreateRes.data.documentId;
 
@@ -502,26 +585,31 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
         lineNo: 1,
         variantId: serialVariant.variantId,
         quantity: 3,
-        netPrice: 450.00,
+        netPrice: 450.0,
         lineType: "article",
       },
       {
         lineNo: 2,
         variantId: batchVariant.variantId,
         quantity: 150,
-        netPrice: 5.50,
+        netPrice: 5.5,
         lineType: "article",
-      }
-    ]
+      },
+    ],
   });
   if (!inboundSaveRes.ok) {
-    throw new Error(`Failed to save draft inbound invoice lines: ${JSON.stringify(inboundSaveRes.error)}`);
+    throw new Error(
+      `Failed to save draft inbound invoice lines: ${JSON.stringify(inboundSaveRes.error)}`,
+    );
   }
 
   // Fetch document lines to apply tracking
-  const inboundLines = await db.select().from(schema.documentLine).where(eq(schema.documentLine.documentId, inboundId));
-  const serialLine = inboundLines.find(l => l.variantId === serialVariant.variantId);
-  const batchLine = inboundLines.find(l => l.variantId === batchVariant.variantId);
+  const inboundLines = await db
+    .select()
+    .from(schema.documentLine)
+    .where(eq(schema.documentLine.documentId, inboundId));
+  const serialLine = inboundLines.find((l) => l.variantId === serialVariant.variantId);
+  const batchLine = inboundLines.find((l) => l.variantId === batchVariant.variantId);
 
   if (serialLine && batchLine) {
     console.log("Registering Serial and Batch tracking on lines...");
@@ -553,16 +641,18 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   // Post the inbound invoice (WE-Rechnung) -> Registers serial numbers and updates inventory
   console.log(`Posting Inbound Invoice ${inboundSaveRes.data.documentNo}...`);
   const inboundPostRes = await executeCapability("sales.document.post", ctx, {
-    documentId: inboundId
+    documentId: inboundId,
   });
   if (!inboundPostRes.ok) {
     throw new Error(`Failed to post inbound invoice: ${JSON.stringify(inboundPostRes.error)}`);
   }
-  console.log("Inbound Invoice posted successfully. Serial numbers SN-GEN-001..003 are now 'in_stock'!");
+  console.log(
+    "Inbound Invoice posted successfully. Serial numbers SN-GEN-001..003 are now 'in_stock'!",
+  );
 
   // 14. Create BOM (Stücklistenartikel) and Production Order (Produktionsauftrag)
   console.log("Creating BOM Components and Assemblies...");
-  
+
   // Component 1 (Fabric)
   const fabricRes = await executeCapability("masterdata.article.upsert", ctx, {
     articleNo: "ART-COMP-FABRIC",
@@ -609,8 +699,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
       and(
         eq(schema.articleBom.tenantId, ctx.tenantId),
         eq(schema.articleBom.headerArticleId, bomShirtId),
-        eq(schema.articleBom.componentArticleId, fabricId)
-      )
+        eq(schema.articleBom.componentArticleId, fabricId),
+      ),
     );
   if (!existingBom1) {
     await executeCapability("masterdata.articleBom.create", ctx, {
@@ -629,8 +719,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
       and(
         eq(schema.articleBom.tenantId, ctx.tenantId),
         eq(schema.articleBom.headerArticleId, bomShirtId),
-        eq(schema.articleBom.componentArticleId, inkId)
-      )
+        eq(schema.articleBom.componentArticleId, inkId),
+      ),
     );
   if (!existingBom2) {
     await executeCapability("masterdata.articleBom.create", ctx, {
@@ -650,8 +740,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     .where(
       and(
         eq(schema.productionOrder.tenantId, ctx.tenantId),
-        eq(schema.productionOrder.orderNo, "PO-000001")
-      )
+        eq(schema.productionOrder.orderNo, "PO-000001"),
+      ),
     );
   if (!existingProdOrder) {
     const prodOrderRes = await executeCapability("masterdata.productionOrder.create", ctx, {
@@ -672,8 +762,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   }
 
   // 15. Create Sales Orders / Invoices workflow (with Net30 Payment Term)
-  const orderGroup = docGroups.find(dg => dg.documentType === "A");
-  const invoiceGroup = docGroups.find(dg => dg.documentType === "R");
+  const orderGroup = docGroups.find((dg) => dg.documentType === "A");
+  const invoiceGroup = docGroups.find((dg) => dg.documentType === "R");
 
   if (!orderGroup || !invoiceGroup) {
     throw new Error("Could not find order or invoice document group for base tenant.");
@@ -729,8 +819,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
         quantity: 10,
         netPrice: 24.99,
         lineType: "article",
-      }
-    ]
+      },
+    ],
   });
   if (!orderSaveRes.ok) {
     throw new Error(`Failed to save draft order lines: ${JSON.stringify(orderSaveRes.error)}`);
@@ -768,8 +858,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
         quantity: 2,
         netPrice: 29.99,
         lineType: "article",
-      }
-    ]
+      },
+    ],
   });
   if (!invoiceSaveRes.ok) {
     throw new Error(`Failed to save draft invoice lines: ${JSON.stringify(invoiceSaveRes.error)}`);
@@ -778,12 +868,14 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   // Post the invoice
   console.log(`Posting Invoice ${invoiceSaveRes.data.documentNo}...`);
   const invoicePostRes = await executeCapability("sales.document.post", ctx, {
-    documentId: invoiceId
+    documentId: invoiceId,
   });
   if (!invoicePostRes.ok) {
     throw new Error(`Failed to post invoice: ${JSON.stringify(invoicePostRes.error)}`);
   }
-  console.log(`Successfully posted Invoice! Financial bookings & warehouse output movements generated.`);
+  console.log(
+    `Successfully posted Invoice! Financial bookings & warehouse output movements generated.`,
+  );
 
   // 16. Seed Email Sync tables (idempotently)
   const [existingEmailAcc] = await db
@@ -792,8 +884,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     .where(
       and(
         eq(schema.emailAccount.tenantId, ctx.tenantId),
-        eq(schema.emailAccount.primaryEmail, "info@slopware.dev")
-      )
+        eq(schema.emailAccount.primaryEmail, "info@slopware.dev"),
+      ),
     )
     .limit(1);
 
@@ -838,19 +930,22 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
         archived: false,
       });
 
-      const [thread] = await db.insert(schema.emailThread).values({
-        tenantId: ctx.tenantId,
-        emailAccountId: emailAcc.emailAccountId,
-        providerThreadId: "th-mock-1",
-        subject: "Frage zu Classic Slopware T-Shirt",
-        snippet: "Hallo, habt ihr das T-Shirt auch in XL?",
-        isRead: false,
-        isStarred: false,
-        messageCount: 1,
-        relatedAddressId: customer.addressId,
-        archived: false,
-        inTrash: false,
-      }).returning();
+      const [thread] = await db
+        .insert(schema.emailThread)
+        .values({
+          tenantId: ctx.tenantId,
+          emailAccountId: emailAcc.emailAccountId,
+          providerThreadId: "th-mock-1",
+          subject: "Frage zu Classic Slopware T-Shirt",
+          snippet: "Hallo, habt ihr das T-Shirt auch in XL?",
+          isRead: false,
+          isStarred: false,
+          messageCount: 1,
+          relatedAddressId: customer.addressId,
+          archived: false,
+          inTrash: false,
+        })
+        .returning();
 
       await db.insert(schema.emailMessage).values({
         tenantId: ctx.tenantId,
@@ -862,7 +957,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
         toJson: [{ email: "info@slopware.dev", name: "Slopware Support" }],
         subject: "Frage zu Classic Slopware T-Shirt",
         snippet: "Hallo, habt ihr das T-Shirt auch in XL?",
-        bodyText: "Hallo,\n\nhabt ihr das Classic Slopware T-Shirt auch in der Größe XL auf Lager?\n\nViele Grüße,\nEin Kunde",
+        bodyText:
+          "Hallo,\n\nhabt ihr das Classic Slopware T-Shirt auch in der Größe XL auf Lager?\n\nViele Grüße,\nEin Kunde",
         isRead: false,
         hasAttachments: false,
         receivedAt: new Date(),
@@ -882,61 +978,70 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     .limit(1);
 
   if (!existingCat) {
-    const [rootCat] = await db.insert(schema.category).values({
-      tenantId: ctx.tenantId,
-      code: "ROOT",
-      name: "Alle Produkte",
-      slug: "alle-produkte",
-      description: "Stammkategorie fuer alle Produkte",
-      sortOrder: 0,
-    }).returning();
-
-    const [softwareCat, hardwareCat, textilCat] = await db.insert(schema.category).values([
-      {
+    const [rootCat] = await db
+      .insert(schema.category)
+      .values({
         tenantId: ctx.tenantId,
-        parentCategoryId: rootCat.categoryId,
-        code: "SW",
-        name: "Software & Lizenzen",
-        slug: "software-lizenzen",
-        description: "Software-Produkte und Lizenzmodelle",
+        code: "ROOT",
+        name: "Alle Produkte",
+        slug: "alle-produkte",
+        description: "Stammkategorie fuer alle Produkte",
+        sortOrder: 0,
+      })
+      .returning();
+
+    const [softwareCat, hardwareCat, textilCat] = await db
+      .insert(schema.category)
+      .values([
+        {
+          tenantId: ctx.tenantId,
+          parentCategoryId: rootCat.categoryId,
+          code: "SW",
+          name: "Software & Lizenzen",
+          slug: "software-lizenzen",
+          description: "Software-Produkte und Lizenzmodelle",
+          sortOrder: 1,
+        },
+        {
+          tenantId: ctx.tenantId,
+          parentCategoryId: rootCat.categoryId,
+          code: "HW",
+          name: "Hardware & Technik",
+          slug: "hardware-technik",
+          description: "Hardware-Module und technische Produkte",
+          sortOrder: 2,
+        },
+        {
+          tenantId: ctx.tenantId,
+          parentCategoryId: rootCat.categoryId,
+          code: "TXT",
+          name: "Textilien & Merchandise",
+          slug: "textilien-merchandise",
+          description: "T-Shirts, Kleidung und Merchandise",
+          sortOrder: 3,
+        },
+      ])
+      .returning();
+
+    const [dienstleistungCat] = await db
+      .insert(schema.category)
+      .values({
+        tenantId: ctx.tenantId,
+        parentCategoryId: softwareCat.categoryId,
+        code: "SVC",
+        name: "Dienstleistungen",
+        slug: "dienstleistungen",
+        description: "Beratung und professionelle Dienstleistungen",
         sortOrder: 1,
-      },
-      {
-        tenantId: ctx.tenantId,
-        parentCategoryId: rootCat.categoryId,
-        code: "HW",
-        name: "Hardware & Technik",
-        slug: "hardware-technik",
-        description: "Hardware-Module und technische Produkte",
-        sortOrder: 2,
-      },
-      {
-        tenantId: ctx.tenantId,
-        parentCategoryId: rootCat.categoryId,
-        code: "TXT",
-        name: "Textilien & Merchandise",
-        slug: "textilien-merchandise",
-        description: "T-Shirts, Kleidung und Merchandise",
-        sortOrder: 3,
-      },
-    ]).returning();
-
-    const [dienstleistungCat] = await db.insert(schema.category).values({
-      tenantId: ctx.tenantId,
-      parentCategoryId: softwareCat.categoryId,
-      code: "SVC",
-      name: "Dienstleistungen",
-      slug: "dienstleistungen",
-      description: "Beratung und professionelle Dienstleistungen",
-      sortOrder: 1,
-    }).returning();
+      })
+      .returning();
 
     // Resolve existing articles by articleNo for category assignment
     const existingArticles = await db
       .select({ articleId: schema.article.articleId, articleNo: schema.article.articleNo })
       .from(schema.article)
       .where(eq(schema.article.tenantId, ctx.tenantId));
-    const artByNo = new Map(existingArticles.map(a => [a.articleNo, a.articleId]));
+    const artByNo = new Map(existingArticles.map((a) => [a.articleNo, a.articleId]));
 
     const categoryAssignments: Array<{ articleNo: string; categoryId: string }> = [
       { articleNo: "ART-001", categoryId: softwareCat.categoryId },
@@ -948,8 +1053,8 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     ];
 
     const validAssignments = categoryAssignments
-      .filter(a => artByNo.has(a.articleNo))
-      .map(a => ({
+      .filter((a) => artByNo.has(a.articleNo))
+      .map((a) => ({
         tenantId: ctx.tenantId,
         articleId: artByNo.get(a.articleNo)!,
         categoryId: a.categoryId,
@@ -970,36 +1075,42 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
     .where(
       and(
         eq(schema.salesChannel.tenantId, ctx.tenantId),
-        eq(schema.salesChannel.name, "Shopware 6 Hauptshop")
-      )
+        eq(schema.salesChannel.name, "Shopware 6 Hauptshop"),
+      ),
     )
     .limit(1);
 
   if (!existingChannel) {
     console.log("Seeding E-Commerce Sync data...");
-    const [channel] = await db.insert(schema.salesChannel).values({
-      tenantId: ctx.tenantId,
-      name: "Shopware 6 Hauptshop",
-      platform: "shopware6",
-      apiUrl: "https://shop.slopware.dev/api",
-      credentials: { apiKey: "mock-key" },
-      isActive: true,
-    }).returning();
+    const [channel] = await db
+      .insert(schema.salesChannel)
+      .values({
+        tenantId: ctx.tenantId,
+        name: "Shopware 6 Hauptshop",
+        platform: "shopware6",
+        apiUrl: "https://shop.slopware.dev/api",
+        credentials: { apiKey: "mock-key" },
+        isActive: true,
+      })
+      .returning();
 
     if (channel) {
-      const [syncRun] = await db.insert(schema.commerceSyncRun).values({
-        tenantId: ctx.tenantId,
-        salesChannelId: channel.salesChannelId,
-        direction: "pull",
-        mode: "full",
-        status: "success",
-        requestedEntities: ["articles", "article_variants"],
-        totalItems: 10,
-        succeededItems: 10,
-        failedItems: 0,
-        startedAt: new Date(Date.now() - 3600000),
-        completedAt: new Date(),
-      }).returning();
+      const [syncRun] = await db
+        .insert(schema.commerceSyncRun)
+        .values({
+          tenantId: ctx.tenantId,
+          salesChannelId: channel.salesChannelId,
+          direction: "pull",
+          mode: "full",
+          status: "success",
+          requestedEntities: ["articles", "article_variants"],
+          totalItems: 10,
+          succeededItems: 10,
+          failedItems: 0,
+          startedAt: new Date(Date.now() - 3600000),
+          completedAt: new Date(),
+        })
+        .returning();
 
       await db.insert(schema.commerceSyncRunStep).values({
         runId: syncRun.runId,
@@ -1033,7 +1144,6 @@ export async function enrichTenant(ctx: ExecutionContext): Promise<void> {
   } else {
     console.log("Sales channel 'Shopware 6 Hauptshop' already exists.");
   }
-
 }
 
 if (isScriptEntry(import.meta.url)) {

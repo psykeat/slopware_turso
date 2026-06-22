@@ -1,5 +1,5 @@
 import { auth } from "@repo/auth/auth";
-import { toCapabilityRole, type ExecutionContext } from "@repo/db/capabilities";
+import { toCapabilityRole, type ActionExecutionContext } from "@repo/db/actions";
 import { getUserTenantRole } from "@repo/db/services/tenant";
 
 import { resolveTenantContext } from "#/lib/resolve-tenant";
@@ -12,7 +12,7 @@ import "#/pdf/register-document-pdf";
 // stored server-side) — capability routes never read tenantId from the payload.
 export async function resolveExecutionContext(
   request: Request,
-): Promise<ExecutionContext | Response> {
+): Promise<ActionExecutionContext | Response> {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) {
     return new Response("Unauthorized", { status: 401 });

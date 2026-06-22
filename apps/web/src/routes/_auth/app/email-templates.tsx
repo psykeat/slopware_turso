@@ -119,11 +119,11 @@ function TemplatePreviewPanel({ subject, bodyHtml }: { subject: string; bodyHtml
         <div className="mb-2 text-[12px] font-medium text-ink-secondary">
           Vorschau (Beispieldaten)
         </div>
-        <div className="mb-1 text-[11px] text-ink-muted">Betreff</div>
+        <div className="text-ink-muted mb-1 text-[11px]">Betreff</div>
         <div className="mb-3 rounded-sm bg-canvas px-2 py-1 text-[13px] text-ink">
           {renderedSubject || <span className="text-ink-muted">—</span>}
         </div>
-        <div className="mb-1 text-[11px] text-ink-muted">Text</div>
+        <div className="text-ink-muted mb-1 text-[11px]">Text</div>
         <div
           className="prose prose-sm max-w-none rounded-sm bg-canvas px-2 py-1 text-[13px] text-ink"
           // Preview only: rendered from the tenant's own template + sample data.
@@ -131,9 +131,7 @@ function TemplatePreviewPanel({ subject, bodyHtml }: { subject: string; bodyHtml
         />
       </div>
       <div className="rounded border border-hairline bg-canvas-soft p-3">
-        <div className="mb-2 text-[12px] font-medium text-ink-secondary">
-          Verfügbare Variablen
-        </div>
+        <div className="mb-2 text-[12px] font-medium text-ink-secondary">Verfügbare Variablen</div>
         <ul className="flex flex-col gap-1">
           {DOCUMENT_TEMPLATE_VARIABLES.map((variable) => (
             <li key={variable.token} className="flex items-baseline gap-2 text-[12px]">
@@ -281,7 +279,8 @@ function EmailTemplatesRoute() {
             fields={TEMPLATE_FIELDS}
             initialValues={createTemplateInitialValues}
             onFieldChange={(key, value) => {
-              if (key === "subjectTemplate") setPreviewSubject(typeof value === "string" ? value : "");
+              if (key === "subjectTemplate")
+                setPreviewSubject(typeof value === "string" ? value : "");
               if (key === "bodyHtmlTemplate")
                 setPreviewBodyHtml(typeof value === "string" ? value : "");
             }}

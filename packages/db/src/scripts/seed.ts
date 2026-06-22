@@ -4,12 +4,12 @@ import { eq, and, sql } from "drizzle-orm";
 import { db } from "../index";
 import * as schema from "../schema/app.schema";
 import { user } from "../schema/auth.schema";
+import { backfillDefaultArticleVariants } from "../services/default-variant-backfill";
 import { importAustrianPostalCodes } from "./import-austrian-postal-codes";
 import { importCountriesCsv } from "./import-countries-csv";
 import { importGermanPostalCodes } from "./import-german-postal-codes";
 import { seedCurrencies } from "./seed-currencies";
 import { seedMetadata } from "./seed-metadata";
-import { backfillDefaultArticleVariants } from "../services/default-variant-backfill";
 
 const CANONICAL_DOC_TYPES: Array<{ movementType: string; name: string }> = [
   { movementType: "N", name: "Angebot" },

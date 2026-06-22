@@ -4,13 +4,7 @@ import { XIcon, MailIcon, UserIcon } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 
 import { cn } from "../lib/utils";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-} from "./command-palette";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "./command-palette";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 
 export interface ContactRecord {

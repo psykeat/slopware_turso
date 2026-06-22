@@ -1,10 +1,11 @@
 import "@tanstack/react-start/server-only";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
-import { db, eq } from "@repo/db";
-import * as schema from "@repo/db/schema";
+import { configDb as db } from "@repo/db/config";
+import * as schema from "@repo/db/config-schema";
 import { initializeDefaultTenant } from "@repo/db/services/tenant";
 import { betterAuth } from "better-auth";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
+import { eq } from "drizzle-orm";
 
 export const auth = betterAuth({
   baseURL: process.env.VITE_BASE_URL,
@@ -13,7 +14,7 @@ export const auth = betterAuth({
     enabled: false,
   },
   database: drizzleAdapter(db, {
-    provider: "pg",
+    provider: "sqlite",
     schema,
   }),
 
@@ -90,7 +91,7 @@ export const auth = betterAuth({
   },
 
   experimental: {
-    // https://www.better-auth.com/docs/adapters/drizzle#joins-experimental
+    // Better Auth's Drizzle adapter uses this for DB-backed session->user lookup.
     joins: true,
   },
 });

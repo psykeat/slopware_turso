@@ -1,7 +1,8 @@
 import { and, desc, eq, getColumns } from "drizzle-orm";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig } from "drizzle-orm/sqlite-core";
 
 import { db } from "../index";
+import * as schema from "../schema/index";
 import {
   helperTableRegistry,
   metadataHistory,
@@ -10,8 +11,7 @@ import {
   tenantFields,
   tenantGroups,
   tenantLayouts,
-} from "../schema/app.schema";
-import * as schema from "../schema/index";
+} from "../schema/sqlite.schema";
 
 export interface MetadataContext {
   tenantId: string;
@@ -314,7 +314,9 @@ export function resolveLookupMetadata(f: Record<string, any>, registries: any[])
   const lookupSchemaTable = f.lookupTable ? (schema as any)[f.lookupTable] : undefined;
   const lookupColumns = lookupSchemaTable ? getColumns(lookupSchemaTable) : undefined;
   const tableColumns = lookupColumns ? Object.keys(lookupColumns) : [];
-  const variantLookupTable = f.lookupTable === "articleVariant" || f.lookupTable === "inventoryItem";
+  const variantLookupTable =
+    f.lookupTable === "articleVariant" || f.lookupTable === "inventoryItem";
+  const codeValueLookupTable = f.lookupTable === "currency" || f.lookupTable === "country";
   const variantLookupDisplayColumn =
     f.lookupTable === "articleVariant"
       ? "lookupLabel"
@@ -356,9 +358,12 @@ export function resolveLookupMetadata(f: Record<string, any>, registries: any[])
     inferredPkColumn,
     inferredCodeColumn,
     inferredDisplayColumn,
-    inferredValueColumn: registry?.valueColumn ?? inferredPkColumn ?? inferredCodeColumn,
-    lookupSortColumn:
-      registry?.sortColumn ?? (variantLookupTable ? "sku" : inferredDisplayColumn),
+    inferredValueColumn:
+      registry?.valueColumn ??
+      (codeValueLookupTable ? inferredCodeColumn : undefined) ??
+      inferredPkColumn ??
+      inferredCodeColumn,
+    lookupSortColumn: registry?.sortColumn ?? (variantLookupTable ? "sku" : inferredDisplayColumn),
     lookupIsI18n: registry?.displayIsI18n,
   };
 }

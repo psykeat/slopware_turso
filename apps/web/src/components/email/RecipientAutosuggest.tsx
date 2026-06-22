@@ -3,9 +3,24 @@ import React, { useRef, useState } from "react";
 
 import { capability } from "#/server-fns/capabilities";
 
-import { formatRecipientAutocompleteContact, getRecipientTokenRange, replaceRecipientToken, type RecipientAutocompleteContact } from "./email-recipient-autocomplete";
+import {
+  formatRecipientAutocompleteContact,
+  getRecipientTokenRange,
+  replaceRecipientToken,
+  type RecipientAutocompleteContact,
+} from "./email-recipient-autocomplete";
 
-export function RecipientAutosuggest({ value, onChange, placeholder, disabled }: { value: string; onChange: (val: string) => void; placeholder?: string; disabled?: boolean }) {
+export function RecipientAutosuggest({
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
   const [isManuallyClosed, setIsManuallyClosed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [cursor, setCursor] = useState<{ start: number; end: number } | null>(null);
@@ -31,7 +46,11 @@ export function RecipientAutosuggest({ value, onChange, placeholder, disabled }:
   const handleSelect = (contact: RecipientAutocompleteContact) => {
     if (!activeToken) return;
     const replacement = formatRecipientAutocompleteContact(contact);
-    const newValue = replaceRecipientToken(value, { start: activeToken.start, end: activeToken.end }, replacement);
+    const newValue = replaceRecipientToken(
+      value,
+      { start: activeToken.start, end: activeToken.end },
+      replacement,
+    );
     onChange(newValue);
     setIsManuallyClosed(true);
     setTimeout(() => {
@@ -43,36 +62,44 @@ export function RecipientAutosuggest({ value, onChange, placeholder, disabled }:
     <div className="relative w-full">
       <input
         ref={inputRef}
-        className="border-0 bg-transparent shadow-none focus-visible:ring-0 w-full outline-none text-sm placeholder:text-muted-foreground"
+        className="w-full border-0 bg-transparent text-sm shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0"
         placeholder={placeholder}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => {
-            onChange(e.target.value);
-            setIsManuallyClosed(false);
-            setCursor({ start: e.target.selectionStart || 0, end: e.target.selectionEnd || 0 });
-          }}
-          onKeyUp={(e) => {
-            setIsManuallyClosed(false);
-            setCursor({ start: e.currentTarget.selectionStart || 0, end: e.currentTarget.selectionEnd || 0 });
-          }}
-          onClick={(e) => {
-            setIsManuallyClosed(false);
-            setCursor({ start: e.currentTarget.selectionStart || 0, end: e.currentTarget.selectionEnd || 0 });
-          }}
-          autoComplete="off"
-        />
+        value={value}
+        disabled={disabled}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setIsManuallyClosed(false);
+          setCursor({ start: e.target.selectionStart || 0, end: e.target.selectionEnd || 0 });
+        }}
+        onKeyUp={(e) => {
+          setIsManuallyClosed(false);
+          setCursor({
+            start: e.currentTarget.selectionStart || 0,
+            end: e.currentTarget.selectionEnd || 0,
+          });
+        }}
+        onClick={(e) => {
+          setIsManuallyClosed(false);
+          setCursor({
+            start: e.currentTarget.selectionStart || 0,
+            end: e.currentTarget.selectionEnd || 0,
+          });
+        }}
+        autoComplete="off"
+      />
       {open && (
         <div className="absolute top-full left-0 z-50 mt-1 w-[300px] rounded-md border bg-popover text-popover-foreground shadow-md outline-none">
           <div className="max-h-[200px] overflow-auto py-1">
             {contacts.map((contact: any) => (
               <button
                 key={contact.contactId || contact.id || contact.email}
-                className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted focus:bg-muted outline-none"
+                className="w-full px-3 py-1.5 text-left text-sm outline-none hover:bg-muted focus:bg-muted"
                 onClick={() => handleSelect(contact)}
                 type="button"
               >
-                <div className="font-medium">{contact.name || contact.firstName + ' ' + contact.lastName}</div>
+                <div className="font-medium">
+                  {contact.name || contact.firstName + " " + contact.lastName}
+                </div>
                 <div className="text-xs text-muted-foreground">{contact.email}</div>
               </button>
             ))}

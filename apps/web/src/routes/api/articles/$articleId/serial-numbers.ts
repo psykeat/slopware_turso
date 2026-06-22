@@ -1,5 +1,5 @@
 import { auth } from "@repo/auth/auth";
-import { db } from "@repo/db";
+import { db, runInTenantScope } from "@repo/db";
 import { serialNumber } from "@repo/db/schema";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, asc } from "drizzle-orm";
@@ -20,28 +20,27 @@ export const Route = createFileRoute("/api/articles/$articleId/serial-numbers")(
         const url = new URL(request.url);
         const status = url.searchParams.get("status");
 
-        const conditions = [
-          eq(serialNumber.tenantId, context.tenantId),
-          eq(serialNumber.articleId, params.articleId),
-        ];
+        return runInTenantScope(context, async () => {
+          const conditions = [eq(serialNumber.articleId, params.articleId)];
 
-        if (status) {
-          conditions.push(eq(serialNumber.status, status));
-        }
+          if (status) {
+            conditions.push(eq(serialNumber.status, status));
+          }
 
-        const rows = await db
-          .select({
-            serialNumberId: serialNumber.serialNumberId,
-            serialNo: serialNumber.serialNo,
-            status: serialNumber.status,
-            createdAt: serialNumber.createdAt,
-          })
-          .from(serialNumber)
-          .where(and(...conditions))
-          .orderBy(asc(serialNumber.serialNo));
+          const rows = await db
+            .select({
+              serialNumberId: serialNumber.serialNumberId,
+              serialNo: serialNumber.serialNo,
+              status: serialNumber.status,
+              createdAt: serialNumber.createdAt,
+            })
+            .from(serialNumber)
+            .where(and(...conditions))
+            .orderBy(asc(serialNumber.serialNo));
 
-        return new Response(JSON.stringify(rows), {
-          headers: { "content-type": "application/json" },
+          return new Response(JSON.stringify(rows), {
+            headers: { "content-type": "application/json" },
+          });
         });
       },
     },

@@ -2,9 +2,8 @@ import { useForm } from "@tanstack/react-form";
 import { ChevronDown, Clock, Loader2, Paperclip, Send, Sparkles } from "lucide-react";
 import * as React from "react";
 
+import { cn } from "../lib/utils";
 import { Button } from "./button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import {
   Dialog,
   DialogContent,
@@ -13,9 +12,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./dropdown-menu";
 import { Input } from "./input";
-import { cn } from "../lib/utils";
 import { RichTextEditor } from "./rich-text-editor";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 
 export interface EmailPayload {
   to: string;
@@ -34,7 +39,12 @@ export interface EmailComposerProps {
   onScheduleSend?: (data: EmailPayload, date: Date) => Promise<void>;
   onAiGenerate?: (prompt: string) => Promise<string>;
   onAttachmentsChange?: (attachments: File[]) => void;
-  renderRecipientInput?: (props: { value: string; onChange: (v: string) => void; placeholder?: string; name: string }) => React.ReactNode;
+  renderRecipientInput?: (props: {
+    value: string;
+    onChange: (v: string) => void;
+    placeholder?: string;
+    name: string;
+  }) => React.ReactNode;
   attachments?: { fileName: string; sizeBytes?: number | null }[];
   isLoading?: boolean;
   className?: string;
@@ -80,8 +90,8 @@ export function EmailComposer({
 
   const handleAiGenerate = async () => {
     if (!onAiGenerate) {
-       window.dispatchEvent(new CustomEvent("slopware:open-ai"));
-       return;
+      window.dispatchEvent(new CustomEvent("slopware:open-ai"));
+      return;
     }
     setAiIsLoading(true);
     try {
@@ -118,10 +128,7 @@ export function EmailComposer({
             {(field: any) => (
               <div className="flex items-center border-b px-4 py-2 focus-within:bg-muted/50">
                 <span className="w-16 text-sm font-medium text-muted-foreground">From:</span>
-                <Select
-                  value={field.state.value}
-                  onValueChange={(val) => field.handleChange(val)}
-                >
+                <Select value={field.state.value} onValueChange={(val) => field.handleChange(val)}>
                   <SelectTrigger className="h-7 w-fit border-0 bg-transparent px-2 shadow-none hover:bg-muted/50 focus:ring-0 data-[state=open]:bg-muted/50">
                     <SelectValue placeholder="Select account" />
                   </SelectTrigger>
@@ -141,7 +148,12 @@ export function EmailComposer({
               <div className="flex items-center border-b px-4 py-2 focus-within:bg-muted/50">
                 <span className="w-16 text-sm font-medium text-muted-foreground">To:</span>
                 {renderRecipientInput ? (
-                  renderRecipientInput({ value: field.state.value, onChange: field.handleChange, placeholder: "recipient@example.com", name: "to" })
+                  renderRecipientInput({
+                    value: field.state.value,
+                    onChange: field.handleChange,
+                    placeholder: "recipient@example.com",
+                    name: "to",
+                  })
                 ) : (
                   <Input
                     className="border-0 bg-transparent shadow-none focus-visible:ring-0"
@@ -158,7 +170,12 @@ export function EmailComposer({
               <div className="flex items-center border-b px-4 py-2 focus-within:bg-muted/50">
                 <span className="w-16 text-sm font-medium text-muted-foreground">Cc:</span>
                 {renderRecipientInput ? (
-                  renderRecipientInput({ value: field.state.value, onChange: field.handleChange, placeholder: "Optional", name: "cc" })
+                  renderRecipientInput({
+                    value: field.state.value,
+                    onChange: field.handleChange,
+                    placeholder: "Optional",
+                    name: "cc",
+                  })
                 ) : (
                   <Input
                     className="border-0 bg-transparent shadow-none focus-visible:ring-0"
@@ -175,7 +192,12 @@ export function EmailComposer({
               <div className="flex items-center border-b px-4 py-2 focus-within:bg-muted/50">
                 <span className="w-16 text-sm font-medium text-muted-foreground">Bcc:</span>
                 {renderRecipientInput ? (
-                  renderRecipientInput({ value: field.state.value, onChange: field.handleChange, placeholder: "Optional", name: "bcc" })
+                  renderRecipientInput({
+                    value: field.state.value,
+                    onChange: field.handleChange,
+                    placeholder: "Optional",
+                    name: "bcc",
+                  })
                 ) : (
                   <Input
                     className="border-0 bg-transparent shadow-none focus-visible:ring-0"
@@ -350,13 +372,15 @@ export function EmailComposer({
                         }
                       />
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => {
-                          const values = form.state.values;
-                          const tomorrow = new Date();
-                          tomorrow.setDate(tomorrow.getDate() + 1);
-                          tomorrow.setHours(8, 0, 0, 0);
-                          void onScheduleSend(values, tomorrow);
-                        }}>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const values = form.state.values;
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            tomorrow.setHours(8, 0, 0, 0);
+                            void onScheduleSend(values, tomorrow);
+                          }}
+                        >
                           <Clock className="mr-2 size-4" />
                           Send Tomorrow Morning
                         </DropdownMenuItem>

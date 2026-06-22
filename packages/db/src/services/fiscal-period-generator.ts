@@ -2,13 +2,9 @@ import { eq, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import { db } from "../index";
-import { fiscalPeriod, company } from "../schema/app.schema";
+import { fiscalPeriod, company } from "../schema/sqlite.schema";
 
-export async function generateFiscalPeriods(
-  companyId: string,
-  tenantId: string,
-  fiscalYear: number,
-): Promise<void> {
+export async function generateFiscalPeriods(companyId: string, fiscalYear: number): Promise<void> {
   // Get company's fiscal year start month (1-12, default 1 = January)
   const companies = await db
     .select({ fiscalYearStartMonth: company.fiscalYearStartMonth })
@@ -34,7 +30,6 @@ export async function generateFiscalPeriods(
     const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
 
     periods.push({
-      tenantId,
       companyId,
       fiscalYear,
       periodNo,
@@ -48,7 +43,6 @@ export async function generateFiscalPeriods(
 }
 
 export async function resolveFiscalPeriodId(
-  tenantId: string,
   companyId: string,
   date: string, // ISO date string YYYY-MM-DD
 ): Promise<string | null> {
@@ -61,7 +55,6 @@ export async function resolveFiscalPeriodId(
     .from(fiscalPeriod)
     .where(
       and(
-        eq(fiscalPeriod.tenantId, tenantId),
         eq(fiscalPeriod.companyId, companyId),
         sql`${fiscalPeriod.startDate} <= ${date}::date`,
         sql`${fiscalPeriod.endDate} >= ${date}::date`,
@@ -76,8 +69,8 @@ export async function resolveFiscalPeriodId(
   const year = dateObj.getFullYear();
 
   // Try generating for this year and the year before (handles fiscal years spanning two calendar years)
-  await generateFiscalPeriods(companyId, tenantId, year);
-  await generateFiscalPeriods(companyId, tenantId, year - 1);
+  await generateFiscalPeriods(companyId, year);
+  await generateFiscalPeriods(companyId, year - 1);
 
   // Retry lookup
   const retry = await db
@@ -85,7 +78,6 @@ export async function resolveFiscalPeriodId(
     .from(fiscalPeriod)
     .where(
       and(
-        eq(fiscalPeriod.tenantId, tenantId),
         eq(fiscalPeriod.companyId, companyId),
         sql`${fiscalPeriod.startDate} <= ${date}::date`,
         sql`${fiscalPeriod.endDate} >= ${date}::date`,

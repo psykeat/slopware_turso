@@ -167,10 +167,7 @@ test("email thread list/get/link through the capability surface", async () => {
 });
 
 test("email threads are tenant-isolated through capabilities", async () => {
-  const [a, b] = await Promise.all([
-    createCommunicationFixture(),
-    createCommunicationFixture(),
-  ]);
+  const [a, b] = await Promise.all([createCommunicationFixture(), createCommunicationFixture()]);
 
   const foreign = await executeCapability("communication.emailThread.get", b.ctx, {
     threadId: a.threadId,

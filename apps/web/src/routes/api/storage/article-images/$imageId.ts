@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { extname, join, normalize } from "node:path";
 
 import { auth } from "@repo/auth/auth";
-import { db } from "@repo/db";
+import { db, activePersistence, runInTenantScope } from "@repo/db";
 import { articleImage } from "@repo/db/schema";
 import { createFileRoute } from "@tanstack/react-router";
 import { eq } from "drizzle-orm";
@@ -72,59 +72,65 @@ export const Route = createFileRoute("/api/storage/article-images/$imageId")({
           return debugResponse("No active tenant found", { imageId: params.imageId }, 403);
         }
 
-        const [record] = await db
-          .select()
-          .from(articleImage)
-          .where(eq(articleImage.articleImageId, params.imageId))
-          .limit(1);
+        return runInTenantScope(context, async () => {
+          const [record] = await db
+            .select()
+            .from(articleImage)
+            .where(eq(articleImage.articleImageId, params.imageId))
+            .limit(1);
 
-        if (!record) {
-          console.log(`[Storage] record not found ${params.imageId}`);
-          return debugResponse("Image record not found", { imageId: params.imageId });
-        }
-        if (record.tenantId !== context.tenantId && !isSystemAdmin) {
-          console.log(
-            `[Storage] forbidden ${params.imageId} record=${record.tenantId} context=${context.tenantId}`,
-          );
-          return debugResponse(
-            "Forbidden",
-            {
-              imageId: params.imageId,
-              recordTenantId: record.tenantId,
-              contextTenantId: context.tenantId,
-            },
-            403,
-          );
-        }
+          if (!record) {
+            console.log(`[Storage] record not found ${params.imageId}`);
+            return debugResponse("Image record not found", { imageId: params.imageId });
+          }
+          if (
+            activePersistence.provider === "postgres" &&
+            record.tenantId !== context.tenantId &&
+            !isSystemAdmin
+          ) {
+            console.log(
+              `[Storage] forbidden ${params.imageId} record=${record.tenantId} context=${context.tenantId}`,
+            );
+            return debugResponse(
+              "Forbidden",
+              {
+                imageId: params.imageId,
+                recordTenantId: record.tenantId,
+                contextTenantId: context.tenantId,
+              },
+              403,
+            );
+          }
 
-        try {
-          const path = safeStoragePath(record.storageKey);
-          console.log(`[Storage] read ${params.imageId} ${path}`);
-          const file = await readFile(path);
+          try {
+            const path = safeStoragePath(record.storageKey);
+            console.log(`[Storage] read ${params.imageId} ${path}`);
+            const file = await readFile(path);
 
-          return new Response(file, {
-            headers: {
-              "Content-Type": record.mimeType || contentTypeFor(path),
-              "Cache-Control": "no-store",
-              "X-Slopware-Storage-Debug": "article-image-v2",
-            },
-          });
-        } catch (error: any) {
-          const path = safeStoragePath(record.storageKey);
-          console.log(`[Storage] read failed ${params.imageId} ${path} ${error?.code ?? ""}`);
-          return debugResponse(
-            error?.code === "ENOENT" ? "Image file not found" : "Storage error",
-            {
-              imageId: params.imageId,
-              storageRoot: storageRoot(),
-              storageKey: record.storageKey,
-              path,
-              errorCode: error?.code,
-              errorMessage: error?.message,
-            },
-            error?.code === "ENOENT" ? 404 : 500,
-          );
-        }
+            return new Response(file, {
+              headers: {
+                "Content-Type": record.mimeType || contentTypeFor(path),
+                "Cache-Control": "no-store",
+                "X-Slopware-Storage-Debug": "article-image-v2",
+              },
+            });
+          } catch (error: any) {
+            const path = safeStoragePath(record.storageKey);
+            console.log(`[Storage] read failed ${params.imageId} ${path} ${error?.code ?? ""}`);
+            return debugResponse(
+              error?.code === "ENOENT" ? "Image file not found" : "Storage error",
+              {
+                imageId: params.imageId,
+                storageRoot: storageRoot(),
+                storageKey: record.storageKey,
+                path,
+                errorCode: error?.code,
+                errorMessage: error?.message,
+              },
+              error?.code === "ENOENT" ? 404 : 500,
+            );
+          }
+        });
       },
     },
   },

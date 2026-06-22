@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { eq, and, or, sql, inArray } from "drizzle-orm";
 
 import { db } from "../index";
-import * as schema from "../schema/app.schema";
+import * as schema from "../schema/sqlite.schema";
 
 interface RawAccount {
   id: string;
@@ -262,7 +262,7 @@ export async function initializeCompanyData(
           archived: false,
         })
         .onConflictDoUpdate({
-          target: [schema.taxClass.tenantId, schema.taxClass.code],
+          target: [schema.taxClass.code],
           set: {
             name: sql`excluded.name`,
             archived: false,
@@ -287,7 +287,7 @@ export async function initializeCompanyData(
           archived: false,
         })
         .onConflictDoUpdate({
-          target: [schema.taxCode.tenantId, schema.taxCode.code],
+          target: [schema.taxCode.code],
           set: {
             description: sql`excluded.description`,
             taxRate: sql`excluded.tax_rate`,
@@ -307,12 +307,9 @@ export async function initializeCompanyData(
       await tx
         .delete(schema.taxRule)
         .where(
-          and(
-            eq(schema.taxRule.tenantId, tenantId),
-            or(
-              inArray(schema.taxRule.customerTaxClassId, classIds),
-              inArray(schema.taxRule.articleTaxClassId, classIds),
-            ),
+          or(
+            inArray(schema.taxRule.customerTaxClassId, classIds),
+            inArray(schema.taxRule.articleTaxClassId, classIds),
           ),
         );
     }
@@ -369,7 +366,7 @@ export async function initializeCompanyData(
           .insert(schema.glAccount)
           .values(glAccountsToInsert)
           .onConflictDoUpdate({
-            target: [schema.glAccount.tenantId, schema.glAccount.accountNo],
+            target: [schema.glAccount.accountNo],
             set: {
               companyId: sql`excluded.company_id`,
               name: sql`excluded.name`,
@@ -393,7 +390,7 @@ export async function initializeCompanyData(
         .insert(schema.glAccount)
         .values(glAccountsToInsert)
         .onConflictDoUpdate({
-          target: [schema.glAccount.tenantId, schema.glAccount.accountNo],
+          target: [schema.glAccount.accountNo],
           set: {
             companyId: sql`excluded.company_id`,
             name: sql`excluded.name`,
@@ -426,7 +423,6 @@ export async function initializeCompanyData(
         })
         .onConflictDoUpdate({
           target: [
-            schema.numberSequence.tenantId,
             schema.numberSequence.companyId,
             schema.numberSequence.prefix,
             schema.numberSequence.fiscalYear,
@@ -449,7 +445,7 @@ export async function initializeCompanyData(
         name: "Hauptlager",
       })
       .onConflictDoUpdate({
-        target: [schema.warehouse.tenantId, schema.warehouse.code],
+        target: [schema.warehouse.code],
         set: {
           companyId,
           archived: false,

@@ -470,7 +470,6 @@ Remaining:
   - `api/setup/initialize`
   - `api/setup/year-end`
   - `api/me/company`
-  - `api/admin/document-groups/*`
   - `api/articles/$articleId/{images,bom,bom/$bomId,serial-numbers,batches}`
   - `api/stats/*`
   - selected admin/config routes that should be classified as true admin exceptions or actionized.

@@ -458,15 +458,17 @@ Completed:
 - Metadata GET route now prefers registry projections for settings registry, fields, and grid layouts.
 - Generated frontend SDK now emits `action(...)` and `ActionInput`/`ActionOutput` imports.
 - Web server function internals execute through `executeAction`; `capability()` remains as a compatibility alias for existing call sites.
+- Move route `/api/capabilities*` to `/api/actions*` outright.
+- App-facing capability APIs renamed to action terminology (aliases kept only for compatibility; normal call sites use action names).
+- Client-side `aiCapabilityRegistry` and `taskScope` UI dependency removed (review rendering and context resolution updated to `actionKey`).
+- Contained route family `/api/delivery-addresses/$deliveryAddressId` converted to action execution.
 - Guardrails added to prevent the deleted manifest/sync layers from returning.
 - Package typechecks pass for registry, DB, agent, UI, and web.
 
 Remaining:
 
-- Rename remaining app-facing `capability()` helper imports and query hook names to action terminology once call sites are migrated.
-- Move route `/api/capabilities*` to `/api/actions*` or keep as deliberate backwards-compatible HTTP API with an explicit deprecation note.
+- Keep the deprecated `capability*` compatibility shims until external callers and old imports can be removed.
 - Convert remaining direct app business routes that still import DB schema:
-  - `api/delivery-addresses/$deliveryAddressId`
   - `api/setup/initialize`
   - `api/setup/year-end`
   - `api/me/company`
